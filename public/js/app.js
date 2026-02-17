@@ -1160,6 +1160,81 @@ function collectFormAnswers(fields, containerId = 'dynamic-form-fields') {
     return answers;
 }
 
+// ─── Discord Import ──────────────────────────────
+async function showImportDiscordEventsModal() {
+    const modal = new bootstrap.Modal(document.getElementById('importDiscordEventsModal'));
+    modal.show();
+    await fetchDiscordEvents();
+}
+
+async function fetchDiscordEvents() {
+    const list = document.getElementById('discord-events-list');
+    list.innerHTML = '<div class="text-center py-5"><span class="spinner-border text-primary"></span><p class="mt-2 text-muted">Lade Events...</p></div>';
+
+    try {
+        const res = await fetch('/api/admin/import/discord-events');
+        const events = await res.json();
+
+        if (!events || events.length === 0) {
+            list.innerHTML = '<div class="text-center py-5"><i class="bi bi-calendar-x" style="font-size: 2rem; color: var(--text-muted);"></i><p class="mt-2 text-muted">Keine geplanten Events im Discord gefunden.</p></div>';
+            return;
+        }
+
+        list.innerHTML = events.map(ev => `
+            <a href="#" class="list-group-item list-group-item-action d-flex gap-3 py-3" onclick="selectDiscordEvent(this)" data-event='${JSON.stringify(ev).replace(/'/g, "&apos;")}'>
+                ${ev.image ? `<img src="${ev.image}" alt="Event Image" width="48" height="48" class="rounded-circle flex-shrink-0" style="object-fit:cover;">` : '<div class="rounded-circle bg-secondary d-flex align-items-center justify-content-center flex-shrink-0" style="width:48px;height:48px;"><i class="bi bi-discord"></i></div>'}
+                <div class="d-flex gap-2 w-100 justify-content-between">
+                    <div>
+                        <h6 class="mb-0 text-white">${escapeHtml(ev.name)}</h6>
+                        <p class="mb-0 opacity-75 small text-white-50">${ev.description ? escapeHtml(ev.description).substring(0, 100) + '...' : 'Keine Beschreibung'}</p>
+                    </div>
+                    <small class="opacity-50 text-nowrap text-white-50">${new Date(ev.scheduledStartTimestamp).toLocaleDateString()}</small>
+                </div>
+            </a>
+        `).join('');
+    } catch (err) {
+        console.error(err);
+        list.innerHTML = '<div class="alert alert-danger">Fehler beim Laden der Events.</div>';
+    }
+}
+
+function selectDiscordEvent(el) {
+    const eventData = JSON.parse(el.getAttribute('data-event'));
+
+    // Close import modal
+    const importModalEl = document.getElementById('importDiscordEventsModal');
+    const importModal = bootstrap.Modal.getInstance(importModalEl);
+    importModal.hide();
+
+    // Open create modal
+    showCreateEventModal().then(() => {
+        // Fill form
+        document.getElementById('event-title').value = eventData.name || '';
+        if (descriptionEditor) {
+            descriptionEditor.value(eventData.description || '');
+        } else {
+            document.getElementById('event-description').value = eventData.description || '';
+        }
+
+        if (eventData.image) {
+            document.getElementById('event-banner-url').value = eventData.image;
+            updateBannerPreview();
+        }
+
+        if (eventData.scheduledStartTimestamp) {
+            const startDate = new Date(eventData.scheduledStartTimestamp);
+            if (startDatePicker) startDatePicker.setDate(startDate);
+        }
+
+        if (eventData.scheduledEndTimestamp) {
+            const endDate = new Date(eventData.scheduledEndTimestamp);
+            if (endDatePicker) endDatePicker.setDate(endDate);
+        }
+
+        showToast('Event-Daten übernommen!', 'success');
+    });
+}
+
 // ─── Profile Section ─────────────────────────────
 async function showProfileSection() {
     const section = document.getElementById('profile-section');
@@ -1424,6 +1499,16 @@ async function loadAdminEvents() {
                     <li><a class="dropdown-item" href="#" onclick="changeEventStatus('${event.id}', 'archived'); return false;">📦 Archiviert</a></li>
                   </ul>
                 </div>
+                ${event.status === 'draft' ? `
+                <button class="btn btn-sm btn-outline-success" onclick="startEvent('${event.id}')" title="Event starten (Status Aktiv + Startzeit jetzt)">
+                  <i class="bi bi-play-fill"></i>
+                </button>
+                ` : ''}
+                ${event.status === 'active' ? `
+                <button class="btn btn-sm btn-outline-warning" onclick="endEvent('${event.id}')" title="Event beenden (Status Archiviert + Endzeit jetzt)">
+                  <i class="bi bi-stop-fill"></i>
+                </button>
+                ` : ''}
                 <button class="btn btn-sm btn-outline-danger" onclick="deleteEvent('${event.id}')">
                   <i class="bi bi-trash me-1"></i>Löschen
                 </button>
@@ -1732,6 +1817,13 @@ async function showCreateEventModal() {
     document.getElementById('form-fields-builder').innerHTML = '';
     document.getElementById('role-requirement-area').style.display = 'none';
 
+    // Reset Custom Messages
+    document.getElementById('event-custom-msg-toggle').checked = false;
+    document.getElementById('custom-msg-options').style.display = 'none';
+    document.getElementById('event-msg-registration').value = '';
+    document.getElementById('event-msg-accepted').value = '';
+    document.getElementById('event-msg-rejected').value = '';
+
     // Initialize EasyMDE if not exists
     if (!descriptionEditor) {
         descriptionEditor = new EasyMDE({
@@ -1858,6 +1950,15 @@ async function editEvent(eventId) {
 
         document.getElementById('event-assign-role').value = event.assignRoleId || '';
 
+        // Custom Messages
+        const customMsgs = event.customBotMessages || {};
+        const hasCustom = customMsgs.registration || customMsgs.accepted || customMsgs.rejected;
+        document.getElementById('event-custom-msg-toggle').checked = !!hasCustom;
+        document.getElementById('custom-msg-options').style.display = hasCustom ? 'block' : 'none';
+        document.getElementById('event-msg-registration').value = customMsgs.registration || '';
+        document.getElementById('event-msg-accepted').value = customMsgs.accepted || '';
+        document.getElementById('event-msg-rejected').value = customMsgs.rejected || '';
+
         document.getElementById('role-requirement-area').style.display = event.accessMode === 'role-required' ? 'block' : 'none';
         if (event.requiredRoles) {
             event.requiredRoles.forEach(roleId => {
@@ -1905,7 +2006,12 @@ async function saveEvent() {
         recurring: document.getElementById('event-recurring').checked,
         recurringInterval: document.getElementById('event-recurring-interval').value,
         recurringUntil: document.getElementById('event-recurring-until').value,
-        checkinMessage: document.getElementById('event-checkin-message').value
+        checkinMessage: document.getElementById('event-checkin-message').value,
+        customBotMessages: {
+            registration: document.getElementById('event-msg-registration').value,
+            accepted: document.getElementById('event-msg-accepted').value,
+            rejected: document.getElementById('event-msg-rejected').value
+        }
     };
 
     try {
@@ -2054,6 +2160,44 @@ async function sendAnnouncement() {
     } finally {
         btn.disabled = false;
         btn.innerHTML = '<i class="bi bi-megaphone me-1"></i>Ankündigen';
+    }
+}
+
+async function startEvent(eventId) {
+    if (!confirm('Event jetzt starten? Status wird auf "Aktiv" gesetzt und Startzeit aktualisiert (falls leer).')) return;
+    try {
+        const res = await fetch(`/api/admin/events/${eventId}/start`, {
+            method: 'POST',
+            headers: { 'X-CSRF-TOKEN': csrfToken }
+        });
+        if (res.ok) {
+            showToast('Event gestartet!', 'success');
+            loadAdminEvents();
+            loadAdminStats();
+        } else {
+            showToast('Fehler beim Starten.', 'danger');
+        }
+    } catch {
+        showToast('Netzwerkfehler.', 'danger');
+    }
+}
+
+async function endEvent(eventId) {
+    if (!confirm('Event jetzt beenden? Status wird auf "Archiviert" gesetzt und Endzeit aktualisiert.')) return;
+    try {
+        const res = await fetch(`/api/admin/events/${eventId}/end`, {
+            method: 'POST',
+            headers: { 'X-CSRF-TOKEN': csrfToken }
+        });
+        if (res.ok) {
+            showToast('Event beendet!', 'success');
+            loadAdminEvents();
+            loadAdminStats();
+        } else {
+            showToast('Fehler beim Beenden.', 'danger');
+        }
+    } catch {
+        showToast('Netzwerkfehler.', 'danger');
     }
 }
 

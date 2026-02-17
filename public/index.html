@@ -358,6 +358,9 @@
             <p class="text-secondary mb-0">Erstelle und verwalte Events.</p>
           </div>
           <div class="d-flex gap-2">
+            <button class="btn btn-outline-light" onclick="showImportDiscordEventsModal()">
+              <i class="bi bi-discord me-1"></i>Import aus Discord
+            </button>
             <button class="btn btn-accent" onclick="showCreateEventModal()">
               <i class="bi bi-plus-circle me-1"></i>Neues Event
             </button>
@@ -405,6 +408,29 @@
   <!-- ═══════════════════════════════════════════ -->
   <!-- MODALS                                      -->
   <!-- ═══════════════════════════════════════════ -->
+
+  <!-- Import Discord Events Modal -->
+  <div class="modal fade" id="importDiscordEventsModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+      <div class="modal-content glass-modal">
+        <div class="modal-header border-0">
+          <h5 class="modal-title"><i class="bi bi-discord me-2"></i>Event aus Discord importieren</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div id="discord-events-list" class="list-group">
+            <!-- Populated dynamically -->
+            <div class="text-center py-5">
+              <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+              </div>
+              <p class="mt-2 text-muted">Lade Events...</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <!-- Create / Edit Event Modal -->
   <div class="modal fade" id="eventModal" tabindex="-1">
@@ -541,6 +567,35 @@
                 <option value="">Keine Rolle zuweisen</option>
                 <!-- Populated dynamically -->
               </select>
+            </div>
+
+            <!-- Custom Bot Messages -->
+            <div class="mb-3 glass-card p-3" style="background:rgba(139,92,246,0.05);">
+              <div class="form-check mb-2">
+                <input class="form-check-input" type="checkbox" id="event-custom-msg-toggle"
+                  onchange="document.getElementById('custom-msg-options').style.display=this.checked?'':'none'">
+                <label class="form-check-label" for="event-custom-msg-toggle">🤖 Eigene Bot-Nachrichten</label>
+              </div>
+              <div id="custom-msg-options" style="display:none;">
+                <div class="mb-3">
+                  <label class="form-label">Registrierungs-Nachricht</label>
+                  <textarea class="form-control" id="event-msg-registration" rows="2"
+                    placeholder="Standard verwenden..."></textarea>
+                  <small class="text-muted d-block mt-1">Variablen: {user.name}, {user.mention}, {event.title},
+                    {event.url}</small>
+                </div>
+                <div class="mb-3">
+                  <label class="form-label">Angenommen-Nachricht</label>
+                  <textarea class="form-control" id="event-msg-accepted" rows="2"
+                    placeholder="Standard verwenden..."></textarea>
+                  <small class="text-muted d-block mt-1">Zusätzlich: {role.name}, {role.mention}</small>
+                </div>
+                <div class="mb-3">
+                  <label class="form-label">Abgelehnt-Nachricht</label>
+                  <textarea class="form-control" id="event-msg-rejected" rows="2"
+                    placeholder="Standard verwenden..."></textarea>
+                </div>
+              </div>
             </div>
 
             <hr class="border-secondary">

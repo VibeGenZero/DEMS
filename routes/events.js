@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { db, collection, doc, getDoc, getDocs, addDoc, deleteDoc, updateDoc, query, where, orderBy } = require('../firebaseAdmin');
 const { requireAuth } = require('../middleware/auth');
-const { sendDM, parseTemplate, assignRole, removeRole, isGuildMember } = require('../bot');
+const { sendDM, assignRole, parseTemplate, getGuildRoles } = require('../bot');
 const { promoteFromWaitlist } = require('../utils/eventUtils');
 
 /**
@@ -219,29 +219,59 @@ router.post('/:id/register', requireAuth, async (req, res) => {
 
         // Send DM notification
         const templateSnap = await getDoc(doc(db, 'botMessages', 'templates'));
-        const templates = templateSnap.exists() ? templateSnap.data() : {};
+        const globalTemplates = templateSnap.exists() ? templateSnap.data() : {};
+
+        // Prepare variables
+        const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
+        const eventUrl = `${baseUrl}/#events/${req.params.id}`;
+
+        let roleName = '';
+        let roleMention = '';
+
+        if (event.assignRoleId) {
+            const roles = await getGuildRoles(process.env.DISCORD_GUILD_ID);
+            const role = roles.find(r => r.id === event.assignRoleId);
+            if (role) {
+                roleName = role.name;
+                roleMention = `<@&${role.id}>`;
+            } else {
+                roleName = 'Unbekannte Rolle';
+                roleMention = 'Unbekannte Rolle';
+            }
+        }
 
         const vars = {
             'user.id': user.id,
             'user.name': user.displayName,
-            'event.title': event.title
+            'user.mention': `<@${user.id}>`,
+            'event.title': event.title || 'Unbekanntes Event',
+            'event.url': eventUrl,
+            'role.name': roleName,
+            'role.mention': roleMention
         };
 
+        const customMsgs = event.customBotMessages || {};
+
         if (isWaitlisted) {
+            // Waitlist message (currently no custom override for waitlist in plan, but good to keep consistent)
             await sendDM(user.id, `📋 Das Event **${event.title}** ist aktuell voll. Du wurdest auf die **Warteliste** gesetzt. Wir benachrichtigen dich, sobald ein Platz frei wird!`);
         } else if (status === 'accepted') {
-            const msg = templates.accepted
-                ? parseTemplate(templates.accepted, vars)
+            const template = customMsgs.accepted || globalTemplates.accepted;
+            const msg = template
+                ? parseTemplate(template, vars)
                 : `✅ Du wurdest automatisch für **${event.title}** angenommen!`;
+
             await sendDM(user.id, msg);
 
             if (event.assignRoleId) {
                 await assignRole(user.id, event.assignRoleId, process.env.DISCORD_GUILD_ID);
             }
         } else {
-            const msg = templates.registration
-                ? parseTemplate(templates.registration, vars)
+            const template = customMsgs.registration || globalTemplates.registration;
+            const msg = template
+                ? parseTemplate(template, vars)
                 : `📋 Deine Anfrage für **${event.title}** ist eingegangen. Bitte warte auf die Bestätigung.`;
+
             await sendDM(user.id, msg);
         }
 

@@ -6,7 +6,7 @@ const {
 } = require('../firebaseAdmin');
 const { requireAuth, requireAdmin } = require('../middleware/auth');
 const { validateEvent, validateRegStatus, validateBotMessages } = require('../middleware/validators');
-const { sendDM, assignRole, parseTemplate, getGuildRoles, sendChannelMessage, buildEventEmbed } = require('../bot');
+const { sendDM, assignRole, parseTemplate, getGuildRoles, sendChannelMessage, buildEventEmbed, getGuildScheduledEvents } = require('../bot');
 const { promoteFromWaitlist, addAuditLog } = require('../utils/eventUtils');
 
 // All admin routes require auth + admin
@@ -86,6 +86,19 @@ router.get('/all-events', async (req, res) => {
 });
 
 /**
+ * GET /api/admin/import/discord-events — Fetch scheduled events from Discord
+ */
+router.get('/import/discord-events', async (req, res) => {
+    try {
+        const events = await getGuildScheduledEvents(process.env.DISCORD_GUILD_ID);
+        res.json(events);
+    } catch (err) {
+        console.error('Import discord events error:', err);
+        res.status(500).json({ error: 'Fehler beim Laden der Discord-Events' });
+    }
+});
+
+/**
  * POST /api/admin/events — Create event
  */
 router.post('/events', validateEvent, async (req, res) => {
@@ -94,7 +107,8 @@ router.post('/events', validateEvent, async (req, res) => {
             title, description, maxParticipants, accessMode, requiredRoles,
             approvalMode, assignRoleId, formFields,
             startDate, endDate, bannerUrl, category, status, reminderHours,
-            recurring, recurringInterval, recurringUntil, checkinMessage
+            recurring, recurringInterval, recurringUntil, checkinMessage,
+            customBotMessages // { registration: '', accepted: '' }
         } = req.body;
 
         const baseEvent = {
@@ -113,6 +127,7 @@ router.post('/events', validateEvent, async (req, res) => {
             status: status || 'active',
             reminderHours: Array.isArray(reminderHours) ? reminderHours : (reminderHours ? [{ hours: parseInt(reminderHours) || 0, sent: false }] : []),
             checkinMessage: checkinMessage || '',
+            customBotMessages: customBotMessages || {},
             eventStartNotificationSent: false,
             recurring: !!recurring,
             recurringInterval: recurringInterval || '',
@@ -168,7 +183,8 @@ router.put('/events/:id', validateEvent, async (req, res) => {
         const {
             title, description, maxParticipants, accessMode, requiredRoles,
             approvalMode, assignRoleId, formFields,
-            startDate, endDate, bannerUrl, category, status, reminderHours, checkinMessage
+            startDate, endDate, bannerUrl, category, status, reminderHours, checkinMessage,
+            customBotMessages
         } = req.body;
 
         const updates = {
@@ -187,6 +203,7 @@ router.put('/events/:id', validateEvent, async (req, res) => {
             status: status || 'active',
             reminderHours: Array.isArray(reminderHours) ? reminderHours : (reminderHours ? [{ hours: parseInt(reminderHours) || 0, sent: false }] : []),
             checkinMessage: checkinMessage || '',
+            customBotMessages: customBotMessages || {},
             recurring: !!req.body.recurring,
             recurringInterval: req.body.recurringInterval || '',
             recurringUntil: req.body.recurringUntil || '',
@@ -255,6 +272,64 @@ router.put('/events/:id/cancel', async (req, res) => {
     } catch (err) {
         console.error('Cancel event error:', err);
         res.status(500).json({ error: 'Fehler beim Absagen' });
+    }
+});
+
+/**
+ * POST /api/admin/events/:id/start — Manually start event
+ */
+router.post('/events/:id/start', async (req, res) => {
+    try {
+        const eventId = req.params.id;
+        const col = collection(db, 'events');
+        const eventSnap = await getDoc(doc(col, eventId));
+        if (!eventSnap.exists()) return res.status(404).json({ error: 'Event nicht gefunden' });
+
+        const data = eventSnap.data();
+        const updates = {
+            status: 'active',
+            updatedAt: new Date().toISOString()
+        };
+        // Set start date to now if empty OR if we want to force update? 
+        // Plan says: set to NOW if empty.
+        if (!data.startDate) {
+            updates.startDate = new Date().toISOString();
+        }
+
+        await updateDoc(doc(col, eventId), updates);
+        await addAuditLog('START_EVENT', req.session.user.id, `Manually started event "${data.title}"`, eventId);
+
+        res.json({ success: true, updates });
+    } catch (err) {
+        console.error('Start event error:', err);
+        res.status(500).json({ error: 'Fehler beim Starten' });
+    }
+});
+
+/**
+ * POST /api/admin/events/:id/end — Manually end event
+ */
+router.post('/events/:id/end', async (req, res) => {
+    try {
+        const eventId = req.params.id;
+        const col = collection(db, 'events');
+        const eventSnap = await getDoc(doc(col, eventId));
+        if (!eventSnap.exists()) return res.status(404).json({ error: 'Event nicht gefunden' });
+
+        const data = eventSnap.data();
+        const updates = {
+            status: 'archived',
+            updatedAt: new Date().toISOString(),
+            endDate: new Date().toISOString() // Always set end date to now
+        };
+
+        await updateDoc(doc(col, eventId), updates);
+        await addAuditLog('END_EVENT', req.session.user.id, `Manually ended event "${data.title}"`, eventId);
+
+        res.json({ success: true, updates });
+    } catch (err) {
+        console.error('End event error:', err);
+        res.status(500).json({ error: 'Fehler beim Beenden' });
     }
 });
 
@@ -470,18 +545,46 @@ router.put('/registrations/:id/status', validateRegStatus, async (req, res) => {
 
         // Get message templates
         const templateSnap = await getDoc(doc(db, 'botMessages', 'templates'));
-        const templates = templateSnap.exists() ? templateSnap.data() : {};
+        const globalTemplates = templateSnap.exists() ? templateSnap.data() : {};
+
+        // Prepare variables
+        const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
+        const eventUrl = `${baseUrl}/#events/${reg.eventId}`;
+
+        let roleName = '';
+        let roleMention = '';
+
+        if (event.assignRoleId) {
+            // Try to find role name from cache or fetch
+            const roles = await getGuildRoles(process.env.DISCORD_GUILD_ID);
+            const role = roles.find(r => r.id === event.assignRoleId);
+            if (role) {
+                roleName = role.name;
+                roleMention = `<@&${role.id}>`;
+            } else {
+                roleName = 'Unbekannte Rolle';
+                roleMention = 'Unbekannte Rolle';
+            }
+        }
 
         const vars = {
             'user.id': reg.userId,
             'user.name': reg.userName,
-            'event.title': event.title || 'Unbekanntes Event'
+            'user.mention': `<@${reg.userId}>`,
+            'event.title': event.title || 'Unbekanntes Event',
+            'event.url': eventUrl,
+            'role.name': roleName,
+            'role.mention': roleMention
         };
 
+        const customMsgs = event.customBotMessages || {};
+
         if (status === 'accepted') {
-            const msg = templates.accepted
-                ? parseTemplate(templates.accepted, vars)
+            const template = customMsgs.accepted || globalTemplates.accepted;
+            const msg = template
+                ? parseTemplate(template, vars)
                 : `✅ Du wurdest für **${event.title}** angenommen! Willkommen dabei!`;
+
             await sendDM(reg.userId, msg);
 
             // Assign role
@@ -489,9 +592,11 @@ router.put('/registrations/:id/status', validateRegStatus, async (req, res) => {
                 await assignRole(reg.userId, event.assignRoleId, process.env.DISCORD_GUILD_ID);
             }
         } else if (status === 'rejected') {
-            const msg = templates.rejected
-                ? parseTemplate(templates.rejected, vars)
+            const template = customMsgs.rejected || globalTemplates.rejected;
+            const msg = template
+                ? parseTemplate(template, vars)
                 : `❌ Leider wurde deine Anfrage für **${event.title}** abgelehnt.`;
+
             await sendDM(reg.userId, msg);
 
             // Auto-promote from waitlist
