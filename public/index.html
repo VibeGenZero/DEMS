@@ -889,6 +889,34 @@
     </div>
   </div>
 
+  <!-- Updates Modal -->
+  <div class="modal fade" id="updatesModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+      <div class="modal-content glass-modal">
+        <div class="modal-header border-0">
+          <h5 class="modal-title"><i class="bi bi-megaphone me-2"></i>Neuigkeiten & Updates <span
+              id="updates-version-badge" class="badge bg-accent ms-2"></span></h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div id="updates-content">
+            <!-- Populated dynamically -->
+          </div>
+        </div>
+        <div class="modal-footer border-0 justify-content-between">
+          <div class="form-check">
+            <input class="form-check-input" type="checkbox" id="dont-show-again">
+            <label class="form-check-label text-muted small" for="dont-show-again">
+              Nicht erneut anzeigen (bis zum nächsten Update)
+            </label>
+          </div>
+          <button type="button" class="btn btn-accent" data-bs-dismiss="modal"
+            onclick="closeUpdatesModal()">Verstanden</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- ── INFO SECTION ── -->
   <section id="info-section" class="app-section" style="display:none;">
     <div class="container section-container">
