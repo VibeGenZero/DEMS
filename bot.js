@@ -6,7 +6,8 @@ const client = new Client({
         GatewayIntentBits.Guilds,
         GatewayIntentBits.GuildMembers,
         GatewayIntentBits.GuildMessages,
-        GatewayIntentBits.DirectMessages
+        GatewayIntentBits.DirectMessages,
+        GatewayIntentBits.GuildScheduledEvents
     ]
 });
 
@@ -664,6 +665,30 @@ function stopBot() {
     console.log('🤖 Bot & Reminder Scheduler gestoppt.');
 }
 
+/**
+ * Get all scheduled events from the guild
+ */
+async function getGuildScheduledEvents(guildId) {
+    if (!isReady) return [];
+    try {
+        const guild = await client.guilds.fetch(guildId);
+        const events = await guild.scheduledEvents.fetch();
+        return events.map(e => ({
+            id: e.id,
+            name: e.name,
+            description: e.description,
+            scheduledStartTimestamp: e.scheduledStartTimestamp,
+            scheduledEndTimestamp: e.scheduledEndTimestamp,
+            image: e.coverImageURL({ size: 1024 }),
+            location: e.entityMetadata?.location || 'Discord',
+            url: e.url
+        }));
+    } catch (err) {
+        console.error('Failed to fetch guild scheduled events:', err.message);
+        return [];
+    }
+}
+
 module.exports = {
     client,
     startBot,
@@ -677,6 +702,7 @@ module.exports = {
     isGuildMember,
     getGuildName,
     getGuildRoles,
+    getGuildScheduledEvents,
     parseTemplate,
     startReminderScheduler
 };

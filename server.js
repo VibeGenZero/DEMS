@@ -140,6 +140,17 @@ app.get('/api/server-info', async (req, res) => {
     }
 });
 
+// Updates endpoint
+app.get('/api/updates', (req, res) => {
+    try {
+        const updatesPath = path.join(__dirname, 'updates.json');
+        res.sendFile(updatesPath);
+    } catch (err) {
+        console.error('Updates error:', err);
+        res.status(500).json({ error: 'Fehler beim Laden der Updates' });
+    }
+});
+
 // SPA fallback
 app.get('*', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
