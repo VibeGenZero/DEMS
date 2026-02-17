@@ -12,6 +12,10 @@ const { startBot, startReminderScheduler, stopBot, getGuildName } = require('./b
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Trust Proxy (Railway, Heroku, etc.)
+// Needed for correct IP addressing in rate limiting behind load balancers
+app.set('trust proxy', 1);
+
 // ── Validate required env vars ──────────────────────────────────────────
 if (!process.env.SESSION_SECRET || process.env.SESSION_SECRET === 'your_random_session_secret_here') {
     console.error('❌ SESSION_SECRET ist nicht gesetzt oder noch auf dem Standardwert. Bitte in .env setzen.');
