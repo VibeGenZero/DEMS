@@ -641,7 +641,9 @@ async function showEventDetail(eventId) {
 
         // Check role requirement
         if (event.accessMode === 'role-required' && event.requiredRoles && event.requiredRoles.length > 0) {
-            const hasRole = event.requiredRoles.some(r => currentUser.roles.includes(r));
+            // Safety check: ensure currentUser.roles is an array
+            const userRoles = Array.isArray(currentUser.roles) ? currentUser.roles : [];
+            const hasRole = event.requiredRoles.some(r => userRoles.includes(r));
             if (!hasRole) {
                 noAccessArea.style.display = 'block';
                 document.getElementById('no-access-text').textContent = 'Du hast nicht die erforderliche Rolle für dieses Event.';
@@ -661,6 +663,14 @@ async function showEventDetail(eventId) {
             renderFormFields(event.formFields || [], 'waitlist-form-fields');
 
             const waitForm = document.getElementById('waitlist-form');
+
+            // Reset button state
+            const waitBtn = document.getElementById('waitlist-btn');
+            if (waitBtn) {
+                waitBtn.disabled = false;
+                waitBtn.innerHTML = '<i class="bi bi-list-nested me-2"></i>Auf Warteliste setzen';
+            }
+
             waitForm.onsubmit = async (e) => {
                 e.preventDefault();
                 await submitRegistration(eventId, event, 'waitlist-btn', 'waitlist-form-fields');
@@ -671,6 +681,14 @@ async function showEventDetail(eventId) {
             renderFormFields(event.formFields || []);
 
             const form = document.getElementById('registration-form');
+
+            // Reset button state ensures we don't show "Wird gesendet..." from a previous cancelled attempt
+            const regBtn = document.getElementById('register-btn');
+            if (regBtn) {
+                regBtn.disabled = false;
+                regBtn.innerHTML = '<i class="bi bi-check-circle me-2"></i>Teilnehmen';
+            }
+
             form.onsubmit = async (e) => {
                 e.preventDefault();
                 await submitRegistration(eventId, event, 'register-btn', 'dynamic-form-fields');
@@ -993,10 +1011,19 @@ async function deleteComment(eventId, commentId) {
 
 async function submitRegistration(eventId, event, btnId, formContainerId) {
     const btn = document.getElementById(btnId);
+    if (!btn) return;
+
+    // Save original text to restore later
+    const originalText = btn.innerHTML;
+
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Wird gesendet...';
 
     const formAnswers = collectFormAnswers(event.formFields || [], formContainerId);
+
+    // Create an abort controller for timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
 
     try {
         const submitRes = await fetch(`/api/events/${eventId}/register`, {
@@ -1005,8 +1032,12 @@ async function submitRegistration(eventId, event, btnId, formContainerId) {
                 'Content-Type': 'application/json',
                 'X-CSRF-TOKEN': csrfToken
             },
-            body: JSON.stringify({ formAnswers })
+            body: JSON.stringify({ formAnswers }),
+            signal: controller.signal
         });
+
+        clearTimeout(timeoutId);
+
         const result = await submitRes.json();
 
         if (submitRes.ok) {
@@ -1014,13 +1045,26 @@ async function submitRegistration(eventId, event, btnId, formContainerId) {
             showEventDetail(eventId);
         } else {
             showToast(result.error || 'Fehler bei der Anmeldung.', 'danger');
-            btn.disabled = false;
-            btn.innerHTML = '<i class="bi bi-check-circle me-2"></i>Teilnehmen';
+            // Allow retry by not reloading the whole page, just resetting button
         }
-    } catch {
-        showToast('Netzwerkfehler.', 'danger');
-        btn.disabled = false;
-        btn.innerHTML = '<i class="bi bi-check-circle me-2"></i>Teilnehmen';
+    } catch (error) {
+        if (error.name === 'AbortError') {
+            showToast('Zeitüberschreitung bei der Anfrage. Bitte versuche es erneut.', 'danger');
+        } else {
+            console.error('Registration error:', error);
+            showToast('Netzwerkfehler. Bitte versuche es später erneut.', 'danger');
+        }
+    } finally {
+        // Always re-enable button and restore text if we didn't navigate away
+        if (document.body.contains(btn)) {
+            btn.disabled = false;
+            // Restore original icon if it was lost, or just set safer default
+            if (btnId === 'waitlist-btn') {
+                btn.innerHTML = '<i class="bi bi-list-nested me-2"></i>Auf Warteliste setzen';
+            } else {
+                btn.innerHTML = '<i class="bi bi-check-circle me-2"></i>Teilnehmen';
+            }
+        }
     }
 }
 
