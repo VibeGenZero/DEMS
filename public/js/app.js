@@ -881,6 +881,9 @@ async function loadComments(eventId) {
     }
     if (!commentSection) return;
 
+    // Clear previous comments and show loading state
+    commentSection.innerHTML = '<div class="text-center py-4"><div class="spinner-border text-accent" role="status"><span class="visually-hidden">Laden...</span></div></div>';
+
     const isLoggedIn = !!currentUser;
 
     try {
