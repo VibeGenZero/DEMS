@@ -6,7 +6,7 @@ const {
 } = require('../firebaseAdmin');
 const { requireAuth, requireAdmin } = require('../middleware/auth');
 const { validateEvent, validateRegStatus, validateBotMessages } = require('../middleware/validators');
-const { sendDM, assignRole, parseTemplate, getGuildRoles, sendChannelMessage, buildEventEmbed, getGuildScheduledEvents } = require('../bot');
+const { sendDM, assignRole, parseTemplate, getGuildRoles, sendChannelMessage, buildEventEmbed, getGuildScheduledEvents, createEventChannels, deleteEventChannels, createScheduledEvent } = require('../bot');
 const { promoteFromWaitlist, addAuditLog } = require('../utils/eventUtils');
 
 // All admin routes require auth + admin
@@ -49,12 +49,14 @@ router.get('/stats', async (req, res) => {
         let waitlistedRegs = 0;
 
         regsSnap.forEach(d => {
-            totalRegs++;
-            const status = d.data().status;
-            if (status === 'pending') pendingRegs++;
-            else if (status === 'accepted') acceptedRegs++;
-            else if (status === 'rejected') rejectedRegs++;
-            else if (status === 'waitlisted') waitlistedRegs++;
+            const r = d.data();
+            const count = 1 + (Array.isArray(r.guests) ? r.guests.length : 0);
+            totalRegs += count;
+            const status = r.status;
+            if (status === 'pending') pendingRegs += count;
+            else if (status === 'accepted') acceptedRegs += count;
+            else if (status === 'rejected') rejectedRegs += count;
+            else if (status === 'waitlisted') waitlistedRegs += count;
         });
 
         res.json({
@@ -108,7 +110,7 @@ router.post('/events', validateEvent, async (req, res) => {
             approvalMode, assignRoleId, formFields,
             startDate, endDate, bannerUrl, category, status, reminderHours,
             recurring, recurringInterval, recurringUntil, checkinMessage,
-            customBotMessages // { registration: '', accepted: '' }
+            customBotMessages, autoCreateChannels, channelConfig, allowGuests
         } = req.body;
 
         const baseEvent = {
@@ -128,6 +130,9 @@ router.post('/events', validateEvent, async (req, res) => {
             reminderHours: Array.isArray(reminderHours) ? reminderHours : (reminderHours ? [{ hours: parseInt(reminderHours) || 0, sent: false }] : []),
             checkinMessage: checkinMessage || '',
             customBotMessages: customBotMessages || {},
+            autoCreateChannels: !!autoCreateChannels,
+            channelConfig: channelConfig || {},
+            allowGuests: allowGuests !== false,
             eventStartNotificationSent: false,
             recurring: !!recurring,
             recurringInterval: recurringInterval || '',
@@ -167,6 +172,9 @@ router.post('/events', validateEvent, async (req, res) => {
         } else {
             const ref = await addDoc(collection(db, 'events'), baseEvent);
             await addAuditLog('CREATE_EVENT', req.session.user.id, `Created event "${title}"`, ref.id);
+            if (baseEvent.autoCreateChannels && baseEvent.status === 'active') {
+                createEventChannels({ id: ref.id, ...baseEvent }).catch(console.error);
+            }
             res.json({ id: ref.id, ...baseEvent });
         }
     } catch (err) {
@@ -180,11 +188,14 @@ router.post('/events', validateEvent, async (req, res) => {
  */
 router.put('/events/:id', validateEvent, async (req, res) => {
     try {
+        const eventSnap = await getDoc(doc(db, 'events', req.params.id));
+        const oldEvent = eventSnap.exists() ? eventSnap.data() : {};
+
         const {
             title, description, maxParticipants, accessMode, requiredRoles,
             approvalMode, assignRoleId, formFields,
             startDate, endDate, bannerUrl, category, status, reminderHours, checkinMessage,
-            customBotMessages
+            customBotMessages, autoCreateChannels, channelConfig, allowGuests
         } = req.body;
 
         const updates = {
@@ -204,6 +215,9 @@ router.put('/events/:id', validateEvent, async (req, res) => {
             reminderHours: Array.isArray(reminderHours) ? reminderHours : (reminderHours ? [{ hours: parseInt(reminderHours) || 0, sent: false }] : []),
             checkinMessage: checkinMessage || '',
             customBotMessages: customBotMessages || {},
+            autoCreateChannels: !!autoCreateChannels,
+            channelConfig: channelConfig || {},
+            allowGuests: allowGuests !== false,
             recurring: !!req.body.recurring,
             recurringInterval: req.body.recurringInterval || '',
             recurringUntil: req.body.recurringUntil || '',
@@ -212,6 +226,16 @@ router.put('/events/:id', validateEvent, async (req, res) => {
 
         await updateDoc(doc(db, 'events', req.params.id), updates);
         await addAuditLog('UPDATE_EVENT', req.session.user.id, `Updated event "${title}"`, req.params.id);
+
+        const isNowActive = updates.status === 'active';
+        const wasActive = oldEvent.status === 'active';
+
+        if (updates.autoCreateChannels && isNowActive && (!oldEvent.autoCreateChannels || !wasActive)) {
+            createEventChannels({ id: req.params.id, ...updates }).catch(console.error);
+        } else if ((oldEvent.autoCreateChannels && wasActive) && (!updates.autoCreateChannels || !isNowActive)) {
+            deleteEventChannels(req.params.id).catch(console.error);
+        }
+
         res.json({ id: req.params.id, ...updates });
     } catch (err) {
         console.error('Update event error:', err);
@@ -228,8 +252,21 @@ router.put('/events/:id/status', async (req, res) => {
         if (!['draft', 'active', 'archived', 'cancelled'].includes(status)) {
             return res.status(400).json({ error: 'Ungültiger Status' });
         }
+
+        const eventSnap = await getDoc(doc(db, 'events', req.params.id));
+        const oldEvent = eventSnap.exists() ? eventSnap.data() : {};
+
         await updateDoc(doc(db, 'events', req.params.id), { status, updatedAt: new Date().toISOString() });
         await addAuditLog('UPDATE_EVENT_STATUS', req.session.user.id, `Changed status to ${status}`, req.params.id);
+
+        if (oldEvent.autoCreateChannels) {
+            if (status === 'active' && oldEvent.status !== 'active') {
+                createEventChannels({ id: req.params.id, ...oldEvent, status }).catch(console.error);
+            } else if (status !== 'active' && oldEvent.status === 'active') {
+                deleteEventChannels(req.params.id).catch(console.error);
+            }
+        }
+
         res.json({ id: req.params.id, status });
     } catch (err) {
         console.error('Update event status error:', err);
@@ -250,6 +287,10 @@ router.put('/events/:id/cancel', async (req, res) => {
 
         // 1. Update status
         await updateDoc(doc(db, 'events', eventId), { status: 'cancelled', updatedAt: new Date().toISOString() });
+
+        if (event.autoCreateChannels && event.status === 'active') {
+            deleteEventChannels(eventId).catch(console.error);
+        }
 
         // 2. Notify participants
         const regQ = query(
@@ -299,6 +340,10 @@ router.post('/events/:id/start', async (req, res) => {
         await updateDoc(doc(col, eventId), updates);
         await addAuditLog('START_EVENT', req.session.user.id, `Manually started event "${data.title}"`, eventId);
 
+        if (data.autoCreateChannels && data.status !== 'active') {
+            createEventChannels({ id: eventId, ...data, ...updates }).catch(console.error);
+        }
+
         res.json({ success: true, updates });
     } catch (err) {
         console.error('Start event error:', err);
@@ -326,6 +371,10 @@ router.post('/events/:id/end', async (req, res) => {
         await updateDoc(doc(col, eventId), updates);
         await addAuditLog('END_EVENT', req.session.user.id, `Manually ended event "${data.title}"`, eventId);
 
+        if (data.autoCreateChannels && data.status === 'active') {
+            deleteEventChannels(eventId).catch(console.error);
+        }
+
         res.json({ success: true, updates });
     } catch (err) {
         console.error('End event error:', err);
@@ -338,6 +387,9 @@ router.post('/events/:id/end', async (req, res) => {
  */
 router.delete('/events/:id', async (req, res) => {
     try {
+        const eventSnap = await getDoc(doc(db, 'events', req.params.id));
+        const event = eventSnap.exists() ? eventSnap.data() : null;
+
         await deleteDoc(doc(db, 'events', req.params.id));
         // Also delete all registrations for this event
         const regQ = query(collection(db, 'registrations'), where('eventId', '==', req.params.id));
@@ -349,6 +401,11 @@ router.delete('/events/:id', async (req, res) => {
         await Promise.all(deletePromises);
 
         await addAuditLog('DELETE_EVENT', req.session.user.id, `Deleted event ${req.params.id}`, req.params.id);
+
+        if (event && event.autoCreateChannels && event.status === 'active') {
+            deleteEventChannels(req.params.id).catch(console.error);
+        }
+
         res.json({ success: true });
     } catch (err) {
         console.error('Delete event error:', err);
@@ -497,13 +554,17 @@ router.get('/events/:id/registrations/export', async (req, res) => {
         const formKeysArr = [...allFormKeys];
 
         // Build CSV
-        const headers = ['User', 'UserID', 'Status', 'Datum', ...formKeysArr];
+        const headers = ['User', 'UserID', 'Status', 'Datum', 'Gäste (Anzahl)', 'Gäste IDs', ...formKeysArr];
         const rows = registrations.map(r => {
+            const guestCount = Array.isArray(r.guests) ? r.guests.length : 0;
+            const guestIds = Array.isArray(r.guests) ? r.guests.join('; ') : '';
             const base = [
                 `"${(r.userName || '').replace(/"/g, '""')}"`,
                 r.userId,
                 r.status,
-                r.createdAt ? new Date(r.createdAt).toLocaleDateString('de-DE') : ''
+                r.createdAt ? new Date(r.createdAt).toLocaleDateString('de-DE') : '',
+                guestCount,
+                `"${guestIds}"`
             ];
             const formVals = formKeysArr.map(k => {
                 const val = r.formAnswers ? r.formAnswers[k] : '';
@@ -649,6 +710,40 @@ router.post('/events/:id/announce', async (req, res) => {
     } catch (err) {
         console.error('Announce error:', err);
         res.status(500).json({ error: 'Fehler beim Ankündigen' });
+    }
+});
+
+/**
+ * POST /api/admin/events/:id/sync-discord — Create native Discord Scheduled Event
+ */
+router.post('/events/:id/sync-discord', async (req, res) => {
+    try {
+        const eventSnap = await getDoc(doc(db, 'events', req.params.id));
+        if (!eventSnap.exists()) {
+            return res.status(404).json({ error: 'Event nicht gefunden' });
+        }
+
+        const event = eventSnap.data();
+
+        if (event.discordScheduledEventId) {
+            return res.status(400).json({ error: 'Dieses Event wurde bereits mit Discord synchronisiert.' });
+        }
+
+        const scheduledEventId = await createScheduledEvent({ id: req.params.id, ...event });
+
+        if (scheduledEventId) {
+            await updateDoc(doc(db, 'events', req.params.id), {
+                discordScheduledEventId: scheduledEventId,
+                updatedAt: new Date().toISOString()
+            });
+            await addAuditLog('SYNC_DISCORD_EVENT', req.session.user.id, `Synced event "${event.title}" to Discord`, req.params.id);
+            res.json({ success: true, discordScheduledEventId: scheduledEventId });
+        } else {
+            res.status(500).json({ error: 'Konnte das Scheduled Event in Discord nicht erstellen. Bitte Berechtigungen prüfen.' });
+        }
+    } catch (err) {
+        console.error('Sync discord event error:', err);
+        res.status(500).json({ error: 'Fehler beim Synchronisieren' });
     }
 });
 
