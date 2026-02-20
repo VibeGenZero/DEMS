@@ -1,22 +1,22 @@
 {
-    "version": "1.1.0",
-    "date": "2026-02-17",
+    "version": "2.0.0",
+    "date": "2026-02-20",
     "news": [
         {
-            "title": "🎉 DEMS Update 1.1.0",
-            "content": "Willkommen in der neuen Version! Wir haben einige coole Features hinzugefügt."
+            "title": "🎉 DEMS 2.0 ist da!",
+            "content": "Willkommen in der Version 2.0! Wir haben riesige neue Discord-Integrationen und Verbesserungen für das Event-Management hinzugefügt."
         },
         {
-            "title": "🤖 Eigene Bot-Nachrichten",
-            "content": "Admins können jetzt pro Event individuelle Nachrichten für Anmeldung, Zusage und Absage definieren. Nutze Platzhalter wie {user.name}!"
+            "title": "🎟️ Gästetickets",
+            "content": "Teilnehmer können nun bei Anmeldung Gäste hinzufügen (per Discord User ID). Gäste belegen automatisch reguläre Plätze."
         },
         {
-            "title": "⏯️ Manuelle Event-Steuerung",
-            "content": "Events können jetzt manuell gestartet und beendet werden, auch ohne festes Datum."
+            "title": "🎙️ Erweiterte Auto-Channels",
+            "content": "Admins können nun genau konfigurieren, ob Voice, Text oder beide Kanaltypen für ein Event in Discord erstellt werden sollen, inkl. eigener Namen."
         },
         {
-            "title": "📥 Discord Import",
-            "content": "Importiere geplante Events direkt aus deinem Discord-Server in das DEMS."
+            "title": "🔄 Native Discord Event Sync",
+            "content": "Du kannst jetzt deine DEMS Events per Knopfdruck als echtes 'Scheduled Event' in Discord anlegen!"
         }
     ]
 }

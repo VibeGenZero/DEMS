@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { db, collection, doc, getDoc, getDocs, addDoc, deleteDoc, updateDoc, query, where, orderBy } = require('../firebaseAdmin');
 const { requireAuth } = require('../middleware/auth');
-const { sendDM, assignRole, parseTemplate, getGuildRoles } = require('../bot');
+const { sendDM, assignRole, parseTemplate, getGuildRoles, addParticipantToEventChannels, removeParticipantFromEventChannels } = require('../bot');
 const { promoteFromWaitlist } = require('../utils/eventUtils');
 
 /**
@@ -58,7 +58,8 @@ router.get('/', async (req, res) => {
         regSnapshot.forEach(regDoc => {
             const data = regDoc.data();
             if (data.status === 'accepted' || data.status === 'pending') {
-                participantCounts[data.eventId] = (participantCounts[data.eventId] || 0) + 1;
+                const guestCount = Array.isArray(data.guests) ? data.guests.length : 0;
+                participantCounts[data.eventId] = (participantCounts[data.eventId] || 0) + 1 + guestCount;
             }
         });
 
@@ -124,6 +125,12 @@ router.get('/:id', async (req, res) => {
         );
         const regSnap = await getDocs(regQ);
 
+        let currentParticipants = 0;
+        regSnap.forEach(doc => {
+            const r = doc.data();
+            currentParticipants += 1 + (Array.isArray(r.guests) ? r.guests.length : 0);
+        });
+
         // Get waitlist count
         const waitQ = query(
             collection(db, 'registrations'),
@@ -135,7 +142,7 @@ router.get('/:id', async (req, res) => {
         res.json({
             id: docSnap.id,
             ...docSnap.data(),
-            currentParticipants: regSnap.size,
+            currentParticipants,
             waitlistCount: waitSnap.size
         });
     } catch (err) {
@@ -188,6 +195,12 @@ router.post('/:id/register', requireAuth, async (req, res) => {
         let status;
         let isWaitlisted = false;
 
+        const incomingGuests = Array.isArray(req.body.guests) ? req.body.guests : [];
+        if (event.allowGuests === false && incomingGuests.length > 0) {
+            return res.status(400).json({ error: 'Gäste sind für dieses Event nicht zugelassen.' });
+        }
+        const requiredSlots = 1 + incomingGuests.length;
+
         if (event.maxParticipants > 0) {
             const regQ = query(
                 collection(db, 'registrations'),
@@ -195,7 +208,14 @@ router.post('/:id/register', requireAuth, async (req, res) => {
                 where('status', 'in', ['pending', 'accepted'])
             );
             const regSnap = await getDocs(regQ);
-            if (regSnap.size >= event.maxParticipants) {
+
+            let currentCount = 0;
+            regSnap.forEach(doc => {
+                const r = doc.data();
+                currentCount += 1 + (r.guests ? r.guests.length : 0);
+            });
+
+            if (currentCount + requiredSlots > event.maxParticipants) {
                 status = 'waitlisted';
                 isWaitlisted = true;
             }
@@ -212,6 +232,7 @@ router.post('/:id/register', requireAuth, async (req, res) => {
             userName: user.displayName,
             status,
             formAnswers: req.body.formAnswers || {},
+            guests: incomingGuests,
             createdAt: new Date().toISOString()
         };
 
@@ -265,6 +286,9 @@ router.post('/:id/register', requireAuth, async (req, res) => {
 
             if (event.assignRoleId) {
                 await assignRole(user.id, event.assignRoleId, process.env.DISCORD_GUILD_ID);
+            }
+            if (event.discordChannelId || event.discordTextChannelId) {
+                await addParticipantToEventChannels(event, user.id);
             }
         } else {
             const template = customMsgs.registration || globalTemplates.registration;
@@ -320,8 +344,13 @@ router.delete('/:id/register', requireAuth, async (req, res) => {
         const eventSnap = await getDoc(doc(db, 'events', eventId));
         if (eventSnap.exists()) {
             const event = eventSnap.data();
-            if (regData.status === 'accepted' && event.assignRoleId) {
-                await removeRole(user.id, event.assignRoleId, process.env.DISCORD_GUILD_ID);
+            if (regData.status === 'accepted') {
+                if (event.assignRoleId) {
+                    await removeRole(user.id, event.assignRoleId, process.env.DISCORD_GUILD_ID);
+                }
+                if (event.discordChannelId || event.discordTextChannelId) {
+                    await removeParticipantFromEventChannels(event, user.id);
+                }
             }
 
             // Trigger waitlist promotion if a spot opened up

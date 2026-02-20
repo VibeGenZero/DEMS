@@ -680,6 +680,11 @@ async function showEventDetail(eventId) {
             registerArea.style.display = 'block';
             renderFormFields(event.formFields || []);
 
+            const guestArea = document.getElementById('guest-tickets-area');
+            if (guestArea) {
+                guestArea.style.display = event.allowGuests === false ? 'none' : 'block';
+            }
+
             const form = document.getElementById('registration-form');
 
             // Reset button state ensures we don't show "Wird gesendet..." from a previous cancelled attempt
@@ -1024,6 +1029,14 @@ async function submitRegistration(eventId, event, btnId, formContainerId) {
 
     const formAnswers = collectFormAnswers(event.formFields || [], formContainerId);
 
+    let guests = [];
+    if (formContainerId === 'dynamic-form-fields') {
+        const guestInput = document.getElementById('reg-guest-ids');
+        if (guestInput && guestInput.value) {
+            guests = guestInput.value.split(',').map(s => s.trim()).filter(Boolean);
+        }
+    }
+
     // Create an abort controller for timeout
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
@@ -1035,7 +1048,7 @@ async function submitRegistration(eventId, event, btnId, formContainerId) {
                 'Content-Type': 'application/json',
                 'X-CSRF-TOKEN': csrfToken
             },
-            body: JSON.stringify({ formAnswers }),
+            body: JSON.stringify({ formAnswers, guests }),
             signal: controller.signal
         });
 
@@ -1571,6 +1584,11 @@ async function loadAdminEvents() {
                 <button class="btn btn-sm btn-outline-light" onclick="editEvent('${event.id}')">
                   <i class="bi bi-pencil me-1"></i>Bearbeiten
                 </button>
+                ${!event.discordScheduledEventId ? `
+                <button class="btn btn-sm btn-outline-primary" onclick="syncDiscordEvent('${event.id}')" title="Als geplantes Event in Discord erstellen">
+                  <i class="bi bi-discord me-1"></i>Sync
+                </button>
+                ` : ''}
                 <div class="dropdown d-inline-block status-dropdown">
                   <button class="btn btn-sm btn-outline-light dropdown-toggle" data-bs-toggle="dropdown">
                     <i class="bi bi-toggle-on me-1"></i>Status
@@ -1896,6 +1914,12 @@ async function showCreateEventModal() {
     document.getElementById('event-status').value = 'active';
     document.getElementById('event-reminder').value = '0';
     document.getElementById('event-assign-role').value = '';
+    document.getElementById('event-auto-create-channels').checked = false;
+    document.getElementById('channel-config-options').style.display = 'none';
+    document.getElementById('event-channel-type').value = 'voice';
+    document.getElementById('event-voice-name').value = '';
+    document.getElementById('event-text-name').value = '';
+    document.getElementById('event-allow-guests').checked = true;
     document.getElementById('form-fields-builder').innerHTML = '';
     document.getElementById('role-requirement-area').style.display = 'none';
 
@@ -2020,6 +2044,16 @@ async function editEvent(eventId) {
         document.getElementById('event-status').value = event.status || 'active';
         document.getElementById('event-reminder').value = event.reminderHours || 0;
         document.getElementById('event-checkin-message').value = event.checkinMessage || '';
+        document.getElementById('event-auto-create-channels').checked = !!event.autoCreateChannels;
+
+        document.getElementById('channel-config-options').style.display = event.autoCreateChannels ? '' : 'none';
+        const cConfig = event.channelConfig || {};
+        document.getElementById('event-channel-type').value = cConfig.type || 'voice';
+        document.getElementById('event-voice-name').value = cConfig.voiceName || '';
+        document.getElementById('event-text-name').value = cConfig.textName || '';
+
+        // Allow Guests Toggle
+        document.getElementById('event-allow-guests').checked = event.allowGuests !== false;
 
         // Recurring fields
         const recurringCb = document.getElementById('event-recurring');
@@ -2089,6 +2123,13 @@ async function saveEvent() {
         recurringInterval: document.getElementById('event-recurring-interval').value,
         recurringUntil: document.getElementById('event-recurring-until').value,
         checkinMessage: document.getElementById('event-checkin-message').value,
+        autoCreateChannels: document.getElementById('event-auto-create-channels').checked,
+        channelConfig: {
+            type: document.getElementById('event-channel-type').value,
+            voiceName: document.getElementById('event-voice-name').value.trim(),
+            textName: document.getElementById('event-text-name').value.trim()
+        },
+        allowGuests: document.getElementById('event-allow-guests').checked,
         customBotMessages: {
             registration: document.getElementById('event-msg-registration').value,
             accepted: document.getElementById('event-msg-accepted').value,
@@ -2398,11 +2439,19 @@ async function showRegistrations(eventId, eventTitle) {
 
         const statusTexts = { pending: '⏳ Ausstehend', accepted: '✅ Angenommen', rejected: '❌ Abgelehnt', waitlisted: '📋 Warteliste' };
 
-        tbody.innerHTML = regs.map(reg => `
+        tbody.innerHTML = regs.map(reg => {
+            const guestsText = Array.isArray(reg.guests) && reg.guests.length > 0
+                ? `<span class="badge bg-secondary mb-1">${reg.guests.length} Gast/Gäste</span><br><small class="text-muted text-break" style="max-width: 120px; display: inline-block;">${reg.guests.map(g => escapeHtml(g)).join(', ')}</small>`
+                : '<span class="text-muted">—</span>';
+
+            return `
       <tr>
         <td>
           <strong>${escapeHtml(reg.userName)}</strong>
           <br><small class="text-muted">${reg.userId}</small>
+        </td>
+        <td>
+          ${guestsText}
         </td>
         <td>
           <span class="badge-pill status-${reg.status}">
@@ -2411,8 +2460,8 @@ async function showRegistrations(eventId, eventTitle) {
         </td>
         <td>
           ${Object.entries(reg.formAnswers || {}).map(([k, v]) =>
-            `<small><strong>${escapeHtml(k)}:</strong> ${escapeHtml(String(v))}</small>`
-        ).join('<br>') || '<small class="text-muted">—</small>'}
+                `<small><strong>${escapeHtml(k)}:</strong> ${escapeHtml(String(v))}</small>`
+            ).join('<br>') || '<small class="text-muted">—</small>'}
         </td>
         <td><small>${new Date(reg.createdAt).toLocaleDateString('de-DE')}</small></td>
         <td>
@@ -2426,7 +2475,8 @@ async function showRegistrations(eventId, eventTitle) {
           ` : '—'}
         </td>
       </tr>
-    `).join('');
+    `;
+        }).join('');
     } catch {
         tbody.innerHTML = '<tr><td colspan="5" class="text-center text-danger">Fehler</td></tr>';
     }
@@ -2489,6 +2539,31 @@ async function saveBotMessages() {
         }
     } catch {
         showToast('Fehler beim Speichern.', 'danger');
+    }
+}
+
+// ─── Discord Sync ────────────────────────────────
+async function syncDiscordEvent(eventId) {
+    if (!confirm('Dieses Event jetzt als geplantes Event in Discord erstellen?')) return;
+
+    try {
+        const res = await fetch(`/api/admin/events/${eventId}/sync-discord`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': window.csrfToken || ''
+            }
+        });
+
+        if (res.ok) {
+            showToast('Event erfolgreich in Discord erstellt!', 'success');
+            loadAdminEvents(); // Refresh view
+        } else {
+            const err = await res.json();
+            showToast(err.error || 'Fehler beim Synchronisieren.', 'danger');
+        }
+    } catch (err) {
+        showToast('Netzwerkfehler.', 'danger');
     }
 }
 
