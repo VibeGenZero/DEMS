@@ -2551,7 +2551,7 @@ async function syncDiscordEvent(eventId) {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'X-CSRF-TOKEN': window.csrfToken || ''
+                'X-CSRF-TOKEN': csrfToken
             }
         });
 
