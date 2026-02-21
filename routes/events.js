@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { db, collection, doc, getDoc, getDocs, addDoc, deleteDoc, updateDoc, query, where, orderBy } = require('../firebaseAdmin');
 const { requireAuth } = require('../middleware/auth');
-const { sendDM, assignRole, parseTemplate, getGuildRoles, addParticipantToEventChannels, removeParticipantFromEventChannels } = require('../bot');
+const { sendDM, assignRole, parseTemplate, getGuildRoles, addParticipantToEventChannels, removeParticipantFromEventChannels, removeRole } = require('../bot');
 const { promoteFromWaitlist } = require('../utils/eventUtils');
 
 /**
@@ -340,28 +340,34 @@ router.delete('/:id/register', requireAuth, async (req, res) => {
 
         res.json({ success: true, message: 'Abmeldung erfolgreich.' });
 
-        // Post-processing: If user was accepted, remove role
-        const eventSnap = await getDoc(doc(db, 'events', eventId));
-        if (eventSnap.exists()) {
-            const event = eventSnap.data();
-            if (regData.status === 'accepted') {
-                if (event.assignRoleId) {
-                    await removeRole(user.id, event.assignRoleId, process.env.DISCORD_GUILD_ID);
+        try {
+            // Post-processing: If user was accepted, remove role
+            const eventSnap = await getDoc(doc(db, 'events', eventId));
+            if (eventSnap.exists()) {
+                const event = eventSnap.data();
+                if (regData.status === 'accepted') {
+                    if (event.assignRoleId) {
+                        await removeRole(user.id, event.assignRoleId, process.env.DISCORD_GUILD_ID);
+                    }
+                    if (event.discordChannelId || event.discordTextChannelId) {
+                        await removeParticipantFromEventChannels(event, user.id);
+                    }
                 }
-                if (event.discordChannelId || event.discordTextChannelId) {
-                    await removeParticipantFromEventChannels(event, user.id);
-                }
-            }
 
-            // Trigger waitlist promotion if a spot opened up
-            if (regData.status === 'accepted' || regData.status === 'pending') {
-                await promoteFromWaitlist(eventId, event);
+                // Trigger waitlist promotion if a spot opened up
+                if (regData.status === 'accepted' || regData.status === 'pending') {
+                    await promoteFromWaitlist(eventId, event);
+                }
             }
+        } catch (postErr) {
+            console.error('Post-processing error after unregister:', postErr);
         }
 
     } catch (err) {
         console.error('Unregister error:', err);
-        res.status(500).json({ error: 'Fehler bei der Abmeldung' });
+        if (!res.headersSent) {
+            res.status(500).json({ error: 'Fehler bei der Abmeldung' });
+        }
     }
 });
 

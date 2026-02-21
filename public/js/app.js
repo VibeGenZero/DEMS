@@ -1315,7 +1315,7 @@ document.addEventListener('DOMContentLoaded', () => {
         })
         .then(user => {
             currentUser = user;
-            updateUI();
+            showLoggedIn();
 
             // Check hash for initial navigation
             const hash = window.location.hash.slice(1) || 'events';
@@ -1326,7 +1326,7 @@ document.addEventListener('DOMContentLoaded', () => {
         })
         .catch(() => {
             currentUser = null;
-            updateUI();
+            showLoggedOut();
             showLoginModal();
         });
 });
