@@ -1,22 +1,22 @@
 {
-    "version": "2.0.0",
-    "date": "2026-02-20",
+    "version": "2.1.0",
+    "date": "2026-03-08",
     "news": [
         {
-            "title": "🎉 DEMS 2.0 ist da!",
-            "content": "Willkommen in der Version 2.0! Wir haben riesige neue Discord-Integrationen und Verbesserungen für das Event-Management hinzugefügt."
+            "title": "🔁 Event-Serien als gruppierte Kacheln",
+            "content": "Wiederkehrende Events werden jetzt als eine einzige Kachel mit Terminliste angezeigt — ähnlich wie in Discord. Keine Flut an einzelnen Kacheln mehr! Klicke auf einen Termin, um zur Detailseite zu gelangen."
         },
         {
-            "title": "🎟️ Gästetickets",
-            "content": "Teilnehmer können nun bei Anmeldung Gäste hinzufügen (per Discord User ID). Gäste belegen automatisch reguläre Plätze."
+            "title": "📋 Serien-Terminübersicht",
+            "content": "Auf der Event-Detailseite siehst du jetzt alle Termine der Serie auf einen Blick. Der aktuelle Termin wird hervorgehoben, und du kannst direkt zwischen den Terminen wechseln."
         },
         {
-            "title": "🎙️ Erweiterte Auto-Channels",
-            "content": "Admins können nun genau konfigurieren, ob Voice, Text oder beide Kanaltypen für ein Event in Discord erstellt werden sollen, inkl. eigener Namen."
+            "title": "🗑️ Serien-Verwaltung für Admins",
+            "content": "Admins können im Admin-Bereich Serien als Gruppe sehen, einzelne Termine bearbeiten oder die gesamte Serie auf einmal löschen."
         },
         {
-            "title": "🔄 Native Discord Event Sync",
-            "content": "Du kannst jetzt deine DEMS Events per Knopfdruck als echtes 'Scheduled Event' in Discord anlegen!"
+            "title": "📅 Anmeldung pro Einzeltermin",
+            "content": "Trotz der neuen Gruppierung bleibt die Anmeldung flexibel: Nutzer melden sich weiterhin für einzelne Termine an — nicht für die ganze Serie."
         }
     ]
 }
