@@ -1,22 +1,10 @@
 {
-    "version": "2.0.0",
-    "date": "2026-02-20",
+    "version": "2.0.1",
+    "date": "2026-03-08",
     "news": [
         {
-            "title": "🎉 DEMS 2.0 ist da!",
-            "content": "Willkommen in der Version 2.0! Wir haben riesige neue Discord-Integrationen und Verbesserungen für das Event-Management hinzugefügt."
-        },
-        {
-            "title": "🎟️ Gästetickets",
-            "content": "Teilnehmer können nun bei Anmeldung Gäste hinzufügen (per Discord User ID). Gäste belegen automatisch reguläre Plätze."
-        },
-        {
-            "title": "🎙️ Erweiterte Auto-Channels",
-            "content": "Admins können nun genau konfigurieren, ob Voice, Text oder beide Kanaltypen für ein Event in Discord erstellt werden sollen, inkl. eigener Namen."
-        },
-        {
-            "title": "🔄 Native Discord Event Sync",
-            "content": "Du kannst jetzt deine DEMS Events per Knopfdruck als echtes 'Scheduled Event' in Discord anlegen!"
+            "title": "🐛 Zeitzonen-Fix",
+            "content": "Event-Zeiten werden jetzt korrekt als UTC-ISO-Strings gespeichert. Benachrichtigungen und Discord-Event-Sync starten nun pünktlich zur eingegebenen Uhrzeit."
         }
     ]
 }

@@ -1,6 +1,8 @@
 const { Client, GatewayIntentBits, EmbedBuilder, REST, Routes, SlashCommandBuilder, PermissionsBitField, ChannelType } = require('discord.js');
 const { db, collection, doc, getDoc, getDocs, addDoc, updateDoc, query, where, orderBy } = require('./firebaseAdmin');
 
+const TIMEZONE = process.env.TIMEZONE || 'Europe/Berlin';
+
 const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
@@ -158,7 +160,7 @@ client.on('interactionCreate', async (interaction) => {
                     .setColor(0x8b5cf6)
                     .setDescription((ev.description || '').substring(0, 200))
                     .addFields(
-                        { name: '📅 Datum', value: ev.startDate ? new Date(ev.startDate).toLocaleString('de-DE') : 'TBD', inline: true },
+                        { name: '📅 Datum', value: ev.startDate ? new Date(ev.startDate).toLocaleString('de-DE', { timeZone: TIMEZONE }) : 'TBD', inline: true },
                         { name: '👥 Plätze', value: ev.maxParticipants > 0 ? `${ev.currentParticipants || 0}/${ev.maxParticipants}` : 'Unbegrenzt', inline: true },
                         { name: '🔗 Link', value: `[Zur Anmeldung](${baseUrl}/#events/${ev.id})`, inline: true }
                     );
@@ -351,7 +353,7 @@ function buildEventEmbed(event, registrationLink) {
         .setTitle(`🎉 ${event.title}`)
         .setDescription(event.description || 'Keine Beschreibung.')
         .addFields(
-            { name: '🗓️ Datum', value: event.startDate ? new Date(event.startDate).toLocaleString('de-DE') : 'TBA', inline: true },
+            { name: '🗓️ Datum', value: event.startDate ? new Date(event.startDate).toLocaleString('de-DE', { timeZone: TIMEZONE }) : 'TBA', inline: true },
             { name: '👥 Teilnehmer', value: event.maxParticipants > 0 ? `Max. ${event.maxParticipants}` : 'Unbegrenzt', inline: true },
             { name: '🔓 Zugang', value: event.accessMode === 'open' ? 'Offen für alle' : 'Rollen-Requirement', inline: true }
         )
@@ -545,7 +547,7 @@ async function checkReminders() {
                     );
                     const regs = await getDocs(regQ);
 
-                    const timeStr = startTime.toLocaleString('de-DE');
+                    const timeStr = startTime.toLocaleString('de-DE', { timeZone: TIMEZONE });
                     for (const regDoc of regs.docs) {
                         const reg = regDoc.data();
                         await sendDM(reg.userId,
@@ -824,7 +826,7 @@ async function createEventChannels(event) {
                 .setColor(0x8b5cf6)
                 .setDescription(event.description ? event.description.substring(0, 1000) : 'Keine Beschreibung.')
                 .addFields(
-                    { name: '📅 Start', value: event.startDate ? new Date(event.startDate).toLocaleString('de-DE', { dateStyle: 'long', timeStyle: 'short' }) + ' Uhr' : 'TBD', inline: true },
+                    { name: '📅 Start', value: event.startDate ? new Date(event.startDate).toLocaleString('de-DE', { timeZone: TIMEZONE, dateStyle: 'long', timeStyle: 'short' }) + ' Uhr' : 'TBD', inline: true },
                     { name: '🔗 Link', value: `[Zur Event-Seite](${baseUrl}/#events/${event.id})`, inline: true }
                 )
                 .setFooter({ text: 'Automatisierter Event Channel' });
