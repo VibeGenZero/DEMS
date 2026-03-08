@@ -430,7 +430,89 @@ async function showEventsSection() {
                 ? `<span class="event-category-tag">${escapeHtml(event.category)}</span>`
                 : '';
 
-            // Sanitize date (replace space with T for ISO compatibility)
+            // Series event card
+            if (event.seriesDates && event.seriesDates.length > 1) {
+                const maxVisible = 4;
+                const visibleDates = event.seriesDates.slice(0, maxVisible);
+                const hiddenCount = event.seriesDates.length - maxVisible;
+                const seriesCardId = `series-${event.seriesId}`;
+
+                // Find the next upcoming date for countdown
+                const now = new Date().toISOString();
+                const nextDate = event.seriesDates.find(d => d.startDate >= now);
+                const countdownDate = nextDate ? nextDate.startDate.replace(' ', 'T') : null;
+                const countdownId = `cd-series-${event.seriesId}`;
+
+                const datesHtml = visibleDates.map(d => {
+                    const safeD = d.startDate ? d.startDate.replace(' ', 'T') : null;
+                    const dateStr = safeD ? new Date(safeD).toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
+                    return `
+                      <a class="series-date-item" href="#" onclick="event.stopPropagation(); navigateTo('event/${d.id}'); return false;">
+                        <span><i class="bi bi-calendar-event me-2"></i>${dateStr}</span>
+                        <span class="series-date-participants"><i class="bi bi-people me-1"></i>${d.currentParticipants || 0}${event.maxParticipants > 0 ? '/' + event.maxParticipants : ''}</span>
+                      </a>`;
+                }).join('');
+
+                const hiddenDatesHtml = hiddenCount > 0
+                    ? event.seriesDates.slice(maxVisible).map(d => {
+                        const safeD = d.startDate ? d.startDate.replace(' ', 'T') : null;
+                        const dateStr = safeD ? new Date(safeD).toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
+                        return `
+                          <a class="series-date-item" href="#" onclick="event.stopPropagation(); navigateTo('event/${d.id}'); return false;">
+                            <span><i class="bi bi-calendar-event me-2"></i>${dateStr}</span>
+                            <span class="series-date-participants"><i class="bi bi-people me-1"></i>${d.currentParticipants || 0}${event.maxParticipants > 0 ? '/' + event.maxParticipants : ''}</span>
+                          </a>`;
+                    }).join('')
+                    : '';
+
+                return `
+            <div class="col-md-6 col-lg-4">
+              <div class="glass-card event-card series-card">
+                ${bannerHtml}
+                <div class="card-body">
+                  <div class="d-flex justify-content-between align-items-start mb-2">
+                    <h5 class="mb-0">${escapeHtml(event.title)}</h5>
+                    <div class="d-flex gap-2 align-items-center">
+                      ${categoryHtml}
+                      <span class="series-badge"><i class="bi bi-arrow-repeat me-1"></i>Serie</span>
+                    </div>
+                  </div>
+                  <p>${escapeHtml(event.description || '').substring(0, 120)}${(event.description || '').length > 120 ? '...' : ''}</p>
+                  ${countdownDate ? `<div class="countdown" id="${countdownId}" data-date="${countdownDate}"></div>` : ''}
+                  <div class="series-dates-list">
+                    <div class="series-dates-header"><i class="bi bi-list-ul me-1"></i>Termine der Serie</div>
+                    ${datesHtml}
+                    ${hiddenCount > 0 ? `
+                      <div class="series-dates-hidden" id="${seriesCardId}-hidden" style="display:none;">
+                        ${hiddenDatesHtml}
+                      </div>
+                      <a class="series-dates-toggle" href="#" onclick="event.stopPropagation(); toggleSeriesDates('${seriesCardId}'); return false;">
+                        <i class="bi bi-chevron-down me-1" id="${seriesCardId}-icon"></i><span id="${seriesCardId}-text">${hiddenCount} weitere Termine anzeigen</span>
+                      </a>
+                    ` : ''}
+                  </div>
+                  <div class="d-flex flex-wrap gap-2 mt-3">
+                    <span class="badge-pill">
+                      <i class="bi bi-${event.accessMode === 'open' ? 'unlock' : 'lock'}"></i>
+                      ${event.accessMode === 'open' ? 'Offen' : 'Rolle nötig'}
+                    </span>
+                    <span class="badge-pill">
+                      <i class="bi bi-${event.approvalMode === 'instant' ? 'lightning' : 'hourglass-split'}"></i>
+                      ${event.approvalMode === 'instant' ? 'Instant' : 'Manuell'}
+                    </span>
+                    ${event.maxParticipants > 0 ? `
+                      <span class="badge-pill">
+                        <i class="bi bi-people"></i>Max ${event.maxParticipants}
+                      </span>
+                    ` : ''}
+                  </div>
+                </div>
+              </div>
+            </div>
+          `;
+            }
+
+            // Standard (non-series) event card
             const safeDate = event.startDate ? event.startDate.replace(' ', 'T') : null;
             let dateHtml = '';
             try {
@@ -482,9 +564,17 @@ async function showEventsSection() {
             img.addEventListener('error', () => { img.style.display = 'none'; });
         });
 
-        // Start countdowns
+        // Start countdowns for standard events
         events.forEach(event => {
-            if (event.startDate) {
+            if (event.seriesDates) {
+                // Series: countdown for the next upcoming date
+                const now = new Date().toISOString();
+                const nextDate = event.seriesDates.find(d => d.startDate >= now);
+                if (nextDate) {
+                    const el = document.getElementById(`cd-series-${event.seriesId}`);
+                    if (el) startCountdown(el, nextDate.startDate.replace(' ', 'T'));
+                }
+            } else if (event.startDate) {
                 const safeDate = event.startDate.replace(' ', 'T');
                 const el = document.getElementById(`cd-${event.id}`);
                 if (el) startCountdown(el, safeDate);
@@ -604,6 +694,45 @@ async function showEventDetail(eventId) {
             dateBadge.innerHTML = `<i class="bi bi-calendar3"></i>${dateStr}`;
         } else {
             dateBadge.style.display = 'none';
+        }
+
+        // Render series dates section if this event belongs to a series
+        let seriesContainer = document.getElementById('detail-series-section');
+        if (!seriesContainer) {
+            seriesContainer = document.createElement('div');
+            seriesContainer.id = 'detail-series-section';
+            const badgesArea = document.querySelector('#event-detail-card .detail-badges');
+            if (badgesArea) badgesArea.parentNode.insertBefore(seriesContainer, badgesArea.nextSibling);
+        }
+        if (event.seriesId) {
+            try {
+                const seriesRes = await fetch(`/api/events/series/${event.seriesId}`);
+                const seriesEvents = await seriesRes.json();
+                if (Array.isArray(seriesEvents) && seriesEvents.length > 1) {
+                    seriesContainer.innerHTML = `
+                        <div class="series-detail-section mt-4">
+                            <h6 class="mb-3"><i class="bi bi-arrow-repeat me-2"></i>Termine der Serie</h6>
+                            <div class="series-dates-list">
+                                ${seriesEvents.map(se => {
+                                    const isCurrent = se.id === eventId;
+                                    const safeD = se.startDate ? se.startDate.replace(' ', 'T') : null;
+                                    const dateStr = safeD ? new Date(safeD).toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
+                                    return `
+                                        <a class="series-date-item ${isCurrent ? 'active' : ''}" href="#" onclick="navigateTo('event/${se.id}'); return false;">
+                                            <span><i class="bi bi-calendar-event me-2"></i>${dateStr}</span>
+                                            <span class="series-date-participants"><i class="bi bi-people me-1"></i>${se.currentParticipants || 0}${se.maxParticipants > 0 ? '/' + se.maxParticipants : ''}</span>
+                                        </a>`;
+                                }).join('')}
+                            </div>
+                        </div>`;
+                } else {
+                    seriesContainer.innerHTML = '';
+                }
+            } catch {
+                seriesContainer.innerHTML = '';
+            }
+        } else {
+            seriesContainer.innerHTML = '';
         }
 
         // Check areas
@@ -1543,11 +1672,78 @@ async function loadAdminEvents() {
 
         const statusMap = { active: 'Aktiv', draft: 'Entwurf', archived: 'Archiviert' };
 
-        grid.innerHTML = events.map(event => {
+        // Group events by seriesId for admin view
+        const seriesGroups = {};
+        const standaloneEvents = [];
+        for (const event of events) {
+            if (event.seriesId) {
+                if (!seriesGroups[event.seriesId]) seriesGroups[event.seriesId] = [];
+                seriesGroups[event.seriesId].push(event);
+            } else {
+                standaloneEvents.push(event);
+            }
+        }
+
+        // Convert series groups to grouped entries
+        const groupedEvents = [...standaloneEvents];
+        for (const [seriesId, seriesEvents] of Object.entries(seriesGroups)) {
+            seriesEvents.sort((a, b) => (a.startDate || '').localeCompare(b.startDate || ''));
+            // Use first event as representative, attach all events
+            const rep = { ...seriesEvents[0], _seriesEvents: seriesEvents, _seriesId: seriesId };
+            groupedEvents.push(rep);
+        }
+        // Sort by createdAt desc (admin view)
+        groupedEvents.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+
+        grid.innerHTML = groupedEvents.map(event => {
             const status = event.status || 'active';
             const bannerHtml = isValidBannerUrl(event.bannerUrl)
                 ? `<img src="${escapeHtml(event.bannerUrl)}" class="event-banner" alt="Banner" style="border-radius: var(--radius-lg) var(--radius-lg) 0 0;">`
                 : '';
+
+            // Series group card
+            if (event._seriesEvents) {
+                const seriesEvents = event._seriesEvents;
+                const datesHtml = seriesEvents.map(se => {
+                    const dateStr = se.startDate ? new Date(se.startDate).toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
+                    const seStatus = se.status || 'active';
+                    return `
+                      <div class="series-admin-date-item d-flex justify-content-between align-items-center">
+                        <span><i class="bi bi-calendar-event me-2"></i>${dateStr}</span>
+                        <div class="d-flex gap-1">
+                          <span class="event-status-badge event-status-${seStatus}" style="font-size:0.7rem;">${statusMap[seStatus] || seStatus}</span>
+                          <button class="btn btn-sm btn-outline-light py-0 px-1" onclick="editEvent('${se.id}')" title="Bearbeiten"><i class="bi bi-pencil"></i></button>
+                          <button class="btn btn-sm btn-outline-light py-0 px-1" onclick="showRegistrations('${se.id}', '${escapeHtml(se.title).replace(/'/g, "\\\'")}')"><i class="bi bi-list-check"></i></button>
+                        </div>
+                      </div>`;
+                }).join('');
+
+                return `
+            <div class="col-md-6">
+              <div class="glass-card admin-event-card series-admin-card">
+                ${bannerHtml}
+                <div class="p-4">
+                  <div class="d-flex justify-content-between align-items-start mb-2">
+                    <h5 class="mb-0">${escapeHtml(event.title)}</h5>
+                    <div class="d-flex gap-2 align-items-center">
+                      <span class="series-badge"><i class="bi bi-arrow-repeat me-1"></i>Serie (${seriesEvents.length})</span>
+                    </div>
+                  </div>
+                  <p class="text-secondary small mb-2">${escapeHtml(event.description || '').substring(0, 120)}${(event.description || '').length > 120 ? '...' : ''}</p>
+                  ${event.category ? `<span class="event-category-tag mb-2 d-inline-block">${escapeHtml(event.category)}</span>` : ''}
+                  <div class="series-dates-list mt-2 mb-3">
+                    <div class="series-dates-header"><i class="bi bi-list-ul me-1"></i>Termine</div>
+                    ${datesHtml}
+                  </div>
+                  <div class="admin-actions">
+                    <button class="btn btn-sm btn-outline-danger" onclick="deleteEventSeries('${event._seriesId}')">
+                      <i class="bi bi-trash me-1"></i>Ganze Serie löschen
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>`;
+            }
 
             return `
         <div class="col-md-6">
@@ -1754,6 +1950,20 @@ function getParticipantWarningBadge(event) {
         return `<span class="badge-pill spots-warning"><i class="bi bi-exclamation-triangle"></i>Nur noch ${remaining} ${remaining === 1 ? 'Platz' : 'Plätze'}!</span>`;
     }
     return '';
+}
+
+// ─── Series Toggle ──────────────────────────────
+function toggleSeriesDates(seriesCardId) {
+    const hidden = document.getElementById(`${seriesCardId}-hidden`);
+    const icon = document.getElementById(`${seriesCardId}-icon`);
+    const text = document.getElementById(`${seriesCardId}-text`);
+    if (!hidden) return;
+
+    const isVisible = hidden.style.display !== 'none';
+    hidden.style.display = isVisible ? 'none' : 'block';
+    if (icon) icon.className = `bi bi-chevron-${isVisible ? 'down' : 'up'} me-1`;
+    if (text) text.textContent = isVisible ? text.dataset.showText || 'Weitere Termine anzeigen' : 'Weniger anzeigen';
+    if (!text.dataset.showText) text.dataset.showText = text.textContent;
 }
 
 // ─── Debounced Search ─────────────────────────────
@@ -2175,6 +2385,22 @@ async function deleteEvent(eventId) {
         loadAdminStats();
     } catch {
         showToast('Fehler beim Löschen.', 'danger');
+    }
+}
+
+async function deleteEventSeries(seriesId) {
+    if (!confirm('Ganze Serie wirklich löschen? Alle Termine und Anmeldungen werden gelöscht.')) return;
+    try {
+        const res = await fetch(`/api/admin/events/series/${seriesId}`, {
+            method: 'DELETE',
+            headers: { 'X-CSRF-TOKEN': csrfToken }
+        });
+        const data = await res.json();
+        showToast(`Serie gelöscht (${data.deletedCount || 0} Events).`, 'success');
+        loadAdminEvents();
+        loadAdminStats();
+    } catch {
+        showToast('Fehler beim Löschen der Serie.', 'danger');
     }
 }
 

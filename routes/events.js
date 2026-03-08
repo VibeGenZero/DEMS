@@ -69,6 +69,48 @@ router.get('/', async (req, res) => {
             currentParticipants: participantCounts[e.id] || 0
         }));
 
+        // Group series events: replace multiple events with same seriesId by one representative
+        const seriesGroups = {};
+        const standalone = [];
+        for (const event of events) {
+            if (event.seriesId) {
+                if (!seriesGroups[event.seriesId]) {
+                    seriesGroups[event.seriesId] = [];
+                }
+                seriesGroups[event.seriesId].push(event);
+            } else {
+                standalone.push(event);
+            }
+        }
+
+        // For each series, pick the next upcoming event as representative and attach seriesDates
+        const now = new Date().toISOString();
+        for (const [seriesId, seriesEvents] of Object.entries(seriesGroups)) {
+            // Sort by startDate ascending
+            seriesEvents.sort((a, b) => (a.startDate || '').localeCompare(b.startDate || ''));
+
+            // Pick the next upcoming event, or the last one if all are past
+            const representative = seriesEvents.find(e => e.startDate >= now) || seriesEvents[seriesEvents.length - 1];
+
+            representative.seriesDates = seriesEvents.map(e => ({
+                id: e.id,
+                startDate: e.startDate,
+                endDate: e.endDate,
+                currentParticipants: e.currentParticipants
+            }));
+
+            standalone.push(representative);
+        }
+
+        // Re-sort after grouping
+        standalone.sort((a, b) => {
+            const dateA = a.startDate || a.createdAt || '';
+            const dateB = b.startDate || b.createdAt || '';
+            return dateA.localeCompare(dateB);
+        });
+
+        events = standalone;
+
         // Apply pagination
         const total = events.length;
         const totalPages = Math.ceil(total / limit);
@@ -87,6 +129,50 @@ router.get('/', async (req, res) => {
     } catch (err) {
         console.error('Error fetching events:', err);
         res.status(500).json({ error: 'Fehler beim Laden der Events' });
+    }
+});
+
+/**
+ * GET /api/events/series/:seriesId — Get all events in a series
+ */
+router.get('/series/:seriesId', async (req, res) => {
+    try {
+        const seriesId = req.params.seriesId;
+        const snapshot = await getDocs(collection(db, 'events'));
+        const seriesEvents = [];
+        snapshot.forEach(docSnap => {
+            if (docSnap.data().seriesId === seriesId) {
+                seriesEvents.push({ id: docSnap.id, ...docSnap.data() });
+            }
+        });
+
+        if (!seriesEvents.length) {
+            return res.status(404).json({ error: 'Serie nicht gefunden' });
+        }
+
+        // Sort by startDate ascending
+        seriesEvents.sort((a, b) => (a.startDate || '').localeCompare(b.startDate || ''));
+
+        // Get participant counts
+        const regSnapshot = await getDocs(collection(db, 'registrations'));
+        const participantCounts = {};
+        regSnapshot.forEach(regDoc => {
+            const data = regDoc.data();
+            if (data.status === 'accepted' || data.status === 'pending') {
+                const guestCount = Array.isArray(data.guests) ? data.guests.length : 0;
+                participantCounts[data.eventId] = (participantCounts[data.eventId] || 0) + 1 + guestCount;
+            }
+        });
+
+        const result = seriesEvents.map(e => ({
+            ...e,
+            currentParticipants: participantCounts[e.id] || 0
+        }));
+
+        res.json(result);
+    } catch (err) {
+        console.error('Error fetching series:', err);
+        res.status(500).json({ error: 'Fehler beim Laden der Serie' });
     }
 });
 
