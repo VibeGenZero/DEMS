@@ -1,3 +1,4 @@
+const crypto = require('crypto');
 const express = require('express');
 const router = express.Router();
 const {
@@ -143,6 +144,7 @@ router.post('/events', validateEvent, async (req, res) => {
 
         // Generate recurring instances
         if (recurring && startDate && recurringUntil) {
+            const seriesId = crypto.randomUUID();
             const createdEvents = [];
             let currentStart = new Date(startDate);
             const untilDate = new Date(recurringUntil);
@@ -151,6 +153,7 @@ router.post('/events', validateEvent, async (req, res) => {
             while (currentStart <= untilDate) {
                 const instance = {
                     ...baseEvent,
+                    seriesId,
                     startDate: currentStart.toISOString(),
                     endDate: duration ? new Date(currentStart.getTime() + duration).toISOString() : '',
                 };
@@ -410,6 +413,50 @@ router.delete('/events/:id', async (req, res) => {
     } catch (err) {
         console.error('Delete event error:', err);
         res.status(500).json({ error: 'Fehler beim Löschen' });
+    }
+});
+
+/**
+ * DELETE /api/admin/events/series/:seriesId — Delete all events in a series
+ */
+router.delete('/events/series/:seriesId', async (req, res) => {
+    try {
+        const seriesId = req.params.seriesId;
+        const snapshot = await getDocs(collection(db, 'events'));
+        const eventIds = [];
+        snapshot.forEach(docSnap => {
+            if (docSnap.data().seriesId === seriesId) {
+                eventIds.push(docSnap.id);
+            }
+        });
+
+        if (!eventIds.length) {
+            return res.status(404).json({ error: 'Serie nicht gefunden' });
+        }
+
+        // Delete all events and their registrations
+        for (const eventId of eventIds) {
+            const event = (await getDoc(doc(db, 'events', eventId))).data();
+            await deleteDoc(doc(db, 'events', eventId));
+
+            const regQ = query(collection(db, 'registrations'), where('eventId', '==', eventId));
+            const regs = await getDocs(regQ);
+            const deletePromises = [];
+            regs.forEach(regDoc => {
+                deletePromises.push(deleteDoc(doc(db, 'registrations', regDoc.id)));
+            });
+            await Promise.all(deletePromises);
+
+            if (event && event.autoCreateChannels && event.status === 'active') {
+                deleteEventChannels(eventId).catch(console.error);
+            }
+        }
+
+        await addAuditLog('DELETE_SERIES', req.session.user.id, `Deleted series ${seriesId} (${eventIds.length} events)`, eventIds[0]);
+        res.json({ success: true, deletedCount: eventIds.length });
+    } catch (err) {
+        console.error('Delete series error:', err);
+        res.status(500).json({ error: 'Fehler beim Löschen der Serie' });
     }
 });
 

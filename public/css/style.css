@@ -383,6 +383,116 @@ body {
   margin-bottom: 1.5rem;
 }
 
+/* ─── Event Series ────────────────────────────── */
+.series-card {
+  cursor: default;
+}
+
+.series-badge {
+  background: linear-gradient(135deg, var(--accent), var(--accent-light));
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 0.2rem 0.6rem;
+  border-radius: 20px;
+  white-space: nowrap;
+}
+
+.series-dates-list {
+  margin-top: 0.75rem;
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  overflow: hidden;
+}
+
+.series-dates-header {
+  padding: 0.5rem 0.75rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.series-date-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.85rem;
+  color: var(--text-primary);
+  text-decoration: none;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  transition: background 0.2s;
+}
+
+.series-date-item:last-child {
+  border-bottom: none;
+}
+
+.series-date-item:hover {
+  background: rgba(139, 92, 246, 0.1);
+  color: var(--accent-light);
+}
+
+.series-date-item.active {
+  background: rgba(139, 92, 246, 0.15);
+  border-left: 3px solid var(--accent);
+  color: var(--accent-light);
+  font-weight: 600;
+}
+
+.series-date-participants {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.series-dates-toggle {
+  display: block;
+  text-align: center;
+  padding: 0.5rem;
+  font-size: 0.8rem;
+  color: var(--accent-light);
+  text-decoration: none;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  transition: background 0.2s;
+}
+
+.series-dates-toggle:hover {
+  background: rgba(139, 92, 246, 0.08);
+  color: var(--accent);
+}
+
+.series-detail-section {
+  border-radius: var(--radius);
+  padding: 1rem;
+  background: rgba(139, 92, 246, 0.05);
+  border: 1px solid rgba(139, 92, 246, 0.15);
+}
+
+.series-detail-section h6 {
+  color: var(--accent-light);
+  font-weight: 700;
+}
+
+.series-admin-date-item {
+  padding: 0.4rem 0.75rem;
+  font-size: 0.82rem;
+  color: var(--text-primary);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.series-admin-date-item:last-child {
+  border-bottom: none;
+}
+
+.series-admin-card {
+  border: 1px solid rgba(139, 92, 246, 0.2);
+}
+
 /* Rendered Markdown Content */
 .markdown-body {
   color: var(--text-secondary);
