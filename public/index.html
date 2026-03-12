@@ -100,6 +100,11 @@
                 <i class="bi bi-gear me-1"></i>Admin
               </a>
             </li>
+            <li class="nav-item" id="nav-bot-control" style="display:none;">
+              <a class="nav-link" href="#bot-control" data-section="bot-control-section">
+                <i class="bi bi-robot me-1"></i>Bot-Zentrale
+              </a>
+            </li>
             <li class="nav-item">
               <a class="nav-link" href="#info" data-section="info-section">
                 <i class="bi bi-info-circle me-1"></i>Info
@@ -409,6 +414,150 @@
               <!-- Rendered dynamically -->
             </div>
           </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Bot Control Center (Bot-Zentrale) -->
+    <section id="bot-control-section" class="app-section" style="display:none;">
+      <div class="container section-container">
+        <div class="section-header">
+          <h2><i class="bi bi-robot me-2"></i>Bot-Zentrale</h2>
+          <p class="text-secondary mb-0">Steuere und konfiguriere den Discord Bot.</p>
+        </div>
+
+        <!-- Bot Status Overview -->
+        <div class="bot-status-panel glass-card p-4 mb-4" id="bot-status-panel">
+          <!-- Rendered dynamically -->
+        </div>
+
+        <!-- Running Events -->
+        <div class="mb-4">
+          <h4 class="mb-3"><i class="bi bi-broadcast me-2"></i>Laufende Events</h4>
+          <div id="bot-running-events" class="row g-3">
+            <!-- Rendered dynamically -->
+          </div>
+        </div>
+
+        <!-- Bot Settings -->
+        <div class="glass-card p-4 mb-4">
+          <h4 class="mb-3"><i class="bi bi-sliders me-2"></i>Bot Einstellungen</h4>
+          <form id="bot-settings-form">
+            <div class="row g-4">
+              <!-- Presence Settings -->
+              <div class="col-md-6">
+                <div class="bot-settings-group">
+                  <h6 class="bot-settings-group-title"><i class="bi bi-circle-fill me-2"></i>Presence / Status</h6>
+                  <div class="mb-3">
+                    <label class="form-label">Online-Status</label>
+                    <select class="form-select" id="bot-status-type">
+                      <option value="online">Online</option>
+                      <option value="idle">Abwesend (Idle)</option>
+                      <option value="dnd">Nicht stören (DND)</option>
+                      <option value="invisible">Unsichtbar</option>
+                    </select>
+                  </div>
+                  <div class="mb-3">
+                    <label class="form-label">Aktivitätstyp</label>
+                    <select class="form-select" id="bot-activity-type">
+                      <option value="WATCHING">Schaut zu</option>
+                      <option value="PLAYING">Spielt</option>
+                      <option value="LISTENING">Hört zu</option>
+                      <option value="COMPETING">Tritt an in</option>
+                    </select>
+                  </div>
+                  <div class="mb-3">
+                    <label class="form-label">Aktivitätstext</label>
+                    <input type="text" class="form-control" id="bot-activity-text" placeholder="z.B. {events.list.details}" maxlength="128">
+                    <small class="text-muted">Leer lassen um keine Aktivität anzuzeigen. Variablen werden automatisch ersetzt.</small>
+                    <div class="mt-2">
+                      <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="collapse" data-bs-target="#activity-vars-ref">
+                        <i class="bi bi-code-slash me-1"></i>Verfügbare Variablen
+                      </button>
+                      <div class="collapse mt-2" id="activity-vars-ref">
+                        <div class="variable-ref-card">
+                          <div class="variable-ref-title">Event-Variablen</div>
+                          <div class="variable-ref-item"><code>{events.count}</code> Anzahl aktiver Events</div>
+                          <div class="variable-ref-item"><code>{events.next}</code> Titel des nächsten Events</div>
+                          <div class="variable-ref-item"><code>{events.next.date}</code> Datum des nächsten Events</div>
+                          <div class="variable-ref-item"><code>{events.next.time}</code> Uhrzeit des nächsten Events</div>
+                          <div class="variable-ref-item"><code>{events.next.participants}</code> Teilnehmer des nächsten Events</div>
+                          <div class="variable-ref-item"><code>{events.list}</code> Nächste 2 Events (Titel)</div>
+                          <div class="variable-ref-item"><code>{events.list.details}</code> Nächste 2 Events mit Datum</div>
+                          <div class="variable-ref-title mt-2">Server-Variablen</div>
+                          <div class="variable-ref-item"><code>{server.name}</code> Server-Name</div>
+                          <div class="variable-ref-item"><code>{server.members}</code> Mitgliederanzahl</div>
+                          <div class="variable-ref-item"><code>{link.events}</code> Link zur Event-Seite</div>
+                          <div class="variable-ref-example mt-2">
+                            <strong>Beispiel:</strong> <code>{events.list.details}</code><br>
+                            <span class="text-muted">Ergebnis: "Gamenight (15. Mär) | Workshop (18. Mär)"</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="form-check form-switch mb-2">
+                    <input class="form-check-input" type="checkbox" id="bot-auto-update-presence">
+                    <label class="form-check-label" for="bot-auto-update-presence">
+                      <i class="bi bi-arrow-repeat me-1"></i>Auto-Update (alle 5 Min.)
+                    </label>
+                    <small class="d-block text-muted">Aktualisiert den Aktivitätstext automatisch mit Live-Event-Daten</small>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Feature Toggles -->
+              <div class="col-md-6">
+                <div class="bot-settings-group">
+                  <h6 class="bot-settings-group-title"><i class="bi bi-toggles me-2"></i>Funktionen</h6>
+                  <div class="form-check form-switch mb-3">
+                    <input class="form-check-input" type="checkbox" id="bot-dm-notifications" checked>
+                    <label class="form-check-label" for="bot-dm-notifications">
+                      <i class="bi bi-envelope me-1"></i>DM-Benachrichtigungen
+                    </label>
+                    <small class="d-block text-muted">Sende Direktnachrichten bei Registrierung, Annahme, etc.</small>
+                  </div>
+                  <div class="form-check form-switch mb-3">
+                    <input class="form-check-input" type="checkbox" id="bot-reminder-enabled" checked>
+                    <label class="form-check-label" for="bot-reminder-enabled">
+                      <i class="bi bi-bell me-1"></i>Erinnerungen
+                    </label>
+                    <small class="d-block text-muted">Automatische Erinnerungen vor Event-Start</small>
+                  </div>
+                  <div class="form-check form-switch mb-3">
+                    <input class="form-check-input" type="checkbox" id="bot-event-start-notifications" checked>
+                    <label class="form-check-label" for="bot-event-start-notifications">
+                      <i class="bi bi-play-circle me-1"></i>Event-Start Benachrichtigungen
+                    </label>
+                    <small class="d-block text-muted">Benachrichtige Teilnehmer wenn ein Event startet</small>
+                  </div>
+                  <div class="form-check form-switch mb-3">
+                    <input class="form-check-input" type="checkbox" id="bot-auto-channel-creation" checked>
+                    <label class="form-check-label" for="bot-auto-channel-creation">
+                      <i class="bi bi-hash me-1"></i>Auto Channel-Erstellung
+                    </label>
+                    <small class="d-block text-muted">Erstelle automatisch Voice/Text Channels für Events</small>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Welcome Message -->
+            <div class="mb-3 mt-3">
+              <label class="form-label"><i class="bi bi-chat-heart me-2"></i>Willkommensnachricht (optional)</label>
+              <textarea class="form-control" id="bot-welcome-message" rows="2" placeholder="Nachricht die neuen Teilnehmern per DM gesendet wird..." maxlength="500"></textarea>
+              <small class="text-muted">Wird gesendet, wenn ein Nutzer zum ersten Mal akzeptiert wird. Leer lassen zum Deaktivieren.</small>
+            </div>
+
+            <div class="d-flex justify-content-end gap-2 mt-4">
+              <button type="button" class="btn btn-outline-light" onclick="loadBotSettings()">
+                <i class="bi bi-arrow-clockwise me-1"></i>Zurücksetzen
+              </button>
+              <button type="submit" class="btn btn-accent">
+                <i class="bi bi-save me-1"></i>Einstellungen speichern
+              </button>
+            </div>
+          </form>
         </div>
       </div>
     </section>

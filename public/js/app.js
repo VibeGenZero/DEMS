@@ -250,6 +250,7 @@ function showLoggedIn() {
 
     if (currentUser.isAdmin) {
         document.getElementById('nav-admin').style.display = 'block';
+        document.getElementById('nav-bot-control').style.display = 'block';
     }
 }
 
@@ -257,6 +258,7 @@ function showLoggedOut() {
     document.getElementById('login-btn-container').style.display = 'block';
     document.getElementById('user-info').style.display = 'none';
     document.getElementById('nav-admin').style.display = 'none';
+    document.getElementById('nav-bot-control').style.display = 'none';
     document.getElementById('nav-profile').style.display = 'none';
 
     // Clear sensitive data from UI
@@ -283,6 +285,12 @@ function handleRoute() {
     // Clear countdown timers
     countdownTimers.forEach(t => clearInterval(t));
     countdownTimers = [];
+
+    // Clear bot status refresh when navigating away
+    if (botStatusRefreshInterval) {
+        clearInterval(botStatusRefreshInterval);
+        botStatusRefreshInterval = null;
+    }
 
     const hash = window.location.hash.replace('#', '') || 'events';
     const parts = hash.split('/');
@@ -316,6 +324,13 @@ function handleRoute() {
         case 'admin':
             if (currentUser && currentUser.isAdmin) {
                 showAdminSection();
+            } else {
+                navigateTo('events');
+            }
+            break;
+        case 'bot-control':
+            if (currentUser && currentUser.isAdmin) {
+                showBotControlSection();
             } else {
                 navigateTo('events');
             }
@@ -1934,6 +1949,241 @@ async function performSystemReset() {
         }
     } catch (err) {
         showToast('Netzwerkfehler beim Reset.', 'danger');
+    }
+}
+
+// ═══════════════════════════════════════════════════════════
+// BOT CONTROL CENTER (Bot-Zentrale)
+// ═══════════════════════════════════════════════════════════
+
+let botStatusRefreshInterval = null;
+
+async function showBotControlSection() {
+    const section = document.getElementById('bot-control-section');
+    section.style.display = 'block';
+
+    await Promise.all([loadBotStatus(), loadBotRunningEvents(), loadBotSettings()]);
+
+    // Auto-refresh bot status every 30 seconds
+    if (botStatusRefreshInterval) clearInterval(botStatusRefreshInterval);
+    botStatusRefreshInterval = setInterval(loadBotStatus, 30000);
+
+    // Setup form handler
+    const form = document.getElementById('bot-settings-form');
+    form.onsubmit = async (e) => {
+        e.preventDefault();
+        await saveBotSettingsForm();
+    };
+}
+
+function formatUptime(seconds) {
+    const days = Math.floor(seconds / 86400);
+    const hours = Math.floor((seconds % 86400) / 3600);
+    const mins = Math.floor((seconds % 3600) / 60);
+    const secs = seconds % 60;
+
+    const parts = [];
+    if (days > 0) parts.push(`${days}d`);
+    if (hours > 0) parts.push(`${hours}h`);
+    if (mins > 0) parts.push(`${mins}m`);
+    parts.push(`${secs}s`);
+    return parts.join(' ');
+}
+
+async function loadBotStatus() {
+    const panel = document.getElementById('bot-status-panel');
+    try {
+        const res = await fetch('/api/admin/bot/status');
+        const status = await res.json();
+
+        const statusColors = { online: '#22c55e', idle: '#eab308', dnd: '#ef4444', invisible: '#6b7280' };
+        const statusColor = status.online ? (statusColors.online) : '#ef4444';
+        const statusText = status.online ? 'Online' : 'Offline';
+
+        panel.innerHTML = `
+            <div class="bot-status-header">
+                <div class="d-flex align-items-center gap-3">
+                    ${status.avatarUrl ? `<img src="${escapeHtml(status.avatarUrl)}" alt="Bot Avatar" class="bot-avatar">` : '<div class="bot-avatar-placeholder"><i class="bi bi-robot"></i></div>'}
+                    <div>
+                        <h4 class="mb-0">${escapeHtml(status.username || 'Bot')}</h4>
+                        <div class="d-flex align-items-center gap-2 mt-1">
+                            <span class="bot-status-dot" style="background:${statusColor};"></span>
+                            <span class="text-secondary">${statusText}</span>
+                            ${status.ping > 0 ? `<span class="bot-ping-badge">${status.ping}ms</span>` : ''}
+                        </div>
+                    </div>
+                </div>
+                ${status.guildName ? `<div class="bot-guild-info"><i class="bi bi-discord me-1"></i>${escapeHtml(status.guildName)} <span class="text-muted">(${status.guildMemberCount} Mitglieder)</span></div>` : ''}
+            </div>
+            <div class="bot-stats-grid mt-3">
+                <div class="bot-stat-item">
+                    <div class="bot-stat-icon"><i class="bi bi-clock-history"></i></div>
+                    <div>
+                        <div class="bot-stat-value">${status.online ? formatUptime(status.uptime) : '--'}</div>
+                        <div class="bot-stat-label">Uptime</div>
+                    </div>
+                </div>
+                <div class="bot-stat-item">
+                    <div class="bot-stat-icon"><i class="bi bi-envelope-check"></i></div>
+                    <div>
+                        <div class="bot-stat-value">${status.dmsSent}</div>
+                        <div class="bot-stat-label">DMs gesendet</div>
+                    </div>
+                </div>
+                <div class="bot-stat-item">
+                    <div class="bot-stat-icon"><i class="bi bi-terminal"></i></div>
+                    <div>
+                        <div class="bot-stat-value">${status.commandsProcessed}</div>
+                        <div class="bot-stat-label">Befehle verarbeitet</div>
+                    </div>
+                </div>
+                <div class="bot-stat-item">
+                    <div class="bot-stat-icon"><i class="bi bi-bell${status.reminderSchedulerActive ? '' : '-slash'}"></i></div>
+                    <div>
+                        <div class="bot-stat-value">${status.reminderSchedulerActive ? 'Aktiv' : 'Inaktiv'}</div>
+                        <div class="bot-stat-label">Erinnerungen</div>
+                    </div>
+                </div>
+                <div class="bot-stat-item">
+                    <div class="bot-stat-icon"><i class="bi bi-arrow-repeat${status.presenceAutoUpdate ? '' : ''}"></i></div>
+                    <div>
+                        <div class="bot-stat-value">${status.presenceAutoUpdate ? 'Aktiv' : 'Aus'}</div>
+                        <div class="bot-stat-label">Auto-Update</div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        gsap.fromTo('.bot-stat-item',
+            { y: 10, opacity: 0 },
+            { y: 0, opacity: 1, duration: 0.25, stagger: 0.05, ease: 'power3.out' }
+        );
+    } catch {
+        panel.innerHTML = '<div class="text-danger text-center py-3">Bot-Status konnte nicht geladen werden.</div>';
+    }
+}
+
+async function loadBotRunningEvents() {
+    const container = document.getElementById('bot-running-events');
+    container.innerHTML = '<div class="col-12 text-center py-3"><span class="spinner-border spinner-border-sm"></span> Laden...</div>';
+
+    try {
+        const res = await fetch('/api/admin/bot/running-events');
+        const events = await res.json();
+
+        if (!events.length) {
+            container.innerHTML = '<div class="col-12"><div class="glass-card p-4 text-center text-muted"><i class="bi bi-calendar-x me-2"></i>Keine laufenden Events</div></div>';
+            return;
+        }
+
+        container.innerHTML = events.map(event => {
+            const stats = event.registrationStats || {};
+            const startDate = event.startDate ? new Date(event.startDate).toLocaleString('de-DE', {
+                day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit'
+            }) : 'TBD';
+
+            const now = new Date();
+            const start = event.startDate ? new Date(event.startDate) : null;
+            const isLive = start && now >= start;
+            const liveIndicator = isLive
+                ? '<span class="live-indicator"><span class="live-dot"></span>LIVE</span>'
+                : '<span class="upcoming-indicator"><i class="bi bi-clock me-1"></i>Bevorstehend</span>';
+
+            const capacityPercent = event.maxParticipants > 0
+                ? Math.round((stats.accepted / event.maxParticipants) * 100)
+                : 0;
+            const capacityBar = event.maxParticipants > 0
+                ? `<div class="capacity-bar-container mt-2">
+                     <div class="capacity-bar" style="width:${Math.min(capacityPercent, 100)}%"></div>
+                   </div>
+                   <small class="text-muted">${stats.accepted}/${event.maxParticipants} Plätze belegt (${capacityPercent}%)</small>`
+                : `<small class="text-muted">${stats.accepted} Teilnehmer (unbegrenzt)</small>`;
+
+            return `
+                <div class="col-md-6 col-lg-4">
+                    <div class="glass-card running-event-card p-3">
+                        <div class="d-flex justify-content-between align-items-start mb-2">
+                            <h6 class="mb-0">${escapeHtml(event.title)}</h6>
+                            ${liveIndicator}
+                        </div>
+                        <div class="text-muted small mb-2"><i class="bi bi-calendar3 me-1"></i>${startDate}</div>
+                        ${event.category ? `<span class="event-category-tag small mb-2 d-inline-block">${escapeHtml(event.category)}</span>` : ''}
+                        ${capacityBar}
+                        <div class="running-event-stats mt-2">
+                            <span class="re-stat re-stat-accepted" title="Angenommen"><i class="bi bi-check-circle"></i> ${stats.accepted}</span>
+                            <span class="re-stat re-stat-pending" title="Ausstehend"><i class="bi bi-hourglass-split"></i> ${stats.pending}</span>
+                            <span class="re-stat re-stat-waitlisted" title="Warteliste"><i class="bi bi-list-nested"></i> ${stats.waitlisted}</span>
+                        </div>
+                        <div class="mt-2">
+                            <a href="#event/${event.id}" class="btn btn-sm btn-outline-light w-100">
+                                <i class="bi bi-eye me-1"></i>Details
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        gsap.fromTo('.running-event-card',
+            { y: 15, opacity: 0 },
+            { y: 0, opacity: 1, duration: 0.3, stagger: 0.06, ease: 'power3.out' }
+        );
+    } catch {
+        container.innerHTML = '<div class="col-12"><div class="alert alert-danger">Fehler beim Laden der Events.</div></div>';
+    }
+}
+
+async function loadBotSettings() {
+    try {
+        const res = await fetch('/api/admin/bot/settings');
+        const settings = await res.json();
+
+        document.getElementById('bot-status-type').value = settings.statusType || 'online';
+        document.getElementById('bot-activity-type').value = settings.activityType || 'WATCHING';
+        document.getElementById('bot-activity-text').value = settings.activityText || '';
+        document.getElementById('bot-auto-update-presence').checked = !!settings.autoUpdatePresence;
+        document.getElementById('bot-dm-notifications').checked = settings.dmNotifications !== false;
+        document.getElementById('bot-reminder-enabled').checked = settings.reminderEnabled !== false;
+        document.getElementById('bot-event-start-notifications').checked = settings.eventStartNotifications !== false;
+        document.getElementById('bot-auto-channel-creation').checked = settings.autoChannelCreation !== false;
+        document.getElementById('bot-welcome-message').value = settings.welcomeMessage || '';
+    } catch {
+        showToast('Bot-Einstellungen konnten nicht geladen werden.', 'danger');
+    }
+}
+
+async function saveBotSettingsForm() {
+    const settings = {
+        statusType: document.getElementById('bot-status-type').value,
+        activityType: document.getElementById('bot-activity-type').value,
+        activityText: document.getElementById('bot-activity-text').value,
+        autoUpdatePresence: document.getElementById('bot-auto-update-presence').checked,
+        dmNotifications: document.getElementById('bot-dm-notifications').checked,
+        reminderEnabled: document.getElementById('bot-reminder-enabled').checked,
+        eventStartNotifications: document.getElementById('bot-event-start-notifications').checked,
+        autoChannelCreation: document.getElementById('bot-auto-channel-creation').checked,
+        welcomeMessage: document.getElementById('bot-welcome-message').value,
+    };
+
+    try {
+        const res = await fetch('/api/admin/bot/settings', {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': csrfToken
+            },
+            body: JSON.stringify(settings)
+        });
+
+        if (res.ok) {
+            showToast('Bot-Einstellungen gespeichert!', 'success');
+            await loadBotStatus();
+        } else {
+            const data = await res.json();
+            showToast(data.error || 'Fehler beim Speichern.', 'danger');
+        }
+    } catch {
+        showToast('Netzwerkfehler beim Speichern.', 'danger');
     }
 }
 
