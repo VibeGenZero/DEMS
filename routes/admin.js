@@ -147,10 +147,11 @@ router.post('/events', validateEvent, async (req, res) => {
             const seriesId = crypto.randomUUID();
             const createdEvents = [];
             let currentStart = new Date(startDate);
-            const untilDate = new Date(recurringUntil);
+            // Compare only the date portion (YYYY-MM-DD) so the full last day is included
+            // regardless of the event's time-of-day
             const duration = endDate ? (new Date(endDate) - new Date(startDate)) : 0;
 
-            while (currentStart <= untilDate) {
+            while (currentStart.toISOString().substring(0, 10) <= recurringUntil) {
                 const instance = {
                     ...baseEvent,
                     seriesId,
