@@ -7,7 +7,7 @@ const {
 } = require('../firebaseAdmin');
 const { requireAuth, requireAdmin } = require('../middleware/auth');
 const { validateEvent, validateRegStatus, validateBotMessages } = require('../middleware/validators');
-const { sendDM, assignRole, parseTemplate, getGuildRoles, sendChannelMessage, buildEventEmbed, getGuildScheduledEvents, createEventChannels, deleteEventChannels, createScheduledEvent } = require('../bot');
+const { sendDM, assignRole, parseTemplate, getGuildRoles, sendChannelMessage, buildEventEmbed, getGuildScheduledEvents, createEventChannels, deleteEventChannels, createScheduledEvent, getBotStatus, getBotSettings, saveBotSettings, getRunningEvents } = require('../bot');
 const { promoteFromWaitlist, addAuditLog } = require('../utils/eventUtils');
 
 // All admin routes require auth + admin
@@ -921,6 +921,85 @@ router.delete('/reset', async (req, res) => {
     } catch (err) {
         console.error('System reset error:', err);
         res.status(500).json({ error: 'System-Reset fehlgeschlagen.' });
+    }
+});
+
+// ═══════════════════════════════════════════════════════════
+// BOT CONTROL CENTER (Bot-Zentrale)
+// ═══════════════════════════════════════════════════════════
+
+/**
+ * GET /api/admin/bot/status — Get bot status and runtime info
+ */
+router.get('/bot/status', async (req, res) => {
+    try {
+        const status = getBotStatus();
+        res.json(status);
+    } catch (err) {
+        console.error('Bot status error:', err);
+        res.status(500).json({ error: 'Fehler beim Laden des Bot-Status' });
+    }
+});
+
+/**
+ * GET /api/admin/bot/settings — Get bot settings
+ */
+router.get('/bot/settings', async (req, res) => {
+    try {
+        const settings = await getBotSettings();
+        res.json(settings);
+    } catch (err) {
+        console.error('Bot settings error:', err);
+        res.status(500).json({ error: 'Fehler beim Laden der Bot-Einstellungen' });
+    }
+});
+
+/**
+ * PUT /api/admin/bot/settings — Update bot settings
+ */
+router.put('/bot/settings', async (req, res) => {
+    try {
+        const {
+            statusType, activityType, activityText,
+            dmNotifications, reminderEnabled, eventStartNotifications,
+            autoChannelCreation, announceChannel, welcomeMessage
+        } = req.body;
+
+        const settings = {
+            statusType: statusType || 'online',
+            activityType: activityType || 'WATCHING',
+            activityText: activityText || '',
+            dmNotifications: dmNotifications !== false,
+            reminderEnabled: reminderEnabled !== false,
+            eventStartNotifications: eventStartNotifications !== false,
+            autoChannelCreation: autoChannelCreation !== false,
+            announceChannel: announceChannel || '',
+            welcomeMessage: welcomeMessage || '',
+        };
+
+        const success = await saveBotSettings(settings);
+        if (success) {
+            await addAuditLog('UPDATE_BOT_SETTINGS', req.session.user.id, 'Bot-Zentrale Einstellungen aktualisiert');
+            res.json({ success: true, settings });
+        } else {
+            res.status(500).json({ error: 'Fehler beim Speichern' });
+        }
+    } catch (err) {
+        console.error('Update bot settings error:', err);
+        res.status(500).json({ error: 'Fehler beim Speichern der Einstellungen' });
+    }
+});
+
+/**
+ * GET /api/admin/bot/running-events — Get currently active events with live stats
+ */
+router.get('/bot/running-events', async (req, res) => {
+    try {
+        const events = await getRunningEvents();
+        res.json(events);
+    } catch (err) {
+        console.error('Running events error:', err);
+        res.status(500).json({ error: 'Fehler beim Laden der laufenden Events' });
     }
 });
 

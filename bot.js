@@ -1,5 +1,5 @@
-const { Client, GatewayIntentBits, EmbedBuilder, REST, Routes, SlashCommandBuilder, PermissionsBitField, ChannelType } = require('discord.js');
-const { db, collection, doc, getDoc, getDocs, addDoc, updateDoc, query, where, orderBy } = require('./firebaseAdmin');
+const { Client, GatewayIntentBits, EmbedBuilder, REST, Routes, SlashCommandBuilder, PermissionsBitField, ChannelType, ActivityType } = require('discord.js');
+const { db, collection, doc, getDoc, getDocs, addDoc, setDoc, updateDoc, deleteDoc, query, where, orderBy } = require('./firebaseAdmin');
 
 const TIMEZONE = process.env.TIMEZONE || 'Europe/Berlin';
 
@@ -14,12 +14,17 @@ const client = new Client({
 });
 
 let isReady = false;
+let botStartedAt = null;
+let dmsSentCount = 0;
+let commandsProcessedCount = 0;
 
 client.once('ready', async () => {
     console.log(`🤖 Bot logged in as ${client.user.tag}`);
     isReady = true;
+    botStartedAt = new Date();
     await registerSlashCommands();
     logBotInviteUrl();
+    await applyBotSettings();
 });
 
 client.on('error', (err) => {
@@ -126,6 +131,7 @@ client.on('interactionCreate', async (interaction) => {
     }
 
     if (!interaction.isChatInputCommand()) return;
+    commandsProcessedCount++;
 
     // /events command
     if (interaction.commandName === 'events') {
@@ -276,6 +282,7 @@ async function sendDM(userId, message) {
     try {
         const user = await client.users.fetch(userId);
         await user.send(message);
+        dmsSentCount++;
         console.log(`📩 DM sent to ${user.tag}`);
         return true;
     } catch (err) {
@@ -941,6 +948,146 @@ async function deleteEventChannels(eventId) {
     }
 }
 
+/**
+ * Get bot status information for the control center
+ */
+function getBotStatus() {
+    const guild = client.guilds?.cache.get(process.env.DISCORD_GUILD_ID);
+    return {
+        online: isReady,
+        username: client.user?.tag || null,
+        avatarUrl: client.user?.displayAvatarURL({ size: 128 }) || null,
+        uptime: botStartedAt ? Math.floor((Date.now() - botStartedAt.getTime()) / 1000) : 0,
+        startedAt: botStartedAt ? botStartedAt.toISOString() : null,
+        ping: client.ws.ping || 0,
+        guildName: guild?.name || null,
+        guildMemberCount: guild?.memberCount || 0,
+        guildId: process.env.DISCORD_GUILD_ID || null,
+        dmsSent: dmsSentCount,
+        commandsProcessed: commandsProcessedCount,
+        reminderSchedulerActive: !!reminderInterval,
+    };
+}
+
+/**
+ * Get bot settings from Firestore
+ */
+async function getBotSettings() {
+    try {
+        const snap = await getDoc(doc(db, 'botSettings', 'config'));
+        if (snap.exists()) return snap.data();
+    } catch (err) {
+        console.error('Failed to load bot settings:', err.message);
+    }
+    // Defaults
+    return {
+        statusType: 'online',
+        activityType: 'WATCHING',
+        activityText: '',
+        dmNotifications: true,
+        reminderEnabled: true,
+        eventStartNotifications: true,
+        autoChannelCreation: true,
+        announceChannel: process.env.DISCORD_ANNOUNCE_CHANNEL_ID || '',
+        welcomeMessage: '',
+    };
+}
+
+/**
+ * Save bot settings to Firestore and apply them
+ */
+async function saveBotSettings(settings) {
+    try {
+        await setDoc(doc(db, 'botSettings', 'config'), {
+            ...settings,
+            updatedAt: new Date().toISOString()
+        });
+        await applyBotSettings();
+        return true;
+    } catch (err) {
+        console.error('Failed to save bot settings:', err.message);
+        return false;
+    }
+}
+
+/**
+ * Apply bot settings (presence, activity, etc.)
+ */
+async function applyBotSettings() {
+    if (!isReady) return;
+    try {
+        const settings = await getBotSettings();
+
+        // Set presence status
+        const statusMap = { online: 'online', idle: 'idle', dnd: 'dnd', invisible: 'invisible' };
+        const status = statusMap[settings.statusType] || 'online';
+
+        // Set activity
+        const activityTypeMap = {
+            PLAYING: ActivityType.Playing,
+            WATCHING: ActivityType.Watching,
+            LISTENING: ActivityType.Listening,
+            COMPETING: ActivityType.Competing,
+        };
+
+        const activities = [];
+        if (settings.activityText) {
+            activities.push({
+                name: settings.activityText,
+                type: activityTypeMap[settings.activityType] || ActivityType.Watching
+            });
+        }
+
+        client.user.setPresence({ status, activities });
+
+        // Toggle reminder scheduler
+        if (settings.reminderEnabled && !reminderInterval) {
+            startReminderScheduler();
+        } else if (!settings.reminderEnabled && reminderInterval) {
+            clearInterval(reminderInterval);
+            reminderInterval = null;
+            console.log('⏰ Reminder scheduler deaktiviert via Bot-Zentrale');
+        }
+
+    } catch (err) {
+        console.error('Failed to apply bot settings:', err.message);
+    }
+}
+
+/**
+ * Get currently running (active) events with live data
+ */
+async function getRunningEvents() {
+    try {
+        const q = query(collection(db, 'events'), where('status', '==', 'active'));
+        const snapshot = await getDocs(q);
+        const events = [];
+        for (const docSnap of snapshot.docs) {
+            const event = { id: docSnap.id, ...docSnap.data() };
+            // Count registrations
+            const regQ = query(
+                collection(db, 'registrations'),
+                where('eventId', '==', docSnap.id)
+            );
+            const regSnap = await getDocs(regQ);
+            let accepted = 0, pending = 0, waitlisted = 0;
+            regSnap.forEach(r => {
+                const s = r.data().status;
+                if (s === 'accepted') accepted++;
+                else if (s === 'pending') pending++;
+                else if (s === 'waitlisted') waitlisted++;
+            });
+            event.registrationStats = { accepted, pending, waitlisted, total: regSnap.size };
+            events.push(event);
+        }
+        events.sort((a, b) => (a.startDate || '').localeCompare(b.startDate || ''));
+        return events;
+    } catch (err) {
+        console.error('Failed to get running events:', err.message);
+        return [];
+    }
+}
+
 module.exports = {
     client,
     startBot,
@@ -961,5 +1108,9 @@ module.exports = {
     addParticipantToEventChannels,
     removeParticipantFromEventChannels,
     deleteEventChannels,
-    createScheduledEvent
+    createScheduledEvent,
+    getBotStatus,
+    getBotSettings,
+    saveBotSettings,
+    getRunningEvents
 };
