@@ -2596,6 +2596,53 @@ body {
   border-bottom: 1px solid var(--border-subtle);
 }
 
+/* Variable Reference Card */
+.variable-ref-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius);
+  padding: 1rem;
+  font-size: 0.82rem;
+}
+
+.variable-ref-title {
+  font-weight: 600;
+  color: var(--accent-light);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 0.4rem;
+}
+
+.variable-ref-item {
+  padding: 2px 0;
+  color: var(--text-secondary);
+}
+
+.variable-ref-item code {
+  background: rgba(139, 92, 246, 0.12);
+  color: var(--accent-light);
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 0.78rem;
+  margin-right: 0.4rem;
+}
+
+.variable-ref-example {
+  padding: 0.5rem;
+  background: rgba(139, 92, 246, 0.06);
+  border-radius: 6px;
+  border-left: 3px solid var(--accent);
+}
+
+.variable-ref-example code {
+  background: rgba(139, 92, 246, 0.12);
+  color: var(--accent-light);
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 0.78rem;
+}
+
 @media (max-width: 768px) {
   .bot-status-header {
     flex-direction: column;

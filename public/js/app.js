@@ -2044,6 +2044,13 @@ async function loadBotStatus() {
                         <div class="bot-stat-label">Erinnerungen</div>
                     </div>
                 </div>
+                <div class="bot-stat-item">
+                    <div class="bot-stat-icon"><i class="bi bi-arrow-repeat${status.presenceAutoUpdate ? '' : ''}"></i></div>
+                    <div>
+                        <div class="bot-stat-value">${status.presenceAutoUpdate ? 'Aktiv' : 'Aus'}</div>
+                        <div class="bot-stat-label">Auto-Update</div>
+                    </div>
+                </div>
             </div>
         `;
 
@@ -2134,6 +2141,7 @@ async function loadBotSettings() {
         document.getElementById('bot-status-type').value = settings.statusType || 'online';
         document.getElementById('bot-activity-type').value = settings.activityType || 'WATCHING';
         document.getElementById('bot-activity-text').value = settings.activityText || '';
+        document.getElementById('bot-auto-update-presence').checked = !!settings.autoUpdatePresence;
         document.getElementById('bot-dm-notifications').checked = settings.dmNotifications !== false;
         document.getElementById('bot-reminder-enabled').checked = settings.reminderEnabled !== false;
         document.getElementById('bot-event-start-notifications').checked = settings.eventStartNotifications !== false;
@@ -2149,6 +2157,7 @@ async function saveBotSettingsForm() {
         statusType: document.getElementById('bot-status-type').value,
         activityType: document.getElementById('bot-activity-type').value,
         activityText: document.getElementById('bot-activity-text').value,
+        autoUpdatePresence: document.getElementById('bot-auto-update-presence').checked,
         dmNotifications: document.getElementById('bot-dm-notifications').checked,
         reminderEnabled: document.getElementById('bot-reminder-enabled').checked,
         eventStartNotifications: document.getElementById('bot-event-start-notifications').checked,
