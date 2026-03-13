@@ -2142,6 +2142,7 @@ async function loadBotSettings() {
         document.getElementById('bot-activity-type').value = settings.activityType || 'WATCHING';
         document.getElementById('bot-activity-text').value = settings.activityText || '';
         document.getElementById('bot-auto-update-presence').checked = !!settings.autoUpdatePresence;
+        document.getElementById('bot-auto-status-calendar').checked = !!settings.autoStatusCalendarEvents;
         document.getElementById('bot-dm-notifications').checked = settings.dmNotifications !== false;
         document.getElementById('bot-reminder-enabled').checked = settings.reminderEnabled !== false;
         document.getElementById('bot-event-start-notifications').checked = settings.eventStartNotifications !== false;
@@ -2158,6 +2159,7 @@ async function saveBotSettingsForm() {
         activityType: document.getElementById('bot-activity-type').value,
         activityText: document.getElementById('bot-activity-text').value,
         autoUpdatePresence: document.getElementById('bot-auto-update-presence').checked,
+        autoStatusCalendarEvents: document.getElementById('bot-auto-status-calendar').checked,
         dmNotifications: document.getElementById('bot-dm-notifications').checked,
         reminderEnabled: document.getElementById('bot-reminder-enabled').checked,
         eventStartNotifications: document.getElementById('bot-event-start-notifications').checked,

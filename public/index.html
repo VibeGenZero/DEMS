@@ -503,6 +503,18 @@
                     </label>
                     <small class="d-block text-muted">Aktualisiert den Aktivitätstext automatisch mit Live-Event-Daten</small>
                   </div>
+                  <div class="form-check form-switch mb-2">
+                    <input class="form-check-input" type="checkbox" id="bot-auto-status-calendar">
+                    <label class="form-check-label" for="bot-auto-status-calendar">
+                      <i class="bi bi-calendar-event me-1"></i>Online-Status automatisch wählen
+                    </label>
+                    <small class="d-block text-muted">
+                      Funktioniert nur wenn Auto-Update (alle 5 Min.) aktiv ist:<br>
+                      <span class="text-success fw-semibold">● Online</span> = Event steht an &nbsp;
+                      <span class="text-warning fw-semibold">● Idle</span> = Keine Events geplant &nbsp;
+                      <span class="text-danger fw-semibold">● DnD</span> = Event läuft gerade
+                    </small>
+                  </div>
                 </div>
               </div>
 
