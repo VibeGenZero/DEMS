@@ -995,6 +995,7 @@ async function getBotSettings() {
         eventStartNotifications: true,
         autoChannelCreation: true,
         autoUpdatePresence: false,
+        autoStatusCalendarEvents: false,
         announceChannel: process.env.DISCORD_ANNOUNCE_CHANNEL_ID || '',
         welcomeMessage: '',
     };
@@ -1117,7 +1118,41 @@ async function applyBotSettings() {
 
         // Set presence status
         const statusMap = { online: 'online', idle: 'idle', dnd: 'dnd', invisible: 'invisible' };
-        const status = statusMap[settings.statusType] || 'online';
+        let status = statusMap[settings.statusType] || 'online';
+
+        // Auto-Status based on calendar events (only when autoUpdatePresence is enabled)
+        if (settings.autoStatusCalendarEvents && settings.autoUpdatePresence) {
+            try {
+                const now = new Date();
+                const q = query(collection(db, 'events'), where('status', '==', 'active'));
+                const snapshot = await getDocs(q);
+                const events = [];
+                snapshot.forEach(d => events.push({ id: d.id, ...d.data() }));
+
+                const running = events.some(e => {
+                    if (!e.startDate) return false;
+                    const start = new Date(e.startDate);
+                    const end = e.endDate ? new Date(e.endDate) : new Date(start.getTime() + 2 * 60 * 60 * 1000);
+                    return start <= now && now <= end;
+                });
+
+                const upcoming = events.some(e => {
+                    if (!e.startDate) return false;
+                    const start = new Date(e.startDate);
+                    return start > now;
+                });
+
+                if (running) {
+                    status = 'dnd';       // Event läuft gerade
+                } else if (upcoming) {
+                    status = 'online';    // Event steht an
+                } else {
+                    status = 'idle';      // Keine Events in Zukunft geplant
+                }
+            } catch (err) {
+                console.error('Auto-Status calendar check failed:', err.message);
+            }
+        }
 
         // Set activity
         const activityTypeMap = {

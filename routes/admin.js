@@ -963,7 +963,8 @@ router.put('/bot/settings', async (req, res) => {
         const {
             statusType, activityType, activityText,
             dmNotifications, reminderEnabled, eventStartNotifications,
-            autoChannelCreation, autoUpdatePresence, announceChannel, welcomeMessage
+            autoChannelCreation, autoUpdatePresence, autoStatusCalendarEvents,
+            announceChannel, welcomeMessage
         } = req.body;
 
         const settings = {
@@ -975,6 +976,7 @@ router.put('/bot/settings', async (req, res) => {
             eventStartNotifications: eventStartNotifications !== false,
             autoChannelCreation: autoChannelCreation !== false,
             autoUpdatePresence: !!autoUpdatePresence,
+            autoStatusCalendarEvents: !!autoStatusCalendarEvents,
             announceChannel: announceChannel || '',
             welcomeMessage: welcomeMessage || '',
         };
