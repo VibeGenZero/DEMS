@@ -1168,10 +1168,29 @@ async function submitRegistration(eventId, event, btnId, formContainerId) {
     // Save original text to restore later
     const originalText = btn.innerHTML;
 
+    // Validate required form fields before submission
+    const formFields = event.formFields || [];
+    const prefix = formContainerId === 'dynamic-form-fields' ? 'form-field' : 'wl-field';
+    const missingFields = [];
+    formFields.forEach((field, i) => {
+        if (!field.required) return;
+        const el = document.getElementById(`${prefix}-${i}`);
+        if (!el) return;
+        if (field.type === 'checkbox') {
+            if (!el.checked) missingFields.push(field.label);
+        } else {
+            if (!el.value || !el.value.trim()) missingFields.push(field.label);
+        }
+    });
+    if (missingFields.length > 0) {
+        showToast(`Bitte fülle alle Pflichtfelder aus: ${missingFields.join(', ')}`, 'danger');
+        return;
+    }
+
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Wird gesendet...';
 
-    const formAnswers = collectFormAnswers(event.formFields || [], formContainerId);
+    const formAnswers = collectFormAnswers(formFields, formContainerId);
 
     let guests = [];
     if (formContainerId === 'dynamic-form-fields') {
@@ -1293,8 +1312,8 @@ function renderFormFields(fields, containerId = 'dynamic-form-fields') {
                 break;
             case 'checkbox':
                 input = `<div class="form-check">
-          <input type="checkbox" class="form-check-input" id="${id}">
-          <label class="form-check-label" for="${id}">${escapeHtml(field.label)}</label>
+          <input type="checkbox" class="form-check-input" id="${id}" ${field.required ? 'required' : ''}>
+          <label class="form-check-label" for="${id}">${escapeHtml(field.label)}${field.required ? ' *' : ''}</label>
         </div>`;
                 return `<div class="mb-3">${input}</div>`;
         }
