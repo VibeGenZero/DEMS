@@ -311,13 +311,30 @@ router.post('/:id/register', requireAuth, async (req, res) => {
             status = event.approvalMode === 'instant' ? 'accepted' : 'pending';
         }
 
+        // Validate required form fields
+        const formFields = event.formFields || [];
+        const formAnswers = req.body.formAnswers || {};
+        const missingFields = [];
+        formFields.forEach(field => {
+            if (!field.required) return;
+            const answer = formAnswers[field.label];
+            if (field.type === 'checkbox') {
+                if (answer !== true) missingFields.push(field.label);
+            } else {
+                if (!answer || (typeof answer === 'string' && !answer.trim())) missingFields.push(field.label);
+            }
+        });
+        if (missingFields.length > 0) {
+            return res.status(400).json({ error: `Bitte fülle alle Pflichtfelder aus: ${missingFields.join(', ')}` });
+        }
+
         // Create registration
         const registration = {
             eventId: req.params.id,
             userId: user.id,
             userName: user.displayName,
             status,
-            formAnswers: req.body.formAnswers || {},
+            formAnswers,
             guests: incomingGuests,
             createdAt: new Date().toISOString()
         };
