@@ -209,8 +209,13 @@ async function checkAuth() {
             const data = await res.json();
             // Stricter check: must have at least an ID
             if (data && data.id) {
+                const isNewUser = data.isNewUser;
                 currentUser = data;
                 showLoggedIn();
+                // Show first-login modal after a short delay so the UI renders first
+                if (isNewUser) {
+                    setTimeout(showFirstLoginModal, 800);
+                }
             } else {
                 currentUser = null;
                 showLoggedOut();
@@ -642,6 +647,9 @@ function filterByCategory(cat) {
 // ─── Event Detail ────────────────────────────────
 async function showEventDetail(eventId) {
     if (!eventId) return navigateTo('events');
+
+    // Reset guest selection for fresh start
+    resetGuestSelection();
 
     const section = document.getElementById('event-detail-section');
     section.style.display = 'block';
@@ -1194,10 +1202,7 @@ async function submitRegistration(eventId, event, btnId, formContainerId) {
 
     let guests = [];
     if (formContainerId === 'dynamic-form-fields') {
-        const guestInput = document.getElementById('reg-guest-ids');
-        if (guestInput && guestInput.value) {
-            guests = guestInput.value.split(',').map(s => s.trim()).filter(Boolean);
-        }
+        guests = selectedGuests.map(g => ({ id: g.id, displayName: g.displayName, avatar: g.avatar }));
     }
 
     // Create an abort controller for timeout
@@ -1628,6 +1633,9 @@ async function showProfileSection() {
                 y: 20, duration: 0.5, ease: 'power3.out'
             });
         }
+
+        // Load account settings
+        await loadAccountSettings();
 
     } catch {
         regContainer.innerHTML = '<div class="alert alert-danger">Fehler beim Laden des Profils.</div>';
@@ -3349,3 +3357,167 @@ document.addEventListener('DOMContentLoaded', () => {
         btn.addEventListener('click', showUserData);
     }
 });
+
+// ─── Guest Search ─────────────────────────────────
+let selectedGuests = []; // [{id, displayName, avatar}]
+let guestSearchTimer = null;
+
+function debounceGuestSearch() {
+    clearTimeout(guestSearchTimer);
+    guestSearchTimer = setTimeout(searchGuests, 300);
+}
+
+async function searchGuests() {
+    const input = document.getElementById('guest-search-input');
+    const resultsEl = document.getElementById('guest-search-results');
+    if (!input || !resultsEl) return;
+
+    const q = input.value.trim();
+    if (q.length < 2) {
+        resultsEl.style.display = 'none';
+        resultsEl.innerHTML = '';
+        return;
+    }
+
+    try {
+        const res = await fetch(`/api/user/search?q=${encodeURIComponent(q)}`);
+        if (!res.ok) return;
+        const users = await res.json();
+
+        // Filter out already selected guests
+        const filtered = users.filter(u => !selectedGuests.some(g => g.id === u.id));
+
+        if (!filtered.length) {
+            resultsEl.innerHTML = '<div class="list-group-item bg-dark text-muted small">Keine Nutzer gefunden</div>';
+            resultsEl.style.display = 'block';
+            return;
+        }
+
+        resultsEl.innerHTML = filtered.map(u => `
+            <button type="button" class="list-group-item list-group-item-action bg-dark text-white border-secondary d-flex align-items-center gap-2"
+                onclick="addGuestToList(${JSON.stringify({ id: u.id, displayName: u.displayName, avatar: u.avatar }).replace(/"/g, '&quot;')})">
+                <img src="${escapeHtml(u.avatar)}" width="28" height="28" class="rounded-circle" onerror="this.src='/img/default-avatar.png'">
+                <span>${escapeHtml(u.displayName)}</span>
+                <small class="text-muted ms-1">@${escapeHtml(u.username)}</small>
+            </button>
+        `).join('');
+        resultsEl.style.display = 'block';
+    } catch (err) {
+        console.error('Guest search error:', err);
+    }
+}
+
+function addGuestToList(user) {
+    if (selectedGuests.some(g => g.id === user.id)) return;
+    selectedGuests.push(user);
+    renderSelectedGuests();
+
+    // Clear search
+    const input = document.getElementById('guest-search-input');
+    const resultsEl = document.getElementById('guest-search-results');
+    if (input) input.value = '';
+    if (resultsEl) { resultsEl.style.display = 'none'; resultsEl.innerHTML = ''; }
+}
+
+function removeGuestFromList(userId) {
+    selectedGuests = selectedGuests.filter(g => g.id !== userId);
+    renderSelectedGuests();
+}
+
+function renderSelectedGuests() {
+    const container = document.getElementById('selected-guests');
+    if (!container) return;
+    if (!selectedGuests.length) {
+        container.innerHTML = '';
+        return;
+    }
+    container.innerHTML = selectedGuests.map(g => `
+        <div class="badge d-flex align-items-center gap-1 p-2" style="background:rgba(139,92,246,0.2);border:1px solid rgba(139,92,246,0.4);font-size:0.85rem;">
+            <img src="${escapeHtml(g.avatar)}" width="18" height="18" class="rounded-circle" onerror="this.src=''">
+            <span>${escapeHtml(g.displayName)}</span>
+            <button type="button" class="btn-close btn-close-white ms-1" style="font-size:0.6rem;"
+                onclick="removeGuestFromList('${escapeHtml(g.id)}')"></button>
+        </div>
+    `).join('');
+}
+
+// Reset guest selection when event detail is loaded
+function resetGuestSelection() {
+    selectedGuests = [];
+    renderSelectedGuests();
+    const input = document.getElementById('guest-search-input');
+    const resultsEl = document.getElementById('guest-search-results');
+    if (input) input.value = '';
+    if (resultsEl) { resultsEl.style.display = 'none'; resultsEl.innerHTML = ''; }
+}
+
+// ─── Account Settings ─────────────────────────────
+async function loadAccountSettings() {
+    try {
+        const res = await fetch('/api/user/settings');
+        if (!res.ok) return;
+        const settings = await res.json();
+        const toggle = document.getElementById('accept-invitations-toggle');
+        if (toggle) toggle.checked = settings.acceptInvitations !== false;
+    } catch (err) {
+        console.error('Failed to load account settings:', err);
+    }
+}
+
+async function saveAccountSettings() {
+    const toggle = document.getElementById('accept-invitations-toggle');
+    if (!toggle) return;
+    try {
+        const res = await fetch('/api/user/settings', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrfToken },
+            body: JSON.stringify({ acceptInvitations: toggle.checked })
+        });
+        if (res.ok) {
+            showToast(toggle.checked ? 'Einladungen aktiviert' : 'Einladungen deaktiviert', 'success');
+        }
+    } catch (err) {
+        console.error('Failed to save account settings:', err);
+    }
+}
+
+async function deleteUserAccount() {
+    if (!confirm('Bist du sicher? Dein Account und alle Registrierungen werden dauerhaft gelöscht.')) return;
+    if (!confirm('Letzte Bestätigung: Account wirklich löschen?')) return;
+    try {
+        const res = await fetch('/api/user/account', {
+            method: 'DELETE',
+            headers: { 'X-CSRF-TOKEN': csrfToken }
+        });
+        if (res.ok) {
+            showToast('Account erfolgreich gelöscht.', 'success');
+            setTimeout(() => { window.location.href = '/auth/logout'; }, 1500);
+        } else {
+            showToast('Fehler beim Löschen des Accounts.', 'danger');
+        }
+    } catch {
+        showToast('Netzwerkfehler.', 'danger');
+    }
+}
+
+// ─── First-Login Modal ────────────────────────────
+function showFirstLoginModal() {
+    const modal = new bootstrap.Modal(document.getElementById('firstLoginModal'));
+    modal.show();
+}
+
+async function confirmInvitationPreference(accept) {
+    try {
+        await fetch('/api/user/settings', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrfToken },
+            body: JSON.stringify({ acceptInvitations: accept })
+        });
+    } catch (err) {
+        console.error('Failed to save invitation preference:', err);
+    }
+    const modalEl = document.getElementById('firstLoginModal');
+    const modal = bootstrap.Modal.getInstance(modalEl);
+    if (modal) modal.hide();
+    showToast(accept ? 'Du kannst jetzt Gäste-Einladungen erhalten.' : 'Einladungen wurden deaktiviert. Du kannst das in deinem Profil ändern.', 'info');
+}

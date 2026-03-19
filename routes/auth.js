@@ -1,6 +1,7 @@
 const express = require('express');
 const fetch = require('node-fetch');
 const router = express.Router();
+const { db, collection, doc, getDoc, setDoc } = require('../firebaseAdmin');
 
 const DISCORD_API = 'https://discord.com/api/v10';
 
@@ -71,16 +72,49 @@ router.get('/discord/callback', async (req, res) => {
             ? (memberData.roles || []).includes(adminRoleId)
             : false;
 
+        const avatarUrl = userData.avatar
+            ? `https://cdn.discordapp.com/avatars/${userData.id}/${userData.avatar}.png`
+            : `https://cdn.discordapp.com/embed/avatars/${parseInt(userData.discriminator || '0') % 5}.png`;
+
+        // Save/update user in Firestore users collection
+        let isNewUser = false;
+        try {
+            const userRef = doc(db, 'users', userData.id);
+            const userSnap = await getDoc(userRef);
+            if (!userSnap.exists()) {
+                isNewUser = true;
+                await setDoc(userRef, {
+                    id: userData.id,
+                    username: userData.username,
+                    displayName: userData.global_name || userData.username,
+                    avatar: avatarUrl,
+                    acceptInvitations: true,
+                    createdAt: new Date().toISOString(),
+                    updatedAt: new Date().toISOString()
+                });
+            } else {
+                // Update mutable fields
+                await setDoc(userRef, {
+                    ...userSnap.data(),
+                    username: userData.username,
+                    displayName: userData.global_name || userData.username,
+                    avatar: avatarUrl,
+                    updatedAt: new Date().toISOString()
+                });
+            }
+        } catch (err) {
+            console.error('Failed to save user to Firestore:', err.message);
+        }
+
         // Store user in session
         req.session.user = {
             id: userData.id,
             username: userData.username,
             displayName: userData.global_name || userData.username,
-            avatar: userData.avatar
-                ? `https://cdn.discordapp.com/avatars/${userData.id}/${userData.avatar}.png`
-                : `https://cdn.discordapp.com/embed/avatars/${parseInt(userData.discriminator || '0') % 5}.png`,
+            avatar: avatarUrl,
             roles: memberData.roles || [],
-            isAdmin
+            isAdmin,
+            isNewUser
         };
 
         res.redirect('/#events');
@@ -97,7 +131,12 @@ router.get('/me', (req, res) => {
     if (!req.session || !req.session.user) {
         return res.status(200).json(null);
     }
-    res.json(req.session.user);
+    const user = { ...req.session.user };
+    // Clear isNewUser flag after first read so it only shows once
+    if (req.session.user.isNewUser) {
+        req.session.user.isNewUser = false;
+    }
+    res.json(user);
 });
 
 /**

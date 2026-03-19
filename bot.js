@@ -1,4 +1,4 @@
-const { Client, GatewayIntentBits, EmbedBuilder, REST, Routes, SlashCommandBuilder, PermissionsBitField, ChannelType, ActivityType } = require('discord.js');
+const { Client, GatewayIntentBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, REST, Routes, SlashCommandBuilder, PermissionsBitField, ChannelType, ActivityType } = require('discord.js');
 const { db, collection, doc, getDoc, getDocs, addDoc, setDoc, updateDoc, deleteDoc, query, where, orderBy } = require('./firebaseAdmin');
 
 const TIMEZONE = process.env.TIMEZONE || 'Europe/Berlin';
@@ -129,6 +129,73 @@ client.on('interactionCreate', async (interaction) => {
             }
         }
         return;
+    }
+
+    // Handle guest invitation button interactions
+    if (interaction.isButton()) {
+        const [action, registrationId, guestId] = interaction.customId.split(':');
+        if ((action === 'guest_accept' || action === 'guest_decline') && registrationId && guestId) {
+            // Only allow the invited user to respond
+            if (interaction.user.id !== guestId) {
+                return interaction.reply({ content: '❌ Diese Einladung ist nicht für dich.', ephemeral: true });
+            }
+            try {
+                const regRef = doc(db, 'registrations', registrationId);
+                const regSnap = await getDoc(regRef);
+                if (!regSnap.exists()) {
+                    return interaction.update({ content: '❌ Registrierung nicht mehr vorhanden.', components: [] });
+                }
+                const reg = regSnap.data();
+
+                // Find this guest in pendingGuests
+                const pendingGuests = reg.pendingGuests || [];
+                const guestIndex = pendingGuests.findIndex(g => g.userId === guestId);
+                if (guestIndex === -1) {
+                    return interaction.update({ content: '⚠️ Einladung bereits bearbeitet.', components: [] });
+                }
+
+                if (action === 'guest_accept') {
+                    // Move from pendingGuests to guests
+                    pendingGuests[guestIndex].status = 'accepted';
+                    const guests = reg.guests || [];
+                    if (!guests.includes(guestId)) guests.push(guestId);
+                    await updateDoc(regRef, { pendingGuests, guests });
+
+                    // Notify registrant
+                    const inviteeName = pendingGuests[guestIndex].displayName || guestId;
+                    await sendDM(reg.userId, `✅ **${inviteeName}** hat deine Gäste-Einladung für das Event angenommen!`);
+
+                    await interaction.update({
+                        embeds: [new EmbedBuilder()
+                            .setTitle('✅ Einladung angenommen')
+                            .setColor(0x22c55e)
+                            .setDescription('Du wurdest als Gast eingetragen. Viel Spaß beim Event!')
+                        ],
+                        components: []
+                    });
+                } else {
+                    // Remove from pendingGuests
+                    pendingGuests.splice(guestIndex, 1);
+                    await updateDoc(regRef, { pendingGuests });
+
+                    // Notify registrant
+                    await sendDM(reg.userId, `❌ Deine Gäste-Einladung wurde abgelehnt.`);
+
+                    await interaction.update({
+                        embeds: [new EmbedBuilder()
+                            .setTitle('❌ Einladung abgelehnt')
+                            .setColor(0xef4444)
+                            .setDescription('Du hast die Einladung abgelehnt.')
+                        ],
+                        components: []
+                    });
+                }
+            } catch (err) {
+                console.error('Guest invitation button error:', err);
+                try { await interaction.reply({ content: '❌ Fehler beim Verarbeiten der Einladung.', ephemeral: true }); } catch {}
+            }
+            return;
+        }
     }
 
     if (!interaction.isChatInputCommand()) return;
@@ -1204,6 +1271,54 @@ async function applyBotSettings() {
 }
 
 /**
+ * Send a guest invitation DM with Accept/Decline buttons
+ * @param {string} guestUserId - Discord ID of the invited guest
+ * @param {Object} registrant - {id, displayName} of the person sending the invite
+ * @param {Object} event - event object with title and id
+ * @param {string} registrationId - Firestore registration document ID
+ */
+async function sendGuestInvitation(guestUserId, registrant, event, registrationId) {
+    if (!isReady) return false;
+    try {
+        const user = await client.users.fetch(guestUserId);
+        const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
+
+        const embed = new EmbedBuilder()
+            .setTitle('🎟️ Gäste-Einladung erhalten')
+            .setColor(0x8b5cf6)
+            .setDescription(
+                `**${registrant.displayName}** hat dich als Gast zum Event eingeladen.\n\n` +
+                `**Event:** ${event.title}\n` +
+                (event.startDate ? `**Datum:** ${new Date(event.startDate).toLocaleString('de-DE', { timeZone: TIMEZONE })}\n` : '') +
+                `\nMöchtest du die Einladung annehmen?`
+            )
+            .addFields({ name: '🔗 Event', value: `[Zur Event-Seite](${baseUrl}/#events/${event.id})` })
+            .setFooter({ text: 'DEMS — Event Management' })
+            .setTimestamp();
+
+        const row = new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+                .setCustomId(`guest_accept:${registrationId}:${guestUserId}`)
+                .setLabel('Annehmen')
+                .setStyle(ButtonStyle.Success)
+                .setEmoji('✅'),
+            new ButtonBuilder()
+                .setCustomId(`guest_decline:${registrationId}:${guestUserId}`)
+                .setLabel('Ablehnen')
+                .setStyle(ButtonStyle.Danger)
+                .setEmoji('❌')
+        );
+
+        await user.send({ embeds: [embed], components: [row] });
+        dmsSentCount++;
+        return true;
+    } catch (err) {
+        console.error(`Failed to send guest invitation to ${guestUserId}:`, err.message);
+        return false;
+    }
+}
+
+/**
  * Get currently running (active) events with live data
  */
 async function getRunningEvents() {
@@ -1261,5 +1376,6 @@ module.exports = {
     getBotStatus,
     getBotSettings,
     saveBotSettings,
-    getRunningEvents
+    getRunningEvents,
+    sendGuestInvitation
 };

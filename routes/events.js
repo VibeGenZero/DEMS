@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { db, collection, doc, getDoc, getDocs, addDoc, deleteDoc, updateDoc, query, where, orderBy } = require('../firebaseAdmin');
 const { requireAuth } = require('../middleware/auth');
-const { sendDM, assignRole, parseTemplate, getGuildRoles, addParticipantToEventChannels, removeParticipantFromEventChannels, removeRole } = require('../bot');
+const { sendDM, assignRole, parseTemplate, getGuildRoles, addParticipantToEventChannels, removeParticipantFromEventChannels, removeRole, sendGuestInvitation } = require('../bot');
 const { promoteFromWaitlist } = require('../utils/eventUtils');
 
 /**
@@ -281,10 +281,15 @@ router.post('/:id/register', requireAuth, async (req, res) => {
         let status;
         let isWaitlisted = false;
 
-        const incomingGuests = Array.isArray(req.body.guests) ? req.body.guests : [];
-        if (event.allowGuests === false && incomingGuests.length > 0) {
+        // incomingGuests: array of {id, displayName, avatar} objects from search
+        const rawGuests = Array.isArray(req.body.guests) ? req.body.guests : [];
+        if (event.allowGuests === false && rawGuests.length > 0) {
             return res.status(400).json({ error: 'Gäste sind für dieses Event nicht zugelassen.' });
         }
+
+        // Validate guest objects — each must have an id field
+        const incomingGuests = rawGuests.filter(g => g && typeof g.id === 'string' && g.id.trim());
+        // Guests reserve slots (pending until they accept)
         const requiredSlots = 1 + incomingGuests.length;
 
         if (event.maxParticipants > 0) {
@@ -298,7 +303,10 @@ router.post('/:id/register', requireAuth, async (req, res) => {
             let currentCount = 0;
             regSnap.forEach(doc => {
                 const r = doc.data();
-                currentCount += 1 + (r.guests ? r.guests.length : 0);
+                // Count confirmed guests + pending guests
+                const confirmedGuests = r.guests ? r.guests.length : 0;
+                const pendingGuests = r.pendingGuests ? r.pendingGuests.filter(g => g.status === 'pending').length : 0;
+                currentCount += 1 + confirmedGuests + pendingGuests;
             });
 
             if (currentCount + requiredSlots > event.maxParticipants) {
@@ -328,18 +336,34 @@ router.post('/:id/register', requireAuth, async (req, res) => {
             return res.status(400).json({ error: `Bitte fülle alle Pflichtfelder aus: ${missingFields.join(', ')}` });
         }
 
-        // Create registration
+        // Build pendingGuests list (each guest gets an invitation DM)
+        const pendingGuests = incomingGuests.map(g => ({
+            userId: g.id,
+            displayName: g.displayName || g.id,
+            avatar: g.avatar || '',
+            status: 'pending'
+        }));
+
+        // Create registration — guests array is empty until guests accept
         const registration = {
             eventId: req.params.id,
             userId: user.id,
             userName: user.displayName,
             status,
             formAnswers,
-            guests: incomingGuests,
+            guests: [],
+            pendingGuests,
             createdAt: new Date().toISOString()
         };
 
         const regRef = await addDoc(collection(db, 'registrations'), registration);
+
+        // Send invitation DMs to each guest (non-blocking)
+        const eventData = { id: req.params.id, title: event.title, startDate: event.startDate };
+        for (const guest of pendingGuests) {
+            sendGuestInvitation(guest.userId, { id: user.id, displayName: user.displayName }, eventData, regRef.id)
+                .catch(err => console.error('sendGuestInvitation error:', err));
+        }
 
         // Send DM notification
         const templateSnap = await getDoc(doc(db, 'botMessages', 'templates'));

@@ -259,10 +259,17 @@
                 <div class="mt-3 mb-2" id="guest-tickets-area">
                   <label class="form-label mb-1"><i class="bi bi-person-plus me-1"></i>Gäste hinzufügen
                     (optional)</label>
-                  <input type="text" class="form-control" id="reg-guest-ids"
-                    placeholder="Discord User IDs (kommagetrennt)">
-                  <small class="text-muted">Gib die Discord User IDs deiner Gäste an, durch Komma getrennt. Jeder Gast
-                    belegt einen Event-Platz.</small>
+                  <div class="input-group mb-2">
+                    <input type="text" class="form-control" id="guest-search-input"
+                      placeholder="Name oder Benutzername suchen..."
+                      oninput="debounceGuestSearch()" autocomplete="off">
+                    <span class="input-group-text bg-transparent border-secondary">
+                      <i class="bi bi-search text-muted"></i>
+                    </span>
+                  </div>
+                  <div id="guest-search-results" class="list-group mb-2" style="display:none;max-height:200px;overflow-y:auto;"></div>
+                  <div id="selected-guests" class="d-flex flex-wrap gap-2 mb-1"></div>
+                  <small class="text-muted">Suche nach Servernutzern — sie erhalten eine Discord-Einladung und müssen bestätigen. Jeder Gast belegt einen Event-Platz.</small>
                 </div>
 
                 <button type="submit" class="btn btn-accent btn-lg mt-3" id="register-btn">
@@ -359,6 +366,31 @@
         <div id="profile-empty" class="text-center py-5" style="display:none;">
           <i class="bi bi-inbox" style="font-size:2.5rem;color:var(--text-muted);"></i>
           <p class="text-muted mt-2">Du hast dich noch für kein Event registriert.</p>
+        </div>
+
+        <!-- Account Settings -->
+        <h5 class="mb-3 mt-4"><i class="bi bi-gear me-2"></i>Account-Einstellungen</h5>
+        <div class="glass-card p-4 mb-4" id="account-settings-card">
+          <div class="d-flex align-items-center justify-content-between mb-3">
+            <div>
+              <div class="fw-semibold">Einladungen erhalten</div>
+              <small class="text-muted">Andere Nutzer können dich als Gast zu Events einladen.</small>
+            </div>
+            <div class="form-check form-switch">
+              <input class="form-check-input" type="checkbox" id="accept-invitations-toggle" role="switch"
+                onchange="saveAccountSettings()">
+            </div>
+          </div>
+          <hr class="border-secondary">
+          <div class="d-flex align-items-center justify-content-between">
+            <div>
+              <div class="fw-semibold text-danger">Account löschen</div>
+              <small class="text-muted">Löscht deinen Account und alle Registrierungen dauerhaft.</small>
+            </div>
+            <button class="btn btn-outline-danger btn-sm" onclick="deleteUserAccount()">
+              <i class="bi bi-trash me-1"></i>Account löschen
+            </button>
+          </div>
         </div>
       </div>
     </section>
@@ -1269,6 +1301,30 @@
       <div class="d-flex">
         <div class="toast-body" id="toast-message"></div>
         <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- First-Login Modal -->
+  <div class="modal fade" id="firstLoginModal" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content bg-dark border border-secondary">
+        <div class="modal-header border-secondary">
+          <h5 class="modal-title"><i class="bi bi-envelope-heart me-2"></i>Willkommen bei DEMS!</h5>
+        </div>
+        <div class="modal-body">
+          <p class="mb-3">Möchtest du <strong>Einladungen</strong> von anderen Servernutzern erhalten können?</p>
+          <p class="text-muted small mb-0">Andere Nutzer können dich dann als Gast zu Events hinzufügen. Du bekommst eine Discord-Nachricht und kannst selbst entscheiden, ob du annimmst oder ablehnst.</p>
+          <p class="text-muted small mt-2">Du kannst diese Einstellung jederzeit in deinem Profil ändern.</p>
+        </div>
+        <div class="modal-footer border-secondary">
+          <button class="btn btn-outline-secondary" onclick="confirmInvitationPreference(false)">
+            <i class="bi bi-x-circle me-1"></i>Nein, danke
+          </button>
+          <button class="btn btn-accent" onclick="confirmInvitationPreference(true)">
+            <i class="bi bi-check-circle me-1"></i>Ja, erlauben
+          </button>
+        </div>
       </div>
     </div>
   </div>

@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { db, collection, doc, getDoc, getDocs, query, where, orderBy } = require('../firebaseAdmin');
+const { db, collection, doc, getDoc, getDocs, setDoc, deleteDoc, query, where, orderBy, writeBatch } = require('../firebaseAdmin');
 const { requireAuth } = require('../middleware/auth');
 
 /**
@@ -275,6 +275,114 @@ router.get('/profile', requireAuth, async (req, res) => {
     } catch (err) {
         console.error('Error fetching user profile:', err);
         res.status(500).json({ error: 'Fehler beim Laden des Profils' });
+    }
+});
+
+/**
+ * GET /api/users/search?q=... — Search registered users by name
+ * Only returns users who accept invitations
+ */
+router.get('/search', requireAuth, async (req, res) => {
+    try {
+        const q = (req.query.q || '').toLowerCase().trim();
+        if (!q || q.length < 2) {
+            return res.json([]);
+        }
+
+        const snap = await getDocs(collection(db, 'users'));
+        const currentUserId = req.session.user.id;
+        const results = [];
+
+        snap.forEach(docSnap => {
+            const user = docSnap.data();
+            // Skip self and users who disabled invitations
+            if (user.id === currentUserId) return;
+            if (user.acceptInvitations === false) return;
+
+            const nameMatch = (user.displayName || '').toLowerCase().includes(q);
+            const usernameMatch = (user.username || '').toLowerCase().includes(q);
+            if (nameMatch || usernameMatch) {
+                results.push({
+                    id: user.id,
+                    username: user.username,
+                    displayName: user.displayName,
+                    avatar: user.avatar
+                });
+            }
+        });
+
+        res.json(results.slice(0, 10));
+    } catch (err) {
+        console.error('User search error:', err);
+        res.status(500).json({ error: 'Fehler bei der Suche' });
+    }
+});
+
+/**
+ * GET /api/user/settings — Get current user's account settings
+ */
+router.get('/settings', requireAuth, async (req, res) => {
+    try {
+        const userRef = doc(db, 'users', req.session.user.id);
+        const userSnap = await getDoc(userRef);
+        if (!userSnap.exists()) {
+            return res.json({ acceptInvitations: true });
+        }
+        const data = userSnap.data();
+        res.json({ acceptInvitations: data.acceptInvitations !== false });
+    } catch (err) {
+        console.error('Error fetching user settings:', err);
+        res.status(500).json({ error: 'Fehler beim Laden der Einstellungen' });
+    }
+});
+
+/**
+ * PUT /api/user/settings — Update account settings
+ */
+router.put('/settings', requireAuth, async (req, res) => {
+    try {
+        const { acceptInvitations } = req.body;
+        const userRef = doc(db, 'users', req.session.user.id);
+        const userSnap = await getDoc(userRef);
+        if (!userSnap.exists()) {
+            return res.status(404).json({ error: 'User nicht gefunden' });
+        }
+        await setDoc(userRef, {
+            ...userSnap.data(),
+            acceptInvitations: acceptInvitations !== false,
+            updatedAt: new Date().toISOString()
+        });
+        res.json({ success: true });
+    } catch (err) {
+        console.error('Error updating user settings:', err);
+        res.status(500).json({ error: 'Fehler beim Speichern der Einstellungen' });
+    }
+});
+
+/**
+ * DELETE /api/user/account — Delete user account and all registrations
+ */
+router.delete('/account', requireAuth, async (req, res) => {
+    try {
+        const userId = req.session.user.id;
+        const batch = writeBatch(db);
+
+        // Delete all registrations
+        const regQ = query(collection(db, 'registrations'), where('userId', '==', userId));
+        const regSnap = await getDocs(regQ);
+        regSnap.forEach(regDoc => batch.delete(regDoc.ref));
+
+        // Delete user document
+        batch.delete(doc(db, 'users', userId));
+        await batch.commit();
+
+        // Destroy session
+        req.session.destroy(() => {
+            res.json({ success: true });
+        });
+    } catch (err) {
+        console.error('Error deleting account:', err);
+        res.status(500).json({ error: 'Fehler beim Löschen des Accounts' });
     }
 });
 
