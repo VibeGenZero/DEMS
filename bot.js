@@ -165,6 +165,33 @@ client.on('interactionCreate', async (interaction) => {
                     const inviteeName = pendingGuests[guestIndex].displayName || guestId;
                     await sendDM(reg.userId, `✅ **${inviteeName}** hat deine Gäste-Einladung für das Event angenommen!`);
 
+                    // Send configured acceptance message to the guest
+                    try {
+                        const eventSnap = await getDoc(doc(db, 'events', reg.eventId));
+                        const event = eventSnap.exists() ? eventSnap.data() : {};
+                        const templateSnap = await getDoc(doc(db, 'botMessages', 'templates'));
+                        const globalTemplates = templateSnap.exists() ? templateSnap.data() : {};
+                        const customMsgs = event.customBotMessages || {};
+                        const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
+                        const eventUrl = `${baseUrl}/#events/${reg.eventId}`;
+                        const vars = {
+                            'user.id': guestId,
+                            'user.name': inviteeName,
+                            'user.mention': `<@${guestId}>`,
+                            'event.title': event.title || 'Unbekanntes Event',
+                            'event.url': eventUrl,
+                            'role.name': '',
+                            'role.mention': ''
+                        };
+                        const template = customMsgs.accepted || globalTemplates.accepted;
+                        const msg = template
+                            ? parseTemplate(template, vars)
+                            : `✅ Du wurdest als Gast für **${event.title || 'das Event'}** eingetragen!`;
+                        await sendDM(guestId, msg);
+                    } catch (msgErr) {
+                        console.error('Failed to send guest acceptance message:', msgErr);
+                    }
+
                     await interaction.update({
                         embeds: [new EmbedBuilder()
                             .setTitle('✅ Einladung angenommen')

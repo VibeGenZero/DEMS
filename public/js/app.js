@@ -782,7 +782,9 @@ async function showEventDetail(eventId) {
             const statusEl = document.getElementById('detail-reg-status');
             const statusTexts = { pending: 'Ausstehend', accepted: 'Angenommen', rejected: 'Abgelehnt', waitlisted: 'Warteliste' };
             const statusColors = { pending: 'warning', accepted: 'success', rejected: 'danger', waitlisted: 'info' };
-            statusEl.textContent = statusTexts[regData.status] || regData.status;
+            statusEl.textContent = regData.asGuest
+                ? 'Angenommen (Gast)'
+                : (statusTexts[regData.status] || regData.status);
             statusEl.className = 'fw-bold text-' + (statusColors[regData.status] || 'secondary');
 
             gsap.from('#event-detail-card', { y: 20, opacity: 0, duration: 0.5, ease: 'power3.out' });
@@ -2387,6 +2389,75 @@ function renderCalendar(events) {
     container.innerHTML = html;
 }
 
+// ─── Event Wizard Navigation ─────────────────────
+let currentWizardStep = 1;
+const WIZARD_TOTAL_STEPS = 5;
+
+function wizardGoTo(step) {
+    // Hide current page & deactivate indicator
+    document.getElementById(`wizard-page-${currentWizardStep}`).style.display = 'none';
+
+    currentWizardStep = step;
+
+    // Show new page
+    const page = document.getElementById(`wizard-page-${step}`);
+    page.style.display = '';
+
+    // Update step indicators
+    for (let i = 1; i <= WIZARD_TOTAL_STEPS; i++) {
+        const el = document.getElementById(`wstep-${i}`);
+        el.classList.remove('active', 'completed');
+        if (i === step) el.classList.add('active');
+        else if (i < step) el.classList.add('completed');
+    }
+
+    // Navigation buttons
+    document.getElementById('wizard-btn-back').style.display = step > 1 ? '' : 'none';
+    document.getElementById('wizard-btn-next').style.display = step < WIZARD_TOTAL_STEPS ? '' : 'none';
+    document.getElementById('wizard-btn-save').style.display = step === WIZARD_TOTAL_STEPS ? '' : 'none';
+    document.getElementById('wizard-step-counter').textContent = `Schritt ${step} von ${WIZARD_TOTAL_STEPS}`;
+
+    // Refresh EasyMDE when returning to step 1
+    if (step === 1 && descriptionEditor) {
+        setTimeout(() => descriptionEditor.codemirror.refresh(), 50);
+    }
+
+    // Init Flatpickr on step 2 (needs visible DOM)
+    if (step === 2) {
+        if (!startDatePicker) {
+            startDatePicker = flatpickr('#event-start-date', {
+                enableTime: true, dateFormat: 'Y-m-d H:i', time_24hr: true, locale: 'de'
+            });
+        }
+        if (!endDatePicker) {
+            endDatePicker = flatpickr('#event-end-date', {
+                enableTime: true, dateFormat: 'Y-m-d H:i', time_24hr: true, locale: 'de'
+            });
+        }
+    }
+}
+
+function wizardNext() {
+    if (currentWizardStep === 1) {
+        const titleEl = document.getElementById('event-title');
+        if (!titleEl.value.trim()) {
+            titleEl.classList.add('is-invalid');
+            titleEl.focus();
+            return;
+        }
+        titleEl.classList.remove('is-invalid');
+    }
+    if (currentWizardStep < WIZARD_TOTAL_STEPS) {
+        wizardGoTo(currentWizardStep + 1);
+    }
+}
+
+function wizardBack() {
+    if (currentWizardStep > 1) {
+        wizardGoTo(currentWizardStep - 1);
+    }
+}
+
 // ─── Event CRUD ──────────────────────────────────
 async function showCreateEventModal() {
     document.getElementById('eventModalTitle').textContent = 'Neues Event erstellen';
@@ -2431,34 +2502,19 @@ async function showCreateEventModal() {
     }
     descriptionEditor.value('');
 
-    // Initialize Flatpickr if not exists
-    if (!startDatePicker) {
-        startDatePicker = flatpickr("#event-start-date", {
-            enableTime: true,
-            dateFormat: "Y-m-d H:i",
-            time_24hr: true,
-            locale: "de"
-        });
-    }
-    startDatePicker.clear();
-
-    if (!endDatePicker) {
-        endDatePicker = flatpickr("#event-end-date", {
-            enableTime: true,
-            dateFormat: "Y-m-d H:i",
-            time_24hr: true,
-            locale: "de"
-        });
-    }
-    endDatePicker.clear();
+    if (startDatePicker) startDatePicker.clear();
+    if (endDatePicker) endDatePicker.clear();
 
     // Banner Preview Setup
     const bannerInput = document.getElementById('event-banner-url');
-    bannerInput.removeEventListener('input', updateBannerPreview); // Avoid duplicates
+    bannerInput.removeEventListener('input', updateBannerPreview);
     bannerInput.addEventListener('input', updateBannerPreview);
     updateBannerPreview();
 
     await loadRoles();
+
+    // Reset wizard to step 1
+    wizardGoTo(1);
 
     const modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('eventModal'));
     modal.show();
@@ -2510,16 +2566,14 @@ async function editEvent(eventId) {
 
         document.getElementById('event-banner-url').value = event.bannerUrl || '';
 
-        // Update Flatpickr
-        if (!startDatePicker) {
-            startDatePicker = flatpickr("#event-start-date", { enableTime: true, dateFormat: "Y-m-d H:i", time_24hr: true, locale: "de" });
-        }
-        startDatePicker.setDate(event.startDate || null);
-
-        if (!endDatePicker) {
-            endDatePicker = flatpickr("#event-end-date", { enableTime: true, dateFormat: "Y-m-d H:i", time_24hr: true, locale: "de" });
-        }
-        endDatePicker.setDate(event.endDate || null);
+        // Store dates to apply once Flatpickr is initialized (lazy init on step 2)
+        const _startDate = event.startDate || null;
+        const _endDate = event.endDate || null;
+        // Init if already exists, otherwise they'll be created when user visits step 2
+        if (startDatePicker) startDatePicker.setDate(_startDate);
+        else { startDatePicker = flatpickr("#event-start-date", { enableTime: true, dateFormat: "Y-m-d H:i", time_24hr: true, locale: "de" }); startDatePicker.setDate(_startDate); }
+        if (endDatePicker) endDatePicker.setDate(_endDate);
+        else { endDatePicker = flatpickr("#event-end-date", { enableTime: true, dateFormat: "Y-m-d H:i", time_24hr: true, locale: "de" }); endDatePicker.setDate(_endDate); }
 
         // Banner Preview
         const bannerInput = document.getElementById('event-banner-url');
@@ -2579,6 +2633,9 @@ async function editEvent(eventId) {
         document.getElementById('event-access').onchange = function () {
             document.getElementById('role-requirement-area').style.display = this.value === 'role-required' ? 'block' : 'none';
         };
+
+        // Reset wizard to step 1
+        wizardGoTo(1);
 
         const modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('eventModal'));
         modal.show();

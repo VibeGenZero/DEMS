@@ -635,243 +635,299 @@
     </div>
   </div>
 
-  <!-- Create / Edit Event Modal -->
+  <!-- Create / Edit Event Modal (Wizard) -->
   <div class="modal fade" id="eventModal" tabindex="-1">
     <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
       <div class="modal-content glass-modal">
-        <div class="modal-header border-0">
+
+        <div class="modal-header border-0 pb-0">
           <h5 class="modal-title" id="eventModalTitle">Neues Event erstellen</h5>
           <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
         </div>
+
+        <!-- Wizard Step Indicator -->
+        <div class="px-4 pt-3">
+          <div class="wizard-nav">
+            <div class="wizard-step-item active" id="wstep-1" onclick="wizardGoTo(1)">
+              <div class="wizard-step-bubble">1</div>
+              <div class="wizard-step-label">Grundlagen</div>
+            </div>
+            <div class="wizard-step-connector"></div>
+            <div class="wizard-step-item" id="wstep-2" onclick="wizardGoTo(2)">
+              <div class="wizard-step-bubble">2</div>
+              <div class="wizard-step-label">Datum & Zeit</div>
+            </div>
+            <div class="wizard-step-connector"></div>
+            <div class="wizard-step-item" id="wstep-3" onclick="wizardGoTo(3)">
+              <div class="wizard-step-bubble">3</div>
+              <div class="wizard-step-label">Teilnehmer</div>
+            </div>
+            <div class="wizard-step-connector"></div>
+            <div class="wizard-step-item" id="wstep-4" onclick="wizardGoTo(4)">
+              <div class="wizard-step-bubble">4</div>
+              <div class="wizard-step-label">Formular</div>
+            </div>
+            <div class="wizard-step-connector"></div>
+            <div class="wizard-step-item" id="wstep-5" onclick="wizardGoTo(5)">
+              <div class="wizard-step-bubble">5</div>
+              <div class="wizard-step-label">Erweitert</div>
+            </div>
+          </div>
+        </div>
+
         <div class="modal-body">
           <form id="event-form">
             <input type="hidden" id="event-edit-id" value="">
 
-            <div class="mb-3">
-              <label class="form-label">Titel</label>
-              <input type="text" class="form-control" id="event-title" required placeholder="Event-Name">
-            </div>
-
-            <div class="mb-3">
-              <label class="form-label">Beschreibung</label>
-              <textarea class="form-control" id="event-description" rows="4"
-                placeholder="Beschreibe das Event..."></textarea>
-            </div>
-
-            <div class="mb-3">
-              <label class="form-label">🖼️ Banner URL</label>
-              <input type="url" class="form-control" id="event-banner-url" placeholder="https://example.com/banner.jpg">
-              <small class="text-muted">Direkte URL zu einem Banner-Bild (z.B. Imgur, Discord CDN)</small>
-              <div class="mt-2" id="banner-preview-container" style="display:none;">
-                <img id="banner-preview" src="" alt="Banner Vorschau"
-                  style="max-width:100%; border-radius:var(--radius); max-height:200px; object-fit:cover;">
+            <!-- ── Step 1: Grundlagen ── -->
+            <div class="wizard-page" id="wizard-page-1">
+              <div class="mb-3">
+                <label class="form-label">Titel <span class="text-danger">*</span></label>
+                <input type="text" class="form-control" id="event-title" maxlength="200" placeholder="Event-Name">
+                <div class="invalid-feedback">Bitte einen Titel eingeben.</div>
               </div>
-            </div>
-
-            <div class="row g-3 mb-3">
-              <div class="col-md-6">
-                <label class="form-label">📅 Startdatum</label>
-                <input type="text" class="form-control" id="event-start-date" placeholder="Datum & Uhrzeit wählen" readonly>
+              <div class="mb-3">
+                <label class="form-label">Beschreibung</label>
+                <textarea class="form-control" id="event-description" rows="4"
+                  placeholder="Beschreibe das Event..."></textarea>
               </div>
-              <div class="col-md-6">
-                <label class="form-label">📅 Enddatum</label>
-                <input type="text" class="form-control" id="event-end-date" placeholder="Datum & Uhrzeit wählen" readonly>
-              </div>
-            </div>
-
-            <div class="row g-3 mb-3">
-              <div class="col-md-3">
-                <label class="form-label">Max. Teilnehmer</label>
-                <input type="number" class="form-control" id="event-max" min="0" value="0" placeholder="0 = unbegrenzt">
-                <small class="text-muted">0 = unbegrenzt</small>
-              </div>
-              <div class="col-md-3">
-                <label class="form-label">Kategorie</label>
-                <select class="form-select" id="event-category">
-                  <option value="">Keine Kategorie</option>
-                  <option value="Tournament">Tournament</option>
-                  <option value="Community">Community</option>
-                  <option value="Workshop">Workshop</option>
-                  <option value="Gamenight">Gamenight</option>
-                  <option value="Meeting">Meeting</option>
-                  <option value="Sonstiges">Sonstiges</option>
-                </select>
-              </div>
-              <div class="col-md-3">
-                <label class="form-label">Zugang</label>
-                <select class="form-select" id="event-access">
-                  <option value="open">Jeder darf teilnehmen</option>
-                  <option value="role-required">Rollen-Requirement</option>
-                </select>
-              </div>
-              <div class="col-md-3">
-                <label class="form-label">Genehmigung</label>
-                <select class="form-select" id="event-approval">
-                  <option value="manual">Manuelle Prüfung</option>
-                  <option value="instant">Instant Access</option>
-                </select>
-              </div>
-            </div>
-
-            <div class="row g-3 mb-3">
-              <div class="col-md-4">
-                <label class="form-label">Status</label>
-                <select class="form-select" id="event-status">
-                  <option value="active">Aktiv</option>
-                  <option value="draft">Entwurf</option>
-                  <option value="archived">Archiviert</option>
-                </select>
-              </div>
-              <div class="col-md-4">
-                <label class="form-label">⏰ Erinnerung (h)</label>
-                <input type="number" class="form-control" id="event-reminder" min="0" value="0" placeholder="0 = keine">
-                <small class="text-muted">0 = keine Erinnerung</small>
-              </div>
-              <div class="col-md-4">
-                <label class="form-label">Gäste-Tickets</label>
-                <div class="form-check form-switch mt-1">
-                  <input class="form-check-input" type="checkbox" id="event-allow-guests" checked>
-                  <label class="form-check-label" for="event-allow-guests">Gäste zulassen</label>
+              <div class="mb-3">
+                <label class="form-label">🖼️ Banner URL</label>
+                <input type="url" class="form-control" id="event-banner-url"
+                  placeholder="https://example.com/banner.jpg">
+                <small class="text-muted">Direkte URL zu einem Banner-Bild (z.B. Imgur, Discord CDN)</small>
+                <div class="mt-2" id="banner-preview-container" style="display:none;">
+                  <img id="banner-preview" src="" alt="Banner Vorschau"
+                    style="max-width:100%; border-radius:var(--radius); max-height:200px; object-fit:cover;">
                 </div>
               </div>
             </div>
 
-            <!-- Recurring Event -->
-            <div class="mb-3 glass-card p-3" style="background:rgba(139,92,246,0.05);">
-              <div class="form-check mb-2">
-                <input class="form-check-input" type="checkbox" id="event-recurring"
-                  onchange="document.getElementById('recurring-options').style.display=this.checked?'':'none'">
-                <label class="form-check-label" for="event-recurring">🔁 Wiederkehrendes Event</label>
-              </div>
-              <div id="recurring-options" style="display:none;">
-                <div class="row g-3">
-                  <div class="col-md-6">
-                    <label class="form-label">Intervall</label>
-                    <select class="form-select" id="event-recurring-interval">
-                      <option value="weekly">Wöchentlich</option>
-                      <option value="biweekly">Alle 2 Wochen</option>
-                      <option value="monthly">Monatlich</option>
-                    </select>
-                  </div>
-                  <div class="col-md-6">
-                    <label class="form-label">Wiederholen bis</label>
-                    <input type="date" class="form-control" id="event-recurring-until">
-                  </div>
+            <!-- ── Step 2: Datum & Zeit ── -->
+            <div class="wizard-page" id="wizard-page-2" style="display:none;">
+              <div class="row g-3 mb-3">
+                <div class="col-md-6">
+                  <label class="form-label">📅 Startdatum</label>
+                  <input type="text" class="form-control" id="event-start-date" placeholder="Datum & Uhrzeit wählen"
+                    readonly>
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label">📅 Enddatum</label>
+                  <input type="text" class="form-control" id="event-end-date" placeholder="Datum & Uhrzeit wählen"
+                    readonly>
                 </div>
               </div>
-            </div>
-
-            <!-- Role Requirement -->
-            <div class="mb-3" id="role-requirement-area" style="display:none;">
-              <label class="form-label">Erforderliche Rollen</label>
-              <div id="role-checkboxes" class="d-flex flex-wrap gap-2">
-                <!-- Populated dynamically -->
-              </div>
-            </div>
-
-            <!-- Assign Role on Accept -->
-            <div class="mb-3">
-              <label class="form-label">Rolle bei Annahme zuweisen</label>
-              <select class="form-select" id="event-assign-role">
-                <option value="">Keine Rolle zuweisen</option>
-                <!-- Populated dynamically -->
-              </select>
-            </div>
-
-            <!-- Custom Bot Messages -->
-            <div class="mb-3 glass-card p-3" style="background:rgba(139,92,246,0.05);">
-              <div class="form-check mb-2">
-                <input class="form-check-input" type="checkbox" id="event-custom-msg-toggle"
-                  onchange="document.getElementById('custom-msg-options').style.display=this.checked?'':'none'">
-                <label class="form-check-label" for="event-custom-msg-toggle">🤖 Eigene Bot-Nachrichten</label>
-              </div>
-              <div id="custom-msg-options" style="display:none;">
-                <div class="mb-3">
-                  <label class="form-label">Registrierungs-Nachricht</label>
-                  <textarea class="form-control" id="event-msg-registration" rows="2"
-                    placeholder="Standard verwenden..."></textarea>
-                  <small class="text-muted d-block mt-1">Variablen: {user.name}, {user.mention}, {event.title},
-                    {event.url}</small>
-                </div>
-                <div class="mb-3">
-                  <label class="form-label">Angenommen-Nachricht</label>
-                  <textarea class="form-control" id="event-msg-accepted" rows="2"
-                    placeholder="Standard verwenden..."></textarea>
-                  <small class="text-muted d-block mt-1">Zusätzlich: {role.name}, {role.mention}</small>
-                </div>
-                <div class="mb-3">
-                  <label class="form-label">Abgelehnt-Nachricht</label>
-                  <textarea class="form-control" id="event-msg-rejected" rows="2"
-                    placeholder="Standard verwenden..."></textarea>
-                </div>
-              </div>
-            </div>
-
-            <!-- Deep Discord Integration -->
-            <div class="mb-3 glass-card p-3" style="background:rgba(139,92,246,0.05);">
-              <div class="form-check mb-2">
-                <input class="form-check-input" type="checkbox" id="event-auto-create-channels"
-                  onchange="document.getElementById('channel-config-options').style.display=this.checked?'':'none'">
-                <label class="form-check-label" for="event-auto-create-channels">🎧 Auto-Voice/Text Channels
-                  generieren</label>
-              </div>
-              <small class="text-muted d-block ms-4 mb-2">Erstellt einen privaten Kanal für dieses Event in Discord,
-                auf den nur angenommene Teilnehmer zugreifen können.</small>
-
-              <div id="channel-config-options" style="display:none;" class="ms-4 mt-3">
-                <div class="mb-2">
-                  <label class="form-label small text-muted">Kanal-Typ</label>
-                  <select class="form-select form-select-sm" id="event-channel-type">
-                    <option value="voice">Voice Channel (mit Text-Chat)</option>
-                    <option value="text">Nur Text Channel</option>
-                    <option value="both">Beides (Voice & Text separat)</option>
+              <div class="row g-3 mb-3">
+                <div class="col-md-6">
+                  <label class="form-label">Kategorie</label>
+                  <select class="form-select" id="event-category">
+                    <option value="">Keine Kategorie</option>
+                    <option value="Tournament">Tournament</option>
+                    <option value="Community">Community</option>
+                    <option value="Workshop">Workshop</option>
+                    <option value="Gamenight">Gamenight</option>
+                    <option value="Meeting">Meeting</option>
+                    <option value="Sonstiges">Sonstiges</option>
                   </select>
                 </div>
-                <div class="row g-2">
-                  <div class="col-md-6">
-                    <label class="form-label small text-muted">Voice Channel Name (optional)</label>
-                    <input type="text" class="form-control form-control-sm" id="event-voice-name"
-                      placeholder="Standard: Event Titel">
-                  </div>
-                  <div class="col-md-6">
-                    <label class="form-label small text-muted">Text Channel Name (optional)</label>
-                    <input type="text" class="form-control form-control-sm" id="event-text-name"
-                      placeholder="Standard: Event Titel">
+                <div class="col-md-6">
+                  <label class="form-label">Status</label>
+                  <select class="form-select" id="event-status">
+                    <option value="active">Aktiv</option>
+                    <option value="draft">Entwurf</option>
+                    <option value="archived">Archiviert</option>
+                  </select>
+                </div>
+              </div>
+              <!-- Recurring -->
+              <div class="mb-3 glass-card p-3" style="background:rgba(139,92,246,0.05);">
+                <div class="form-check mb-2">
+                  <input class="form-check-input" type="checkbox" id="event-recurring"
+                    onchange="document.getElementById('recurring-options').style.display=this.checked?'':'none'">
+                  <label class="form-check-label" for="event-recurring">🔁 Wiederkehrendes Event</label>
+                </div>
+                <div id="recurring-options" style="display:none;">
+                  <div class="row g-3">
+                    <div class="col-md-6">
+                      <label class="form-label">Intervall</label>
+                      <select class="form-select" id="event-recurring-interval">
+                        <option value="weekly">Wöchentlich</option>
+                        <option value="biweekly">Alle 2 Wochen</option>
+                        <option value="monthly">Monatlich</option>
+                      </select>
+                    </div>
+                    <div class="col-md-6">
+                      <label class="form-label">Wiederholen bis</label>
+                      <input type="date" class="form-control" id="event-recurring-until">
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
 
-            <hr class="border-secondary">
-
-            <!-- Check-in Message -->
-            <h6 class="mb-3"><i class="bi bi-chat-text me-2"></i>Check-in Nachricht</h6>
-            <div class="mb-3">
-              <label class="form-label">Nachricht nach Check-in (optional)</label>
-              <textarea class="form-control" id="event-checkin-message" rows="4"
-                placeholder="z.B. Server-Zugangsdaten, Voice-Channel-Links, etc. (Markdown unterstützt)"></textarea>
-              <small class="text-muted">Diese Nachricht wird Benutzern nach erfolgreichem Check-in angezeigt.
-                Unterstützt Markdown-Formatierung.</small>
+            <!-- ── Step 3: Teilnehmer & Zugang ── -->
+            <div class="wizard-page" id="wizard-page-3" style="display:none;">
+              <div class="row g-3 mb-3">
+                <div class="col-md-6">
+                  <label class="form-label">Max. Teilnehmer</label>
+                  <input type="number" class="form-control" id="event-max" min="0" value="0"
+                    placeholder="0 = unbegrenzt">
+                  <small class="text-muted">0 = unbegrenzt</small>
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label">⏰ Erinnerung (h)</label>
+                  <input type="number" class="form-control" id="event-reminder" min="0" value="0"
+                    placeholder="0 = keine">
+                  <small class="text-muted">0 = keine Erinnerung</small>
+                </div>
+              </div>
+              <div class="row g-3 mb-3">
+                <div class="col-md-4">
+                  <label class="form-label">Zugang</label>
+                  <select class="form-select" id="event-access">
+                    <option value="open">Jeder darf teilnehmen</option>
+                    <option value="role-required">Rollen-Requirement</option>
+                  </select>
+                </div>
+                <div class="col-md-4">
+                  <label class="form-label">Genehmigung</label>
+                  <select class="form-select" id="event-approval">
+                    <option value="manual">Manuelle Prüfung</option>
+                    <option value="instant">Instant Access</option>
+                  </select>
+                </div>
+                <div class="col-md-4">
+                  <label class="form-label">Gäste-Tickets</label>
+                  <div class="form-check form-switch mt-1">
+                    <input class="form-check-input" type="checkbox" id="event-allow-guests" checked>
+                    <label class="form-check-label" for="event-allow-guests">Gäste zulassen</label>
+                  </div>
+                </div>
+              </div>
+              <div class="mb-3" id="role-requirement-area" style="display:none;">
+                <label class="form-label">Erforderliche Rollen</label>
+                <div id="role-checkboxes" class="d-flex flex-wrap gap-2">
+                  <!-- Populated dynamically -->
+                </div>
+              </div>
+              <div class="mb-3">
+                <label class="form-label">Rolle bei Annahme zuweisen</label>
+                <select class="form-select" id="event-assign-role">
+                  <option value="">Keine Rolle zuweisen</option>
+                  <!-- Populated dynamically -->
+                </select>
+              </div>
             </div>
 
-            <hr class="border-secondary">
-
-            <!-- Dynamic Form Builder -->
-            <h6 class="mb-3"><i class="bi bi-ui-checks me-2"></i>Anmeldeformular-Felder</h6>
-            <div id="form-fields-builder">
-              <!-- Dynamic field rows -->
+            <!-- ── Step 4: Anmeldeformular ── -->
+            <div class="wizard-page" id="wizard-page-4" style="display:none;">
+              <p class="text-muted small mb-3">
+                <i class="bi bi-ui-checks me-1"></i>
+                Optionale Felder, die Teilnehmer beim Anmelden ausfüllen müssen.
+              </p>
+              <div id="form-fields-builder">
+                <!-- Dynamic field rows -->
+              </div>
+              <button type="button" class="btn btn-sm btn-outline-light mt-2" onclick="addFormField()">
+                <i class="bi bi-plus me-1"></i>Feld hinzufügen
+              </button>
             </div>
-            <button type="button" class="btn btn-sm btn-outline-light mt-2" onclick="addFormField()">
-              <i class="bi bi-plus me-1"></i>Feld hinzufügen
-            </button>
+
+            <!-- ── Step 5: Erweitert ── -->
+            <div class="wizard-page" id="wizard-page-5" style="display:none;">
+              <!-- Auto Voice/Text Channels -->
+              <div class="mb-3 glass-card p-3" style="background:rgba(139,92,246,0.05);">
+                <div class="form-check mb-2">
+                  <input class="form-check-input" type="checkbox" id="event-auto-create-channels"
+                    onchange="document.getElementById('channel-config-options').style.display=this.checked?'':'none'">
+                  <label class="form-check-label" for="event-auto-create-channels">🎧 Auto-Voice/Text Channels
+                    generieren</label>
+                </div>
+                <small class="text-muted d-block ms-4 mb-2">Erstellt einen privaten Kanal für dieses Event in Discord,
+                  auf den nur angenommene Teilnehmer zugreifen können.</small>
+                <div id="channel-config-options" style="display:none;" class="ms-4 mt-3">
+                  <div class="mb-2">
+                    <label class="form-label small text-muted">Kanal-Typ</label>
+                    <select class="form-select form-select-sm" id="event-channel-type">
+                      <option value="voice">Voice Channel (mit Text-Chat)</option>
+                      <option value="text">Nur Text Channel</option>
+                      <option value="both">Beides (Voice & Text separat)</option>
+                    </select>
+                  </div>
+                  <div class="row g-2">
+                    <div class="col-md-6">
+                      <label class="form-label small text-muted">Voice Channel Name (optional)</label>
+                      <input type="text" class="form-control form-control-sm" id="event-voice-name"
+                        placeholder="Standard: Event Titel">
+                    </div>
+                    <div class="col-md-6">
+                      <label class="form-label small text-muted">Text Channel Name (optional)</label>
+                      <input type="text" class="form-control form-control-sm" id="event-text-name"
+                        placeholder="Standard: Event Titel">
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <!-- Custom Bot Messages -->
+              <div class="mb-3 glass-card p-3" style="background:rgba(139,92,246,0.05);">
+                <div class="form-check mb-2">
+                  <input class="form-check-input" type="checkbox" id="event-custom-msg-toggle"
+                    onchange="document.getElementById('custom-msg-options').style.display=this.checked?'':'none'">
+                  <label class="form-check-label" for="event-custom-msg-toggle">🤖 Eigene Bot-Nachrichten</label>
+                </div>
+                <div id="custom-msg-options" style="display:none;">
+                  <div class="mb-3">
+                    <label class="form-label">Registrierungs-Nachricht</label>
+                    <textarea class="form-control" id="event-msg-registration" rows="2"
+                      placeholder="Standard verwenden..."></textarea>
+                    <small class="text-muted d-block mt-1">Variablen: {user.name}, {user.mention}, {event.title},
+                      {event.url}</small>
+                  </div>
+                  <div class="mb-3">
+                    <label class="form-label">Angenommen-Nachricht</label>
+                    <textarea class="form-control" id="event-msg-accepted" rows="2"
+                      placeholder="Standard verwenden..."></textarea>
+                    <small class="text-muted d-block mt-1">Zusätzlich: {role.name}, {role.mention}</small>
+                  </div>
+                  <div class="mb-3">
+                    <label class="form-label">Abgelehnt-Nachricht</label>
+                    <textarea class="form-control" id="event-msg-rejected" rows="2"
+                      placeholder="Standard verwenden..."></textarea>
+                  </div>
+                </div>
+              </div>
+              <!-- Check-in Message -->
+              <div class="mb-3">
+                <label class="form-label"><i class="bi bi-chat-text me-1"></i>Check-in Nachricht (optional)</label>
+                <textarea class="form-control" id="event-checkin-message" rows="4"
+                  placeholder="z.B. Server-Zugangsdaten, Voice-Channel-Links, etc. (Markdown unterstützt)"></textarea>
+                <small class="text-muted">Wird Benutzern nach erfolgreichem Check-in angezeigt. Markdown
+                  unterstützt.</small>
+              </div>
+            </div>
+
           </form>
         </div>
-        <div class="modal-footer border-0">
+
+        <!-- Wizard Footer -->
+        <div class="modal-footer border-0 justify-content-between">
           <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Abbrechen</button>
-          <button type="button" class="btn btn-accent" onclick="saveEvent()">
-            <i class="bi bi-save me-1"></i>Speichern
-          </button>
+          <div class="d-flex gap-2 align-items-center">
+            <span class="text-muted small me-2" id="wizard-step-counter">Schritt 1 von 5</span>
+            <button type="button" class="btn btn-outline-secondary" id="wizard-btn-back" onclick="wizardBack()"
+              style="display:none;">
+              <i class="bi bi-arrow-left me-1"></i>Zurück
+            </button>
+            <button type="button" class="btn btn-accent" id="wizard-btn-next" onclick="wizardNext()">
+              Weiter<i class="bi bi-arrow-right ms-1"></i>
+            </button>
+            <button type="button" class="btn btn-accent" id="wizard-btn-save" onclick="saveEvent()"
+              style="display:none;">
+              <i class="bi bi-save me-1"></i>Speichern
+            </button>
+          </div>
         </div>
+
       </div>
     </div>
   </div>

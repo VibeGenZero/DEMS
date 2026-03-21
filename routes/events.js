@@ -504,6 +504,8 @@ router.delete('/:id/register', requireAuth, async (req, res) => {
 router.get('/:id/my-registration', requireAuth, async (req, res) => {
     try {
         const user = req.session.user;
+
+        // Check if user is the primary registrant
         const regQ = query(
             collection(db, 'registrations'),
             where('eventId', '==', req.params.id),
@@ -511,12 +513,25 @@ router.get('/:id/my-registration', requireAuth, async (req, res) => {
         );
         const regSnap = await getDocs(regQ);
 
-        if (regSnap.empty) {
-            return res.json({ registered: false });
+        if (!regSnap.empty) {
+            const regDoc = regSnap.docs[0];
+            return res.json({ registered: true, id: regDoc.id, ...regDoc.data() });
         }
 
-        const regDoc = regSnap.docs[0];
-        res.json({ registered: true, id: regDoc.id, ...regDoc.data() });
+        // Check if user is an accepted guest in someone else's registration
+        const guestQ = query(
+            collection(db, 'registrations'),
+            where('eventId', '==', req.params.id),
+            where('guests', 'array-contains', user.id)
+        );
+        const guestSnap = await getDocs(guestQ);
+
+        if (!guestSnap.empty) {
+            const regDoc = guestSnap.docs[0];
+            return res.json({ registered: true, id: regDoc.id, status: 'accepted', asGuest: true, ...regDoc.data() });
+        }
+
+        res.json({ registered: false });
     } catch (err) {
         res.status(500).json({ error: 'Fehler' });
     }

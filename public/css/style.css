@@ -2653,3 +2653,99 @@ body {
     grid-template-columns: repeat(2, 1fr);
   }
 }
+
+/* ═══════════════════════════════════════════ */
+/* EVENT WIZARD STEPPER                        */
+/* ═══════════════════════════════════════════ */
+.wizard-nav {
+  display: flex;
+  align-items: center;
+  margin-bottom: 1.5rem;
+}
+
+.wizard-step-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+  cursor: pointer;
+}
+
+.wizard-step-bubble {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.85rem;
+  font-weight: 700;
+  border: 2px solid var(--border-subtle);
+  background: var(--bg-secondary);
+  color: var(--text-muted);
+  transition: var(--transition);
+}
+
+.wizard-step-label {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+  transition: var(--transition);
+}
+
+.wizard-step-item.active .wizard-step-bubble {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+  box-shadow: 0 0 12px var(--accent-glow);
+}
+
+.wizard-step-item.active .wizard-step-label {
+  color: var(--accent-light);
+  font-weight: 600;
+}
+
+.wizard-step-item.completed .wizard-step-bubble {
+  background: var(--accent-dark);
+  border-color: var(--accent-dark);
+  color: #fff;
+}
+
+.wizard-step-item.completed .wizard-step-label {
+  color: var(--text-secondary);
+}
+
+.wizard-step-connector {
+  flex: 1;
+  height: 2px;
+  background: var(--border-subtle);
+  margin: 0 6px;
+  margin-bottom: 22px;
+  border-radius: 2px;
+  transition: var(--transition);
+}
+
+.wizard-step-item.completed + .wizard-step-connector {
+  background: var(--accent-dark);
+}
+
+.wizard-page {
+  animation: wizardFadeIn 0.25s ease;
+}
+
+@keyframes wizardFadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@media (max-width: 576px) {
+  .wizard-step-label {
+    display: none;
+  }
+  .wizard-step-bubble {
+    width: 30px;
+    height: 30px;
+    font-size: 0.75rem;
+  }
+}
