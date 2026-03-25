@@ -1007,4 +1007,150 @@ router.get('/bot/running-events', async (req, res) => {
     }
 });
 
+// ═══════════════════════════════════════════════════════════
+// MAINTENANCE MODE (Wartungsmodus)
+// ═══════════════════════════════════════════════════════════
+
+/**
+ * GET /api/admin/maintenance — Get current maintenance settings
+ */
+router.get('/maintenance', async (req, res) => {
+    try {
+        const snap = await getDoc(doc(db, 'maintenanceSettings', 'config'));
+        const defaults = {
+            warningEnabled: false,
+            warningText: '',
+            loginDisabled: false,
+            registrationDisabled: false,
+            plannedMaintenance: false,
+            plannedMaintenanceStart: '',
+            plannedMaintenanceEnd: '',
+            plannedMaintenanceText: '',
+            panicMode: false,
+            panicActivatedAt: '',
+            panicActivatedBy: ''
+        };
+        res.json(snap.exists() ? { ...defaults, ...snap.data() } : defaults);
+    } catch (err) {
+        console.error('Maintenance settings error:', err);
+        res.status(500).json({ error: 'Fehler beim Laden der Wartungseinstellungen.' });
+    }
+});
+
+/**
+ * PUT /api/admin/maintenance — Update maintenance settings
+ */
+router.put('/maintenance', async (req, res) => {
+    try {
+        const {
+            warningEnabled, warningText,
+            loginDisabled, registrationDisabled,
+            plannedMaintenance, plannedMaintenanceStart,
+            plannedMaintenanceEnd, plannedMaintenanceText
+        } = req.body;
+
+        const settings = {
+            warningEnabled: !!warningEnabled,
+            warningText: (warningText || '').substring(0, 500),
+            loginDisabled: !!loginDisabled,
+            registrationDisabled: !!registrationDisabled,
+            plannedMaintenance: !!plannedMaintenance,
+            plannedMaintenanceStart: plannedMaintenanceStart || '',
+            plannedMaintenanceEnd: plannedMaintenanceEnd || '',
+            plannedMaintenanceText: (plannedMaintenanceText || '').substring(0, 500),
+            updatedAt: new Date().toISOString(),
+            updatedBy: req.session.user.id
+        };
+
+        // Preserve panic mode state (can't be changed via this endpoint)
+        const existing = await getDoc(doc(db, 'maintenanceSettings', 'config'));
+        if (existing.exists()) {
+            const data = existing.data();
+            settings.panicMode = !!data.panicMode;
+            settings.panicActivatedAt = data.panicActivatedAt || '';
+            settings.panicActivatedBy = data.panicActivatedBy || '';
+        } else {
+            settings.panicMode = false;
+            settings.panicActivatedAt = '';
+            settings.panicActivatedBy = '';
+        }
+
+        await setDoc(doc(db, 'maintenanceSettings', 'config'), settings);
+        await addAuditLog('UPDATE_MAINTENANCE', req.session.user.id, 'Wartungseinstellungen aktualisiert');
+        res.json({ success: true, settings });
+    } catch (err) {
+        console.error('Update maintenance error:', err);
+        res.status(500).json({ error: 'Fehler beim Speichern der Wartungseinstellungen.' });
+    }
+});
+
+/**
+ * POST /api/admin/maintenance/panic — Activate Panic Mode (no password required)
+ * Complete lockdown: only admin reset password holder can deactivate
+ */
+router.post('/maintenance/panic', async (req, res) => {
+    try {
+        const existing = await getDoc(doc(db, 'maintenanceSettings', 'config'));
+        const data = existing.exists() ? existing.data() : {};
+
+        await setDoc(doc(db, 'maintenanceSettings', 'config'), {
+            ...data,
+            panicMode: true,
+            panicActivatedAt: new Date().toISOString(),
+            panicActivatedBy: req.session.user.id,
+            warningEnabled: true,
+            warningText: data.warningText || 'NOTFALL-WARTUNG: System ist gesperrt.',
+            loginDisabled: true,
+            registrationDisabled: true,
+            updatedAt: new Date().toISOString(),
+            updatedBy: req.session.user.id
+        });
+
+        await addAuditLog('PANIC_MODE_ACTIVATED', req.session.user.id, 'Panic Mode aktiviert — Kompletter Lockdown');
+        console.log(`🚨 PANIC MODE activated by ${req.session.user.id}`);
+        res.json({ success: true });
+    } catch (err) {
+        console.error('Panic mode activation error:', err);
+        res.status(500).json({ error: 'Panic Mode konnte nicht aktiviert werden.' });
+    }
+});
+
+/**
+ * POST /api/admin/maintenance/panic/deactivate — Deactivate Panic Mode
+ * Requires the ADMIN_RESET_PASSWORD
+ */
+router.post('/maintenance/panic/deactivate', async (req, res) => {
+    try {
+        const { password } = req.body;
+        const adminPassword = process.env.ADMIN_RESET_PASSWORD;
+
+        if (!adminPassword || password !== adminPassword) {
+            return res.status(401).json({ error: 'Ungültiges Admin-Reset-Passwort.' });
+        }
+
+        const existing = await getDoc(doc(db, 'maintenanceSettings', 'config'));
+        const data = existing.exists() ? existing.data() : {};
+
+        await setDoc(doc(db, 'maintenanceSettings', 'config'), {
+            ...data,
+            panicMode: false,
+            panicActivatedAt: '',
+            panicActivatedBy: '',
+            warningEnabled: false,
+            warningText: '',
+            loginDisabled: false,
+            registrationDisabled: false,
+            updatedAt: new Date().toISOString(),
+            updatedBy: req.session.user.id
+        });
+
+        await addAuditLog('PANIC_MODE_DEACTIVATED', req.session.user.id, 'Panic Mode deaktiviert');
+        console.log(`✅ PANIC MODE deactivated by ${req.session.user.id}`);
+        res.json({ success: true });
+    } catch (err) {
+        console.error('Panic mode deactivation error:', err);
+        res.status(500).json({ error: 'Panic Mode konnte nicht deaktiviert werden.' });
+    }
+});
+
 module.exports = router;

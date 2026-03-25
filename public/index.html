@@ -144,6 +144,36 @@
       <span id="error-message"></span>
     </div>
 
+    <!-- MAINTENANCE BANNER -->
+    <div id="maintenance-banner" class="maintenance-banner" style="display:none;">
+      <div class="container d-flex align-items-center justify-content-center gap-2 py-2">
+        <i class="bi bi-exclamation-triangle-fill"></i>
+        <span id="maintenance-banner-text"></span>
+      </div>
+    </div>
+
+    <!-- PLANNED MAINTENANCE BANNER -->
+    <div id="planned-maintenance-banner" class="planned-maintenance-banner" style="display:none;">
+      <div class="container d-flex align-items-center justify-content-center gap-2 py-2">
+        <i class="bi bi-calendar-event me-1"></i>
+        <span id="planned-maintenance-banner-text"></span>
+      </div>
+    </div>
+
+    <!-- PANIC MODE LOCKDOWN OVERLAY -->
+    <div id="panic-lockdown-overlay" class="panic-lockdown-overlay" style="display:none;">
+      <div class="panic-lockdown-content text-center">
+        <i class="bi bi-shield-exclamation panic-lockdown-icon"></i>
+        <h1 class="text-danger mb-3">SYSTEM GESPERRT</h1>
+        <p class="text-white-50 mb-4">Das System befindet sich im Notfall-Lockdown.<br>
+          Bitte wende dich an einen Administrator.</p>
+        <div id="panic-lockdown-message" class="text-warning mb-4"></div>
+        <a href="/auth/discord" class="btn btn-outline-light btn-sm">
+          <i class="bi bi-discord me-1"></i>Admin Login
+        </a>
+      </div>
+    </div>
+
     <!-- ── LOGIN SECTION ── -->
     <section id="login-section" class="app-section" style="display:none;">
       <div class="container">
@@ -417,9 +447,23 @@
             <button class="btn btn-outline-light" onclick="loadAuditLog()">
               <i class="bi bi-journal-text me-1"></i>Audit-Log
             </button>
-            <button class="btn btn-danger ms-2" onclick="showResetModal()">
-              <i class="bi bi-exclamation-triangle-fill me-1"></i>System Reset
-            </button>
+            <div class="dropdown ms-2">
+              <button class="btn btn-danger dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                <i class="bi bi-exclamation-triangle-fill me-1"></i>Danger Zone
+              </button>
+              <ul class="dropdown-menu dropdown-menu-dark dropdown-menu-end">
+                <li><a class="dropdown-item" href="#" onclick="showMaintenanceModal(); return false;">
+                  <i class="bi bi-tools me-2"></i>Wartungsmodus
+                </a></li>
+                <li><a class="dropdown-item" href="#" onclick="showResetModal(); return false;">
+                  <i class="bi bi-trash3 me-2"></i>System Reset
+                </a></li>
+                <li><hr class="dropdown-divider"></li>
+                <li><a class="dropdown-item text-danger" href="#" onclick="activatePanicMode(); return false;">
+                  <i class="bi bi-shield-exclamation me-2"></i>PANIC BUTTON
+                </a></li>
+              </ul>
+            </div>
           </div>
         </div>
 
@@ -977,6 +1021,106 @@
           <button type="button" class="btn btn-outline-light" data-bs-dismiss="modal">Abbrechen</button>
           <button type="button" class="btn btn-danger" onclick="performSystemReset()">
             Alles Löschen
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Maintenance Modal -->
+  <div class="modal fade" id="maintenanceModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+      <div class="modal-content glass-modal border-warning">
+        <div class="modal-header border-0">
+          <h5 class="modal-title text-warning"><i class="bi bi-tools me-2"></i>Wartungsmodus</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+
+          <!-- Panic Mode Active Banner -->
+          <div id="maintenance-panic-active" class="alert alert-danger d-none">
+            <div class="d-flex align-items-center gap-2 mb-2">
+              <i class="bi bi-shield-exclamation fs-4"></i>
+              <strong>PANIC MODE AKTIV</strong>
+            </div>
+            <p class="mb-2">Das System ist im Notfall-Lockdown. Alle Logins und Registrierungen sind gesperrt.</p>
+            <p class="mb-2 small text-white-50">Aktiviert: <span id="panic-activated-at"></span> von <span id="panic-activated-by"></span></p>
+            <div class="d-flex gap-2 align-items-end">
+              <div class="flex-grow-1">
+                <label class="form-label small">Admin-Reset-Passwort zum Deaktivieren:</label>
+                <input type="password" class="form-control glass-input" id="panic-deactivate-password" placeholder="Passwort eingeben">
+              </div>
+              <button class="btn btn-outline-danger" onclick="deactivatePanicMode()">
+                <i class="bi bi-unlock me-1"></i>Panic Mode Deaktivieren
+              </button>
+            </div>
+          </div>
+
+          <!-- Warning Banner -->
+          <div class="glass-card p-3 mb-3">
+            <div class="form-check form-switch mb-2">
+              <input class="form-check-input" type="checkbox" id="maint-warning-enabled">
+              <label class="form-check-label fw-bold" for="maint-warning-enabled">
+                <i class="bi bi-megaphone me-1"></i>Warnhinweis anzeigen
+              </label>
+            </div>
+            <textarea class="form-control glass-input" id="maint-warning-text" rows="2"
+              placeholder="z.B. Geplante Wartungsarbeiten am Samstag von 22:00-02:00 Uhr"></textarea>
+            <small class="text-muted">Wird als Banner oben auf der Seite für alle Benutzer angezeigt.</small>
+          </div>
+
+          <!-- Login Control -->
+          <div class="glass-card p-3 mb-3">
+            <div class="form-check form-switch mb-1">
+              <input class="form-check-input" type="checkbox" id="maint-login-disabled">
+              <label class="form-check-label fw-bold" for="maint-login-disabled">
+                <i class="bi bi-door-closed me-1"></i>Discord-Login deaktivieren
+              </label>
+            </div>
+            <small class="text-muted">Nur Admins können sich anmelden. Andere Benutzer werden abgewiesen.</small>
+          </div>
+
+          <!-- Registration Control -->
+          <div class="glass-card p-3 mb-3">
+            <div class="form-check form-switch mb-1">
+              <input class="form-check-input" type="checkbox" id="maint-registration-disabled">
+              <label class="form-check-label fw-bold" for="maint-registration-disabled">
+                <i class="bi bi-person-slash me-1"></i>Event-Registrierungen stoppen
+              </label>
+            </div>
+            <small class="text-muted">Keine neuen Event-Anmeldungen möglich. Bestehende Registrierungen bleiben erhalten.</small>
+          </div>
+
+          <!-- Planned Maintenance -->
+          <div class="glass-card p-3 mb-3">
+            <div class="form-check form-switch mb-2">
+              <input class="form-check-input" type="checkbox" id="maint-planned">
+              <label class="form-check-label fw-bold" for="maint-planned">
+                <i class="bi bi-calendar-event me-1"></i>Geplante Wartung
+              </label>
+            </div>
+            <div class="row g-2 mb-2" id="maint-planned-fields">
+              <div class="col-md-6">
+                <label class="form-label small">Start</label>
+                <input type="datetime-local" class="form-control glass-input" id="maint-planned-start">
+              </div>
+              <div class="col-md-6">
+                <label class="form-label small">Ende</label>
+                <input type="datetime-local" class="form-control glass-input" id="maint-planned-end">
+              </div>
+              <div class="col-12">
+                <label class="form-label small">Wartungshinweis</label>
+                <textarea class="form-control glass-input" id="maint-planned-text" rows="2"
+                  placeholder="z.B. Datenbankwartung — Einige Funktionen sind vorübergehend nicht verfügbar."></textarea>
+              </div>
+            </div>
+          </div>
+
+        </div>
+        <div class="modal-footer border-0">
+          <button type="button" class="btn btn-outline-light" data-bs-dismiss="modal">Abbrechen</button>
+          <button type="button" class="btn btn-warning text-dark" onclick="saveMaintenanceSettings()">
+            <i class="bi bi-save me-1"></i>Speichern
           </button>
         </div>
       </div>
