@@ -119,6 +119,33 @@ app.get('/api/csrf-token', (req, res) => {
     res.json({ token: req.session.csrfToken });
 });
 
+// Public maintenance status endpoint (no auth required)
+app.get('/api/maintenance/status', async (req, res) => {
+    try {
+        const { db, doc, getDoc } = require('./firebaseAdmin');
+        const snap = await getDoc(doc(db, 'maintenanceSettings', 'config'));
+        if (!snap.exists()) {
+            return res.json({ active: false });
+        }
+        const data = snap.data();
+        res.json({
+            active: !!(data.warningEnabled || data.panicMode),
+            warningEnabled: !!data.warningEnabled,
+            warningText: data.warningText || '',
+            loginDisabled: !!data.loginDisabled,
+            registrationDisabled: !!data.registrationDisabled,
+            plannedMaintenance: !!data.plannedMaintenance,
+            plannedMaintenanceStart: data.plannedMaintenanceStart || '',
+            plannedMaintenanceEnd: data.plannedMaintenanceEnd || '',
+            plannedMaintenanceText: data.plannedMaintenanceText || '',
+            panicMode: !!data.panicMode
+        });
+    } catch (err) {
+        console.error('Maintenance status error:', err);
+        res.json({ active: false });
+    }
+});
+
 // Server info endpoint - returns server name (env override or Discord API)
 app.get('/api/server-info', async (req, res) => {
     try {

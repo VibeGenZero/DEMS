@@ -6,6 +6,18 @@ const { db, collection, doc, getDoc, setDoc } = require('../firebaseAdmin');
 const DISCORD_API = 'https://discord.com/api/v10';
 
 /**
+ * Helper: Check maintenance settings from Firestore
+ */
+async function getMaintenanceStatus() {
+    try {
+        const snap = await getDoc(doc(db, 'maintenanceSettings', 'config'));
+        return snap.exists() ? snap.data() : null;
+    } catch {
+        return null;
+    }
+}
+
+/**
  * GET /auth/discord — Redirect to Discord OAuth2
  */
 router.get('/discord', (req, res) => {
@@ -71,6 +83,19 @@ router.get('/discord/callback', async (req, res) => {
         const isAdmin = adminRoleId
             ? (memberData.roles || []).includes(adminRoleId)
             : false;
+
+        // Maintenance mode: block non-admin logins
+        const maintenance = await getMaintenanceStatus();
+        if (maintenance) {
+            if (maintenance.panicMode && !isAdmin) {
+                // Panic mode: only admins can log in (to deactivate panic)
+                return res.redirect('/?error=panic_mode');
+            }
+            if (maintenance.loginDisabled && !isAdmin) {
+                // Login disabled: only admins can log in
+                return res.redirect('/?error=maintenance_login_disabled');
+            }
+        }
 
         const avatarUrl = userData.avatar
             ? `https://cdn.discordapp.com/avatars/${userData.id}/${userData.avatar}.png`

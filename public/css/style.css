@@ -2749,3 +2749,74 @@ body {
     font-size: 0.75rem;
   }
 }
+
+/* ═══════════════════════════════════════════════ */
+/*  MAINTENANCE MODE                              */
+/* ═══════════════════════════════════════════════ */
+
+.maintenance-banner {
+  background: linear-gradient(90deg, #e65100, #ff9800);
+  color: #fff;
+  font-weight: 600;
+  font-size: 0.9rem;
+  position: fixed;
+  top: 56px;
+  left: 0;
+  right: 0;
+  z-index: 1040;
+  animation: maintenance-pulse 3s ease-in-out infinite;
+}
+
+.planned-maintenance-banner {
+  background: linear-gradient(90deg, #1565c0, #42a5f5);
+  color: #fff;
+  font-weight: 500;
+  font-size: 0.85rem;
+  position: fixed;
+  top: 56px;
+  left: 0;
+  right: 0;
+  z-index: 1039;
+}
+
+.maintenance-banner + .planned-maintenance-banner,
+.maintenance-banner[style*="block"] ~ .planned-maintenance-banner[style*="block"] {
+  top: 96px;
+}
+
+@keyframes maintenance-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.85; }
+}
+
+.panic-lockdown-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(10, 10, 15, 0.97);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(20px);
+}
+
+.panic-lockdown-content {
+  max-width: 500px;
+  padding: 3rem;
+}
+
+.panic-lockdown-icon {
+  font-size: 5rem;
+  color: #f44336;
+  animation: panic-glow 1.5s ease-in-out infinite;
+  display: block;
+  margin-bottom: 1.5rem;
+}
+
+@keyframes panic-glow {
+  0%, 100% { text-shadow: 0 0 20px rgba(244, 67, 54, 0.5); }
+  50% { text-shadow: 0 0 40px rgba(244, 67, 54, 0.9), 0 0 80px rgba(244, 67, 54, 0.4); }
+}

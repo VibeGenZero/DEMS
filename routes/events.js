@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { db, collection, doc, getDoc, getDocs, addDoc, deleteDoc, updateDoc, query, where, orderBy } = require('../firebaseAdmin');
 const { requireAuth } = require('../middleware/auth');
+const { checkRegistrationAllowed } = require('../middleware/maintenance');
 const { sendDM, assignRole, parseTemplate, getGuildRoles, addParticipantToEventChannels, removeParticipantFromEventChannels, removeRole, sendGuestInvitation } = require('../bot');
 const { promoteFromWaitlist } = require('../utils/eventUtils');
 
@@ -240,7 +241,7 @@ router.get('/:id', async (req, res) => {
 /**
  * POST /api/events/:id/register — Register for an event
  */
-router.post('/:id/register', requireAuth, async (req, res) => {
+router.post('/:id/register', requireAuth, checkRegistrationAllowed, async (req, res) => {
     try {
         const user = req.session.user;
         const eventRef = doc(db, 'events', req.params.id);
