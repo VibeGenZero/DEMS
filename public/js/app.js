@@ -625,6 +625,70 @@ async function showEventsSection() {
     }
 }
 
+// ─── Location Autocomplete ───────────────────
+let _cachedChannels = null;
+
+async function loadChannelsForAutocomplete() {
+    if (_cachedChannels !== null) return _cachedChannels;
+    try {
+        const res = await fetch('/api/admin/channels');
+        _cachedChannels = await res.json();
+        return _cachedChannels;
+    } catch { return []; }
+}
+
+async function handleLocationInput() {
+    const input = document.getElementById('event-location-text');
+    const suggestionsEl = document.getElementById('location-suggestions');
+    if (!input || !suggestionsEl) return;
+
+    const val = input.value.trim();
+
+    const chanIdEl = document.getElementById('event-location-channel-id');
+    const chanTypeEl = document.getElementById('event-location-channel-type');
+    if (chanIdEl) chanIdEl.value = '';
+    if (chanTypeEl) chanTypeEl.value = '';
+
+    if (!val) {
+        suggestionsEl.style.display = 'none';
+        return;
+    }
+
+    const channels = await loadChannelsForAutocomplete();
+    const q = val.replace(/^#/, '').toLowerCase();
+    const filtered = channels.filter(c => c.name.toLowerCase().includes(q)).slice(0, 8);
+
+    if (!filtered.length) {
+        suggestionsEl.style.display = 'none';
+        return;
+    }
+
+    suggestionsEl.innerHTML = filtered.map(c => `
+        <div class="location-suggestion-item"
+             onclick="selectLocationChannel('${escapeHtml(c.id)}', '${escapeHtml(c.name)}', '${c.type}')">
+            <i class="bi bi-${c.type === 'voice' ? 'volume-up' : 'hash'} me-2"></i>${escapeHtml(c.name)}
+        </div>`).join('');
+    suggestionsEl.style.display = 'block';
+}
+
+function selectLocationChannel(channelId, channelName, channelType) {
+    const input = document.getElementById('event-location-text');
+    if (input) input.value = '#' + channelName;
+    const chanIdEl = document.getElementById('event-location-channel-id');
+    if (chanIdEl) chanIdEl.value = channelId;
+    const chanTypeEl = document.getElementById('event-location-channel-type');
+    if (chanTypeEl) chanTypeEl.value = channelType;
+    const suggestionsEl = document.getElementById('location-suggestions');
+    if (suggestionsEl) suggestionsEl.style.display = 'none';
+}
+
+document.addEventListener('click', (e) => {
+    const suggestionsEl = document.getElementById('location-suggestions');
+    if (suggestionsEl && !e.target.closest('#event-location-text') && !e.target.closest('#location-suggestions')) {
+        suggestionsEl.style.display = 'none';
+    }
+});
+
 // ─── Category Filter ────────────────────────────
 async function loadCategories() {
     try {
@@ -2883,6 +2947,18 @@ async function editEvent(eventId) {
 
         document.getElementById('event-banner-url').value = event.bannerUrl || '';
 
+        // Accent color
+        const accentEl = document.getElementById('event-accent-color');
+        if (accentEl) accentEl.value = event.accentColor || '#8b5cf6';
+
+        // Location
+        const locationTextEl = document.getElementById('event-location-text');
+        const locationChanId = document.getElementById('event-location-channel-id');
+        const locationChanType = document.getElementById('event-location-channel-type');
+        if (locationTextEl) locationTextEl.value = event.location?.text || '';
+        if (locationChanId) locationChanId.value = event.location?.channelId || '';
+        if (locationChanType) locationChanType.value = event.location?.channelType || '';
+
         // Store dates to apply once Flatpickr is initialized (lazy init on step 2)
         const _startDate = event.startDate || null;
         const _endDate = event.endDate || null;
@@ -2997,7 +3073,17 @@ async function saveEvent() {
             registration: document.getElementById('event-msg-registration').value,
             accepted: document.getElementById('event-msg-accepted').value,
             rejected: document.getElementById('event-msg-rejected').value
-        }
+        },
+        accentColor: document.getElementById('event-accent-color')?.value || '',
+        location: (() => {
+            const text = document.getElementById('event-location-text')?.value?.trim() || '';
+            if (!text) return null;
+            return {
+                text,
+                channelId: document.getElementById('event-location-channel-id')?.value || '',
+                channelType: document.getElementById('event-location-channel-type')?.value || ''
+            };
+        })(),
     };
 
     try {

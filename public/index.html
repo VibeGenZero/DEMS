@@ -786,6 +786,24 @@
                     style="max-width:100%; border-radius:var(--radius); max-height:200px; object-fit:cover;">
                 </div>
               </div>
+              <div class="mb-3">
+                <label class="form-label small text-muted"><i class="bi bi-palette me-1"></i>Akzentfarbe (optional)</label>
+                <div class="d-flex align-items-center gap-3">
+                  <input type="color" class="form-control form-control-color" id="event-accent-color"
+                    value="#8b5cf6" style="width:48px;height:36px;padding:2px;">
+                  <small class="text-muted">Hintergrundfarbe wenn kein Banner-Bild gesetzt ist.</small>
+                </div>
+              </div>
+              <div class="mb-3 position-relative">
+                <label class="form-label small text-muted"><i class="bi bi-geo-alt me-1"></i>Ort (optional)</label>
+                <input type="text" class="form-control form-control-sm" id="event-location-text"
+                  placeholder="z.B. #gaming-voice oder Teamspeak Server"
+                  autocomplete="off" oninput="handleLocationInput()">
+                <div id="location-suggestions" class="location-dropdown" style="display:none;"></div>
+                <input type="hidden" id="event-location-channel-id">
+                <input type="hidden" id="event-location-channel-type">
+                <small class="text-muted mt-1 d-block">Tippe # für Discord-Channel-Vorschläge.</small>
+              </div>
             </div>
 
             <!-- ── Step 2: Datum & Zeit ── -->
