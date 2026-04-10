@@ -744,20 +744,35 @@ async function showEventDetail(eventId) {
                 const seriesRes = await fetch(`/api/events/series/${event.seriesId}`);
                 const seriesEvents = await seriesRes.json();
                 if (Array.isArray(seriesEvents) && seriesEvents.length > 1) {
+                    const maxVisible = 5;
+                    const visibleSeries = seriesEvents.slice(0, maxVisible);
+                    const hiddenSeries = seriesEvents.slice(maxVisible);
+                    const hiddenCount = hiddenSeries.length;
+
+                    const renderSeriesItem = (se) => {
+                        const isCurrent = se.id === eventId;
+                        const safeD = se.startDate ? se.startDate.replace(' ', 'T') : null;
+                        const dateStr = safeD ? new Date(safeD).toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
+                        return `
+                            <a class="series-date-item ${isCurrent ? 'active' : ''}" href="#" onclick="navigateTo('event/${se.id}'); return false;">
+                                <span><i class="bi bi-calendar-event me-2"></i>${dateStr}</span>
+                                <span class="series-date-participants"><i class="bi bi-people me-1"></i>${se.currentParticipants || 0}${se.maxParticipants > 0 ? '/' + se.maxParticipants : ''}</span>
+                            </a>`;
+                    };
+
                     seriesContainer.innerHTML = `
                         <div class="series-detail-section mt-4">
                             <h6 class="mb-3"><i class="bi bi-arrow-repeat me-2"></i>Termine der Serie</h6>
                             <div class="series-dates-list">
-                                ${seriesEvents.map(se => {
-                                    const isCurrent = se.id === eventId;
-                                    const safeD = se.startDate ? se.startDate.replace(' ', 'T') : null;
-                                    const dateStr = safeD ? new Date(safeD).toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
-                                    return `
-                                        <a class="series-date-item ${isCurrent ? 'active' : ''}" href="#" onclick="navigateTo('event/${se.id}'); return false;">
-                                            <span><i class="bi bi-calendar-event me-2"></i>${dateStr}</span>
-                                            <span class="series-date-participants"><i class="bi bi-people me-1"></i>${se.currentParticipants || 0}${se.maxParticipants > 0 ? '/' + se.maxParticipants : ''}</span>
-                                        </a>`;
-                                }).join('')}
+                                ${visibleSeries.map(renderSeriesItem).join('')}
+                                ${hiddenCount > 0 ? `
+                                    <div id="detail-series-hidden" style="display:none;">
+                                        ${hiddenSeries.map(renderSeriesItem).join('')}
+                                    </div>
+                                    <a class="series-dates-toggle" href="#" onclick="toggleDetailSeriesDates(); return false;">
+                                        <i class="bi bi-chevron-down me-1" id="detail-series-icon"></i>
+                                        <span id="detail-series-toggle-text">${hiddenCount} weitere Termine anzeigen</span>
+                                    </a>` : ''}
                             </div>
                         </div>`;
                 } else {
@@ -2426,6 +2441,18 @@ function toggleSeriesDates(seriesCardId) {
     if (icon) icon.className = `bi bi-chevron-${isVisible ? 'down' : 'up'} me-1`;
     if (text) text.textContent = isVisible ? text.dataset.showText || 'Weitere Termine anzeigen' : 'Weniger anzeigen';
     if (!text.dataset.showText) text.dataset.showText = text.textContent;
+}
+
+function toggleDetailSeriesDates() {
+    const hidden = document.getElementById('detail-series-hidden');
+    const icon = document.getElementById('detail-series-icon');
+    const text = document.getElementById('detail-series-toggle-text');
+    if (!hidden) return;
+    const isOpen = hidden.style.display !== 'none';
+    hidden.style.display = isOpen ? 'none' : 'block';
+    icon.className = isOpen ? 'bi bi-chevron-down me-1' : 'bi bi-chevron-up me-1';
+    const count = hidden.querySelectorAll('.series-date-item').length;
+    text.textContent = isOpen ? `${count} weitere Termine anzeigen` : 'Weniger anzeigen';
 }
 
 // ─── Debounced Search ─────────────────────────────
