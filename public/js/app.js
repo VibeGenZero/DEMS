@@ -832,6 +832,21 @@ function renderSidebarDetails(event) {
     renderSidebarCapacity(event);
 }
 
+function renderSidebarAction(state) {
+    const area = document.getElementById('sidebar-action-area');
+    if (!area) return;
+    const configs = {
+        register:   { label: '<i class="bi bi-pencil-square me-2"></i>Jetzt anmelden',       cls: 'btn-accent w-100',                      disabled: false },
+        waitlist:   { label: '<i class="bi bi-list-nested me-2"></i>Auf Warteliste setzen',   cls: 'btn-outline-secondary w-100',            disabled: false },
+        registered: { label: '<i class="bi bi-check-circle me-2"></i>Angemeldet',             cls: 'btn-outline-success w-100',              disabled: true  },
+        noaccess:   { label: '<i class="bi bi-lock me-2"></i>Kein Zugang',                    cls: 'btn-outline-danger w-100',               disabled: true  },
+        none:       { label: '',                                                               cls: '',                                       disabled: true  }
+    };
+    const cfg = configs[state] || configs.none;
+    if (!cfg.label) { area.innerHTML = ''; return; }
+    area.innerHTML = `<button class="btn ${cfg.cls} mt-2" ${cfg.disabled ? 'disabled' : `onclick="document.getElementById('detail-register-area')?.scrollIntoView({behavior:'smooth'}); return false;"`}>${cfg.label}</button>`;
+}
+
 function renderSidebarCapacity(event) {
     const panel = document.getElementById('sidebar-capacity-panel');
     const content = document.getElementById('sidebar-capacity-content');
@@ -992,6 +1007,7 @@ async function showEventDetail(eventId) {
         waitlistArea.style.display = 'none';
 
         if (!currentUser) {
+            renderSidebarAction('none');
             gsap.from('.col-lg-8', { y: 20, opacity: 0, duration: 0.4, ease: 'power3.out' });
             return;
         }
@@ -1010,6 +1026,7 @@ async function showEventDetail(eventId) {
                 : (statusTexts[regData.status] || regData.status);
             statusEl.className = 'fw-bold text-' + (statusColors[regData.status] || 'secondary');
 
+            renderSidebarAction('registered');
             gsap.from('.col-lg-8', { y: 20, opacity: 0, duration: 0.4, ease: 'power3.out' });
             loadDetailParticipants(eventId);
             loadComments(eventId);
@@ -1025,6 +1042,7 @@ async function showEventDetail(eventId) {
             if (!hasRole) {
                 noAccessArea.style.display = 'block';
                 document.getElementById('no-access-text').textContent = 'Du hast nicht die erforderliche Rolle für dieses Event.';
+                renderSidebarAction('noaccess');
                 gsap.from('.col-lg-8', { y: 20, opacity: 0, duration: 0.4, ease: 'power3.out' });
                 return;
             }
@@ -1053,6 +1071,7 @@ async function showEventDetail(eventId) {
                 e.preventDefault();
                 await submitRegistration(eventId, event, 'waitlist-btn', 'waitlist-form-fields');
             };
+            renderSidebarAction('waitlist');
         } else {
             // Show registration form
             registerArea.style.display = 'block';
@@ -1076,6 +1095,7 @@ async function showEventDetail(eventId) {
                 e.preventDefault();
                 await submitRegistration(eventId, event, 'register-btn', 'dynamic-form-fields');
             };
+            renderSidebarAction('register');
         }
 
         gsap.from('.col-lg-8', { y: 20, opacity: 0, duration: 0.4, ease: 'power3.out' });
@@ -3585,7 +3605,7 @@ function showToast(message, type = 'info') {
 
 function renderSkeletonEvents(container, count, isAdmin = false) {
     container.innerHTML = Array(count).fill(0).map(() => `
-        <div class="col-md-6 ${isAdmin ? '' : 'col-lg-4'}">
+        <div class="col-md-6">
             <div class="glass-card skeleton-card p-0">
                 <div class="skeleton skeleton-img"></div>
                 <div class="p-4" style="height:200px; display:flex; flex-direction:column; justify-content:space-between;">
