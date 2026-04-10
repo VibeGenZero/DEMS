@@ -848,13 +848,7 @@ async function showEventDetail(eventId) {
         renderSidebarDetails(event);
 
         // Render series dates section if this event belongs to a series
-        let seriesContainer = document.getElementById('detail-series-section');
-        if (!seriesContainer) {
-            seriesContainer = document.createElement('div');
-            seriesContainer.id = 'detail-series-section';
-            const badgesArea = document.querySelector('#event-detail-card .detail-badges');
-            if (badgesArea) badgesArea.parentNode.insertBefore(seriesContainer, badgesArea.nextSibling);
-        }
+        const seriesContainer = document.getElementById('detail-series-section');
         if (event.seriesId) {
             try {
                 const seriesRes = await fetch(`/api/events/series/${event.seriesId}`);
@@ -1018,10 +1012,7 @@ async function renderCheckinSection(eventId, event, registration) {
         container.id = 'checkin-section';
         container.className = 'mt-4 glass-card p-4';
         container.style.background = 'rgba(139,92,246,0.05)';
-        document.querySelector('#event-detail-card .p-4.p-md-5')?.insertBefore(
-            container,
-            document.getElementById('comments-section')
-        );
+        document.getElementById('detail-register-area')?.insertAdjacentElement('afterend', container);
     }
 
     // Admin view: show code generation + stats
@@ -1181,7 +1172,7 @@ async function loadComments(eventId) {
         commentSection = document.createElement('div');
         commentSection.id = 'comments-section';
         commentSection.className = 'comments-section';
-        document.querySelector('#event-detail-card .p-4.p-md-5')?.appendChild(commentSection);
+        document.querySelector('.col-lg-8')?.appendChild(commentSection);
     }
     if (!commentSection) return;
 
