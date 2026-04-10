@@ -3033,3 +3033,63 @@ body {
   background: rgba(139, 92, 246, 0.12);
   color: var(--accent-light);
 }
+
+/* ═══════════════════════════════════════════ */
+/* EVENT CARD — GRADIENT PLACEHOLDER          */
+/* ═══════════════════════════════════════════ */
+.event-banner-placeholder {
+  width: 100%;
+  height: 160px;
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  display: block;
+  flex-shrink: 0;
+}
+
+/* ═══════════════════════════════════════════ */
+/* EVENT CARD — UPDATED LAYOUT                */
+/* ═══════════════════════════════════════════ */
+.event-card-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 0.5rem;
+}
+
+.event-card-date-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  margin-bottom: 0.5rem;
+  font-weight: 500;
+}
+
+.event-card-date-row i {
+  color: var(--accent-light);
+  font-size: 0.9rem;
+}
+
+.event-card-mini-progress {
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.07);
+  overflow: hidden;
+  margin-bottom: 0.3rem;
+}
+
+.event-card-mini-progress-bar {
+  height: 100%;
+  border-radius: 2px;
+  background: var(--accent);
+}
+
+.event-card-mini-progress-bar.danger {
+  background: var(--danger);
+}
+
+.event-card-capacity-label {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-bottom: 0.75rem;
+}
