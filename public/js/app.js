@@ -141,6 +141,7 @@ async function loadServerInfo() {
         const res = await fetch('/api/server-info');
         const data = await res.json();
         serverName = data.serverName || 'DEMS';
+        window._demsGuildId = data.guildId || '';
         updateServerNameInUI();
     } catch (e) {
         console.error('Failed to fetch server info', e);
@@ -656,6 +657,148 @@ function filterByCategory(cat) {
     showEventsSection();
 }
 
+// ─── Detail View Helpers ─────────────────────────
+const GRADIENT_PRESETS = [
+    'linear-gradient(135deg, #6d28d9 0%, #8b5cf6 100%)',
+    'linear-gradient(135deg, #1e40af 0%, #3b82f6 100%)',
+    'linear-gradient(135deg, #065f46 0%, #10b981 100%)',
+    'linear-gradient(135deg, #92400e 0%, #f59e0b 100%)',
+    'linear-gradient(135deg, #9d174d 0%, #ec4899 100%)'
+];
+
+function getEventGradient(eventId) {
+    const idx = (eventId || '').charCodeAt(0) % GRADIENT_PRESETS.length;
+    return GRADIENT_PRESETS[isNaN(idx) ? 0 : idx];
+}
+
+function renderDetailBanner(event) {
+    const bannerArea = document.getElementById('detail-banner-area');
+    if (!bannerArea) return;
+
+    if (isValidBannerUrl(event.bannerUrl)) {
+        bannerArea.style.background = '';
+        bannerArea.innerHTML = `
+            <img src="${escapeHtml(event.bannerUrl)}" class="event-detail-banner-img" alt="Banner">
+            <div class="event-detail-banner-overlay"></div>`;
+        bannerArea.querySelector('img').addEventListener('error', function () {
+            this.style.display = 'none';
+            bannerArea.style.background = event.accentColor
+                ? `linear-gradient(135deg, ${escapeHtml(event.accentColor)}99 0%, ${escapeHtml(event.accentColor)} 100%)`
+                : getEventGradient(event.id);
+        });
+    } else {
+        bannerArea.innerHTML = '';
+        bannerArea.style.background = event.accentColor
+            ? `linear-gradient(135deg, ${escapeHtml(event.accentColor)}99 0%, ${escapeHtml(event.accentColor)} 100%)`
+            : getEventGradient(event.id);
+    }
+}
+
+function setSidebarRow(rowId, icon, label, value, isHtml = false) {
+    const el = document.getElementById(rowId);
+    if (!el) return;
+    el.style.display = 'flex';
+    el.innerHTML = `
+        <i class="bi ${icon} sidebar-icon"></i>
+        <div>
+            <div class="sidebar-label">${escapeHtml(label)}</div>
+            <div class="sidebar-value">${isHtml ? value : escapeHtml(String(value))}</div>
+        </div>`;
+}
+
+function renderSidebarDetails(event) {
+    const guildId = window._demsGuildId || '';
+
+    if (event.startDate) {
+        const safeStart = event.startDate.replace(' ', 'T');
+        const d = new Date(safeStart);
+        const dateStr = d.toLocaleDateString('de-DE', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' });
+        const timeStr = d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) + ' Uhr';
+        setSidebarRow('sidebar-date-row', 'bi-calendar3', 'Datum', dateStr);
+        setSidebarRow('sidebar-time-row', 'bi-clock', 'Uhrzeit', timeStr);
+
+        if (event.endDate) {
+            const safeEnd = event.endDate.replace(' ', 'T');
+            const end = new Date(safeEnd);
+            const diffMs = end - d;
+            if (diffMs > 0) {
+                const hours = Math.floor(diffMs / 3600000);
+                const mins = Math.floor((diffMs % 3600000) / 60000);
+                const durationStr = hours > 0
+                    ? `${hours}h${mins > 0 ? ` ${mins}min` : ''}`
+                    : `${mins}min`;
+                setSidebarRow('sidebar-duration-row', 'bi-hourglass', 'Dauer', durationStr);
+            }
+        }
+    }
+
+    if (event.location && event.location.text) {
+        const locHtml = event.location.channelId && guildId
+            ? `<a href="discord://channels/${guildId}/${escapeHtml(event.location.channelId)}">${escapeHtml(event.location.text)}</a>`
+            : escapeHtml(event.location.text);
+        setSidebarRow('sidebar-location-row', 'bi-geo-alt', 'Ort', locHtml, true);
+    }
+
+    if (event.createdByName) {
+        setSidebarRow('sidebar-creator-row', 'bi-person', 'Erstellt von', event.createdByName);
+    }
+
+    renderSidebarCapacity(event);
+}
+
+function renderSidebarCapacity(event) {
+    const panel = document.getElementById('sidebar-capacity-panel');
+    const content = document.getElementById('sidebar-capacity-content');
+    if (!panel || !content) return;
+
+    panel.style.display = 'block';
+    if (event.maxParticipants > 0) {
+        const current = event.currentParticipants || 0;
+        const max = event.maxParticipants;
+        const pct = Math.min(100, Math.round((current / max) * 100));
+        const isDanger = pct >= 90;
+        const available = max - current;
+        content.innerHTML = `
+            <div class="capacity-label">${current} Anmeldungen / ${max} max.</div>
+            <div class="capacity-progress">
+                <div class="capacity-progress-bar${isDanger ? ' danger' : ''}" style="width:${pct}%"></div>
+            </div>
+            <div class="capacity-sublabel">${available > 0 ? `${available} Plätze verfügbar` : 'Ausgebucht'}</div>`;
+    } else {
+        content.innerHTML = `<div class="capacity-label">Unbegrenzte Kapazität</div>`;
+    }
+}
+
+async function loadDetailParticipants(eventId) {
+    if (!currentUser) return;
+    try {
+        const res = await fetch(`/api/events/${eventId}/participants`);
+        if (!res.ok) return;
+        const data = await res.json();
+        const section = document.getElementById('detail-participants-section');
+        const avatarsEl = document.getElementById('detail-participants-avatars');
+        const countEl = document.getElementById('detail-participants-count');
+        if (!section || !avatarsEl) return;
+
+        section.style.display = 'block';
+        if (countEl) countEl.textContent = `(${data.total})`;
+
+        if (!data.participants.length) {
+            avatarsEl.innerHTML = '<span class="text-muted small">Noch keine bestätigten Teilnehmer.</span>';
+            return;
+        }
+
+        const overflow = data.total > 20 ? data.total - 20 : 0;
+        avatarsEl.innerHTML = data.participants.map(p => {
+            const initials = (p.displayName || '?').charAt(0).toUpperCase();
+            if (p.avatar) {
+                return `<img src="${escapeHtml(p.avatar)}" class="participant-avatar" title="${escapeHtml(p.displayName)}" alt="${escapeHtml(p.displayName)}" onerror="this.outerHTML='<div class=\\'participant-avatar-placeholder\\' title=\\'${escapeHtml(p.displayName)}\\'>${initials}</div>'">`;
+            }
+            return `<div class="participant-avatar-placeholder" title="${escapeHtml(p.displayName)}">${initials}</div>`;
+        }).join('') + (overflow > 0 ? `<div class="participants-overflow-badge">+${overflow}</div>` : '');
+    } catch { /* non-fatal */ }
+}
+
 // ─── Event Detail ────────────────────────────────
 async function showEventDetail(eventId) {
     if (!eventId) return navigateTo('events');
@@ -672,13 +815,7 @@ async function showEventDetail(eventId) {
         const event = await res.json();
 
         // Banner
-        const bannerArea = document.getElementById('detail-banner-area');
-        if (isValidBannerUrl(event.bannerUrl)) {
-            bannerArea.innerHTML = `<img src="${escapeHtml(event.bannerUrl)}" class="event-banner-detail" alt="Banner">`;
-            bannerArea.querySelector('img').addEventListener('error', function () { this.style.display = 'none'; });
-        } else {
-            bannerArea.innerHTML = '';
-        }
+        renderDetailBanner(event);
 
         // Category & Status tags
         const catTag = document.getElementById('detail-category-tag');
@@ -707,29 +844,8 @@ async function showEventDetail(eventId) {
             cdArea.style.display = 'none';
         }
 
-        // Badges
-        document.getElementById('detail-access-badge').innerHTML = `
-      <i class="bi bi-${event.accessMode === 'open' ? 'unlock' : 'lock'}"></i>
-      ${event.accessMode === 'open' ? 'Jeder darf teilnehmen' : 'Rollen-Requirement'}
-    `;
-        document.getElementById('detail-approval-badge').innerHTML = `
-      <i class="bi bi-${event.approvalMode === 'instant' ? 'lightning' : 'hourglass-split'}"></i>
-      ${event.approvalMode === 'instant' ? 'Instant Access' : 'Manuelle Prüfung'}
-    `;
-        document.getElementById('detail-participants-badge').innerHTML = `
-      <i class="bi bi-people"></i>
-      ${event.currentParticipants || 0}${event.maxParticipants > 0 ? '/' + event.maxParticipants : ''} Teilnehmer
-    `;
-
-        // Date badge
-        const dateBadge = document.getElementById('detail-date-badge');
-        if (event.startDate) {
-            dateBadge.style.display = 'inline-flex';
-            const dateStr = new Date(event.startDate).toLocaleDateString('de-DE', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-            dateBadge.innerHTML = `<i class="bi bi-calendar3"></i>${dateStr}`;
-        } else {
-            dateBadge.style.display = 'none';
-        }
+        // Sidebar details
+        renderSidebarDetails(event);
 
         // Render series dates section if this event belongs to a series
         let seriesContainer = document.getElementById('detail-series-section');
@@ -796,7 +912,7 @@ async function showEventDetail(eventId) {
         waitlistArea.style.display = 'none';
 
         if (!currentUser) {
-            gsap.from('#event-detail-card', { y: 20, opacity: 0, duration: 0.5, ease: 'power3.out' });
+            gsap.from('.col-lg-8', { y: 20, opacity: 0, duration: 0.4, ease: 'power3.out' });
             return;
         }
 
@@ -814,7 +930,8 @@ async function showEventDetail(eventId) {
                 : (statusTexts[regData.status] || regData.status);
             statusEl.className = 'fw-bold text-' + (statusColors[regData.status] || 'secondary');
 
-            gsap.from('#event-detail-card', { y: 20, opacity: 0, duration: 0.5, ease: 'power3.out' });
+            gsap.from('.col-lg-8', { y: 20, opacity: 0, duration: 0.4, ease: 'power3.out' });
+            loadDetailParticipants(eventId);
             loadComments(eventId);
             renderCheckinSection(eventId, event, regData);
             return;
@@ -828,7 +945,7 @@ async function showEventDetail(eventId) {
             if (!hasRole) {
                 noAccessArea.style.display = 'block';
                 document.getElementById('no-access-text').textContent = 'Du hast nicht die erforderliche Rolle für dieses Event.';
-                gsap.from('#event-detail-card', { y: 20, opacity: 0, duration: 0.5, ease: 'power3.out' });
+                gsap.from('.col-lg-8', { y: 20, opacity: 0, duration: 0.4, ease: 'power3.out' });
                 return;
             }
         }
@@ -881,9 +998,10 @@ async function showEventDetail(eventId) {
             };
         }
 
-        gsap.from('#event-detail-card', { y: 20, opacity: 0, duration: 0.5, ease: 'power3.out' });
+        gsap.from('.col-lg-8', { y: 20, opacity: 0, duration: 0.4, ease: 'power3.out' });
 
         // Load comments section
+        loadDetailParticipants(eventId);
         loadComments(eventId);
 
     } catch {

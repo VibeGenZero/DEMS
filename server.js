@@ -149,25 +149,22 @@ app.get('/api/maintenance/status', async (req, res) => {
 // Server info endpoint - returns server name (env override or Discord API)
 app.get('/api/server-info', async (req, res) => {
     try {
-        // Priority 1: Environment variable override
+        const guildId = process.env.DISCORD_GUILD_ID || '';
         if (process.env.SERVER_NAME) {
-            return res.json({ serverName: process.env.SERVER_NAME });
+            return res.json({ serverName: process.env.SERVER_NAME, guildId });
         }
 
-        // Priority 2: Fetch from Discord API
-        const guildId = process.env.DISCORD_GUILD_ID;
         if (guildId) {
             const serverName = await getGuildName(guildId);
             if (serverName) {
-                return res.json({ serverName });
+                return res.json({ serverName, guildId });
             }
         }
 
-        // Fallback
-        res.json({ serverName: 'DEMS' });
+        res.json({ serverName: 'DEMS', guildId });
     } catch (err) {
         console.error('Error fetching server info:', err);
-        res.json({ serverName: 'DEMS' });
+        res.json({ serverName: 'DEMS', guildId: '' });
     }
 });
 
