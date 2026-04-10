@@ -7,7 +7,7 @@ const {
 } = require('../firebaseAdmin');
 const { requireAuth, requireAdmin } = require('../middleware/auth');
 const { validateEvent, validateRegStatus, validateBotMessages } = require('../middleware/validators');
-const { sendDM, assignRole, parseTemplate, getGuildRoles, sendChannelMessage, buildEventEmbed, getGuildScheduledEvents, createEventChannels, deleteEventChannels, createScheduledEvent, getBotStatus, getBotSettings, saveBotSettings, getRunningEvents } = require('../bot');
+const { sendDM, assignRole, parseTemplate, getGuildRoles, sendChannelMessage, buildEventEmbed, getGuildScheduledEvents, createEventChannels, deleteEventChannels, createScheduledEvent, getBotStatus, getBotSettings, saveBotSettings, getRunningEvents, getGuildChannels } = require('../bot');
 const { promoteFromWaitlist, addAuditLog } = require('../utils/eventUtils');
 
 // All admin routes require auth + admin
@@ -19,6 +19,21 @@ router.use(requireAuth, requireAdmin);
 router.get('/roles', async (req, res) => {
     const roles = await getGuildRoles(process.env.DISCORD_GUILD_ID);
     res.json(roles);
+});
+
+/**
+ * GET /api/admin/channels — List guild channels for location autocomplete
+ */
+router.get('/channels', async (req, res) => {
+    try {
+        const guildId = process.env.DISCORD_GUILD_ID;
+        if (!guildId) return res.json([]);
+        const channels = await getGuildChannels(guildId);
+        res.json(channels);
+    } catch (err) {
+        console.error('Get channels error:', err);
+        res.status(500).json({ error: 'Fehler beim Laden der Channels' });
+    }
 });
 
 /**
@@ -111,7 +126,8 @@ router.post('/events', validateEvent, async (req, res) => {
             approvalMode, assignRoleId, formFields,
             startDate, endDate, bannerUrl, category, status, reminderHours,
             recurring, recurringInterval, recurringUntil, checkinMessage,
-            customBotMessages, autoCreateChannels, channelConfig, allowGuests
+            customBotMessages, autoCreateChannels, channelConfig, allowGuests,
+            accentColor, location
         } = req.body;
 
         const baseEvent = {
@@ -134,6 +150,8 @@ router.post('/events', validateEvent, async (req, res) => {
             autoCreateChannels: !!autoCreateChannels,
             channelConfig: channelConfig || {},
             allowGuests: allowGuests !== false,
+            accentColor: accentColor || '',
+            location: location || null,
             eventStartNotificationSent: false,
             recurring: !!recurring,
             recurringInterval: recurringInterval || '',
@@ -199,7 +217,8 @@ router.put('/events/:id', validateEvent, async (req, res) => {
             title, description, maxParticipants, accessMode, requiredRoles,
             approvalMode, assignRoleId, formFields,
             startDate, endDate, bannerUrl, category, status, reminderHours, checkinMessage,
-            customBotMessages, autoCreateChannels, channelConfig, allowGuests
+            customBotMessages, autoCreateChannels, channelConfig, allowGuests,
+            accentColor, location
         } = req.body;
 
         const updates = {
@@ -222,6 +241,8 @@ router.put('/events/:id', validateEvent, async (req, res) => {
             autoCreateChannels: !!autoCreateChannels,
             channelConfig: channelConfig || {},
             allowGuests: allowGuests !== false,
+            accentColor: accentColor || '',
+            location: location || null,
             recurring: !!req.body.recurring,
             recurringInterval: req.body.recurringInterval || '',
             recurringUntil: req.body.recurringUntil || '',

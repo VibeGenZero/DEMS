@@ -580,6 +580,28 @@ async function getGuildRoles(guildId) {
 }
 
 /**
+ * Get all channels from the guild (for location autocomplete)
+ */
+async function getGuildChannels(guildId) {
+    if (!isReady) return [];
+    try {
+        const guild = await client.guilds.fetch(guildId);
+        const channels = await guild.channels.fetch();
+        return channels
+            .filter(c => c && [ChannelType.GuildVoice, ChannelType.GuildText, ChannelType.GuildStageVoice, ChannelType.GuildForum].includes(c.type))
+            .sort((a, b) => a.name.localeCompare(b.name))
+            .map(c => ({
+                id: c.id,
+                name: c.name,
+                type: (c.type === ChannelType.GuildVoice || c.type === ChannelType.GuildStageVoice) ? 'voice' : 'text'
+            }));
+    } catch (err) {
+        console.error('Failed to get guild channels:', err.message);
+        return [];
+    }
+}
+
+/**
  * Replace template variables in bot messages
  */
 function parseTemplate(template, variables) {
@@ -1392,6 +1414,7 @@ module.exports = {
     isGuildMember,
     getGuildName,
     getGuildRoles,
+    getGuildChannels,
     getGuildScheduledEvents,
     parseTemplate,
     startReminderScheduler,

@@ -18,8 +18,16 @@ let serverName = 'DEMS'; // Default, will be loaded from API
 
 // ─── Boot Animation ──────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
-    createParticles();
-    runBootAnimation();
+    const lastBoot = localStorage.getItem('dems_boot_ts');
+    const shouldSkip = lastBoot && (Date.now() - parseInt(lastBoot, 10)) < 86_400_000;
+
+    if (shouldSkip) {
+        document.getElementById('loading-screen').style.display = 'none';
+        finishLoading();
+    } else {
+        createParticles();
+        runBootAnimation();
+    }
 });
 
 function createParticles() {
@@ -133,6 +141,7 @@ async function loadServerInfo() {
         const res = await fetch('/api/server-info');
         const data = await res.json();
         serverName = data.serverName || 'DEMS';
+        window._demsGuildId = data.guildId || '';
         updateServerNameInUI();
     } catch (e) {
         console.error('Failed to fetch server info', e);
@@ -169,6 +178,7 @@ function updateServerNameInUI() {
 }
 
 async function finishLoading() {
+    localStorage.setItem('dems_boot_ts', Date.now().toString());
     const loadingScreen = document.getElementById('loading-screen');
     loadingScreen.style.display = 'none';
     document.getElementById('app').style.display = 'block';
@@ -447,7 +457,11 @@ async function showEventsSection() {
         grid.innerHTML = events.map(event => {
             const bannerHtml = isValidBannerUrl(event.bannerUrl)
                 ? `<img src="${escapeHtml(event.bannerUrl)}" class="event-banner" alt="Banner">`
-                : '';
+                : `<div class="event-banner-placeholder" style="background:${
+                    event.accentColor
+                        ? `linear-gradient(135deg,${escapeHtml(event.accentColor)}99 0%,${escapeHtml(event.accentColor)} 100%)`
+                        : getEventGradient(event.id)
+                  }"></div>`;
 
             const categoryHtml = event.category
                 ? `<span class="event-category-tag">${escapeHtml(event.category)}</span>`
@@ -489,7 +503,7 @@ async function showEventsSection() {
                     : '';
 
                 return `
-            <div class="col-md-6 col-lg-4">
+            <div class="col-md-6">
               <div class="glass-card event-card series-card">
                 ${bannerHtml}
                 <div class="card-body">
@@ -548,19 +562,42 @@ async function showEventsSection() {
 
             const countdownId = `cd-${event.id}`;
 
+            // Build date string for card
+            let cardDateStr = '';
+            if (safeDate) {
+                const d = new Date(safeDate);
+                cardDateStr = d.toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: 'short' })
+                    + ' · ' + d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) + ' Uhr';
+            }
+
+            // Mini capacity bar
+            let miniCapacityHtml = '';
+            if (event.maxParticipants > 0) {
+                const current = event.currentParticipants || 0;
+                const pct = Math.min(100, Math.round((current / event.maxParticipants) * 100));
+                const isDanger = pct >= 90;
+                miniCapacityHtml = `
+                    <div class="event-card-mini-progress">
+                        <div class="event-card-mini-progress-bar${isDanger ? ' danger' : ''}" style="width:${pct}%"></div>
+                    </div>
+                    <div class="event-card-capacity-label">${current} / ${event.maxParticipants} Plätze</div>`;
+            }
+
             return `
-        <div class="col-md-6 col-lg-4">
+        <div class="col-md-6">
           <div class="glass-card event-card" onclick="navigateTo('event/${event.id}')">
             ${bannerHtml}
             <div class="card-body">
-              <div class="d-flex justify-content-between align-items-start mb-2">
-                <h5 class="mb-0">${escapeHtml(event.title)}</h5>
+              <div class="event-card-header-row">
                 ${categoryHtml}
+                <span></span>
               </div>
-              <p>${escapeHtml(event.description || '').substring(0, 120)}${(event.description || '').length > 120 ? '...' : ''}</p>
-              ${dateHtml}
+              <h5 class="mb-1 fw-bold">${escapeHtml(event.title)}</h5>
+              <p class="mb-2">${escapeHtml(event.description || '').substring(0, 120)}${(event.description || '').length > 120 ? '...' : ''}</p>
+              ${cardDateStr ? `<div class="event-card-date-row"><i class="bi bi-calendar3"></i>${escapeHtml(cardDateStr)}</div>` : ''}
               ${safeDate ? `<div class="countdown" id="${countdownId}" data-date="${safeDate}"></div>` : ''}
-              <div class="d-flex flex-wrap gap-2 mt-3">
+              ${miniCapacityHtml}
+              <div class="d-flex flex-wrap gap-2 mt-2">
                 <span class="badge-pill">
                   <i class="bi bi-${event.accessMode === 'open' ? 'unlock' : 'lock'}"></i>
                   ${event.accessMode === 'open' ? 'Offen' : 'Rolle nötig'}
@@ -569,11 +606,6 @@ async function showEventsSection() {
                   <i class="bi bi-${event.approvalMode === 'instant' ? 'lightning' : 'hourglass-split'}"></i>
                   ${event.approvalMode === 'instant' ? 'Instant' : 'Manuell'}
                 </span>
-                ${event.maxParticipants > 0 ? `
-                  <span class="badge-pill">
-                    <i class="bi bi-people"></i>Max ${event.maxParticipants}
-                  </span>
-                ` : ''}
                 ${getParticipantWarningBadge(event)}
               </div>
             </div>
@@ -615,6 +647,70 @@ async function showEventsSection() {
     }
 }
 
+// ─── Location Autocomplete ───────────────────
+let _cachedChannels = null;
+
+async function loadChannelsForAutocomplete() {
+    if (_cachedChannels !== null) return _cachedChannels;
+    try {
+        const res = await fetch('/api/admin/channels');
+        _cachedChannels = await res.json();
+        return _cachedChannels;
+    } catch { return []; }
+}
+
+async function handleLocationInput() {
+    const input = document.getElementById('event-location-text');
+    const suggestionsEl = document.getElementById('location-suggestions');
+    if (!input || !suggestionsEl) return;
+
+    const val = input.value.trim();
+
+    const chanIdEl = document.getElementById('event-location-channel-id');
+    const chanTypeEl = document.getElementById('event-location-channel-type');
+    if (chanIdEl) chanIdEl.value = '';
+    if (chanTypeEl) chanTypeEl.value = '';
+
+    if (!val) {
+        suggestionsEl.style.display = 'none';
+        return;
+    }
+
+    const channels = await loadChannelsForAutocomplete();
+    const q = val.replace(/^#/, '').toLowerCase();
+    const filtered = channels.filter(c => c.name.toLowerCase().includes(q)).slice(0, 8);
+
+    if (!filtered.length) {
+        suggestionsEl.style.display = 'none';
+        return;
+    }
+
+    suggestionsEl.innerHTML = filtered.map(c => `
+        <div class="location-suggestion-item"
+             onclick="selectLocationChannel('${escapeHtml(c.id)}', '${escapeHtml(c.name)}', '${c.type}')">
+            <i class="bi bi-${c.type === 'voice' ? 'volume-up' : 'hash'} me-2"></i>${escapeHtml(c.name)}
+        </div>`).join('');
+    suggestionsEl.style.display = 'block';
+}
+
+function selectLocationChannel(channelId, channelName, channelType) {
+    const input = document.getElementById('event-location-text');
+    if (input) input.value = '#' + channelName;
+    const chanIdEl = document.getElementById('event-location-channel-id');
+    if (chanIdEl) chanIdEl.value = channelId;
+    const chanTypeEl = document.getElementById('event-location-channel-type');
+    if (chanTypeEl) chanTypeEl.value = channelType;
+    const suggestionsEl = document.getElementById('location-suggestions');
+    if (suggestionsEl) suggestionsEl.style.display = 'none';
+}
+
+document.addEventListener('click', (e) => {
+    const suggestionsEl = document.getElementById('location-suggestions');
+    if (suggestionsEl && !e.target.closest('#event-location-text') && !e.target.closest('#location-suggestions')) {
+        suggestionsEl.style.display = 'none';
+    }
+});
+
 // ─── Category Filter ────────────────────────────
 async function loadCategories() {
     try {
@@ -647,6 +743,186 @@ function filterByCategory(cat) {
     showEventsSection();
 }
 
+// ─── Detail View Helpers ─────────────────────────
+const GRADIENT_PRESETS = [
+    'linear-gradient(135deg, #6d28d9 0%, #8b5cf6 100%)',
+    'linear-gradient(135deg, #1e40af 0%, #3b82f6 100%)',
+    'linear-gradient(135deg, #065f46 0%, #10b981 100%)',
+    'linear-gradient(135deg, #92400e 0%, #f59e0b 100%)',
+    'linear-gradient(135deg, #9d174d 0%, #ec4899 100%)'
+];
+
+function getEventGradient(eventId) {
+    const idx = (eventId || '').charCodeAt(0) % GRADIENT_PRESETS.length;
+    return GRADIENT_PRESETS[isNaN(idx) ? 0 : idx];
+}
+
+function renderDetailBanner(event) {
+    const bannerArea = document.getElementById('detail-banner-area');
+    if (!bannerArea) return;
+
+    if (isValidBannerUrl(event.bannerUrl)) {
+        bannerArea.style.background = '';
+        bannerArea.innerHTML = `
+            <img src="${escapeHtml(event.bannerUrl)}" class="event-detail-banner-img" alt="Banner">
+            <div class="event-detail-banner-overlay"></div>`;
+        bannerArea.querySelector('img').addEventListener('error', function () {
+            this.style.display = 'none';
+            bannerArea.style.background = event.accentColor
+                ? `linear-gradient(135deg, ${escapeHtml(event.accentColor)}99 0%, ${escapeHtml(event.accentColor)} 100%)`
+                : getEventGradient(event.id);
+        });
+    } else {
+        bannerArea.innerHTML = '';
+        bannerArea.style.background = event.accentColor
+            ? `linear-gradient(135deg, ${escapeHtml(event.accentColor)}99 0%, ${escapeHtml(event.accentColor)} 100%)`
+            : getEventGradient(event.id);
+    }
+}
+
+function setSidebarRow(rowId, icon, label, value, isHtml = false) {
+    const el = document.getElementById(rowId);
+    if (!el) return;
+    el.style.display = 'flex';
+    el.innerHTML = `
+        <i class="bi ${icon} sidebar-icon"></i>
+        <div>
+            <div class="sidebar-label">${escapeHtml(label)}</div>
+            <div class="sidebar-value">${isHtml ? value : escapeHtml(String(value))}</div>
+        </div>`;
+}
+
+function renderSidebarDetails(event) {
+    const guildId = window._demsGuildId || '';
+
+    if (event.startDate) {
+        const safeStart = event.startDate.replace(' ', 'T');
+        const d = new Date(safeStart);
+        const dateStr = d.toLocaleDateString('de-DE', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' });
+        const timeStr = d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) + ' Uhr';
+        setSidebarRow('sidebar-date-row', 'bi-calendar3', 'Datum', dateStr);
+        setSidebarRow('sidebar-time-row', 'bi-clock', 'Uhrzeit', timeStr);
+
+        if (event.endDate) {
+            const safeEnd = event.endDate.replace(' ', 'T');
+            const end = new Date(safeEnd);
+            const diffMs = end - d;
+            if (diffMs > 0) {
+                const hours = Math.floor(diffMs / 3600000);
+                const mins = Math.floor((diffMs % 3600000) / 60000);
+                const durationStr = hours > 0
+                    ? `${hours}h${mins > 0 ? ` ${mins}min` : ''}`
+                    : `${mins}min`;
+                setSidebarRow('sidebar-duration-row', 'bi-hourglass', 'Dauer', durationStr);
+            }
+        }
+    }
+
+    if (event.location && event.location.text) {
+        const locHtml = event.location.channelId && guildId
+            ? `<a href="discord://channels/${guildId}/${escapeHtml(event.location.channelId)}">${escapeHtml(event.location.text)}</a>`
+            : escapeHtml(event.location.text);
+        setSidebarRow('sidebar-location-row', 'bi-geo-alt', 'Ort', locHtml, true);
+    }
+
+    if (event.createdByName) {
+        setSidebarRow('sidebar-creator-row', 'bi-person', 'Erstellt von', event.createdByName);
+    }
+
+    renderSidebarCapacity(event);
+}
+
+function renderSidebarAction(state, event = null) {
+    const area = document.getElementById('sidebar-action-area');
+    if (!area) return;
+
+    const hasFormFields = event && Array.isArray(event.formFields) && event.formFields.length > 0;
+
+    if (state === 'register' || state === 'waitlist') {
+        const isWaitlist = state === 'waitlist';
+        const label = isWaitlist
+            ? '<i class="bi bi-list-nested me-2"></i>Auf Warteliste setzen'
+            : '<i class="bi bi-pencil-square me-2"></i>Jetzt anmelden';
+        const cls = isWaitlist ? 'btn-outline-secondary w-100' : 'btn-accent w-100';
+
+        if (hasFormFields) {
+            // Scroll to form so required fields can be filled
+            area.innerHTML = `<button class="btn ${cls} mt-2" onclick="document.getElementById('detail-register-area')?.scrollIntoView({behavior:'smooth'}); return false;">${label}</button>`;
+        } else {
+            // No custom fields — submit directly from sidebar
+            const btnId = 'sidebar-register-btn';
+            const formContainer = isWaitlist ? 'waitlist-form-fields' : 'dynamic-form-fields';
+            area.innerHTML = `<button id="${btnId}" class="btn ${cls} mt-2">${label}</button>`;
+            document.getElementById(btnId).addEventListener('click', () => {
+                submitRegistration(event.id, event, btnId, formContainer);
+            });
+        }
+        return;
+    }
+
+    const configs = {
+        registered: { label: '<i class="bi bi-check-circle me-2"></i>Angemeldet', cls: 'btn-outline-success w-100', disabled: true },
+        noaccess:   { label: '<i class="bi bi-lock me-2"></i>Kein Zugang',         cls: 'btn-outline-danger w-100',  disabled: true },
+        none:       { label: '',                                                    cls: '',                          disabled: true }
+    };
+    const cfg = configs[state] || configs.none;
+    if (!cfg.label) { area.innerHTML = ''; return; }
+    area.innerHTML = `<button class="btn ${cfg.cls} mt-2" disabled>${cfg.label}</button>`;
+}
+
+function renderSidebarCapacity(event) {
+    const panel = document.getElementById('sidebar-capacity-panel');
+    const content = document.getElementById('sidebar-capacity-content');
+    if (!panel || !content) return;
+
+    panel.style.display = 'block';
+    if (event.maxParticipants > 0) {
+        const current = event.currentParticipants || 0;
+        const max = event.maxParticipants;
+        const pct = Math.min(100, Math.round((current / max) * 100));
+        const isDanger = pct >= 90;
+        const available = max - current;
+        content.innerHTML = `
+            <div class="capacity-label">${current} Anmeldungen / ${max} max.</div>
+            <div class="capacity-progress">
+                <div class="capacity-progress-bar${isDanger ? ' danger' : ''}" style="width:${pct}%"></div>
+            </div>
+            <div class="capacity-sublabel">${available > 0 ? `${available} Plätze verfügbar` : 'Ausgebucht'}</div>`;
+    } else {
+        content.innerHTML = `<div class="capacity-label">Unbegrenzte Kapazität</div>`;
+    }
+}
+
+async function loadDetailParticipants(eventId) {
+    if (!currentUser) return;
+    try {
+        const res = await fetch(`/api/events/${eventId}/participants`);
+        if (!res.ok) return;
+        const data = await res.json();
+        const section = document.getElementById('detail-participants-section');
+        const avatarsEl = document.getElementById('detail-participants-avatars');
+        const countEl = document.getElementById('detail-participants-count');
+        if (!section || !avatarsEl) return;
+
+        section.style.display = 'block';
+        if (countEl) countEl.textContent = `(${data.total})`;
+
+        if (!data.participants.length) {
+            avatarsEl.innerHTML = '<span class="text-muted small">Noch keine bestätigten Teilnehmer.</span>';
+            return;
+        }
+
+        const overflow = data.total > 20 ? data.total - 20 : 0;
+        avatarsEl.innerHTML = data.participants.map(p => {
+            const initials = (p.displayName || '?').charAt(0).toUpperCase();
+            if (p.avatar) {
+                return `<img src="${escapeHtml(p.avatar)}" class="participant-avatar" title="${escapeHtml(p.displayName)}" alt="${escapeHtml(p.displayName)}" onerror="this.outerHTML='<div class=\\'participant-avatar-placeholder\\' title=\\'${escapeHtml(p.displayName)}\\'>${initials}</div>'">`;
+            }
+            return `<div class="participant-avatar-placeholder" title="${escapeHtml(p.displayName)}">${initials}</div>`;
+        }).join('') + (overflow > 0 ? `<div class="participants-overflow-badge">+${overflow}</div>` : '');
+    } catch { /* non-fatal */ }
+}
+
 // ─── Event Detail ────────────────────────────────
 async function showEventDetail(eventId) {
     if (!eventId) return navigateTo('events');
@@ -663,13 +939,7 @@ async function showEventDetail(eventId) {
         const event = await res.json();
 
         // Banner
-        const bannerArea = document.getElementById('detail-banner-area');
-        if (isValidBannerUrl(event.bannerUrl)) {
-            bannerArea.innerHTML = `<img src="${escapeHtml(event.bannerUrl)}" class="event-banner-detail" alt="Banner">`;
-            bannerArea.querySelector('img').addEventListener('error', function () { this.style.display = 'none'; });
-        } else {
-            bannerArea.innerHTML = '';
-        }
+        renderDetailBanner(event);
 
         // Category & Status tags
         const catTag = document.getElementById('detail-category-tag');
@@ -698,57 +968,45 @@ async function showEventDetail(eventId) {
             cdArea.style.display = 'none';
         }
 
-        // Badges
-        document.getElementById('detail-access-badge').innerHTML = `
-      <i class="bi bi-${event.accessMode === 'open' ? 'unlock' : 'lock'}"></i>
-      ${event.accessMode === 'open' ? 'Jeder darf teilnehmen' : 'Rollen-Requirement'}
-    `;
-        document.getElementById('detail-approval-badge').innerHTML = `
-      <i class="bi bi-${event.approvalMode === 'instant' ? 'lightning' : 'hourglass-split'}"></i>
-      ${event.approvalMode === 'instant' ? 'Instant Access' : 'Manuelle Prüfung'}
-    `;
-        document.getElementById('detail-participants-badge').innerHTML = `
-      <i class="bi bi-people"></i>
-      ${event.currentParticipants || 0}${event.maxParticipants > 0 ? '/' + event.maxParticipants : ''} Teilnehmer
-    `;
-
-        // Date badge
-        const dateBadge = document.getElementById('detail-date-badge');
-        if (event.startDate) {
-            dateBadge.style.display = 'inline-flex';
-            const dateStr = new Date(event.startDate).toLocaleDateString('de-DE', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-            dateBadge.innerHTML = `<i class="bi bi-calendar3"></i>${dateStr}`;
-        } else {
-            dateBadge.style.display = 'none';
-        }
+        // Sidebar details
+        renderSidebarDetails(event);
 
         // Render series dates section if this event belongs to a series
-        let seriesContainer = document.getElementById('detail-series-section');
-        if (!seriesContainer) {
-            seriesContainer = document.createElement('div');
-            seriesContainer.id = 'detail-series-section';
-            const badgesArea = document.querySelector('#event-detail-card .detail-badges');
-            if (badgesArea) badgesArea.parentNode.insertBefore(seriesContainer, badgesArea.nextSibling);
-        }
+        const seriesContainer = document.getElementById('detail-series-section');
         if (event.seriesId) {
             try {
                 const seriesRes = await fetch(`/api/events/series/${event.seriesId}`);
                 const seriesEvents = await seriesRes.json();
                 if (Array.isArray(seriesEvents) && seriesEvents.length > 1) {
+                    const maxVisible = 5;
+                    const visibleSeries = seriesEvents.slice(0, maxVisible);
+                    const hiddenSeries = seriesEvents.slice(maxVisible);
+                    const hiddenCount = hiddenSeries.length;
+
+                    const renderSeriesItem = (se) => {
+                        const isCurrent = se.id === eventId;
+                        const safeD = se.startDate ? se.startDate.replace(' ', 'T') : null;
+                        const dateStr = safeD ? new Date(safeD).toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
+                        return `
+                            <a class="series-date-item ${isCurrent ? 'active' : ''}" href="#" onclick="navigateTo('event/${se.id}'); return false;">
+                                <span><i class="bi bi-calendar-event me-2"></i>${dateStr}</span>
+                                <span class="series-date-participants"><i class="bi bi-people me-1"></i>${se.currentParticipants || 0}${se.maxParticipants > 0 ? '/' + se.maxParticipants : ''}</span>
+                            </a>`;
+                    };
+
                     seriesContainer.innerHTML = `
                         <div class="series-detail-section mt-4">
                             <h6 class="mb-3"><i class="bi bi-arrow-repeat me-2"></i>Termine der Serie</h6>
                             <div class="series-dates-list">
-                                ${seriesEvents.map(se => {
-                                    const isCurrent = se.id === eventId;
-                                    const safeD = se.startDate ? se.startDate.replace(' ', 'T') : null;
-                                    const dateStr = safeD ? new Date(safeD).toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
-                                    return `
-                                        <a class="series-date-item ${isCurrent ? 'active' : ''}" href="#" onclick="navigateTo('event/${se.id}'); return false;">
-                                            <span><i class="bi bi-calendar-event me-2"></i>${dateStr}</span>
-                                            <span class="series-date-participants"><i class="bi bi-people me-1"></i>${se.currentParticipants || 0}${se.maxParticipants > 0 ? '/' + se.maxParticipants : ''}</span>
-                                        </a>`;
-                                }).join('')}
+                                ${visibleSeries.map(renderSeriesItem).join('')}
+                                ${hiddenCount > 0 ? `
+                                    <div id="detail-series-hidden" style="display:none;">
+                                        ${hiddenSeries.map(renderSeriesItem).join('')}
+                                    </div>
+                                    <a class="series-dates-toggle" href="#" onclick="toggleDetailSeriesDates(); return false;">
+                                        <i class="bi bi-chevron-down me-1" id="detail-series-icon"></i>
+                                        <span id="detail-series-toggle-text">${hiddenCount} weitere Termine anzeigen</span>
+                                    </a>` : ''}
                             </div>
                         </div>`;
                 } else {
@@ -772,7 +1030,8 @@ async function showEventDetail(eventId) {
         waitlistArea.style.display = 'none';
 
         if (!currentUser) {
-            gsap.from('#event-detail-card', { y: 20, opacity: 0, duration: 0.5, ease: 'power3.out' });
+            renderSidebarAction('none');
+            gsap.from('.col-lg-8', { y: 20, opacity: 0, duration: 0.4, ease: 'power3.out' });
             return;
         }
 
@@ -790,7 +1049,9 @@ async function showEventDetail(eventId) {
                 : (statusTexts[regData.status] || regData.status);
             statusEl.className = 'fw-bold text-' + (statusColors[regData.status] || 'secondary');
 
-            gsap.from('#event-detail-card', { y: 20, opacity: 0, duration: 0.5, ease: 'power3.out' });
+            renderSidebarAction('registered');
+            gsap.from('.col-lg-8', { y: 20, opacity: 0, duration: 0.4, ease: 'power3.out' });
+            loadDetailParticipants(eventId);
             loadComments(eventId);
             renderCheckinSection(eventId, event, regData);
             return;
@@ -804,7 +1065,8 @@ async function showEventDetail(eventId) {
             if (!hasRole) {
                 noAccessArea.style.display = 'block';
                 document.getElementById('no-access-text').textContent = 'Du hast nicht die erforderliche Rolle für dieses Event.';
-                gsap.from('#event-detail-card', { y: 20, opacity: 0, duration: 0.5, ease: 'power3.out' });
+                renderSidebarAction('noaccess');
+                gsap.from('.col-lg-8', { y: 20, opacity: 0, duration: 0.4, ease: 'power3.out' });
                 return;
             }
         }
@@ -832,6 +1094,7 @@ async function showEventDetail(eventId) {
                 e.preventDefault();
                 await submitRegistration(eventId, event, 'waitlist-btn', 'waitlist-form-fields');
             };
+            renderSidebarAction('waitlist', event);
         } else {
             // Show registration form
             registerArea.style.display = 'block';
@@ -855,11 +1118,13 @@ async function showEventDetail(eventId) {
                 e.preventDefault();
                 await submitRegistration(eventId, event, 'register-btn', 'dynamic-form-fields');
             };
+            renderSidebarAction('register', event);
         }
 
-        gsap.from('#event-detail-card', { y: 20, opacity: 0, duration: 0.5, ease: 'power3.out' });
+        gsap.from('.col-lg-8', { y: 20, opacity: 0, duration: 0.4, ease: 'power3.out' });
 
         // Load comments section
+        loadDetailParticipants(eventId);
         loadComments(eventId);
 
     } catch {
@@ -876,10 +1141,7 @@ async function renderCheckinSection(eventId, event, registration) {
         container.id = 'checkin-section';
         container.className = 'mt-4 glass-card p-4';
         container.style.background = 'rgba(139,92,246,0.05)';
-        document.querySelector('#event-detail-card .p-4.p-md-5')?.insertBefore(
-            container,
-            document.getElementById('comments-section')
-        );
+        document.getElementById('detail-register-area')?.insertAdjacentElement('afterend', container);
     }
 
     // Admin view: show code generation + stats
@@ -1039,7 +1301,7 @@ async function loadComments(eventId) {
         commentSection = document.createElement('div');
         commentSection.id = 'comments-section';
         commentSection.className = 'comments-section';
-        document.querySelector('#event-detail-card .p-4.p-md-5')?.appendChild(commentSection);
+        document.querySelector('.col-lg-8')?.appendChild(commentSection);
     }
     if (!commentSection) return;
 
@@ -2419,6 +2681,18 @@ function toggleSeriesDates(seriesCardId) {
     if (!text.dataset.showText) text.dataset.showText = text.textContent;
 }
 
+function toggleDetailSeriesDates() {
+    const hidden = document.getElementById('detail-series-hidden');
+    const icon = document.getElementById('detail-series-icon');
+    const text = document.getElementById('detail-series-toggle-text');
+    if (!hidden) return;
+    const isOpen = hidden.style.display !== 'none';
+    hidden.style.display = isOpen ? 'none' : 'block';
+    icon.className = isOpen ? 'bi bi-chevron-down me-1' : 'bi bi-chevron-up me-1';
+    const count = hidden.querySelectorAll('.series-date-item').length;
+    text.textContent = isOpen ? `${count} weitere Termine anzeigen` : 'Weniger anzeigen';
+}
+
 // ─── Debounced Search ─────────────────────────────
 function debouncedSearch() {
     clearTimeout(searchDebounceTimer);
@@ -2738,6 +3012,18 @@ async function editEvent(eventId) {
 
         document.getElementById('event-banner-url').value = event.bannerUrl || '';
 
+        // Accent color
+        const accentEl = document.getElementById('event-accent-color');
+        if (accentEl) accentEl.value = event.accentColor || '#8b5cf6';
+
+        // Location
+        const locationTextEl = document.getElementById('event-location-text');
+        const locationChanId = document.getElementById('event-location-channel-id');
+        const locationChanType = document.getElementById('event-location-channel-type');
+        if (locationTextEl) locationTextEl.value = event.location?.text || '';
+        if (locationChanId) locationChanId.value = event.location?.channelId || '';
+        if (locationChanType) locationChanType.value = event.location?.channelType || '';
+
         // Store dates to apply once Flatpickr is initialized (lazy init on step 2)
         const _startDate = event.startDate || null;
         const _endDate = event.endDate || null;
@@ -2852,7 +3138,17 @@ async function saveEvent() {
             registration: document.getElementById('event-msg-registration').value,
             accepted: document.getElementById('event-msg-accepted').value,
             rejected: document.getElementById('event-msg-rejected').value
-        }
+        },
+        accentColor: document.getElementById('event-accent-color')?.value || '',
+        location: (() => {
+            const text = document.getElementById('event-location-text')?.value?.trim() || '';
+            if (!text) return null;
+            return {
+                text,
+                channelId: document.getElementById('event-location-channel-id')?.value || '',
+                channelType: document.getElementById('event-location-channel-type')?.value || ''
+            };
+        })(),
     };
 
     try {
@@ -3332,7 +3628,7 @@ function showToast(message, type = 'info') {
 
 function renderSkeletonEvents(container, count, isAdmin = false) {
     container.innerHTML = Array(count).fill(0).map(() => `
-        <div class="col-md-6 ${isAdmin ? '' : 'col-lg-4'}">
+        <div class="col-md-6">
             <div class="glass-card skeleton-card p-0">
                 <div class="skeleton skeleton-img"></div>
                 <div class="p-4" style="height:200px; display:flex; flex-direction:column; justify-content:space-between;">

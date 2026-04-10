@@ -1,22 +1,30 @@
 {
-    "version": "2.2.0",
-    "date": "2026-03-12",
+    "version": "2.3.0",
+    "date": "2026-04-10",
     "news": [
         {
-            "title": "🤖 Bot-Zentrale (Control Center)",
-            "content": "Neuer Bereich in der Navigation: Die Bot-Zentrale zeigt den Live-Status des Discord Bots (Uptime, Ping, gesendete DMs, verarbeitete Befehle) und alle laufenden Events mit Teilnehmerstatistiken auf einen Blick."
+            "title": "🎨 Neues Event-Detail Layout",
+            "content": "Die Event-Detailseite wurde komplett überarbeitet: Zweispaltiges Layout mit einem übersichtlichen Sidebar (Datum, Uhrzeit, Dauer, Ort, Ersteller, Kapazität) und einem Anmelde-Button der direkt aus der Seitenleiste funktioniert."
         },
         {
-            "title": "⚙️ Bot Einstellungen",
-            "content": "Steuere den Bot direkt aus dem Web-Dashboard: Online-Status (Online/Abwesend/DND), Aktivitätstext, und schalte Funktionen wie DM-Benachrichtigungen, Erinnerungen, Event-Start-Meldungen und Auto-Channel-Erstellung ein oder aus."
+            "title": "🖼️ Banner & Farbgestaltung",
+            "content": "Events zeigen jetzt immer einen Banner-Header — entweder ein eigenes Bild, eine benutzerdefinierte Akzentfarbe (via Farbwähler) oder einen automatischen Farbverlauf der pro Event eindeutig und konsistent ist."
         },
         {
-            "title": "📡 Laufende Events Live-Monitor",
-            "content": "Die Bot-Zentrale zeigt alle aktiven Events mit Live-Indikatoren, Kapazitätsbalken und Registrierungsstatistiken (Angenommen/Ausstehend/Warteliste) in Echtzeit an."
+            "title": "👥 Teilnehmer-Avatare",
+            "content": "Eingeloggte Nutzer sehen auf der Event-Detailseite die Avatare aller bestätigten Teilnehmer direkt unterhalb der Beschreibung."
         },
         {
-            "title": "🔧 Bugfix: deleteDoc Import",
-            "content": "Der /unregister Slash-Command funktioniert jetzt zuverlässig — ein fehlender Import wurde behoben."
+            "title": "📍 Ort mit Discord-Deeplink",
+            "content": "Events können jetzt einen Ort mit Channel-Verlinkung haben. Bei der Eingabe werden Server-Channels vorgeschlagen — ein Klick öffnet den Channel direkt in Discord."
+        },
+        {
+            "title": "🃏 Übersicht überarbeitet",
+            "content": "Event-Karten zeigen jetzt Kapazitätsbalken, einen prominenten Datums-Bereich und Farbverläufe als Platzhalter wenn kein Banner gesetzt ist. Layout auf 2 Spalten umgestellt."
+        },
+        {
+            "title": "⚡ Boot-Animation (24h)",
+            "content": "Die Lade-Animation beim ersten Besuch wird jetzt nur noch einmal alle 24 Stunden abgespielt."
         }
     ]
 }
