@@ -129,6 +129,10 @@ function runBootAnimation() {
 async function fetchCSRFToken() {
     try {
         const res = await fetch('/api/csrf-token');
+        if (res.status === 429) {
+            showToast('Zu viele Anfragen – bitte Seite in einem Moment neu laden.', 'warning');
+            return;
+        }
         const data = await res.json();
         csrfToken = data.token;
     } catch (e) {
@@ -139,6 +143,7 @@ async function fetchCSRFToken() {
 async function loadServerInfo() {
     try {
         const res = await fetch('/api/server-info');
+        if (res.status === 429) return;
         const data = await res.json();
         serverName = data.serverName || 'DEMS';
         window._demsGuildId = data.guildId || '';
@@ -436,6 +441,20 @@ async function showEventsSection() {
         if (params.length) url += '?' + params.join('&');
 
         const res = await fetch(url);
+        if (res.status === 429) {
+            grid.innerHTML = '';
+            empty.innerHTML = `
+                <div class="text-center py-5">
+                    <i class="bi bi-clock-history fs-1 text-warning mb-3 d-block"></i>
+                    <h5 class="text-warning">Zu viele Anfragen</h5>
+                    <p class="text-muted">Du hast zu viele Anfragen in kurzer Zeit gesendet.<br>Bitte warte einen Moment und lade die Seite neu.</p>
+                    <button class="btn btn-outline-warning mt-2" onclick="showEventsSection()">
+                        <i class="bi bi-arrow-clockwise me-1"></i>Erneut versuchen
+                    </button>
+                </div>`;
+            empty.style.display = 'block';
+            return;
+        }
         const result = await res.json();
         const events = result.data || result;
 
@@ -1752,7 +1771,6 @@ document.addEventListener('DOMContentLoaded', () => {
             currentUser = user;
             showLoggedIn();
 
-            // Check hash for initial navigation
             const hash = window.location.hash.slice(1) || 'events';
             navigateTo(hash);
 
@@ -1762,7 +1780,6 @@ document.addEventListener('DOMContentLoaded', () => {
         .catch(() => {
             currentUser = null;
             showLoggedOut();
-            showLoginModal();
         });
 });
 
