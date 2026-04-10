@@ -126,7 +126,8 @@ router.post('/events', validateEvent, async (req, res) => {
             approvalMode, assignRoleId, formFields,
             startDate, endDate, bannerUrl, category, status, reminderHours,
             recurring, recurringInterval, recurringUntil, checkinMessage,
-            customBotMessages, autoCreateChannels, channelConfig, allowGuests
+            customBotMessages, autoCreateChannels, channelConfig, allowGuests,
+            accentColor, location
         } = req.body;
 
         const baseEvent = {
@@ -149,6 +150,8 @@ router.post('/events', validateEvent, async (req, res) => {
             autoCreateChannels: !!autoCreateChannels,
             channelConfig: channelConfig || {},
             allowGuests: allowGuests !== false,
+            accentColor: accentColor || '',
+            location: location || null,
             eventStartNotificationSent: false,
             recurring: !!recurring,
             recurringInterval: recurringInterval || '',
@@ -214,7 +217,8 @@ router.put('/events/:id', validateEvent, async (req, res) => {
             title, description, maxParticipants, accessMode, requiredRoles,
             approvalMode, assignRoleId, formFields,
             startDate, endDate, bannerUrl, category, status, reminderHours, checkinMessage,
-            customBotMessages, autoCreateChannels, channelConfig, allowGuests
+            customBotMessages, autoCreateChannels, channelConfig, allowGuests,
+            accentColor, location
         } = req.body;
 
         const updates = {
@@ -237,6 +241,8 @@ router.put('/events/:id', validateEvent, async (req, res) => {
             autoCreateChannels: !!autoCreateChannels,
             channelConfig: channelConfig || {},
             allowGuests: allowGuests !== false,
+            accentColor: accentColor || '',
+            location: location || null,
             recurring: !!req.body.recurring,
             recurringInterval: req.body.recurringInterval || '',
             recurringUntil: req.body.recurringUntil || '',
