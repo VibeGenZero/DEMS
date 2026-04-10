@@ -226,11 +226,25 @@ router.get('/:id', async (req, res) => {
         );
         const waitSnap = await getDocs(waitQ);
 
+        // Look up creator display name
+        let createdByName = '';
+        const creatorId = docSnap.data().createdBy;
+        if (creatorId) {
+            try {
+                const userSnap = await getDoc(doc(db, 'users', creatorId));
+                if (userSnap.exists()) {
+                    const u = userSnap.data();
+                    createdByName = u.displayName || u.username || '';
+                }
+            } catch { /* non-fatal */ }
+        }
+
         res.json({
             id: docSnap.id,
             ...docSnap.data(),
             currentParticipants,
-            waitlistCount: waitSnap.size
+            waitlistCount: waitSnap.size,
+            createdByName
         });
     } catch (err) {
         console.error('Error fetching event:', err);
@@ -535,6 +549,47 @@ router.get('/:id/my-registration', requireAuth, async (req, res) => {
         res.json({ registered: false });
     } catch (err) {
         res.status(500).json({ error: 'Fehler' });
+    }
+});
+
+/**
+ * GET /api/events/:id/participants — Get accepted participants (auth required)
+ */
+router.get('/:id/participants', requireAuth, async (req, res) => {
+    try {
+        const regQ = query(
+            collection(db, 'registrations'),
+            where('eventId', '==', req.params.id),
+            where('status', '==', 'accepted')
+        );
+        const regSnap = await getDocs(regQ);
+
+        const userIds = [];
+        regSnap.forEach(d => {
+            if (d.data().userId) userIds.push(d.data().userId);
+        });
+
+        const total = userIds.length;
+        const limited = userIds.slice(0, 20);
+
+        const participants = [];
+        for (const uid of limited) {
+            try {
+                const userSnap = await getDoc(doc(db, 'users', uid));
+                if (userSnap.exists()) {
+                    const u = userSnap.data();
+                    participants.push({
+                        displayName: u.displayName || u.username || 'Unbekannt',
+                        avatar: u.avatar || ''
+                    });
+                }
+            } catch { /* skip missing users */ }
+        }
+
+        res.json({ participants, total });
+    } catch (err) {
+        console.error('Participants error:', err);
+        res.status(500).json({ error: 'Fehler beim Laden der Teilnehmer' });
     }
 });
 
