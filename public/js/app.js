@@ -457,7 +457,11 @@ async function showEventsSection() {
         grid.innerHTML = events.map(event => {
             const bannerHtml = isValidBannerUrl(event.bannerUrl)
                 ? `<img src="${escapeHtml(event.bannerUrl)}" class="event-banner" alt="Banner">`
-                : '';
+                : `<div class="event-banner-placeholder" style="background:${
+                    event.accentColor
+                        ? `linear-gradient(135deg,${escapeHtml(event.accentColor)}99 0%,${escapeHtml(event.accentColor)} 100%)`
+                        : getEventGradient(event.id)
+                  }"></div>`;
 
             const categoryHtml = event.category
                 ? `<span class="event-category-tag">${escapeHtml(event.category)}</span>`
@@ -499,7 +503,7 @@ async function showEventsSection() {
                     : '';
 
                 return `
-            <div class="col-md-6 col-lg-4">
+            <div class="col-md-6">
               <div class="glass-card event-card series-card">
                 ${bannerHtml}
                 <div class="card-body">
@@ -558,19 +562,42 @@ async function showEventsSection() {
 
             const countdownId = `cd-${event.id}`;
 
+            // Build date string for card
+            let cardDateStr = '';
+            if (safeDate) {
+                const d = new Date(safeDate);
+                cardDateStr = d.toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: 'short' })
+                    + ' · ' + d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) + ' Uhr';
+            }
+
+            // Mini capacity bar
+            let miniCapacityHtml = '';
+            if (event.maxParticipants > 0) {
+                const current = event.currentParticipants || 0;
+                const pct = Math.min(100, Math.round((current / event.maxParticipants) * 100));
+                const isDanger = pct >= 90;
+                miniCapacityHtml = `
+                    <div class="event-card-mini-progress">
+                        <div class="event-card-mini-progress-bar${isDanger ? ' danger' : ''}" style="width:${pct}%"></div>
+                    </div>
+                    <div class="event-card-capacity-label">${current} / ${event.maxParticipants} Plätze</div>`;
+            }
+
             return `
-        <div class="col-md-6 col-lg-4">
+        <div class="col-md-6">
           <div class="glass-card event-card" onclick="navigateTo('event/${event.id}')">
             ${bannerHtml}
             <div class="card-body">
-              <div class="d-flex justify-content-between align-items-start mb-2">
-                <h5 class="mb-0">${escapeHtml(event.title)}</h5>
+              <div class="event-card-header-row">
                 ${categoryHtml}
+                <span></span>
               </div>
-              <p>${escapeHtml(event.description || '').substring(0, 120)}${(event.description || '').length > 120 ? '...' : ''}</p>
-              ${dateHtml}
+              <h5 class="mb-1 fw-bold">${escapeHtml(event.title)}</h5>
+              <p class="mb-2">${escapeHtml(event.description || '').substring(0, 120)}${(event.description || '').length > 120 ? '...' : ''}</p>
+              ${cardDateStr ? `<div class="event-card-date-row"><i class="bi bi-calendar3"></i>${escapeHtml(cardDateStr)}</div>` : ''}
               ${safeDate ? `<div class="countdown" id="${countdownId}" data-date="${safeDate}"></div>` : ''}
-              <div class="d-flex flex-wrap gap-2 mt-3">
+              ${miniCapacityHtml}
+              <div class="d-flex flex-wrap gap-2 mt-2">
                 <span class="badge-pill">
                   <i class="bi bi-${event.accessMode === 'open' ? 'unlock' : 'lock'}"></i>
                   ${event.accessMode === 'open' ? 'Offen' : 'Rolle nötig'}
@@ -579,11 +606,6 @@ async function showEventsSection() {
                   <i class="bi bi-${event.approvalMode === 'instant' ? 'lightning' : 'hourglass-split'}"></i>
                   ${event.approvalMode === 'instant' ? 'Instant' : 'Manuell'}
                 </span>
-                ${event.maxParticipants > 0 ? `
-                  <span class="badge-pill">
-                    <i class="bi bi-people"></i>Max ${event.maxParticipants}
-                  </span>
-                ` : ''}
                 ${getParticipantWarningBadge(event)}
               </div>
             </div>
