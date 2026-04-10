@@ -832,19 +832,42 @@ function renderSidebarDetails(event) {
     renderSidebarCapacity(event);
 }
 
-function renderSidebarAction(state) {
+function renderSidebarAction(state, event = null) {
     const area = document.getElementById('sidebar-action-area');
     if (!area) return;
+
+    const hasFormFields = event && Array.isArray(event.formFields) && event.formFields.length > 0;
+
+    if (state === 'register' || state === 'waitlist') {
+        const isWaitlist = state === 'waitlist';
+        const label = isWaitlist
+            ? '<i class="bi bi-list-nested me-2"></i>Auf Warteliste setzen'
+            : '<i class="bi bi-pencil-square me-2"></i>Jetzt anmelden';
+        const cls = isWaitlist ? 'btn-outline-secondary w-100' : 'btn-accent w-100';
+
+        if (hasFormFields) {
+            // Scroll to form so required fields can be filled
+            area.innerHTML = `<button class="btn ${cls} mt-2" onclick="document.getElementById('detail-register-area')?.scrollIntoView({behavior:'smooth'}); return false;">${label}</button>`;
+        } else {
+            // No custom fields — submit directly from sidebar
+            const btnId = 'sidebar-register-btn';
+            const formContainer = isWaitlist ? 'waitlist-form-fields' : 'dynamic-form-fields';
+            area.innerHTML = `<button id="${btnId}" class="btn ${cls} mt-2">${label}</button>`;
+            document.getElementById(btnId).addEventListener('click', () => {
+                submitRegistration(event.id, event, btnId, formContainer);
+            });
+        }
+        return;
+    }
+
     const configs = {
-        register:   { label: '<i class="bi bi-pencil-square me-2"></i>Jetzt anmelden',       cls: 'btn-accent w-100',                      disabled: false },
-        waitlist:   { label: '<i class="bi bi-list-nested me-2"></i>Auf Warteliste setzen',   cls: 'btn-outline-secondary w-100',            disabled: false },
-        registered: { label: '<i class="bi bi-check-circle me-2"></i>Angemeldet',             cls: 'btn-outline-success w-100',              disabled: true  },
-        noaccess:   { label: '<i class="bi bi-lock me-2"></i>Kein Zugang',                    cls: 'btn-outline-danger w-100',               disabled: true  },
-        none:       { label: '',                                                               cls: '',                                       disabled: true  }
+        registered: { label: '<i class="bi bi-check-circle me-2"></i>Angemeldet', cls: 'btn-outline-success w-100', disabled: true },
+        noaccess:   { label: '<i class="bi bi-lock me-2"></i>Kein Zugang',         cls: 'btn-outline-danger w-100',  disabled: true },
+        none:       { label: '',                                                    cls: '',                          disabled: true }
     };
     const cfg = configs[state] || configs.none;
     if (!cfg.label) { area.innerHTML = ''; return; }
-    area.innerHTML = `<button class="btn ${cfg.cls} mt-2" ${cfg.disabled ? 'disabled' : `onclick="document.getElementById('detail-register-area')?.scrollIntoView({behavior:'smooth'}); return false;"`}>${cfg.label}</button>`;
+    area.innerHTML = `<button class="btn ${cfg.cls} mt-2" disabled>${cfg.label}</button>`;
 }
 
 function renderSidebarCapacity(event) {
@@ -1071,7 +1094,7 @@ async function showEventDetail(eventId) {
                 e.preventDefault();
                 await submitRegistration(eventId, event, 'waitlist-btn', 'waitlist-form-fields');
             };
-            renderSidebarAction('waitlist');
+            renderSidebarAction('waitlist', event);
         } else {
             // Show registration form
             registerArea.style.display = 'block';
@@ -1095,7 +1118,7 @@ async function showEventDetail(eventId) {
                 e.preventDefault();
                 await submitRegistration(eventId, event, 'register-btn', 'dynamic-form-fields');
             };
-            renderSidebarAction('register');
+            renderSidebarAction('register', event);
         }
 
         gsap.from('.col-lg-8', { y: 20, opacity: 0, duration: 0.4, ease: 'power3.out' });
