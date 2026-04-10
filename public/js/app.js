@@ -18,8 +18,16 @@ let serverName = 'DEMS'; // Default, will be loaded from API
 
 // ─── Boot Animation ──────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
-    createParticles();
-    runBootAnimation();
+    const lastBoot = localStorage.getItem('dems_boot_ts');
+    const shouldSkip = lastBoot && (Date.now() - parseInt(lastBoot, 10)) < 86_400_000;
+
+    if (shouldSkip) {
+        document.getElementById('loading-screen').style.display = 'none';
+        finishLoading();
+    } else {
+        createParticles();
+        runBootAnimation();
+    }
 });
 
 function createParticles() {
@@ -169,6 +177,7 @@ function updateServerNameInUI() {
 }
 
 async function finishLoading() {
+    localStorage.setItem('dems_boot_ts', Date.now().toString());
     const loadingScreen = document.getElementById('loading-screen');
     loadingScreen.style.display = 'none';
     document.getElementById('app').style.display = 'block';
