@@ -1,4 +1,5 @@
 require('dotenv').config();
+const { debugLog, IS_DEBUG } = require('./utils/debugLog');
 
 const express = require('express');
 const session = require('express-session');
@@ -108,6 +109,42 @@ app.use((req, res, next) => {
 // ── Static files ────────────────────────────────────────────────────────
 app.use(express.static(path.join(__dirname, 'public')));
 
+// ── Debug HTTP logging ───────────────────────────────────────────────────
+if (IS_DEBUG) {
+    app.use((req, res, next) => {
+        const start = Date.now();
+        const sensitiveFields = ['password', 'token', 'secret', 'key', 'csrftoken'];
+
+        // Sanitize body for logging
+        let safeBody = null;
+        if (req.body && Object.keys(req.body).length) {
+            safeBody = Object.fromEntries(
+                Object.entries(req.body).map(([k, v]) =>
+                    [k, sensitiveFields.includes(k.toLowerCase()) ? '[REDACTED]' : v]
+                )
+            );
+        }
+
+        res.on('finish', () => {
+            const ms = Date.now() - start;
+            const status = res.statusCode;
+            const color = status >= 500 ? '\x1b[31m'
+                        : status >= 400 ? '\x1b[33m'
+                        : '\x1b[32m';
+            const reset = '\x1b[0m';
+            const ip = req.ip || req.connection?.remoteAddress || '-';
+            console.log(
+                `\x1b[90m[DEBUG ${new Date().toTimeString().slice(0,8)}]\x1b[0m` +
+                ` \x1b[36m${req.method}\x1b[0m ${req.originalUrl}` +
+                ` → ${color}${status}${reset} (${ms}ms) — ${ip}`
+            );
+            if (safeBody) debugLog('  body', safeBody);
+        });
+
+        next();
+    });
+}
+
 // ── Routes ──────────────────────────────────────────────────────────────
 app.use('/auth', require('./routes/auth'));
 app.use('/api/events', require('./routes/events'));
@@ -148,23 +185,24 @@ app.get('/api/maintenance/status', async (req, res) => {
 
 // Server info endpoint - returns server name (env override or Discord API)
 app.get('/api/server-info', async (req, res) => {
+    const debugMode = process.env.DEBUG_MODE === 'true';
     try {
         const guildId = process.env.DISCORD_GUILD_ID || '';
         if (process.env.SERVER_NAME) {
-            return res.json({ serverName: process.env.SERVER_NAME, guildId });
+            return res.json({ serverName: process.env.SERVER_NAME, guildId, debugMode });
         }
 
         if (guildId) {
             const serverName = await getGuildName(guildId);
             if (serverName) {
-                return res.json({ serverName, guildId });
+                return res.json({ serverName, guildId, debugMode });
             }
         }
 
-        res.json({ serverName: 'DEMS', guildId });
+        res.json({ serverName: 'DEMS', guildId, debugMode });
     } catch (err) {
         console.error('Error fetching server info:', err);
-        res.json({ serverName: 'DEMS', guildId: '' });
+        res.json({ serverName: 'DEMS', guildId: '', debugMode });
     }
 });
 
