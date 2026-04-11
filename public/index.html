@@ -516,6 +516,119 @@
     </section>
 
 
+    <!-- ── STYLING GUIDE SECTION (DEBUG ONLY) ── -->
+    <section id="debug-section" class="app-section" style="display:none;">
+      <div class="container section-container">
+        <div class="section-header">
+          <h2><i class="bi bi-palette me-2"></i>Styling Guide</h2>
+          <p class="text-secondary mb-0">Komponentenübersicht — nur im Debug-Modus sichtbar.</p>
+        </div>
+
+        <!-- 1. Farben -->
+        <h5 class="sg-section-title">Farben</h5>
+        <div id="sg-colors" class="sg-color-grid"></div>
+
+        <!-- 2. Typographie -->
+        <h5 class="sg-section-title">Typographie</h5>
+        <div class="glass-card p-4 mb-4" id="sg-typography">
+          <h1>H1 — Überschrift</h1>
+          <h2>H2 — Überschrift</h2>
+          <h3>H3 — Überschrift</h3>
+          <h4>H4 — Überschrift</h4>
+          <h5>H5 — Überschrift</h5>
+          <h6>H6 — Überschrift</h6>
+          <p class="lead">Lead — Einleitungstext für wichtige Aussagen</p>
+          <p>Body — Standard-Fließtext. Lorem ipsum dolor sit amet consectetur adipiscing elit.</p>
+          <p><small>Small — Kleine Hinweistexte, Metadaten</small></p>
+          <p><code>code — Inline-Code-Darstellung</code></p>
+          <p class="text-muted">text-muted — Abgedämpfter Hilfetext</p>
+        </div>
+
+        <!-- 3. Buttons -->
+        <h5 class="sg-section-title">Buttons</h5>
+        <div class="glass-card p-4 mb-4">
+          <div id="sg-buttons" class="d-flex flex-wrap gap-2"></div>
+        </div>
+
+        <!-- 4. Badges & Pills -->
+        <h5 class="sg-section-title">Badges &amp; Status-Pills</h5>
+        <div class="glass-card p-4 mb-4">
+          <div id="sg-badges" class="d-flex flex-wrap gap-2 align-items-center"></div>
+        </div>
+
+        <!-- 5. Cards -->
+        <h5 class="sg-section-title">Cards</h5>
+        <div id="sg-cards" class="mb-4"></div>
+
+        <!-- 6. Formulare -->
+        <h5 class="sg-section-title">Formulare</h5>
+        <div class="glass-card p-4 mb-4" id="sg-forms">
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label">Text-Input</label>
+              <input type="text" class="form-control" placeholder="Placeholder-Text">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Select</label>
+              <select class="form-select">
+                <option>Option 1</option>
+                <option>Option 2</option>
+                <option>Option 3</option>
+              </select>
+            </div>
+            <div class="col-12">
+              <label class="form-label">Textarea</label>
+              <textarea class="form-control" rows="3" placeholder="Mehrzeiliger Text..."></textarea>
+            </div>
+            <div class="col-md-4">
+              <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" id="sg-switch" checked>
+                <label class="form-check-label" for="sg-switch">Form-Switch (an)</label>
+              </div>
+            </div>
+            <div class="col-md-4">
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="sg-checkbox" checked>
+                <label class="form-check-label" for="sg-checkbox">Checkbox</label>
+              </div>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Range</label>
+              <input type="range" class="form-range" value="60">
+            </div>
+          </div>
+        </div>
+
+        <!-- 7. Feedback -->
+        <h5 class="sg-section-title">Feedback</h5>
+        <div class="glass-card p-4 mb-4">
+          <div class="d-flex flex-wrap gap-3 align-items-center mb-3" id="sg-spinners"></div>
+          <div id="sg-alerts" class="mb-3"></div>
+          <button class="btn btn-outline-secondary btn-sm" onclick="showToast('🐛 Test-Toast vom Styling Guide!', 'info')">
+            <i class="bi bi-bell me-1"></i>Toast testen
+          </button>
+        </div>
+
+        <!-- 8. Animationen -->
+        <h5 class="sg-section-title">Animationen (GSAP)</h5>
+        <div class="glass-card p-4 mb-4">
+          <div class="d-flex flex-wrap gap-2 mb-4" id="sg-anim-buttons"></div>
+          <div id="sg-anim-demo" class="sg-anim-demo-box">
+            <div class="sg-anim-demo-item glass-card p-3 text-center">Demo-Element A</div>
+            <div class="sg-anim-demo-item glass-card p-3 text-center">Demo-Element B</div>
+            <div class="sg-anim-demo-item glass-card p-3 text-center">Demo-Element C</div>
+          </div>
+        </div>
+
+        <!-- 9. Icons -->
+        <h5 class="sg-section-title">Icons (Bootstrap Icons)</h5>
+        <div class="glass-card p-4 mb-4">
+          <div id="sg-icons" class="sg-icon-grid"></div>
+        </div>
+
+      </div>
+    </section>
+
     <!-- ── ADMIN SECTION ── -->
     <section id="admin-section" class="app-section" style="display:none;">
       <div class="container section-container">
