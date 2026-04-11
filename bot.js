@@ -1,5 +1,6 @@
 const { Client, GatewayIntentBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, REST, Routes, SlashCommandBuilder, PermissionsBitField, ChannelType, ActivityType } = require('discord.js');
 const { db, collection, doc, getDoc, getDocs, addDoc, setDoc, updateDoc, deleteDoc, query, where, orderBy } = require('./firebaseAdmin');
+const { debugLog } = require('./utils/debugLog');
 
 const TIMEZONE = process.env.TIMEZONE || 'Europe/Berlin';
 
@@ -21,6 +22,7 @@ let presenceUpdateInterval = null;
 
 client.once('ready', async () => {
     console.log(`🤖 Bot logged in as ${client.user.tag}`);
+    debugLog('bot.ready', { tag: client.user.tag, guildId: process.env.DISCORD_GUILD_ID });
     isReady = true;
     botStartedAt = new Date();
     await registerSlashCommands();
@@ -374,6 +376,7 @@ async function sendDM(userId, message) {
         console.warn('Bot not ready yet, cannot send DM');
         return false;
     }
+    debugLog('bot.sendDM', { userId, messageType: typeof message === 'string' ? 'text' : 'embed' });
     try {
         const user = await client.users.fetch(userId);
         await user.send(message);
@@ -486,6 +489,7 @@ async function assignRole(userId, roleId, guildId) {
         console.warn('Bot not ready yet, cannot assign role');
         return false;
     }
+    debugLog('bot.assignRole', { userId, roleId });
     try {
         const guild = await client.guilds.fetch(guildId);
         const member = await guild.members.fetch(userId);
@@ -672,6 +676,7 @@ async function checkReminders() {
                     const regs = await getDocs(regQ);
 
                     const timeStr = startTime.toLocaleString('de-DE', { timeZone: TIMEZONE });
+                    debugLog('bot.sendReminder', { eventId, recipientCount: regs.docs?.length });
                     for (const regDoc of regs.docs) {
                         const reg = regDoc.data();
                         await sendDM(reg.userId,
