@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { db, collection, doc, getDoc, getDocs, setDoc, deleteDoc, query, where, orderBy, writeBatch } = require('../firebaseAdmin');
 const { requireAuth } = require('../middleware/auth');
+const { debugLog } = require('../utils/debugLog');
 
 /**
  * GET /api/user/registrations — Get all registrations for the logged-in user
@@ -69,6 +70,7 @@ router.get('/profile', requireAuth, async (req, res) => {
             where('userId', '==', user.id)
         );
         const regSnap = await getDocs(regQ);
+        debugLog('user.getProfile', { userId: req.session?.userId });
 
         // Batch-load events
         const eventIds = new Set();

@@ -2,6 +2,7 @@ const express = require('express');
 const fetch = require('node-fetch');
 const router = express.Router();
 const { db, collection, doc, getDoc, setDoc } = require('../firebaseAdmin');
+const { debugLog } = require('../utils/debugLog');
 
 const DISCORD_API = 'https://discord.com/api/v10';
 
@@ -142,6 +143,7 @@ router.get('/discord/callback', async (req, res) => {
             isNewUser
         };
 
+        debugLog('auth.login', { userId: req.session?.userId, username: req.session?.username });
         res.redirect('/#events');
     } catch (err) {
         console.error('OAuth2 callback error:', err);
@@ -168,6 +170,7 @@ router.get('/me', (req, res) => {
  * GET /auth/logout — Destroy session
  */
 router.get('/logout', (req, res) => {
+    debugLog('auth.logout', { userId: req.session?.userId });
     req.session.destroy(() => {
         res.redirect('/');
     });

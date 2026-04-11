@@ -5,6 +5,7 @@ const { requireAuth } = require('../middleware/auth');
 const { checkRegistrationAllowed } = require('../middleware/maintenance');
 const { sendDM, assignRole, parseTemplate, getGuildRoles, addParticipantToEventChannels, removeParticipantFromEventChannels, removeRole, sendGuestInvitation } = require('../bot');
 const { promoteFromWaitlist } = require('../utils/eventUtils');
+const { debugLog } = require('../utils/debugLog');
 
 /**
  * GET /api/events — List all events (paginated)
@@ -111,6 +112,8 @@ router.get('/', async (req, res) => {
         });
 
         events = standalone;
+
+        debugLog('events.GET /', { count: events.length, filters: req.query });
 
         // Apply pagination
         const total = events.length;
@@ -372,6 +375,7 @@ router.post('/:id/register', requireAuth, checkRegistrationAllowed, async (req, 
         };
 
         const regRef = await addDoc(collection(db, 'registrations'), registration);
+        debugLog('events.register', { eventId: req.params.id, userId: req.session?.userId });
 
         // Send invitation DMs to each guest (non-blocking)
         const eventData = { id: req.params.id, title: event.title, startDate: event.startDate };
@@ -479,6 +483,7 @@ router.delete('/:id/register', requireAuth, async (req, res) => {
 
         // Delete registration
         await deleteDoc(doc(db, 'registrations', regDoc.id));
+        debugLog('events.cancelRegistration', { eventId: req.params.id, userId: req.session?.userId });
 
         res.json({ success: true, message: 'Abmeldung erfolgreich.' });
 

@@ -9,6 +9,7 @@ const { requireAuth, requireAdmin } = require('../middleware/auth');
 const { validateEvent, validateRegStatus, validateBotMessages } = require('../middleware/validators');
 const { sendDM, assignRole, parseTemplate, getGuildRoles, sendChannelMessage, buildEventEmbed, getGuildScheduledEvents, createEventChannels, deleteEventChannels, createScheduledEvent, getBotStatus, getBotSettings, saveBotSettings, getRunningEvents, getGuildChannels } = require('../bot');
 const { promoteFromWaitlist, addAuditLog } = require('../utils/eventUtils');
+const { debugLog } = require('../utils/debugLog');
 
 // All admin routes require auth + admin
 router.use(requireAuth, requireAdmin);
@@ -193,6 +194,7 @@ router.post('/events', validateEvent, async (req, res) => {
             res.json({ count: createdEvents.length, events: createdEvents });
         } else {
             const ref = await addDoc(collection(db, 'events'), baseEvent);
+            debugLog('admin.createEvent', { title: req.body.title, adminId: req.session?.userId });
             await addAuditLog('CREATE_EVENT', req.session.user.id, `Created event "${title}"`, ref.id);
             if (baseEvent.autoCreateChannels && baseEvent.status === 'active') {
                 createEventChannels({ id: ref.id, ...baseEvent }).catch(console.error);
@@ -668,6 +670,7 @@ router.put('/registrations/:id/status', validateRegStatus, async (req, res) => {
 
         const reg = regSnap.data();
         await updateDoc(doc(db, 'registrations', req.params.id), { status });
+        debugLog('admin.updateRegStatus', { regId: req.params.id, newStatus: req.body.status });
 
         // Fetch event for template variables & role
         const eventSnap = await getDoc(doc(db, 'events', reg.eventId));
