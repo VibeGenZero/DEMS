@@ -105,6 +105,11 @@
                 <i class="bi bi-robot me-1"></i>Bot-Zentrale
               </a>
             </li>
+            <li class="nav-item" id="nav-debug" style="display:none;">
+              <a class="nav-link" href="#debug" data-section="debug-section">
+                <i class="bi bi-bug me-1"></i>Styling Guide
+              </a>
+            </li>
             <li class="nav-item">
               <a class="nav-link" href="#info" data-section="info-section">
                 <i class="bi bi-info-circle me-1"></i>Info
@@ -437,6 +442,11 @@
         <div id="profile-empty" class="text-center py-5" style="display:none;">
           <i class="bi bi-inbox" style="font-size:2.5rem;color:var(--text-muted);"></i>
           <p class="text-muted mt-2">Du hast dich noch für kein Event registriert.</p>
+        </div>
+        <div class="text-center mt-3" id="profile-load-more-wrapper" style="display:none;">
+          <button class="btn btn-outline-secondary btn-sm" id="profile-load-more">
+            <i class="bi bi-chevron-down me-1"></i>+ 5 weitere anzeigen
+          </button>
         </div>
 
         <!-- Account Settings -->

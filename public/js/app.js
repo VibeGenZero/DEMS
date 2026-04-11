@@ -147,6 +147,10 @@ async function loadServerInfo() {
         const data = await res.json();
         serverName = data.serverName || 'DEMS';
         window._demsGuildId = data.guildId || '';
+        window.DEBUG_MODE = data.debugMode === true;
+        if (window.DEBUG_MODE) {
+            document.getElementById('nav-debug').style.display = 'block';
+        }
         updateServerNameInUI();
     } catch (e) {
         console.error('Failed to fetch server info', e);
@@ -360,6 +364,13 @@ function handleRoute() {
             break;
         case 'info':
             showInfoSection();
+            break;
+        case 'debug':
+            if (window.DEBUG_MODE) {
+                showDebugSection();
+            } else {
+                navigateTo('events');
+            }
             break;
         default:
             showEventsSection();
@@ -1880,13 +1891,21 @@ async function showProfileSection() {
         }
 
         // ── Registrations ───────────────────────────────────
+        const loadMoreWrapper = document.getElementById('profile-load-more-wrapper');
+        const loadMoreBtn = document.getElementById('profile-load-more');
+
         if (!registrations.length) {
             regContainer.innerHTML = '';
             emptyEl.style.display = 'block';
+            loadMoreWrapper.style.display = 'none';
         } else {
             const statusTexts = { pending: '⏳ Ausstehend', accepted: '✅ Angenommen', rejected: '❌ Abgelehnt', waitlisted: '📋 Warteliste' };
+            const PAGE_SIZE = 5;
+            let visibleCount = PAGE_SIZE;
 
-            regContainer.innerHTML = registrations.map(reg => `
+            function renderRegCards() {
+                const slice = registrations.slice(0, visibleCount);
+                regContainer.innerHTML = slice.map(reg => `
         <div class="profile-reg-card" onclick="${reg.event ? `navigateTo('event/${reg.event.id}')` : ''}">
           <div class="profile-reg-info">
             <h6>${reg.event ? escapeHtml(reg.event.title) : '<span class="text-muted">Gelöschtes Event</span>'}</h6>
@@ -1901,6 +1920,22 @@ async function showProfileSection() {
           </span>
         </div>
       `).join('');
+
+                loadMoreWrapper.style.display = visibleCount < registrations.length ? 'block' : 'none';
+            }
+
+            renderRegCards();
+
+            loadMoreBtn.onclick = () => {
+                const prevCount = visibleCount;
+                visibleCount = Math.min(visibleCount + PAGE_SIZE, registrations.length);
+                renderRegCards();
+
+                if (typeof gsap !== 'undefined') {
+                    const newCards = Array.from(regContainer.querySelectorAll('.profile-reg-card')).slice(prevCount);
+                    gsap.from(newCards, { y: 15, duration: 0.3, stagger: 0.05, ease: 'power3.out' });
+                }
+            };
 
             if (typeof gsap !== 'undefined') {
                 gsap.from('.profile-reg-card', {
