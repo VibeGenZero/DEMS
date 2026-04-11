@@ -3093,3 +3093,123 @@ body {
   color: var(--text-muted);
   margin-bottom: 0.75rem;
 }
+
+/* ═══════════════════════════════════════════ */
+/* DEBUG / STYLING GUIDE                       */
+/* ═══════════════════════════════════════════ */
+
+/* Debug JSON pre blocks */
+.debug-json-block {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius);
+  padding: 1rem;
+  font-size: 0.78rem;
+  color: var(--accent-light);
+  max-height: 250px;
+  overflow-y: auto;
+  margin: 0;
+}
+
+/* Chevron transition */
+#debug-chevron {
+  transition: transform 0.25s ease;
+}
+
+/* Styling Guide section titles */
+.sg-section-title {
+  margin-top: 2rem;
+  margin-bottom: 0.75rem;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  font-size: 0.75rem;
+  letter-spacing: 0.12em;
+  font-weight: 600;
+}
+
+/* Color swatches */
+.sg-color-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+}
+
+.sg-color-swatch {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  width: 80px;
+}
+
+.sg-color-block {
+  width: 80px;
+  height: 48px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border-subtle);
+}
+
+.sg-color-name {
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  text-align: center;
+  word-break: break-all;
+}
+
+.sg-color-val {
+  font-size: 0.6rem;
+  color: var(--text-muted);
+  opacity: 0.6;
+}
+
+/* Animation demo */
+.sg-anim-demo-box {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.sg-anim-demo-item {
+  flex: 1;
+  min-width: 120px;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+}
+
+/* Icon grid */
+.sg-icon-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.sg-icon-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  width: 72px;
+  padding: 0.5rem 0.25rem;
+  border-radius: var(--radius);
+  border: 1px solid var(--border-subtle);
+  transition: var(--transition);
+  cursor: default;
+}
+
+.sg-icon-item:hover {
+  background: var(--bg-glass-hover);
+  border-color: var(--border-accent);
+}
+
+.sg-icon-item i {
+  font-size: 1.4rem;
+  color: var(--accent-light);
+}
+
+.sg-icon-item span {
+  font-size: 0.55rem;
+  color: var(--text-muted);
+  text-align: center;
+  word-break: break-all;
+}
