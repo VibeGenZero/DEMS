@@ -145,6 +145,7 @@ async function loadServerInfo() {
         const res = await fetch('/api/server-info');
         if (res.status === 429) return;
         const data = await res.json();
+        if (window.VERBOSE_LOG) console.log('[VERBOSE] GET /api/server-info', data);
         serverName = data.serverName || 'DEMS';
         window._demsGuildId = data.guildId || '';
         window.DEBUG_MODE = data.debugMode === true;
@@ -1827,6 +1828,7 @@ async function showProfileSection() {
     try {
         const res = await fetch('/api/user/profile');
         const data = await res.json();
+        if (window.VERBOSE_LOG) console.log('[VERBOSE] GET /api/user/profile', data);
         const { stats, badges, registrations, unlockedBadges, totalBadges } = data;
 
         // ── Stats Grid ──────────────────────────────────────
@@ -1956,11 +1958,46 @@ async function showProfileSection() {
         // Load account settings
         await loadAccountSettings();
 
+        // ── Debug Card ──────────────────────────────────────
+        if (window.DEBUG_MODE) {
+            const wrapper = document.getElementById('debug-card-wrapper');
+            wrapper.style.display = 'block';
+
+            document.getElementById('debug-user-json').textContent =
+                JSON.stringify(currentUser, null, 2);
+
+            document.getElementById('debug-server-info').textContent =
+                JSON.stringify({
+                    debugMode: window.DEBUG_MODE,
+                    guildId: window._demsGuildId,
+                    userAgent: navigator.userAgent.slice(0, 80),
+                    href: window.location.href,
+                }, null, 2);
+
+            const verboseToggle = document.getElementById('verbose-log-toggle');
+            verboseToggle.checked = localStorage.getItem('dems_verbose_log') === 'true';
+            window.VERBOSE_LOG = verboseToggle.checked;
+
+            const collapseEl = document.getElementById('debug-collapse');
+            collapseEl.addEventListener('show.bs.collapse', () => {
+                document.getElementById('debug-chevron').style.transform = 'rotate(180deg)';
+            });
+            collapseEl.addEventListener('hide.bs.collapse', () => {
+                document.getElementById('debug-chevron').style.transform = 'rotate(0deg)';
+            });
+        }
+
     } catch {
         regContainer.innerHTML = '<div class="alert alert-danger">Fehler beim Laden des Profils.</div>';
         statsContainer.innerHTML = '';
         badgesContainer.innerHTML = '';
     }
+}
+
+function toggleVerboseLog(enabled) {
+    window.VERBOSE_LOG = enabled;
+    localStorage.setItem('dems_verbose_log', enabled ? 'true' : 'false');
+    showToast(enabled ? '🐛 Verbose-Logging aktiviert' : 'Verbose-Logging deaktiviert', enabled ? 'warning' : 'secondary');
 }
 
 // ─── Admin Section ───────────────────────────────
