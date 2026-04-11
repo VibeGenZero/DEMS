@@ -143,7 +143,7 @@ router.get('/discord/callback', async (req, res) => {
             isNewUser
         };
 
-        debugLog('auth.login', { userId: req.session?.userId, username: req.session?.username });
+        debugLog('auth.login', { userId: req.session?.user?.id, username: req.session?.user?.username });
         res.redirect('/#events');
     } catch (err) {
         console.error('OAuth2 callback error:', err);
@@ -170,7 +170,7 @@ router.get('/me', (req, res) => {
  * GET /auth/logout — Destroy session
  */
 router.get('/logout', (req, res) => {
-    debugLog('auth.logout', { userId: req.session?.userId });
+    debugLog('auth.logout', { userId: req.session?.user?.id });
     req.session.destroy(() => {
         res.redirect('/');
     });

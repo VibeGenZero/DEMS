@@ -70,7 +70,7 @@ router.get('/profile', requireAuth, async (req, res) => {
             where('userId', '==', user.id)
         );
         const regSnap = await getDocs(regQ);
-        debugLog('user.getProfile', { userId: req.session?.userId });
+        debugLog('user.getProfile', { userId: req.session?.user?.id });
 
         // Batch-load events
         const eventIds = new Set();

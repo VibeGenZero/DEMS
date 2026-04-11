@@ -152,6 +152,10 @@ async function loadServerInfo() {
         if (window.DEBUG_MODE) {
             document.getElementById('nav-debug').style.display = 'block';
         }
+        if (!window.DEBUG_MODE) {
+            localStorage.removeItem('dems_verbose_log');
+            window.VERBOSE_LOG = false;
+        }
         updateServerNameInUI();
     } catch (e) {
         console.error('Failed to fetch server info', e);
@@ -2002,6 +2006,7 @@ function toggleVerboseLog(enabled) {
 
 // ─── Debug / Styling Guide Section ───────────────
 function showDebugSection() {
+    if (!window.DEBUG_MODE) return;
     const section = document.getElementById('debug-section');
     section.style.display = 'block';
 

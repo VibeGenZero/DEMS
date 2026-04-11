@@ -375,7 +375,7 @@ router.post('/:id/register', requireAuth, checkRegistrationAllowed, async (req, 
         };
 
         const regRef = await addDoc(collection(db, 'registrations'), registration);
-        debugLog('events.register', { eventId: req.params.id, userId: req.session?.userId });
+        debugLog('events.register', { eventId: req.params.id, userId: req.session?.user?.id });
 
         // Send invitation DMs to each guest (non-blocking)
         const eventData = { id: req.params.id, title: event.title, startDate: event.startDate };
@@ -483,7 +483,7 @@ router.delete('/:id/register', requireAuth, async (req, res) => {
 
         // Delete registration
         await deleteDoc(doc(db, 'registrations', regDoc.id));
-        debugLog('events.cancelRegistration', { eventId: req.params.id, userId: req.session?.userId });
+        debugLog('events.cancelRegistration', { eventId: req.params.id, userId: req.session?.user?.id });
 
         res.json({ success: true, message: 'Abmeldung erfolgreich.' });
 

@@ -194,7 +194,7 @@ router.post('/events', validateEvent, async (req, res) => {
             res.json({ count: createdEvents.length, events: createdEvents });
         } else {
             const ref = await addDoc(collection(db, 'events'), baseEvent);
-            debugLog('admin.createEvent', { title: req.body.title, adminId: req.session?.userId });
+            debugLog('admin.createEvent', { title: req.body.title, adminId: req.session?.user?.id });
             await addAuditLog('CREATE_EVENT', req.session.user.id, `Created event "${title}"`, ref.id);
             if (baseEvent.autoCreateChannels && baseEvent.status === 'active') {
                 createEventChannels({ id: ref.id, ...baseEvent }).catch(console.error);

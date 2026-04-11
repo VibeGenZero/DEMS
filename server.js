@@ -185,7 +185,7 @@ app.get('/api/maintenance/status', async (req, res) => {
 
 // Server info endpoint - returns server name (env override or Discord API)
 app.get('/api/server-info', async (req, res) => {
-    const debugMode = process.env.DEBUG_MODE === 'true';
+    const debugMode = IS_DEBUG;
     try {
         const guildId = process.env.DISCORD_GUILD_ID || '';
         if (process.env.SERVER_NAME) {
