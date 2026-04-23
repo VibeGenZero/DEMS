@@ -1,30 +1,22 @@
 {
-    "version": "2.3.0",
-    "date": "2026-04-10",
+    "version": "2.3.1",
+    "date": "2026-04-23",
     "news": [
         {
-            "title": "🎨 Neues Event-Detail Layout",
-            "content": "Die Event-Detailseite wurde komplett überarbeitet: Zweispaltiges Layout mit einem übersichtlichen Sidebar (Datum, Uhrzeit, Dauer, Ort, Ersteller, Kapazität) und einem Anmelde-Button der direkt aus der Seitenleiste funktioniert."
+            "title": "🔒 Check-in Codes nicht mehr öffentlich",
+            "content": "Der 6-stellige Check-in Code wird nicht mehr in der öffentlichen Event-Ansicht mitgeschickt. Er ist weiterhin in der Admin-Oberfläche sichtbar, taucht aber in keiner API-Antwort für reguläre Besucher mehr auf."
         },
         {
-            "title": "🖼️ Banner & Farbgestaltung",
-            "content": "Events zeigen jetzt immer einen Banner-Header — entweder ein eigenes Bild, eine benutzerdefinierte Akzentfarbe (via Farbwähler) oder einen automatischen Farbverlauf der pro Event eindeutig und konsistent ist."
+            "title": "📝 Entwürfe & archivierte Events bleiben intern",
+            "content": "Events mit dem Status 'draft', 'archived' oder 'cancelled' werden jetzt zuverlässig ausschließlich Admins angezeigt. Anfragen nicht-authentifizierter Nutzer mit einem Status-Filter werden abgewiesen."
         },
         {
-            "title": "👥 Teilnehmer-Avatare",
-            "content": "Eingeloggte Nutzer sehen auf der Event-Detailseite die Avatare aller bestätigten Teilnehmer direkt unterhalb der Beschreibung."
+            "title": "💬 Kommentare nur für eingeloggte Nutzer",
+            "content": "Event-Kommentare lassen sich jetzt nur noch mit Discord-Login lesen. Wer nicht eingeloggt ist, sieht wie beim Posten auch beim Lesen einen Hinweis zum Anmelden."
         },
         {
-            "title": "📍 Ort mit Discord-Deeplink",
-            "content": "Events können jetzt einen Ort mit Channel-Verlinkung haben. Bei der Eingabe werden Server-Channels vorgeschlagen — ein Klick öffnet den Channel direkt in Discord."
-        },
-        {
-            "title": "🃏 Übersicht überarbeitet",
-            "content": "Event-Karten zeigen jetzt Kapazitätsbalken, einen prominenten Datums-Bereich und Farbverläufe als Platzhalter wenn kein Banner gesetzt ist. Layout auf 2 Spalten umgestellt."
-        },
-        {
-            "title": "⚡ Boot-Animation (24h)",
-            "content": "Die Lade-Animation beim ersten Besuch wird jetzt nur noch einmal alle 24 Stunden abgespielt."
+            "title": "🛡️ Security-Audit umgesetzt",
+            "content": "Drei Findings aus dem internen Pentest vom 22.04. (zwei kritisch, eins mittel) sind jetzt behoben und mit dem mitgelieferten Proof-of-Concept verifiziert."
         }
     ]
 }
