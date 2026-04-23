@@ -17,6 +17,10 @@
         {
             "title": "🛡️ Security-Audit umgesetzt",
             "content": "Drei Findings aus dem internen Pentest vom 22.04. (zwei kritisch, eins mittel) sind jetzt behoben und mit dem mitgelieferten Proof-of-Concept verifiziert."
+        },
+        {
+            "title": "📦 Abhängigkeiten gepatcht",
+            "content": "Firebase wurde auf 11.10 aktualisiert; damit fallen alle vom npm-Audit gemeldeten Schwachstellen (u.a. protobufjs-RCE und mehrere undici-Advisories) weg. `npm audit` meldet jetzt 0 Vulnerabilities."
         }
     ]
 }
