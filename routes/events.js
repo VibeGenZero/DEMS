@@ -29,12 +29,15 @@ router.get('/', async (req, res) => {
             return dateA.localeCompare(dateB);
         });
 
-        // Filter by status (default: only active for non-admin)
+        // Filter by status — only admins may request non-active statuses.
         const statusFilter = req.query.status;
+        const isAdmin = !!(req.session && req.session.user && req.session.user.isAdmin);
         if (statusFilter) {
+            if (!isAdmin && statusFilter !== 'active') {
+                return res.status(403).json({ error: 'Nicht berechtigt.' });
+            }
             events = events.filter(e => e.status === statusFilter);
         } else {
-            // By default, only show active events to users
             events = events.filter(e => !e.status || e.status === 'active');
         }
 
@@ -242,9 +245,11 @@ router.get('/:id', async (req, res) => {
             } catch { /* non-fatal */ }
         }
 
+        const { checkinCode, ...safe } = docSnap.data();
         res.json({
             id: docSnap.id,
-            ...docSnap.data(),
+            ...safe,
+            checkinEnabled: !!safe.checkinEnabled,
             currentParticipants,
             waitlistCount: waitSnap.size,
             createdByName
@@ -650,7 +655,7 @@ router.post('/:id/checkin', requireAuth, async (req, res) => {
 /**
  * GET /api/events/:id/comments — Get comments for an event
  */
-router.get('/:id/comments', async (req, res) => {
+router.get('/:id/comments', requireAuth, async (req, res) => {
     try {
         const q = query(
             collection(db, 'comments'),
