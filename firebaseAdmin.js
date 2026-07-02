@@ -25,30 +25,39 @@ const firebaseConfig = {
   appId: process.env.FIREBASE_APP_ID
 };
 
-// Validate required Firebase config
-const missingKeys = Object.entries(firebaseConfig)
-  .filter(([, v]) => !v)
-  .map(([k]) => k);
-if (missingKeys.length > 0) {
-  console.error(`❌ Fehlende Firebase-Konfiguration in .env: ${missingKeys.join(', ')}`);
+// Prüfen, welche Firebase-Werte gesetzt sind
+const providedKeys = Object.entries(firebaseConfig).filter(([, v]) => v).map(([k]) => k);
+const missingKeys = Object.entries(firebaseConfig).filter(([, v]) => !v).map(([k]) => k);
+
+if (providedKeys.length === 0) {
+  // Keine Firebase-Konfiguration hinterlegt → lokale SQLite-Datenbank als Fallback.
+  console.log('ℹ️ Keine Firebase-Konfiguration gefunden — nutze lokale SQLite-Datenbank (SQLITE_PATH).');
+  module.exports = require('./db/sqliteAdapter');
+} else if (missingKeys.length > 0) {
+  // Teilweise gesetzt → vermutlich ein Konfigurationsfehler, nicht stillschweigend
+  // auf SQLite ausweichen.
+  console.error(`❌ Unvollständige Firebase-Konfiguration in .env: ${missingKeys.join(', ')}`);
+  console.error('   Entweder alle FIREBASE_*-Werte setzen oder alle leer lassen (dann wird SQLite genutzt).');
   process.exit(1);
+} else {
+  // Vollständige Firebase-Konfiguration → Firestore wie bisher.
+  console.log('✅ Datenspeicher: Firebase Firestore');
+  const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app);
+
+  module.exports = {
+    db,
+    collection,
+    doc,
+    getDoc,
+    getDocs,
+    addDoc,
+    setDoc,
+    updateDoc,
+    deleteDoc,
+    query,
+    where,
+    orderBy,
+    writeBatch
+  };
 }
-
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
-
-module.exports = {
-  db,
-  collection,
-  doc,
-  getDoc,
-  getDocs,
-  addDoc,
-  setDoc,
-  updateDoc,
-  deleteDoc,
-  query,
-  where,
-  orderBy,
-  writeBatch
-};

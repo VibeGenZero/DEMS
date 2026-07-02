@@ -18,9 +18,18 @@ Dieses Projekt wurde entwickelt, um Communities die Organisation von Veranstaltu
 Das Projekt basiert auf einem modernen Tech-Stack:
 
 *   **Backend**: Node.js, Express
-*   **Datenbank**: Google Firebase (Firestore)
+*   **Datenbank**: Google Firebase (Firestore) – *optional*, mit automatischem SQLite-Fallback
 *   **Bot-Integration**: Discord.js
 *   **Frontend**: HTML5, CSS3, JavaScript (EJS Templating)
+
+### 🗄️ Datenbank: Firebase oder SQLite
+
+DEMS ist **nicht mehr zwingend von Firebase abhängig**. Beim Start entscheidet die App automatisch:
+
+*   **Firebase Firestore** – wird genutzt, wenn alle `FIREBASE_*`-Werte in der `.env` gesetzt sind.
+*   **Lokale SQLite-Datenbank** – wird automatisch als Fallback genutzt, wenn **keine** `FIREBASE_*`-Werte gesetzt sind. Es ist keine externe Datenbank nötig; die Daten liegen in einer Datei (Standard: `./data/dems.sqlite`, konfigurierbar über `SQLITE_PATH`).
+
+> **Hinweis:** Auf Plattformen mit flüchtigem Dateisystem (z. B. Heroku, Railway ohne persistentes Volume) gehen SQLite-Daten bei einem Neustart verloren. Für dauerhafte Speicherung in der Cloud entweder Firebase verwenden oder ein persistentes Volume einbinden.
 
 ## 📦 Installation & Einrichtung
 
