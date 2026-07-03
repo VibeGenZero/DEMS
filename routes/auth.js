@@ -1,10 +1,47 @@
 const express = require('express');
-const fetch = require('node-fetch');
+// node-fetch v2 has a known bug where gzip-compressed responses can fail with
+// ERR_STREAM_PREMATURE_CLOSE ("Premature close"). Prefer the native fetch
+// (Node 18+, undici-based) which is not affected; fall back to node-fetch on
+// older runtimes.
+const fetch = globalThis.fetch ? globalThis.fetch.bind(globalThis) : require('node-fetch');
+const usingNodeFetch = !globalThis.fetch;
 const router = express.Router();
 const { db, collection, doc, getDoc, setDoc } = require('../firebaseAdmin');
 const { debugLog } = require('../utils/debugLog');
 
 const DISCORD_API = 'https://discord.com/api/v10';
+
+// Transient network errors that are safe to retry
+const RETRYABLE_CODES = new Set([
+    'ERR_STREAM_PREMATURE_CLOSE',
+    'ECONNRESET',
+    'ETIMEDOUT',
+    'EPIPE',
+    'UND_ERR_SOCKET'
+]);
+
+/**
+ * fetch with a small retry for transient connection errors
+ * (e.g. Discord/Cloudflare closing the connection mid-response).
+ */
+async function discordFetch(url, options = {}, retries = 2) {
+    if (usingNodeFetch) {
+        // Disable gzip for node-fetch to avoid its Gunzip premature-close bug
+        options = { compress: false, ...options };
+    }
+    for (let attempt = 0; ; attempt++) {
+        try {
+            return await fetch(url, options);
+        } catch (err) {
+            const code = err.code || err.errno || (err.cause && err.cause.code);
+            if (attempt >= retries || !RETRYABLE_CODES.has(code)) {
+                throw err;
+            }
+            console.warn(`Discord API request failed (${code}), retrying (${attempt + 1}/${retries})...`);
+            await new Promise((resolve) => setTimeout(resolve, 300 * (attempt + 1)));
+        }
+    }
+}
 
 /**
  * Helper: Check maintenance settings from Firestore
@@ -41,7 +78,7 @@ router.get('/discord/callback', async (req, res) => {
 
     try {
         // Exchange code for token
-        const tokenRes = await fetch(`${DISCORD_API}/oauth2/token`, {
+        const tokenRes = await discordFetch(`${DISCORD_API}/oauth2/token`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
             body: new URLSearchParams({
@@ -61,14 +98,14 @@ router.get('/discord/callback', async (req, res) => {
         }
 
         // Fetch user info
-        const userRes = await fetch(`${DISCORD_API}/users/@me`, {
+        const userRes = await discordFetch(`${DISCORD_API}/users/@me`, {
             headers: { Authorization: `Bearer ${tokenData.access_token}` }
         });
         const userData = await userRes.json();
 
         // Check guild membership
         const guildId = process.env.DISCORD_GUILD_ID;
-        const memberRes = await fetch(`${DISCORD_API}/users/@me/guilds/${guildId}/member`, {
+        const memberRes = await discordFetch(`${DISCORD_API}/users/@me/guilds/${guildId}/member`, {
             headers: { Authorization: `Bearer ${tokenData.access_token}` }
         });
 
