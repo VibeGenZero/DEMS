@@ -1,8 +1,32 @@
-const { Client, GatewayIntentBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, REST, Routes, SlashCommandBuilder, PermissionsBitField, ChannelType, ActivityType } = require('discord.js');
+const { Client, GatewayIntentBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle, MessageFlags, REST, Routes, SlashCommandBuilder, PermissionsBitField, ChannelType, ActivityType } = require('discord.js');
 const { db, collection, doc, getDoc, getDocs, addDoc, setDoc, updateDoc, deleteDoc, query, where, orderBy } = require('./firebaseAdmin');
 const { debugLog } = require('./utils/debugLog');
+const { isRegistrationBlocked } = require('./middleware/maintenance');
 
 const TIMEZONE = process.env.TIMEZONE || 'Europe/Berlin';
+
+// Discord limits for modals -> at most 5 inputs, short labels and placeholders
+const MODAL_MAX_FIELDS = 5;
+const MODAL_TITLE_MAX_LENGTH = 45;
+const MODAL_LABEL_MAX_LENGTH = 45;
+const MODAL_PLACEHOLDER_MAX_LENGTH = 100;
+
+// Form field types that can be mapped onto a Discord modal text input
+const SUPPORTED_MODAL_FIELD_TYPES = ['text', 'dropdown', 'checkbox'];
+
+// Accepted answers for checkbox fields inside a Discord modal
+const CHECKBOX_TRUE_VALUES = ['ja', 'j', 'yes', 'y', 'true', '1', 'x'];
+const CHECKBOX_FALSE_VALUES = ['nein', 'n', 'no', 'false', '0', '-'];
+
+// Custom ID prefixes for the event registration components
+const REGISTER_BUTTON_PREFIX = 'event_register';
+const REGISTER_MODAL_PREFIX = 'event_register_modal';
+const MODAL_FIELD_PREFIX = 'field';
+
+const DEFAULT_BASE_URL = 'http://localhost:3000';
+
+// Registrations that are currently being processed -> guards against double clicks
+const pendingDiscordRegistrations = new Set();
 
 const client = new Client({
     intents: [
@@ -133,9 +157,49 @@ client.on('interactionCreate', async (interaction) => {
         return;
     }
 
-    // Handle guest invitation button interactions
+    // Handle the registration modal of an event announcement
+    if (interaction.isModalSubmit()) {
+        const [modalAction, modalEventId] = interaction.customId.split(':');
+        if (modalAction === REGISTER_MODAL_PREFIX && modalEventId) {
+            try {
+                await handleEventRegisterModal(interaction, modalEventId);
+            } catch (err) {
+                console.error('Event registration modal error:', err);
+                const failureMessage = { content: '❌ Fehler bei der Anmeldung.', flags: MessageFlags.Ephemeral };
+                try {
+                    if (interaction.deferred || interaction.replied) {
+                        await interaction.editReply({ content: failureMessage.content });
+                    } else {
+                        await interaction.reply(failureMessage);
+                    }
+                } catch { /* interaction already expired */ }
+            }
+        }
+        return;
+    }
+
+    // Handle guest invitation and event registration button interactions
     if (interaction.isButton()) {
         const [action, registrationId, guestId] = interaction.customId.split(':');
+
+        if (action === REGISTER_BUTTON_PREFIX && registrationId) {
+            // For this custom ID the second segment carries the event ID
+            const eventId = registrationId;
+            try {
+                await handleEventRegisterButton(interaction, eventId);
+            } catch (err) {
+                console.error('Event registration button error:', err);
+                const failureMessage = { content: '❌ Fehler bei der Anmeldung.', flags: MessageFlags.Ephemeral };
+                try {
+                    if (interaction.deferred || interaction.replied) {
+                        await interaction.editReply({ content: failureMessage.content });
+                    } else {
+                        await interaction.reply(failureMessage);
+                    }
+                } catch { /* interaction already expired */ }
+            }
+            return;
+        }
         if ((action === 'guest_accept' || action === 'guest_decline') && registrationId && guestId) {
             // Only allow the invited user to respond
             if (interaction.user.id !== guestId) {
@@ -397,6 +461,7 @@ async function sendDM(userId, message) {
  * @param {string} [options.text] - Text content above the embed
  * @param {string[]} [options.roleIds] - Role IDs to mention
  * @param {boolean} [options.pingEveryone] - Whether to mention @everyone
+ * @param {ActionRowBuilder[]} [options.components] - Button rows below the embed
  */
 async function sendChannelMessage(channelId, embed, options = {}) {
     if (!isReady) {
@@ -434,6 +499,7 @@ async function sendChannelMessage(channelId, embed, options = {}) {
         await channel.send({
             content,
             embeds: [embed],
+            components: options.components || [],
             allowedMentions: {
                 parse: options.pingEveryone ? ['everyone', 'roles'] : ['roles'],
                 roles: options.roleIds || []
@@ -479,6 +545,465 @@ function buildEventEmbed(event, registrationLink) {
     }
 
     return embed;
+}
+
+/**
+ * Get the usable form fields of an event.
+ *
+ * @param {Object} event -> The event document data.
+ * @returns {Array<Object>} -> Form fields that carry a label.
+ */
+function getEventFormFields(event) {
+    if (!event || !Array.isArray(event.formFields)) return [];
+    return event.formFields.filter(field => field && field.label);
+}
+
+/**
+ * Build the event page URL used in announcements and buttons.
+ *
+ * @param {string} eventId -> The event document ID.
+ * @returns {string} -> Absolute URL of the event detail page.
+ */
+function buildEventUrl(eventId) {
+    const baseUrl = process.env.BASE_URL || DEFAULT_BASE_URL;
+    return `${baseUrl}/#events/${eventId}`;
+}
+
+/**
+ * Check whether an event can be joined directly from Discord.
+ *
+ * Events without a form are always joinable. Events with a form are joinable
+ * as long as the form fits into a Discord modal -> at most five fields and
+ * only field types that can be represented as a text input.
+ *
+ * @param {Object} event -> The event document data.
+ * @returns {boolean} -> True when the "Anmelden" button may be shown.
+ * @example
+ * if (canRegisterViaDiscord(event)) row.addComponents(registerButton);
+ */
+function canRegisterViaDiscord(event) {
+    if (!event) return false;
+    if (event.status && event.status !== 'active') return false;
+
+    const formFields = getEventFormFields(event);
+    if (formFields.length === 0) return true;
+    if (formFields.length > MODAL_MAX_FIELDS) return false;
+
+    return formFields.every(field => SUPPORTED_MODAL_FIELD_TYPES.includes(field.type || 'text'));
+}
+
+/**
+ * Build the button row that is attached to an event announcement.
+ *
+ * The link button is always present. The registration button is only added
+ * when the event can be joined straight from Discord -> otherwise the user is
+ * sent to the web interface through the link button.
+ *
+ * @param {Object} event -> The event document data.
+ * @param {string} eventId -> The event document ID.
+ * @returns {ActionRowBuilder[]} -> Components array ready for channel.send().
+ * @example
+ * await channel.send({ embeds: [embed], components: buildEventComponents(event, eventId) });
+ */
+function buildEventComponents(event, eventId) {
+    const eventUrl = buildEventUrl(eventId);
+    const row = new ActionRowBuilder();
+
+    if (canRegisterViaDiscord(event)) {
+        row.addComponents(
+            new ButtonBuilder()
+                .setCustomId(`${REGISTER_BUTTON_PREFIX}:${eventId}`)
+                .setLabel('Anmelden')
+                .setStyle(ButtonStyle.Success)
+                .setEmoji('✅')
+        );
+    }
+
+    row.addComponents(
+        new ButtonBuilder()
+            .setLabel('Zum Event')
+            .setStyle(ButtonStyle.Link)
+            .setURL(eventUrl)
+            .setEmoji('🔗')
+    );
+
+    return [row];
+}
+
+/**
+ * Build the placeholder text shown inside a modal input.
+ *
+ * @param {Object} field -> The form field definition.
+ * @returns {string} -> Placeholder text, truncated to the Discord limit.
+ */
+function buildModalPlaceholder(field) {
+    if (field.type === 'dropdown') {
+        const options = Array.isArray(field.options) ? field.options : [];
+        return `Auswahl: ${options.join(', ')}`.substring(0, MODAL_PLACEHOLDER_MAX_LENGTH);
+    }
+    if (field.type === 'checkbox') {
+        return field.required ? 'ja (Pflichtfeld)' : 'ja / nein';
+    }
+    return String(field.label).substring(0, MODAL_PLACEHOLDER_MAX_LENGTH);
+}
+
+/**
+ * Build the registration modal for an event form.
+ *
+ * Every form field becomes a text input. Dropdowns list their options in the
+ * placeholder and checkboxes are answered with "ja" or "nein" -> Discord
+ * modals only support text inputs.
+ *
+ * @param {Object} event -> The event document data.
+ * @param {string} eventId -> The event document ID.
+ * @returns {ModalBuilder} -> Modal ready for interaction.showModal().
+ */
+function buildRegistrationModal(event, eventId) {
+    const modal = new ModalBuilder()
+        .setCustomId(`${REGISTER_MODAL_PREFIX}:${eventId}`)
+        .setTitle(`Anmeldung: ${event.title}`.substring(0, MODAL_TITLE_MAX_LENGTH));
+
+    getEventFormFields(event).slice(0, MODAL_MAX_FIELDS).forEach((field, index) => {
+        const input = new TextInputBuilder()
+            .setCustomId(`${MODAL_FIELD_PREFIX}:${index}`)
+            .setLabel(String(field.label).substring(0, MODAL_LABEL_MAX_LENGTH))
+            .setStyle(TextInputStyle.Short)
+            .setRequired(!!field.required)
+            .setPlaceholder(buildModalPlaceholder(field));
+
+        modal.addComponents(new ActionRowBuilder().addComponents(input));
+    });
+
+    return modal;
+}
+
+/**
+ * Read a single modal input value.
+ *
+ * @param {import('discord.js').ModalSubmitInteraction} interaction -> The submitted modal.
+ * @param {number} index -> Index of the form field.
+ * @returns {string} -> Trimmed input value, empty when the field was skipped.
+ */
+function readModalValue(interaction, index) {
+    try {
+        return (interaction.fields.getTextInputValue(`${MODAL_FIELD_PREFIX}:${index}`) || '').trim();
+    } catch {
+        return '';
+    }
+}
+
+/**
+ * Convert the modal input into form answers of the web interface format.
+ *
+ * Text answers stay strings, dropdown answers are normalized to the exact
+ * option spelling and checkbox answers become booleans -> the result looks
+ * exactly like an answer set submitted through the website.
+ *
+ * @param {import('discord.js').ModalSubmitInteraction} interaction -> The submitted modal.
+ * @param {Object} event -> The event document data.
+ * @returns {{ answers: Object, errors: string[] }} -> Parsed answers and validation errors.
+ */
+function parseModalAnswers(interaction, event) {
+    const answers = {};
+    const errors = [];
+
+    getEventFormFields(event).slice(0, MODAL_MAX_FIELDS).forEach((field, index) => {
+        const rawValue = readModalValue(interaction, index);
+        const type = field.type || 'text';
+
+        if (type === 'dropdown') {
+            const options = Array.isArray(field.options) ? field.options : [];
+            if (!rawValue) {
+                answers[field.label] = '';
+                return;
+            }
+            const match = options.find(option => option.toLowerCase() === rawValue.toLowerCase());
+            if (!match) {
+                errors.push(`"${field.label}": Ungültige Auswahl. Möglich ist: ${options.join(', ')}`);
+                return;
+            }
+            answers[field.label] = match;
+            return;
+        }
+
+        if (type === 'checkbox') {
+            const normalized = rawValue.toLowerCase();
+            if (!normalized) {
+                answers[field.label] = false;
+                return;
+            }
+            if (CHECKBOX_TRUE_VALUES.includes(normalized)) {
+                answers[field.label] = true;
+                return;
+            }
+            if (CHECKBOX_FALSE_VALUES.includes(normalized)) {
+                answers[field.label] = false;
+                return;
+            }
+            errors.push(`"${field.label}": Bitte "ja" oder "nein" eintragen.`);
+            return;
+        }
+
+        answers[field.label] = rawValue;
+    });
+
+    return { answers, errors };
+}
+
+/**
+ * Read the Discord role IDs of the interacting member.
+ *
+ * @param {import('discord.js').Interaction} interaction -> The interaction to inspect.
+ * @returns {Promise<string[]>} -> Role IDs of the member, empty when unknown.
+ */
+async function resolveInteractionRoles(interaction) {
+    const member = interaction.member;
+    if (member && member.roles && member.roles.cache) {
+        return member.roles.cache.map(role => role.id);
+    }
+    if (member && Array.isArray(member.roles)) {
+        return member.roles;
+    }
+    const roles = await getUserRoles(interaction.user.id, process.env.DISCORD_GUILD_ID);
+    return roles.map(role => role.id);
+}
+
+/**
+ * Make sure the Discord user exists in the users collection.
+ *
+ * Users that register from Discord may never have logged into the web
+ * interface -> without a profile they would show up without name and avatar
+ * in the participant list.
+ *
+ * @param {import('discord.js').User} user -> The Discord user.
+ * @param {string} displayName -> Display name to store.
+ * @returns {Promise<void>} -> Resolves once the profile was written.
+ */
+async function ensureUserProfile(user, displayName) {
+    try {
+        const userRef = doc(db, 'users', user.id);
+        const userSnap = await getDoc(userRef);
+        const avatarUrl = typeof user.displayAvatarURL === 'function'
+            ? user.displayAvatarURL({ extension: 'png', size: 128 })
+            : '';
+        const now = new Date().toISOString();
+
+        if (!userSnap.exists()) {
+            await setDoc(userRef, {
+                id: user.id,
+                username: user.username,
+                displayName,
+                avatar: avatarUrl,
+                acceptInvitations: true,
+                createdAt: now,
+                updatedAt: now
+            });
+            return;
+        }
+
+        await updateDoc(userRef, {
+            username: user.username,
+            displayName,
+            avatar: avatarUrl,
+            updatedAt: now
+        });
+    } catch (err) {
+        console.error('Failed to store user profile:', err.message);
+    }
+}
+
+/**
+ * Check the conditions that can be verified before the modal is shown.
+ *
+ * @param {Object} params -> Check input.
+ * @param {Object} params.event -> The event document data.
+ * @param {string} params.eventId -> The event document ID.
+ * @param {string} params.userId -> Discord user ID.
+ * @param {string[]} params.roleIds -> Discord role IDs of the user.
+ * @returns {Promise<string|null>} -> Error message, or null when all conditions match.
+ */
+async function checkRegistrationConditions({ event, eventId, userId, roleIds }) {
+    if (await isRegistrationBlocked()) {
+        return 'Event-Registrierungen sind wegen Wartungsarbeiten vorübergehend deaktiviert.';
+    }
+
+    if (event.status && event.status !== 'active') {
+        return 'Dieses Event akzeptiert keine Anmeldungen.';
+    }
+
+    const existingQ = query(
+        collection(db, 'registrations'),
+        where('eventId', '==', eventId),
+        where('userId', '==', userId)
+    );
+    const existingSnap = await getDocs(existingQ);
+    if (!existingSnap.empty) {
+        return 'Du bist bereits für dieses Event registriert.';
+    }
+
+    if (event.accessMode === 'role-required' && Array.isArray(event.requiredRoles) && event.requiredRoles.length > 0) {
+        const hasRole = event.requiredRoles.some(roleId => roleIds.includes(roleId));
+        if (!hasRole) {
+            return 'Du hast nicht die erforderliche Rolle für dieses Event.';
+        }
+    }
+
+    return null;
+}
+
+/**
+ * Create the registration and answer the interaction with the result.
+ *
+ * @param {import('discord.js').Interaction} interaction -> Button or modal interaction.
+ * @param {Object} params -> Registration input.
+ * @param {string} params.eventId -> The event document ID.
+ * @param {Object} params.event -> The event document data.
+ * @param {string[]} params.roleIds -> Discord role IDs of the user.
+ * @param {Object} params.formAnswers -> Answers keyed by form field label.
+ * @returns {Promise<void>} -> Resolves once the interaction was answered.
+ */
+async function completeDiscordRegistration(interaction, { eventId, event, roleIds, formAnswers }) {
+    const { registerUserForEvent, REGISTRATION_SOURCE } = require('./utils/registrationService');
+    const displayName = interaction.member?.displayName
+        || interaction.user.globalName
+        || interaction.user.username;
+
+    const pendingKey = `${eventId}:${interaction.user.id}`;
+    if (pendingDiscordRegistrations.has(pendingKey)) {
+        await interaction.editReply({ content: '⏳ Deine Anmeldung wird bereits verarbeitet.' });
+        return;
+    }
+    pendingDiscordRegistrations.add(pendingKey);
+
+    let result;
+    try {
+        result = await registerUserForEvent({
+            eventId,
+            user: { id: interaction.user.id, displayName, roles: roleIds },
+            formAnswers,
+            guests: [],
+            source: REGISTRATION_SOURCE.DISCORD
+        });
+    } finally {
+        pendingDiscordRegistrations.delete(pendingKey);
+    }
+
+    if (!result.ok) {
+        await interaction.editReply({ content: `❌ ${result.error}` });
+        return;
+    }
+
+    // Store the profile so the participant shows up with name and avatar in the web interface
+    await ensureUserProfile(interaction.user, displayName);
+
+    const statusDescriptions = {
+        accepted: `Du bist für **${event.title}** angemeldet. Deine Anmeldung ist ab sofort auch im Event-System sichtbar.`,
+        pending: `Deine Anfrage für **${event.title}** ist eingegangen und wartet auf Bestätigung. Du siehst den Status im Event-System.`,
+        waitlisted: `**${event.title}** ist aktuell voll — du stehst auf der Warteliste und rückst automatisch nach.`
+    };
+    const statusColors = { accepted: 0x22c55e, pending: 0xf59e0b, waitlisted: 0x8b5cf6 };
+    const statusTitles = {
+        accepted: '✅ Anmeldung bestätigt',
+        pending: '📋 Anfrage eingegangen',
+        waitlisted: '🕒 Auf der Warteliste'
+    };
+
+    const embed = new EmbedBuilder()
+        .setTitle(statusTitles[result.status] || '✅ Anmeldung')
+        .setColor(statusColors[result.status] || 0x8b5cf6)
+        .setDescription(statusDescriptions[result.status] || result.message)
+        .addFields({ name: '🔗 Event-Seite', value: `[Zur Übersicht](${buildEventUrl(eventId)})` })
+        .setFooter({ text: 'DEMS — Event Management' })
+        .setTimestamp();
+
+    await interaction.editReply({ embeds: [embed] });
+}
+
+/**
+ * Handle a click on the "Anmelden" button of an event announcement.
+ *
+ * All conditions are checked before a form is shown, so nobody fills in a
+ * modal just to be rejected afterwards.
+ *
+ * @param {import('discord.js').ButtonInteraction} interaction -> The button interaction.
+ * @param {string} eventId -> The event document ID from the custom ID.
+ * @returns {Promise<void>} -> Resolves once the interaction was answered.
+ */
+async function handleEventRegisterButton(interaction, eventId) {
+    debugLog('bot.registerButton', { eventId, userId: interaction.user.id });
+
+    const eventSnap = await getDoc(doc(db, 'events', eventId));
+    if (!eventSnap.exists()) {
+        return interaction.reply({ content: '❌ Event nicht gefunden.', flags: MessageFlags.Ephemeral });
+    }
+
+    const event = eventSnap.data();
+    const roleIds = await resolveInteractionRoles(interaction);
+    const conditionError = await checkRegistrationConditions({ event, eventId, userId: interaction.user.id, roleIds });
+
+    if (conditionError) {
+        return interaction.reply({ content: `❌ ${conditionError}`, flags: MessageFlags.Ephemeral });
+    }
+
+    const formFields = getEventFormFields(event);
+
+    if (formFields.length > 0) {
+        if (!canRegisterViaDiscord(event)) {
+            return interaction.reply({
+                content: `📝 Für dieses Event ist das Formular zu umfangreich für Discord. Bitte melde dich hier an: ${buildEventUrl(eventId)}`,
+                flags: MessageFlags.Ephemeral
+            });
+        }
+        return interaction.showModal(buildRegistrationModal(event, eventId));
+    }
+
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    await completeDiscordRegistration(interaction, { eventId, event, roleIds, formAnswers: {} });
+}
+
+/**
+ * Handle the submitted registration modal of an event.
+ *
+ * @param {import('discord.js').ModalSubmitInteraction} interaction -> The submitted modal.
+ * @param {string} eventId -> The event document ID from the custom ID.
+ * @returns {Promise<void>} -> Resolves once the interaction was answered.
+ */
+async function handleEventRegisterModal(interaction, eventId) {
+    debugLog('bot.registerModal', { eventId, userId: interaction.user.id });
+
+    const eventSnap = await getDoc(doc(db, 'events', eventId));
+    if (!eventSnap.exists()) {
+        return interaction.reply({ content: '❌ Event nicht gefunden.', flags: MessageFlags.Ephemeral });
+    }
+
+    const event = eventSnap.data();
+
+    // The form may have been changed while the modal was open
+    if (!canRegisterViaDiscord(event)) {
+        return interaction.reply({
+            content: `📝 Das Formular dieses Events hat sich geändert. Bitte melde dich hier an: ${buildEventUrl(eventId)}`,
+            flags: MessageFlags.Ephemeral
+        });
+    }
+
+    const { answers, errors } = parseModalAnswers(interaction, event);
+
+    if (errors.length > 0) {
+        return interaction.reply({
+            content: `❌ Bitte korrigiere deine Angaben:\n${errors.map(e => `• ${e}`).join('\n')}`,
+            flags: MessageFlags.Ephemeral
+        });
+    }
+
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+    const roleIds = await resolveInteractionRoles(interaction);
+    const conditionError = await checkRegistrationConditions({ event, eventId, userId: interaction.user.id, roleIds });
+    if (conditionError) {
+        return interaction.editReply({ content: `❌ ${conditionError}` });
+    }
+
+    await completeDiscordRegistration(interaction, { eventId, event, roleIds, formAnswers: answers });
 }
 
 /**
@@ -1432,5 +1957,7 @@ module.exports = {
     getBotSettings,
     saveBotSettings,
     getRunningEvents,
-    sendGuestInvitation
+    sendGuestInvitation,
+    buildEventComponents,
+    canRegisterViaDiscord
 };

@@ -13,6 +13,29 @@ Dieses Projekt wurde entwickelt, um Communities die Organisation von Veranstaltu
 *   **Automatisierung**: Der integrierte Discord-Bot sendet Benachrichtigungen und verwaltet Rollen.
 *   **Modernes Design**: Ansprechende Benutzeroberfläche im Glassmorphism-Stil.
 
+## 📣 Anmeldung direkt aus Discord
+
+Jede Event-Ankündigung im Discord-Channel enthält zwei Buttons:
+
+| Button | Verhalten |
+| --- | --- |
+| **Anmelden** | Prüft alle Bedingungen (Event aktiv, Wartungsmodus, keine Doppelanmeldung, Rollen-Requirement) und meldet direkt an. Freie Plätze entscheiden über sofortige Aufnahme, Bestätigungspflicht oder Warteliste. |
+| **Zum Event** | Link zur Event-Seite im Web-Interface — immer vorhanden. |
+
+**Events mit Formular:** Der Anmelden-Button öffnet ein Discord-Popup (Modal) mit den Formularfeldern des Events.
+Die Eingaben werden übernommen und wie eine Anmeldung über die Website gespeichert:
+
+*   *Text* wird direkt übernommen.
+*   *Dropdown* zeigt die möglichen Optionen im Platzhalter an und wird gegen diese geprüft.
+*   *Checkbox* wird mit `ja` oder `nein` beantwortet.
+
+Discord erlaubt maximal fünf Eingabefelder pro Popup. Hat ein Event mehr Felder, entfällt der Anmelden-Button und
+die Ankündigung verweist über den Link-Button auf die Website. Im Ankündigungs-Dialog der Admin-Oberfläche wird
+vorab angezeigt, welche Buttons das Event bekommt.
+
+Jede Anmeldung aus Discord erscheint sofort in der Web-Oberfläche. In der Anmeldungs-Übersicht und im CSV-Export
+ist erkennbar, ob sie über Discord oder die Website erstellt wurde.
+
 ## 🛠️ Technologien
 
 Das Projekt basiert auf einem modernen Tech-Stack:

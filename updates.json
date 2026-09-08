@@ -1,26 +1,26 @@
 {
-    "version": "2.3.1",
-    "date": "2026-04-23",
+    "version": "2.4.0",
+    "date": "2026-09-08",
     "news": [
         {
-            "title": "🔒 Check-in Codes nicht mehr öffentlich",
-            "content": "Der 6-stellige Check-in Code wird nicht mehr in der öffentlichen Event-Ansicht mitgeschickt. Er ist weiterhin in der Admin-Oberfläche sichtbar, taucht aber in keiner API-Antwort für reguläre Besucher mehr auf."
+            "title": "✅ Anmelden direkt aus Discord",
+            "content": "Jede Event-Ankündigung bekommt jetzt zwei Buttons: 'Anmelden' und 'Zum Event'. Der Anmelden-Button prüft alle Bedingungen (Status, Rollen-Requirement, Wartungsmodus, Doppelanmeldung, Plätze) und trägt dich direkt ein — inklusive Warteliste und automatischer Bestätigung."
         },
         {
-            "title": "📝 Entwürfe & archivierte Events bleiben intern",
-            "content": "Events mit dem Status 'draft', 'archived' oder 'cancelled' werden jetzt zuverlässig ausschließlich Admins angezeigt. Anfragen nicht-authentifizierter Nutzer mit einem Status-Filter werden abgewiesen."
+            "title": "📝 Event-Formulare als Discord-Dialog",
+            "content": "Hat ein Event ein Formular, öffnet der Anmelden-Button ein Popup direkt in Discord. Die Antworten werden automatisch übernommen und landen genauso in der Anmeldung wie über die Website. Dropdowns und Checkboxen werden dabei geprüft und normalisiert."
         },
         {
-            "title": "💬 Kommentare nur für eingeloggte Nutzer",
-            "content": "Event-Kommentare lassen sich jetzt nur noch mit Discord-Login lesen. Wer nicht eingeloggt ist, sieht wie beim Posten auch beim Lesen einen Hinweis zum Anmelden."
+            "title": "🔗 Link-Button immer dabei",
+            "content": "Der zweite Button führt immer zur Event-Seite. Passt ein Formular nicht in einen Discord-Dialog (mehr als 5 Felder), bleibt nur dieser Button übrig und der Hinweis führt zur Website."
         },
         {
-            "title": "🛡️ Security-Audit umgesetzt",
-            "content": "Drei Findings aus dem internen Pentest vom 22.04. (zwei kritisch, eins mittel) sind jetzt behoben und mit dem mitgelieferten Proof-of-Concept verifiziert."
+            "title": "👀 Herkunft in der Oberfläche sichtbar",
+            "content": "In der Anmeldungs-Übersicht eines Events steht jetzt bei jeder Anmeldung, ob sie über Discord oder die Website kam. Der CSV-Export enthält die neue Spalte 'Quelle'."
         },
         {
-            "title": "📦 Abhängigkeiten gepatcht",
-            "content": "Firebase wurde auf 11.10 aktualisiert; damit fallen alle vom npm-Audit gemeldeten Schwachstellen (u.a. protobufjs-RCE und mehrere undici-Advisories) weg. `npm audit` meldet jetzt 0 Vulnerabilities."
+            "title": "♻️ Eine gemeinsame Anmeldelogik",
+            "content": "Website und Discord nutzen jetzt denselben Anmelde-Service. Damit gelten überall exakt dieselben Prüfungen, Bot-Nachrichten, Rollenvergaben und Channel-Freischaltungen."
         }
     ]
 }

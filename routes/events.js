@@ -3,8 +3,9 @@ const router = express.Router();
 const { db, collection, doc, getDoc, getDocs, addDoc, deleteDoc, updateDoc, query, where, orderBy } = require('../firebaseAdmin');
 const { requireAuth } = require('../middleware/auth');
 const { checkRegistrationAllowed } = require('../middleware/maintenance');
-const { sendDM, assignRole, parseTemplate, getGuildRoles, addParticipantToEventChannels, removeParticipantFromEventChannels, removeRole, sendGuestInvitation } = require('../bot');
+const { removeParticipantFromEventChannels, removeRole } = require('../bot');
 const { promoteFromWaitlist } = require('../utils/eventUtils');
+const { registerUserForEvent, REGISTRATION_SOURCE } = require('../utils/registrationService');
 const { debugLog } = require('../utils/debugLog');
 
 /**
@@ -266,197 +267,20 @@ router.get('/:id', async (req, res) => {
 router.post('/:id/register', requireAuth, checkRegistrationAllowed, async (req, res) => {
     try {
         const user = req.session.user;
-        const eventRef = doc(db, 'events', req.params.id);
-        const eventSnap = await getDoc(eventRef);
-
-        if (!eventSnap.exists()) {
-            return res.status(404).json({ error: 'Event nicht gefunden' });
-        }
-
-        const event = eventSnap.data();
-
-        // Check event is active
-        if (event.status && event.status !== 'active') {
-            return res.status(400).json({ error: 'Dieses Event akzeptiert keine Anmeldungen.' });
-        }
-
-        // Check if already registered
-        const existQ = query(
-            collection(db, 'registrations'),
-            where('eventId', '==', req.params.id),
-            where('userId', '==', user.id)
-        );
-        const existSnap = await getDocs(existQ);
-
-        if (!existSnap.empty) {
-            return res.status(400).json({ error: 'Du bist bereits registriert.' });
-        }
-
-        // Check role requirement
-        if (event.accessMode === 'role-required' && event.requiredRoles && event.requiredRoles.length > 0) {
-            const hasRole = event.requiredRoles.some(roleId => user.roles.includes(roleId));
-            if (!hasRole) {
-                return res.status(403).json({ error: 'Du hast nicht die erforderliche Rolle.' });
-            }
-        }
-
-        // Check max participants — if full, add to waitlist
-        let status;
-        let isWaitlisted = false;
-
-        // incomingGuests: array of {id, displayName, avatar} objects from search
-        const rawGuests = Array.isArray(req.body.guests) ? req.body.guests : [];
-        if (event.allowGuests === false && rawGuests.length > 0) {
-            return res.status(400).json({ error: 'Gäste sind für dieses Event nicht zugelassen.' });
-        }
-
-        // Validate guest objects — each must have an id field
-        const incomingGuests = rawGuests.filter(g => g && typeof g.id === 'string' && g.id.trim());
-        // Guests reserve slots (pending until they accept)
-        const requiredSlots = 1 + incomingGuests.length;
-
-        if (event.maxParticipants > 0) {
-            const regQ = query(
-                collection(db, 'registrations'),
-                where('eventId', '==', req.params.id),
-                where('status', 'in', ['pending', 'accepted'])
-            );
-            const regSnap = await getDocs(regQ);
-
-            let currentCount = 0;
-            regSnap.forEach(doc => {
-                const r = doc.data();
-                // Count confirmed guests + pending guests
-                const confirmedGuests = r.guests ? r.guests.length : 0;
-                const pendingGuests = r.pendingGuests ? r.pendingGuests.filter(g => g.status === 'pending').length : 0;
-                currentCount += 1 + confirmedGuests + pendingGuests;
-            });
-
-            if (currentCount + requiredSlots > event.maxParticipants) {
-                status = 'waitlisted';
-                isWaitlisted = true;
-            }
-        }
-
-        if (!isWaitlisted) {
-            status = event.approvalMode === 'instant' ? 'accepted' : 'pending';
-        }
-
-        // Validate required form fields
-        const formFields = event.formFields || [];
-        const formAnswers = req.body.formAnswers || {};
-        const missingFields = [];
-        formFields.forEach(field => {
-            if (!field.required) return;
-            const answer = formAnswers[field.label];
-            if (field.type === 'checkbox') {
-                if (answer !== true) missingFields.push(field.label);
-            } else {
-                if (!answer || (typeof answer === 'string' && !answer.trim())) missingFields.push(field.label);
-            }
-        });
-        if (missingFields.length > 0) {
-            return res.status(400).json({ error: `Bitte fülle alle Pflichtfelder aus: ${missingFields.join(', ')}` });
-        }
-
-        // Build pendingGuests list (each guest gets an invitation DM)
-        const pendingGuests = incomingGuests.map(g => ({
-            userId: g.id,
-            displayName: g.displayName || g.id,
-            avatar: g.avatar || '',
-            status: 'pending'
-        }));
-
-        // Create registration — guests array is empty until guests accept
-        const registration = {
+        const result = await registerUserForEvent({
             eventId: req.params.id,
-            userId: user.id,
-            userName: user.displayName,
-            status,
-            formAnswers,
-            guests: [],
-            pendingGuests,
-            createdAt: new Date().toISOString()
-        };
+            user: { id: user.id, displayName: user.displayName, roles: user.roles },
+            formAnswers: req.body.formAnswers || {},
+            guests: Array.isArray(req.body.guests) ? req.body.guests : [],
+            source: REGISTRATION_SOURCE.WEB
+        });
 
-        const regRef = await addDoc(collection(db, 'registrations'), registration);
+        if (!result.ok) {
+            return res.status(result.httpStatus).json({ error: result.error });
+        }
+
         debugLog('events.register', { eventId: req.params.id, userId: req.session?.user?.id });
-
-        // Send invitation DMs to each guest (non-blocking)
-        const eventData = { id: req.params.id, title: event.title, startDate: event.startDate };
-        for (const guest of pendingGuests) {
-            sendGuestInvitation(guest.userId, { id: user.id, displayName: user.displayName }, eventData, regRef.id)
-                .catch(err => console.error('sendGuestInvitation error:', err));
-        }
-
-        // Send DM notification
-        const templateSnap = await getDoc(doc(db, 'botMessages', 'templates'));
-        const globalTemplates = templateSnap.exists() ? templateSnap.data() : {};
-
-        // Prepare variables
-        const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
-        const eventUrl = `${baseUrl}/#events/${req.params.id}`;
-
-        let roleName = '';
-        let roleMention = '';
-
-        if (event.assignRoleId) {
-            const roles = await getGuildRoles(process.env.DISCORD_GUILD_ID);
-            const role = roles.find(r => r.id === event.assignRoleId);
-            if (role) {
-                roleName = role.name;
-                roleMention = `<@&${role.id}>`;
-            } else {
-                roleName = 'Unbekannte Rolle';
-                roleMention = 'Unbekannte Rolle';
-            }
-        }
-
-        const vars = {
-            'user.id': user.id,
-            'user.name': user.displayName,
-            'user.mention': `<@${user.id}>`,
-            'event.title': event.title || 'Unbekanntes Event',
-            'event.url': eventUrl,
-            'role.name': roleName,
-            'role.mention': roleMention
-        };
-
-        const customMsgs = event.customBotMessages || {};
-
-        if (isWaitlisted) {
-            // Waitlist message (currently no custom override for waitlist in plan, but good to keep consistent)
-            await sendDM(user.id, `📋 Das Event **${event.title}** ist aktuell voll. Du wurdest auf die **Warteliste** gesetzt. Wir benachrichtigen dich, sobald ein Platz frei wird!`);
-        } else if (status === 'accepted') {
-            const template = customMsgs.accepted || globalTemplates.accepted;
-            const msg = template
-                ? parseTemplate(template, vars)
-                : `✅ Du wurdest automatisch für **${event.title}** angenommen!`;
-
-            await sendDM(user.id, msg);
-
-            if (event.assignRoleId) {
-                await assignRole(user.id, event.assignRoleId, process.env.DISCORD_GUILD_ID);
-            }
-            if (event.discordChannelId || event.discordTextChannelId) {
-                await addParticipantToEventChannels(event, user.id);
-            }
-        } else {
-            const template = customMsgs.registration || globalTemplates.registration;
-            const msg = template
-                ? parseTemplate(template, vars)
-                : `📋 Deine Anfrage für **${event.title}** ist eingegangen. Bitte warte auf die Bestätigung.`;
-
-            await sendDM(user.id, msg);
-        }
-
-        const messages = {
-            accepted: 'Erfolgreich angemeldet!',
-            pending: 'Anfrage eingegangen.',
-            waitlisted: 'Auf die Warteliste gesetzt.'
-        };
-
-        res.json({ id: regRef.id, status, message: messages[status] });
+        res.json({ id: result.id, status: result.status, message: result.message });
     } catch (err) {
         console.error('Registration error:', err);
         res.status(500).json({ error: 'Fehler bei der Anmeldung' });

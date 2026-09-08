@@ -7,7 +7,7 @@ const {
 } = require('../firebaseAdmin');
 const { requireAuth, requireAdmin } = require('../middleware/auth');
 const { validateEvent, validateRegStatus, validateBotMessages } = require('../middleware/validators');
-const { sendDM, assignRole, parseTemplate, getGuildRoles, sendChannelMessage, buildEventEmbed, getGuildScheduledEvents, createEventChannels, deleteEventChannels, createScheduledEvent, getBotStatus, getBotSettings, saveBotSettings, getRunningEvents, getGuildChannels } = require('../bot');
+const { sendDM, assignRole, parseTemplate, getGuildRoles, sendChannelMessage, buildEventEmbed, buildEventComponents, getGuildScheduledEvents, createEventChannels, deleteEventChannels, createScheduledEvent, getBotStatus, getBotSettings, saveBotSettings, getRunningEvents, getGuildChannels } = require('../bot');
 const { promoteFromWaitlist, addAuditLog } = require('../utils/eventUtils');
 const { debugLog } = require('../utils/debugLog');
 
@@ -625,7 +625,7 @@ router.get('/events/:id/registrations/export', async (req, res) => {
         const formKeysArr = [...allFormKeys];
 
         // Build CSV
-        const headers = ['User', 'UserID', 'Status', 'Datum', 'Gäste (Anzahl)', 'Gäste IDs', ...formKeysArr];
+        const headers = ['User', 'UserID', 'Status', 'Quelle', 'Datum', 'Gäste (Anzahl)', 'Gäste IDs', ...formKeysArr];
         const rows = registrations.map(r => {
             const guestCount = Array.isArray(r.guests) ? r.guests.length : 0;
             const guestIds = Array.isArray(r.guests) ? r.guests.join('; ') : '';
@@ -633,6 +633,7 @@ router.get('/events/:id/registrations/export', async (req, res) => {
                 `"${(r.userName || '').replace(/"/g, '""')}"`,
                 r.userId,
                 r.status,
+                r.source === 'discord' ? 'Discord' : 'Website',
                 r.createdAt ? new Date(r.createdAt).toLocaleDateString('de-DE') : '',
                 guestCount,
                 `"${guestIds}"`
@@ -770,7 +771,8 @@ router.post('/events/:id/announce', async (req, res) => {
         const success = await sendChannelMessage(channelId, embed, {
             text: text || '',
             roleIds: roleIds || [],
-            pingEveryone: !!pingEveryone
+            pingEveryone: !!pingEveryone,
+            components: buildEventComponents(event, req.params.id)
         });
 
         if (success) {
