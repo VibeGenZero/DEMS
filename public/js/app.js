@@ -3491,11 +3491,55 @@ async function changeEventStatus(eventId, status) {
     }
 }
 
+// Discord allows at most 5 inputs per modal and only these field types can be
+// mapped onto a modal text input — keep in sync with canRegisterViaDiscord() in bot.js
+const DISCORD_MODAL_MAX_FIELDS = 5;
+const DISCORD_MODAL_FIELD_TYPES = ['text', 'dropdown', 'checkbox'];
+
+// Renders a preview of the buttons that will be attached to the announcement
+function renderAnnounceButtonsPreview(event) {
+    const container = document.getElementById('announce-buttons-preview');
+    if (!container) return;
+
+    const linkLine = '<div><i class="bi bi-box-arrow-up-right me-1"></i><strong>Zum Event</strong> — Link zur Event-Seite (immer dabei)</div>';
+
+    if (!event) {
+        container.innerHTML = linkLine;
+        return;
+    }
+
+    const formFields = Array.isArray(event.formFields) ? event.formFields.filter(f => f && f.label) : [];
+    const isActive = !event.status || event.status === 'active';
+    const fitsIntoModal = formFields.length <= DISCORD_MODAL_MAX_FIELDS
+        && formFields.every(f => DISCORD_MODAL_FIELD_TYPES.includes(f.type || 'text'));
+
+    let registerLine;
+    if (!isActive) {
+        registerLine = '<div class="text-warning"><i class="bi bi-exclamation-triangle me-1"></i>Kein <strong>Anmelden</strong>-Button — das Event ist nicht aktiv.</div>';
+    } else if (!fitsIntoModal) {
+        registerLine = `<div class="text-warning"><i class="bi bi-exclamation-triangle me-1"></i>Kein <strong>Anmelden</strong>-Button — das Formular passt nicht in einen Discord-Dialog (max. ${DISCORD_MODAL_MAX_FIELDS} Felder, nur Text/Dropdown/Checkbox).</div>`;
+    } else if (formFields.length > 0) {
+        registerLine = `<div><i class="bi bi-check-circle me-1"></i><strong>Anmelden</strong> — öffnet ein Discord-Formular mit ${formFields.length} Feld(ern) und meldet direkt an.</div>`;
+    } else {
+        registerLine = '<div><i class="bi bi-check-circle me-1"></i><strong>Anmelden</strong> — meldet direkt in Discord an (kein Formular nötig).</div>';
+    }
+
+    container.innerHTML = registerLine + linkLine;
+}
+
 async function announceEvent(eventId) {
     // Open the announce modal instead of a simple confirm
     document.getElementById('announce-event-id').value = eventId;
     document.getElementById('announce-text').value = '';
     document.getElementById('announce-everyone').checked = false;
+
+    // Show which buttons Discord will get for this event
+    const previewContainer = document.getElementById('announce-buttons-preview');
+    if (previewContainer) previewContainer.innerHTML = 'Wird geladen...';
+    fetch(`/api/events/${eventId}`)
+        .then(res => (res.ok ? res.json() : null))
+        .then(renderAnnounceButtonsPreview)
+        .catch(() => renderAnnounceButtonsPreview(null));
 
     // Load roles for checkboxes
     const container = document.getElementById('announce-role-checkboxes');
@@ -3728,7 +3772,13 @@ async function showRegistrations(eventId, eventTitle) {
 
         const statusTexts = { pending: '⏳ Ausstehend', accepted: '✅ Angenommen', rejected: '❌ Abgelehnt', waitlisted: '📋 Warteliste' };
 
+        const sourceBadges = {
+            discord: '<span class="badge bg-primary-subtle text-primary-emphasis"><i class="bi bi-discord me-1"></i>Discord</span>',
+            web: '<span class="badge bg-secondary-subtle text-secondary-emphasis"><i class="bi bi-globe2 me-1"></i>Website</span>'
+        };
+
         tbody.innerHTML = regs.map(reg => {
+            const sourceBadge = sourceBadges[reg.source] || sourceBadges.web;
             const guestsText = Array.isArray(reg.guests) && reg.guests.length > 0
                 ? `<span class="badge bg-secondary mb-1">${reg.guests.length} Gast/Gäste</span><br><small class="text-muted text-break" style="max-width: 120px; display: inline-block;">${reg.guests.map(g => escapeHtml(g)).join(', ')}</small>`
                 : '<span class="text-muted">—</span>';
@@ -3738,6 +3788,7 @@ async function showRegistrations(eventId, eventTitle) {
         <td>
           <strong>${escapeHtml(reg.userName)}</strong>
           <br><small class="text-muted">${reg.userId}</small>
+          <br>${sourceBadge}
         </td>
         <td>
           ${guestsText}
