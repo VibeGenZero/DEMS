@@ -1486,7 +1486,7 @@ async function submitRegistration(eventId, event, btnId, formContainerId) {
         if (!field.required) return;
         const el = document.getElementById(`${prefix}-${i}`);
         if (!el) return;
-        if (field.type === 'checkbox') {
+        if (normalizeFieldType(field.type) === 'checkbox') {
             if (!el.checked) missingFields.push(field.label);
         } else {
             if (!el.value || !el.value.trim()) missingFields.push(field.label);
@@ -1597,6 +1597,174 @@ async function unregisterFromEvent() {
     }
 }
 
+// ─── Form Field Types & Widgets ──────────────────
+// Mirrors utils/formFields.js on the server. Every type maps onto a Discord
+// modal component, so a form can be filled in on the website and in Discord.
+const FORM_FIELD_TYPE_LABELS = [
+    { value: 'text', text: 'Text' },
+    { value: 'textarea', text: 'Mehrzeiliger Text' },
+    { value: 'dropdown', text: 'Dropdown' },
+    { value: 'checkbox', text: 'Checkbox' },
+    { value: 'user', text: 'Discord-Mitglied' },
+    { value: 'role', text: 'Discord-Rolle' },
+    { value: 'channel', text: 'Discord-Channel' },
+    { value: 'mentionable', text: 'Mitglied oder Rolle' }
+];
+
+// Discord shows at most five fields in one dialog
+const DISCORD_MODAL_MAX_FIELDS = 5;
+
+// Minimum characters before the member search starts
+const ENTITY_SEARCH_MIN_LENGTH = 2;
+const ENTITY_SEARCH_DEBOUNCE_MS = 250;
+
+let formOptionsPromise = null;
+
+// Falls back to a plain text field for unknown types
+function normalizeFieldType(type) {
+    return FORM_FIELD_TYPE_LABELS.some(entry => entry.value === type) ? type : 'text';
+}
+
+// Same answer format as formatEntityAnswer() in utils/formFields.js
+function formatEntityAnswer(type, name, id) {
+    const prefix = type === 'channel' ? '#' : '@';
+    return `${prefix}${name} (${id})`;
+}
+
+// Roles and channels for the picker fields, loaded once per page visit
+function loadFormOptions() {
+    if (!formOptionsPromise) {
+        formOptionsPromise = fetch('/api/events/form-options')
+            .then(res => (res.ok ? res.json() : { roles: [], channels: [] }))
+            .catch(() => ({ roles: [], channels: [] }));
+    }
+    return formOptionsPromise;
+}
+
+function renderEntityPicker(id, type) {
+    const placeholder = type === 'mentionable' ? 'Mitglied oder Rolle suchen...' : 'Mitglied suchen...';
+    return `
+    <div class="entity-picker">
+      <input type="text" class="form-control" id="${id}-search" placeholder="${placeholder}" autocomplete="off">
+      <div class="entity-picker-results" id="${id}-results"></div>
+      <div class="entity-picker-selected" id="${id}-selected"></div>
+      <input type="hidden" id="${id}">
+    </div>`;
+}
+
+// Fills the role/channel selects and wires up the search pickers
+function initFormFieldWidgets(fields, prefix) {
+    const needsOptions = fields.some(field => ['role', 'channel', 'mentionable'].includes(normalizeFieldType(field.type)));
+    if (needsOptions) {
+        loadFormOptions().then(options => fillEntitySelects(fields, prefix, options));
+    }
+
+    fields.forEach((field, i) => {
+        const type = normalizeFieldType(field.type);
+        if (type === 'user' || type === 'mentionable') {
+            initEntityPicker(`${prefix}-${i}`, type);
+        }
+    });
+}
+
+function fillEntitySelects(fields, prefix, options) {
+    fields.forEach((field, i) => {
+        const type = normalizeFieldType(field.type);
+        if (type !== 'role' && type !== 'channel') return;
+
+        const select = document.getElementById(`${prefix}-${i}`);
+        if (!select) return;
+
+        const entries = type === 'role' ? (options.roles || []) : (options.channels || []);
+        const marker = type === 'role' ? '@' : '#';
+        select.innerHTML = '<option value="">Bitte wählen...</option>' + entries.map(entry =>
+            `<option value="${escapeHtml(formatEntityAnswer(type, entry.name, entry.id))}">${marker}${escapeHtml(entry.name)}</option>`
+        ).join('');
+    });
+}
+
+function initEntityPicker(id, type) {
+    const search = document.getElementById(`${id}-search`);
+    const results = document.getElementById(`${id}-results`);
+    const selected = document.getElementById(`${id}-selected`);
+    const hidden = document.getElementById(id);
+    if (!search || !results || !selected || !hidden) return;
+
+    let debounceTimer = null;
+
+    search.addEventListener('input', () => {
+        clearTimeout(debounceTimer);
+        const term = search.value.trim();
+        if (term.length < ENTITY_SEARCH_MIN_LENGTH) {
+            results.innerHTML = '';
+            return;
+        }
+        debounceTimer = setTimeout(async () => {
+            const items = await searchEntities(type, term);
+            renderEntityResults(items);
+        }, ENTITY_SEARCH_DEBOUNCE_MS);
+    });
+
+    function renderEntityResults(items) {
+        if (!items.length) {
+            results.innerHTML = '<div class="entity-picker-empty">Keine Treffer</div>';
+            return;
+        }
+        results.innerHTML = items.map(item => `
+      <button type="button" class="entity-picker-item" data-value="${escapeHtml(item.value)}" data-name="${escapeHtml(item.name)}">
+        ${item.icon} ${escapeHtml(item.name)}
+      </button>`).join('');
+
+        results.querySelectorAll('.entity-picker-item').forEach(button => {
+            button.addEventListener('click', () => selectEntity(button.dataset.value, button.dataset.name));
+        });
+    }
+
+    function selectEntity(value, name) {
+        hidden.value = value;
+        selected.innerHTML = `
+      <span class="badge bg-primary-subtle text-primary-emphasis">${escapeHtml(name)}</span>
+      <button type="button" class="btn btn-sm btn-link p-0 ms-1 entity-picker-clear">entfernen</button>`;
+        selected.querySelector('.entity-picker-clear').addEventListener('click', () => {
+            hidden.value = '';
+            selected.innerHTML = '';
+        });
+        results.innerHTML = '';
+        search.value = '';
+    }
+}
+
+// Searches members (and roles for mentionable fields) for the picker
+async function searchEntities(type, term) {
+    const items = [];
+
+    try {
+        const res = await fetch(`/api/user/search?q=${encodeURIComponent(term)}`);
+        if (res.ok) {
+            const users = await res.json();
+            users.forEach(user => {
+                const name = user.displayName || user.username;
+                items.push({ name, icon: '👤', value: formatEntityAnswer('user', name, user.id) });
+            });
+        }
+    } catch {
+        // Search stays empty when the request fails
+    }
+
+    if (type === 'mentionable') {
+        const options = await loadFormOptions();
+        const lowerTerm = term.toLowerCase();
+        (options.roles || [])
+            .filter(role => role.name.toLowerCase().includes(lowerTerm))
+            .slice(0, 10)
+            .forEach(role => {
+                items.push({ name: role.name, icon: '🏷️', value: formatEntityAnswer('role', role.name, role.id) });
+            });
+    }
+
+    return items.slice(0, 15);
+}
+
 function renderFormFields(fields, containerId = 'dynamic-form-fields') {
     const container = document.getElementById(containerId);
     if (!fields.length) {
@@ -1606,10 +1774,15 @@ function renderFormFields(fields, containerId = 'dynamic-form-fields') {
     const prefix = containerId === 'dynamic-form-fields' ? 'form-field' : 'wl-field';
     container.innerHTML = fields.map((field, i) => {
         const id = `${prefix}-${i}`;
+        const type = normalizeFieldType(field.type);
+        const hint = field.description
+            ? `<small class="text-muted d-block mb-1">${escapeHtml(field.description)}</small>`
+            : '';
         let input = '';
-        switch (field.type) {
-            case 'text':
-                input = `<input type="text" class="form-control" id="${id}" ${field.required ? 'required' : ''} placeholder="${escapeHtml(field.label)}">`;
+
+        switch (type) {
+            case 'textarea':
+                input = `<textarea class="form-control" id="${id}" rows="3" ${field.required ? 'required' : ''} placeholder="${escapeHtml(field.label)}"></textarea>`;
                 break;
             case 'dropdown':
                 input = `<select class="form-select" id="${id}" ${field.required ? 'required' : ''}>
@@ -1622,13 +1795,29 @@ function renderFormFields(fields, containerId = 'dynamic-form-fields') {
           <input type="checkbox" class="form-check-input" id="${id}" ${field.required ? 'required' : ''}>
           <label class="form-check-label" for="${id}">${escapeHtml(field.label)}${field.required ? ' *' : ''}</label>
         </div>`;
-                return `<div class="mb-3">${input}</div>`;
+                return `<div class="mb-3">${hint}${input}</div>`;
+            case 'role':
+            case 'channel':
+                input = `<select class="form-select entity-select" id="${id}" data-entity-type="${type}" ${field.required ? 'required' : ''}>
+          <option value="">Wird geladen...</option>
+        </select>`;
+                break;
+            case 'user':
+            case 'mentionable':
+                input = renderEntityPicker(id, type);
+                break;
+            default:
+                input = `<input type="text" class="form-control" id="${id}" ${field.required ? 'required' : ''} placeholder="${escapeHtml(field.label)}">`;
         }
+
         return `<div class="mb-3">
       <label class="form-label" for="${id}">${escapeHtml(field.label)}${field.required ? ' *' : ''}</label>
+      ${hint}
       ${input}
     </div>`;
     }).join('');
+
+    initFormFieldWidgets(fields, prefix);
 }
 
 function collectFormAnswers(fields, containerId = 'dynamic-form-fields') {
@@ -1637,7 +1826,7 @@ function collectFormAnswers(fields, containerId = 'dynamic-form-fields') {
     fields.forEach((field, i) => {
         const el = document.getElementById(`${prefix}-${i}`);
         if (!el) return;
-        if (field.type === 'checkbox') {
+        if (normalizeFieldType(field.type) === 'checkbox') {
             answers[field.label] = el.checked;
         } else {
             answers[field.label] = el.value;
@@ -3491,11 +3680,6 @@ async function changeEventStatus(eventId, status) {
     }
 }
 
-// Discord allows at most 5 inputs per modal and only these field types can be
-// mapped onto a modal text input — keep in sync with canRegisterViaDiscord() in bot.js
-const DISCORD_MODAL_MAX_FIELDS = 5;
-const DISCORD_MODAL_FIELD_TYPES = ['text', 'dropdown', 'checkbox'];
-
 // Renders a preview of the buttons that will be attached to the announcement
 function renderAnnounceButtonsPreview(event) {
     const container = document.getElementById('announce-buttons-preview');
@@ -3510,14 +3694,13 @@ function renderAnnounceButtonsPreview(event) {
 
     const formFields = Array.isArray(event.formFields) ? event.formFields.filter(f => f && f.label) : [];
     const isActive = !event.status || event.status === 'active';
-    const fitsIntoModal = formFields.length <= DISCORD_MODAL_MAX_FIELDS
-        && formFields.every(f => DISCORD_MODAL_FIELD_TYPES.includes(f.type || 'text'));
+    const fitsIntoModal = formFields.length <= DISCORD_MODAL_MAX_FIELDS;
 
     let registerLine;
     if (!isActive) {
         registerLine = '<div class="text-warning"><i class="bi bi-exclamation-triangle me-1"></i>Kein <strong>Anmelden</strong>-Button — das Event ist nicht aktiv.</div>';
     } else if (!fitsIntoModal) {
-        registerLine = `<div class="text-warning"><i class="bi bi-exclamation-triangle me-1"></i>Kein <strong>Anmelden</strong>-Button — das Formular passt nicht in einen Discord-Dialog (max. ${DISCORD_MODAL_MAX_FIELDS} Felder, nur Text/Dropdown/Checkbox).</div>`;
+        registerLine = `<div class="text-warning"><i class="bi bi-exclamation-triangle me-1"></i>Kein <strong>Anmelden</strong>-Button — das Formular hat mehr als ${DISCORD_MODAL_MAX_FIELDS} Felder und passt nicht in einen Discord-Dialog.</div>`;
     } else if (formFields.length > 0) {
         registerLine = `<div><i class="bi bi-check-circle me-1"></i><strong>Anmelden</strong> — öffnet ein Discord-Formular mit ${formFields.length} Feld(ern) und meldet direkt an.</div>`;
     } else {
@@ -3703,17 +3886,21 @@ function addFormField(existing = null) {
     row.className = 'form-field-row';
 
     const label = existing ? existing.label : '';
-    const type = existing ? existing.type : 'text';
+    const type = existing && existing.type ? existing.type : 'text';
+    const description = existing && existing.description ? existing.description : '';
     const options = existing && existing.options ? existing.options.join(', ') : '';
     const required = existing ? existing.required : false;
 
+    const typeOptions = FORM_FIELD_TYPE_LABELS
+        .map(({ value, text }) => `<option value="${value}" ${type === value ? 'selected' : ''}>${text}</option>`)
+        .join('');
+
     row.innerHTML = `
     <input type="text" class="form-control ff-label" placeholder="Feldname" value="${escapeHtml(label)}" style="flex:2">
-    <select class="form-select ff-type" style="flex:1" onchange="toggleOptionsInput(this)">
-      <option value="text" ${type === 'text' ? 'selected' : ''}>Text</option>
-      <option value="dropdown" ${type === 'dropdown' ? 'selected' : ''}>Dropdown</option>
-      <option value="checkbox" ${type === 'checkbox' ? 'selected' : ''}>Checkbox</option>
+    <select class="form-select ff-type" style="flex:1.4" onchange="toggleOptionsInput(this)">
+      ${typeOptions}
     </select>
+    <input type="text" class="form-control ff-description" placeholder="Hinweis (optional)" value="${escapeHtml(description)}" style="flex:2">
     <input type="text" class="form-control ff-options" placeholder="Optionen (kommagetrennt)" value="${escapeHtml(options)}" style="flex:2;${type === 'dropdown' ? '' : 'display:none'}">
     <label class="d-flex align-items-center gap-1" style="white-space:nowrap;font-size:0.8rem;color:var(--text-muted);">
       <input type="checkbox" class="form-check-input ff-required" ${required ? 'checked' : ''}> Pflicht
@@ -3736,11 +3923,15 @@ function getFormFieldsFromBuilder() {
     const rows = document.querySelectorAll('.form-field-row');
     return Array.from(rows).map(row => {
         const type = row.querySelector('.ff-type').value;
+        const description = row.querySelector('.ff-description').value.trim();
         const field = {
             label: row.querySelector('.ff-label').value,
             type,
             required: row.querySelector('.ff-required').checked
         };
+        if (description) {
+            field.description = description;
+        }
         if (type === 'dropdown') {
             field.options = row.querySelector('.ff-options').value.split(',').map(s => s.trim()).filter(Boolean);
         }

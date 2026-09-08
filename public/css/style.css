@@ -1088,6 +1088,7 @@ body {
 /* ═══════════════════════════════════════════ */
 .form-field-row {
   display: flex;
+  flex-wrap: wrap;
   gap: 0.5rem;
   align-items: center;
   margin-bottom: 0.5rem;
@@ -1101,6 +1102,56 @@ body {
 .form-field-row .form-select {
   padding: 0.4rem 0.6rem;
   font-size: 0.85rem;
+}
+
+/* ═══════════════════════════════════════════ */
+/* ENTITY PICKER (user / role fields)          */
+/* ═══════════════════════════════════════════ */
+.entity-picker {
+  position: relative;
+}
+
+.entity-picker-results {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.entity-picker-results:not(:empty) {
+  margin-top: 0.35rem;
+  padding: 0.35rem;
+  background: var(--bg-glass, rgba(255, 255, 255, 0.04));
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius);
+}
+
+.entity-picker-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 0.35rem 0.5rem;
+  font-size: 0.85rem;
+  color: var(--text-primary);
+  background: transparent;
+  border: none;
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+
+.entity-picker-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.entity-picker-empty {
+  padding: 0.35rem 0.5rem;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.entity-picker-selected:not(:empty) {
+  margin-top: 0.4rem;
 }
 
 /* ═══════════════════════════════════════════ */

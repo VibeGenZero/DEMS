@@ -1,6 +1,6 @@
 {
   "name": "dems",
-  "version": "2.4.0",
+  "version": "2.5.0",
   "description": "Discord Event Management System",
   "main": "server.js",
   "scripts": {

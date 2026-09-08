@@ -3,7 +3,7 @@ const router = express.Router();
 const { db, collection, doc, getDoc, getDocs, addDoc, deleteDoc, updateDoc, query, where, orderBy } = require('../firebaseAdmin');
 const { requireAuth } = require('../middleware/auth');
 const { checkRegistrationAllowed } = require('../middleware/maintenance');
-const { removeParticipantFromEventChannels, removeRole } = require('../bot');
+const { removeParticipantFromEventChannels, removeRole, getGuildRoles, getPublicGuildChannels } = require('../bot');
 const { promoteFromWaitlist } = require('../utils/eventUtils');
 const { registerUserForEvent, REGISTRATION_SOURCE } = require('../utils/registrationService');
 const { debugLog } = require('../utils/debugLog');
@@ -199,6 +199,44 @@ router.get('/categories', async (req, res) => {
         res.json([...categories].sort());
     } catch (err) {
         res.status(500).json({ error: 'Fehler' });
+    }
+});
+
+/**
+ * Cached roles and channels for the form pickers.
+ * Discord is only asked again once the cache has expired.
+ */
+const FORM_OPTIONS_CACHE_MS = 60 * 1000;
+let formOptionsCache = { data: null, fetchedAt: 0 };
+
+/**
+ * GET /api/events/form-options — Roles and channels for form field pickers
+ *
+ * Used by the registration form to render role and channel fields. Only
+ * channels every member can see are returned.
+ */
+router.get('/form-options', requireAuth, async (req, res) => {
+    try {
+        const now = Date.now();
+        if (formOptionsCache.data && now - formOptionsCache.fetchedAt < FORM_OPTIONS_CACHE_MS) {
+            return res.json(formOptionsCache.data);
+        }
+
+        const guildId = process.env.DISCORD_GUILD_ID;
+        const [roles, channels] = await Promise.all([
+            getGuildRoles(guildId),
+            getPublicGuildChannels(guildId)
+        ]);
+
+        const data = {
+            roles: roles.filter(role => !role.managed).map(role => ({ id: role.id, name: role.name })),
+            channels
+        };
+        formOptionsCache = { data, fetchedAt: now };
+        res.json(data);
+    } catch (err) {
+        console.error('Form options error:', err);
+        res.status(500).json({ error: 'Fehler beim Laden der Auswahllisten' });
     }
 });
 

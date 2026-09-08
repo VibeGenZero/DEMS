@@ -1,6 +1,7 @@
 const { db, collection, doc, getDoc, getDocs, addDoc, query, where } = require('../firebaseAdmin');
 const { sendDM, assignRole, parseTemplate, getGuildRoles, addParticipantToEventChannels, sendGuestInvitation } = require('../bot');
 const { debugLog } = require('./debugLog');
+const { findMissingRequiredFields } = require('./formFields');
 
 /** Registration sources — where a registration was created. */
 const REGISTRATION_SOURCE = {
@@ -45,43 +46,6 @@ const STATUS_MESSAGES = {
 };
 
 const DEFAULT_BASE_URL = 'http://localhost:3000';
-
-/**
- * Check whether an event requires the user to fill in a form.
- *
- * Only required fields count -> optional fields can be skipped, so a user can
- * still register without ever opening the web form.
- *
- * @param {Object} event -> The event document data.
- * @returns {boolean} -> True when at least one form field is mandatory.
- * @example
- * if (eventRequiresForm(event)) { showModalInstead(); }
- */
-function eventRequiresForm(event) {
-    const formFields = Array.isArray(event?.formFields) ? event.formFields : [];
-    return formFields.some(field => field && field.required);
-}
-
-/**
- * Validate the submitted answers against the event form definition.
- *
- * @param {Array<Object>} formFields -> Form field definitions of the event.
- * @param {Object} formAnswers -> Submitted answers keyed by field label.
- * @returns {string[]} -> Labels of all required fields that are still missing.
- */
-function findMissingRequiredFields(formFields, formAnswers) {
-    const missingFields = [];
-    formFields.forEach(field => {
-        if (!field || !field.required) return;
-        const answer = formAnswers[field.label];
-        if (field.type === 'checkbox') {
-            if (answer !== true) missingFields.push(field.label);
-        } else if (!answer || (typeof answer === 'string' && !answer.trim())) {
-            missingFields.push(field.label);
-        }
-    });
-    return missingFields;
-}
 
 /**
  * Count the slots that are currently taken for an event.
@@ -347,8 +311,6 @@ function buildFailure(code, error) {
 
 module.exports = {
     registerUserForEvent,
-    eventRequiresForm,
-    findMissingRequiredFields,
     REGISTRATION_SOURCE,
     REGISTRATION_STATUS,
     REGISTRATION_ERROR
