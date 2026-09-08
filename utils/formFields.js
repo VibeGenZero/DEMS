@@ -29,7 +29,10 @@ const ENTITY_FIELD_TYPES = [
     FORM_FIELD_TYPE.MENTIONABLE
 ];
 
-/** Discord allows at most five label components inside one modal. */
+/**
+ * Discord allows at most five top level components inside one modal -> a form
+ * with five fields fills the modal completely and leaves no room for extras.
+ */
 const MODAL_MAX_FIELDS = 5;
 
 /** Prefix used when an answer references a user or a role. */
