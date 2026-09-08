@@ -1,22 +1,39 @@
-const { Client, GatewayIntentBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle, MessageFlags, REST, Routes, SlashCommandBuilder, PermissionsBitField, ChannelType, ActivityType } = require('discord.js');
+const {
+    Client, GatewayIntentBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle,
+    ModalBuilder, LabelBuilder, TextDisplayBuilder, TextInputBuilder, TextInputStyle,
+    StringSelectMenuBuilder, UserSelectMenuBuilder, RoleSelectMenuBuilder,
+    ChannelSelectMenuBuilder, MentionableSelectMenuBuilder, MessageFlags,
+    REST, Routes, SlashCommandBuilder, PermissionsBitField, ChannelType, ActivityType
+} = require('discord.js');
 const { db, collection, doc, getDoc, getDocs, addDoc, setDoc, updateDoc, deleteDoc, query, where, orderBy } = require('./firebaseAdmin');
 const { debugLog } = require('./utils/debugLog');
 const { isRegistrationBlocked } = require('./middleware/maintenance');
+const {
+    FORM_FIELD_TYPE, MODAL_MAX_FIELDS, getFormFields, getFieldType,
+    formatEntityAnswer, fitsIntoDiscordModal
+} = require('./utils/formFields');
 
 const TIMEZONE = process.env.TIMEZONE || 'Europe/Berlin';
 
-// Discord limits for modals -> at most 5 inputs, short labels and placeholders
-const MODAL_MAX_FIELDS = 5;
+// Discord length limits for modal components
 const MODAL_TITLE_MAX_LENGTH = 45;
 const MODAL_LABEL_MAX_LENGTH = 45;
+const MODAL_DESCRIPTION_MAX_LENGTH = 100;
 const MODAL_PLACEHOLDER_MAX_LENGTH = 100;
+const SELECT_OPTION_LABEL_MAX_LENGTH = 100;
 
-// Form field types that can be mapped onto a Discord modal text input
-const SUPPORTED_MODAL_FIELD_TYPES = ['text', 'dropdown', 'checkbox'];
+// Values of the yes/no select that represents a checkbox field
+const CHECKBOX_VALUE_YES = 'true';
+const CHECKBOX_VALUE_NO = 'false';
 
-// Accepted answers for checkbox fields inside a Discord modal
-const CHECKBOX_TRUE_VALUES = ['ja', 'j', 'yes', 'y', 'true', '1', 'x'];
-const CHECKBOX_FALSE_VALUES = ['nein', 'n', 'no', 'false', '0', '-'];
+// Channel types offered by a channel select field
+const SELECTABLE_CHANNEL_TYPES = [
+    ChannelType.GuildText,
+    ChannelType.GuildVoice,
+    ChannelType.GuildAnnouncement,
+    ChannelType.GuildStageVoice,
+    ChannelType.GuildForum
+];
 
 // Custom ID prefixes for the event registration components
 const REGISTER_BUTTON_PREFIX = 'event_register';
@@ -548,17 +565,6 @@ function buildEventEmbed(event, registrationLink) {
 }
 
 /**
- * Get the usable form fields of an event.
- *
- * @param {Object} event -> The event document data.
- * @returns {Array<Object>} -> Form fields that carry a label.
- */
-function getEventFormFields(event) {
-    if (!event || !Array.isArray(event.formFields)) return [];
-    return event.formFields.filter(field => field && field.label);
-}
-
-/**
  * Build the event page URL used in announcements and buttons.
  *
  * @param {string} eventId -> The event document ID.
@@ -573,8 +579,8 @@ function buildEventUrl(eventId) {
  * Check whether an event can be joined directly from Discord.
  *
  * Events without a form are always joinable. Events with a form are joinable
- * as long as the form fits into a Discord modal -> at most five fields and
- * only field types that can be represented as a text input.
+ * as long as the form fits into a Discord modal -> at most five fields, each
+ * of a known field type.
  *
  * @param {Object} event -> The event document data.
  * @returns {boolean} -> True when the "Anmelden" button may be shown.
@@ -584,12 +590,7 @@ function buildEventUrl(eventId) {
 function canRegisterViaDiscord(event) {
     if (!event) return false;
     if (event.status && event.status !== 'active') return false;
-
-    const formFields = getEventFormFields(event);
-    if (formFields.length === 0) return true;
-    if (formFields.length > MODAL_MAX_FIELDS) return false;
-
-    return formFields.every(field => SUPPORTED_MODAL_FIELD_TYPES.includes(field.type || 'text'));
+    return fitsIntoDiscordModal(event);
 }
 
 /**
@@ -631,73 +632,284 @@ function buildEventComponents(event, eventId) {
 }
 
 /**
- * Build the placeholder text shown inside a modal input.
+ * Build the custom ID of a modal field.
+ *
+ * @param {number} index -> Index of the form field.
+ * @returns {string} -> Custom ID used inside the modal.
+ */
+function buildFieldCustomId(index) {
+    return `${MODAL_FIELD_PREFIX}:${index}`;
+}
+
+/**
+ * Build the info text shown at the top of the registration modal.
+ *
+ * @param {Object} event -> The event document data.
+ * @returns {TextDisplayBuilder} -> Text display component with markdown content.
+ */
+function buildModalIntro(event) {
+    const lines = [`### ${event.title}`];
+
+    if (event.startDate) {
+        lines.push(`📅 ${new Date(event.startDate).toLocaleString('de-DE', { timeZone: TIMEZONE })}`);
+    }
+    if (event.maxParticipants > 0) {
+        lines.push(`👥 Maximal ${event.maxParticipants} Teilnehmer`);
+    }
+    lines.push('-# Deine Angaben werden direkt im Event-System gespeichert.');
+
+    return new TextDisplayBuilder().setContent(lines.join('\n'));
+}
+
+/**
+ * Build the description line of a label component.
  *
  * @param {Object} field -> The form field definition.
- * @returns {string} -> Placeholder text, truncated to the Discord limit.
+ * @returns {string} -> Description text for the label.
  */
-function buildModalPlaceholder(field) {
-    if (field.type === 'dropdown') {
-        const options = Array.isArray(field.options) ? field.options : [];
-        return `Auswahl: ${options.join(', ')}`.substring(0, MODAL_PLACEHOLDER_MAX_LENGTH);
+function buildFieldDescription(field) {
+    if (field.description) {
+        return String(field.description).substring(0, MODAL_DESCRIPTION_MAX_LENGTH);
     }
-    if (field.type === 'checkbox') {
-        return field.required ? 'ja (Pflichtfeld)' : 'ja / nein';
+    return field.required ? 'Pflichtfeld' : 'Optional';
+}
+
+/**
+ * Build the input component of a single form field.
+ *
+ * Every field type is mapped onto the component Discord provides for it:
+ * text fields become text inputs, dropdowns and checkboxes become string
+ * selects and the entity fields become user, role, channel or mentionable
+ * selects.
+ *
+ * @param {LabelBuilder} label -> The label the component belongs to.
+ * @param {Object} field -> The form field definition.
+ * @param {number} index -> Index of the form field.
+ * @returns {LabelBuilder} -> The label with its component set.
+ */
+function applyFieldComponent(label, field, index) {
+    const customId = buildFieldCustomId(index);
+    const required = !!field.required;
+    const minValues = required ? 1 : 0;
+    const type = getFieldType(field);
+    const options = Array.isArray(field.options) ? field.options.filter(Boolean) : [];
+
+    switch (type) {
+        case FORM_FIELD_TYPE.TEXTAREA:
+            return label.setTextInputComponent(
+                new TextInputBuilder()
+                    .setCustomId(customId)
+                    .setStyle(TextInputStyle.Paragraph)
+                    .setRequired(required)
+            );
+
+        case FORM_FIELD_TYPE.DROPDOWN:
+            // A select needs at least one option -> fall back to free text otherwise
+            if (options.length === 0) break;
+            return label.setStringSelectMenuComponent(
+                new StringSelectMenuBuilder()
+                    .setCustomId(customId)
+                    .setMinValues(minValues)
+                    .setMaxValues(1)
+                    .setPlaceholder('Bitte wählen')
+                    .addOptions(options.map((option, optionIndex) => ({
+                        label: String(option).substring(0, SELECT_OPTION_LABEL_MAX_LENGTH),
+                        value: String(optionIndex)
+                    })))
+            );
+
+        case FORM_FIELD_TYPE.CHECKBOX:
+            return label.setStringSelectMenuComponent(
+                new StringSelectMenuBuilder()
+                    .setCustomId(customId)
+                    .setMinValues(minValues)
+                    .setMaxValues(1)
+                    .setPlaceholder(required ? 'Zum Bestätigen "Ja" wählen' : 'Ja oder Nein')
+                    .addOptions([
+                        { label: 'Ja', value: CHECKBOX_VALUE_YES },
+                        { label: 'Nein', value: CHECKBOX_VALUE_NO }
+                    ])
+            );
+
+        case FORM_FIELD_TYPE.USER:
+            return label.setUserSelectMenuComponent(
+                new UserSelectMenuBuilder()
+                    .setCustomId(customId)
+                    .setMinValues(minValues)
+                    .setMaxValues(1)
+                    .setPlaceholder('Mitglied auswählen')
+            );
+
+        case FORM_FIELD_TYPE.ROLE:
+            return label.setRoleSelectMenuComponent(
+                new RoleSelectMenuBuilder()
+                    .setCustomId(customId)
+                    .setMinValues(minValues)
+                    .setMaxValues(1)
+                    .setPlaceholder('Rolle auswählen')
+            );
+
+        case FORM_FIELD_TYPE.CHANNEL:
+            return label.setChannelSelectMenuComponent(
+                new ChannelSelectMenuBuilder()
+                    .setCustomId(customId)
+                    .setMinValues(minValues)
+                    .setMaxValues(1)
+                    .setChannelTypes(SELECTABLE_CHANNEL_TYPES)
+                    .setPlaceholder('Channel auswählen')
+            );
+
+        case FORM_FIELD_TYPE.MENTIONABLE:
+            return label.setMentionableSelectMenuComponent(
+                new MentionableSelectMenuBuilder()
+                    .setCustomId(customId)
+                    .setMinValues(minValues)
+                    .setMaxValues(1)
+                    .setPlaceholder('Mitglied oder Rolle auswählen')
+            );
+
+        default:
+            break;
     }
-    return String(field.label).substring(0, MODAL_PLACEHOLDER_MAX_LENGTH);
+
+    return label.setTextInputComponent(
+        new TextInputBuilder()
+            .setCustomId(customId)
+            .setStyle(TextInputStyle.Short)
+            .setRequired(required)
+            .setPlaceholder(String(field.label).substring(0, MODAL_PLACEHOLDER_MAX_LENGTH))
+    );
 }
 
 /**
  * Build the registration modal for an event form.
  *
- * Every form field becomes a text input. Dropdowns list their options in the
- * placeholder and checkboxes are answered with "ja" or "nein" -> Discord
- * modals only support text inputs.
+ * The modal opens with a text display that repeats the event data and then
+ * shows one label per form field, each carrying the component that matches
+ * the field type.
  *
  * @param {Object} event -> The event document data.
  * @param {string} eventId -> The event document ID.
  * @returns {ModalBuilder} -> Modal ready for interaction.showModal().
+ * @example
+ * await interaction.showModal(buildRegistrationModal(event, eventId));
  */
 function buildRegistrationModal(event, eventId) {
     const modal = new ModalBuilder()
         .setCustomId(`${REGISTER_MODAL_PREFIX}:${eventId}`)
         .setTitle(`Anmeldung: ${event.title}`.substring(0, MODAL_TITLE_MAX_LENGTH));
 
-    getEventFormFields(event).slice(0, MODAL_MAX_FIELDS).forEach((field, index) => {
-        const input = new TextInputBuilder()
-            .setCustomId(`${MODAL_FIELD_PREFIX}:${index}`)
-            .setLabel(String(field.label).substring(0, MODAL_LABEL_MAX_LENGTH))
-            .setStyle(TextInputStyle.Short)
-            .setRequired(!!field.required)
-            .setPlaceholder(buildModalPlaceholder(field));
+    modal.addTextDisplayComponents(buildModalIntro(event));
 
-        modal.addComponents(new ActionRowBuilder().addComponents(input));
+    getFormFields(event).slice(0, MODAL_MAX_FIELDS).forEach((field, index) => {
+        const label = new LabelBuilder()
+            .setLabel(String(field.label).substring(0, MODAL_LABEL_MAX_LENGTH))
+            .setDescription(buildFieldDescription(field));
+
+        modal.addLabelComponents(applyFieldComponent(label, field, index));
     });
 
     return modal;
 }
 
 /**
- * Read a single modal input value.
+ * Read the display name of a selected guild member.
+ *
+ * @param {Object} user -> The selected Discord user.
+ * @param {Object|null} member -> The matching guild member, when resolved.
+ * @returns {string} -> Nickname, global name or username.
+ */
+function resolveSelectedUserName(user, member) {
+    if (member) {
+        if (member.displayName) return member.displayName;
+        if (member.nick) return member.nick;
+    }
+    return user.globalName || user.username || user.id;
+}
+
+/**
+ * Read the answer of a single modal field.
  *
  * @param {import('discord.js').ModalSubmitInteraction} interaction -> The submitted modal.
+ * @param {Object} field -> The form field definition.
  * @param {number} index -> Index of the form field.
- * @returns {string} -> Trimmed input value, empty when the field was skipped.
+ * @returns {{ value: (string|boolean), error: (string|null) }} -> Answer and validation error.
  */
-function readModalValue(interaction, index) {
-    try {
-        return (interaction.fields.getTextInputValue(`${MODAL_FIELD_PREFIX}:${index}`) || '').trim();
-    } catch {
-        return '';
+function readModalField(interaction, field, index) {
+    const customId = buildFieldCustomId(index);
+    const type = getFieldType(field);
+    const { fields } = interaction;
+
+    if (type === FORM_FIELD_TYPE.DROPDOWN) {
+        const options = Array.isArray(field.options) ? field.options.filter(Boolean) : [];
+        if (options.length === 0) {
+            return { value: (fields.getTextInputValue(customId) || '').trim(), error: null };
+        }
+        const [selected] = fields.getStringSelectValues(customId) || [];
+        if (selected === undefined) return { value: '', error: null };
+        const option = options[Number(selected)];
+        if (option === undefined) {
+            return { value: '', error: `"${field.label}": Die Auswahl ist nicht mehr verfügbar.` };
+        }
+        return { value: option, error: null };
     }
+
+    if (type === FORM_FIELD_TYPE.CHECKBOX) {
+        const [selected] = fields.getStringSelectValues(customId) || [];
+        const value = selected === CHECKBOX_VALUE_YES;
+        if (field.required && !value) {
+            return { value, error: `"${field.label}": Bitte mit "Ja" bestätigen.` };
+        }
+        return { value, error: null };
+    }
+
+    if (type === FORM_FIELD_TYPE.USER) {
+        const users = fields.getSelectedUsers(customId);
+        const user = users ? users.first() : null;
+        if (!user) return { value: '', error: null };
+        const members = fields.getSelectedMembers(customId);
+        const member = members ? members.get(user.id) : null;
+        return { value: formatEntityAnswer(type, resolveSelectedUserName(user, member), user.id), error: null };
+    }
+
+    if (type === FORM_FIELD_TYPE.ROLE) {
+        const roles = fields.getSelectedRoles(customId);
+        const role = roles ? roles.first() : null;
+        if (!role) return { value: '', error: null };
+        return { value: formatEntityAnswer(type, role.name, role.id), error: null };
+    }
+
+    if (type === FORM_FIELD_TYPE.CHANNEL) {
+        const channels = fields.getSelectedChannels(customId);
+        const channel = channels ? channels.first() : null;
+        if (!channel) return { value: '', error: null };
+        return { value: formatEntityAnswer(type, channel.name, channel.id), error: null };
+    }
+
+    if (type === FORM_FIELD_TYPE.MENTIONABLE) {
+        const mentionables = fields.getSelectedMentionables(customId);
+        const user = mentionables && mentionables.users ? mentionables.users.first() : null;
+        if (user) {
+            const member = mentionables.members ? mentionables.members.get(user.id) : null;
+            return { value: formatEntityAnswer(type, resolveSelectedUserName(user, member), user.id), error: null };
+        }
+        const role = mentionables && mentionables.roles ? mentionables.roles.first() : null;
+        if (role) {
+            return { value: formatEntityAnswer(type, role.name, role.id), error: null };
+        }
+        return { value: '', error: null };
+    }
+
+    return { value: (fields.getTextInputValue(customId) || '').trim(), error: null };
 }
 
 /**
  * Convert the modal input into form answers of the web interface format.
  *
- * Text answers stay strings, dropdown answers are normalized to the exact
- * option spelling and checkbox answers become booleans -> the result looks
- * exactly like an answer set submitted through the website.
+ * Text stays a string, dropdown answers are mapped back onto the configured
+ * option, checkboxes become booleans and selected users, roles or channels
+ * become a readable reference including their ID -> the result looks exactly
+ * like an answer set submitted through the website.
  *
  * @param {import('discord.js').ModalSubmitInteraction} interaction -> The submitted modal.
  * @param {Object} event -> The event document data.
@@ -707,44 +919,17 @@ function parseModalAnswers(interaction, event) {
     const answers = {};
     const errors = [];
 
-    getEventFormFields(event).slice(0, MODAL_MAX_FIELDS).forEach((field, index) => {
-        const rawValue = readModalValue(interaction, index);
-        const type = field.type || 'text';
-
-        if (type === 'dropdown') {
-            const options = Array.isArray(field.options) ? field.options : [];
-            if (!rawValue) {
-                answers[field.label] = '';
-                return;
-            }
-            const match = options.find(option => option.toLowerCase() === rawValue.toLowerCase());
-            if (!match) {
-                errors.push(`"${field.label}": Ungültige Auswahl. Möglich ist: ${options.join(', ')}`);
-                return;
-            }
-            answers[field.label] = match;
-            return;
+    getFormFields(event).slice(0, MODAL_MAX_FIELDS).forEach((field, index) => {
+        const type = getFieldType(field);
+        try {
+            const { value, error } = readModalField(interaction, field, index);
+            answers[field.label] = value;
+            if (error) errors.push(error);
+        } catch (err) {
+            // A field can be missing when the form was changed while the modal was open
+            debugLog('bot.readModalField', { label: field.label, error: err.message });
+            answers[field.label] = type === FORM_FIELD_TYPE.CHECKBOX ? false : '';
         }
-
-        if (type === 'checkbox') {
-            const normalized = rawValue.toLowerCase();
-            if (!normalized) {
-                answers[field.label] = false;
-                return;
-            }
-            if (CHECKBOX_TRUE_VALUES.includes(normalized)) {
-                answers[field.label] = true;
-                return;
-            }
-            if (CHECKBOX_FALSE_VALUES.includes(normalized)) {
-                answers[field.label] = false;
-                return;
-            }
-            errors.push(`"${field.label}": Bitte "ja" oder "nein" eintragen.`);
-            return;
-        }
-
-        answers[field.label] = rawValue;
     });
 
     return { answers, errors };
@@ -945,12 +1130,12 @@ async function handleEventRegisterButton(interaction, eventId) {
         return interaction.reply({ content: `❌ ${conditionError}`, flags: MessageFlags.Ephemeral });
     }
 
-    const formFields = getEventFormFields(event);
+    const formFields = getFormFields(event);
 
     if (formFields.length > 0) {
-        if (!canRegisterViaDiscord(event)) {
+        if (!fitsIntoDiscordModal(event)) {
             return interaction.reply({
-                content: `📝 Für dieses Event ist das Formular zu umfangreich für Discord. Bitte melde dich hier an: ${buildEventUrl(eventId)}`,
+                content: `📝 Für dieses Event ist das Formular zu umfangreich für Discord (max. ${MODAL_MAX_FIELDS} Felder). Bitte melde dich hier an: ${buildEventUrl(eventId)}`,
                 flags: MessageFlags.Ephemeral
             });
         }
@@ -1126,6 +1311,40 @@ async function getGuildChannels(guildId) {
             }));
     } catch (err) {
         console.error('Failed to get guild channels:', err.message);
+        return [];
+    }
+}
+
+/**
+ * Get the channels every guild member can see.
+ *
+ * Used for the channel picker of the web registration form -> private
+ * channels must not leak to users that cannot see them anyway.
+ *
+ * @param {string} guildId -> The guild to read the channels from.
+ * @returns {Promise<Array<Object>>} -> Channels as `{ id, name, type }`.
+ * @example
+ * const channels = await getPublicGuildChannels(process.env.DISCORD_GUILD_ID);
+ */
+async function getPublicGuildChannels(guildId) {
+    if (!isReady) return [];
+    try {
+        const guild = await client.guilds.fetch(guildId);
+        const channels = await guild.channels.fetch();
+        const everyone = guild.roles.everyone;
+
+        return channels
+            .filter(channel => channel
+                && SELECTABLE_CHANNEL_TYPES.includes(channel.type)
+                && channel.permissionsFor(everyone)?.has(PermissionsBitField.Flags.ViewChannel))
+            .sort((a, b) => a.name.localeCompare(b.name))
+            .map(channel => ({
+                id: channel.id,
+                name: channel.name,
+                type: (channel.type === ChannelType.GuildVoice || channel.type === ChannelType.GuildStageVoice) ? 'voice' : 'text'
+            }));
+    } catch (err) {
+        console.error('Failed to get public guild channels:', err.message);
         return [];
     }
 }
@@ -1945,6 +2164,7 @@ module.exports = {
     getGuildName,
     getGuildRoles,
     getGuildChannels,
+    getPublicGuildChannels,
     getGuildScheduledEvents,
     parseTemplate,
     startReminderScheduler,

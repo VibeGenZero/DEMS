@@ -1,26 +1,22 @@
 {
-    "version": "2.4.0",
+    "version": "2.5.0",
     "date": "2026-09-08",
     "news": [
         {
-            "title": "✅ Anmelden direkt aus Discord",
-            "content": "Jede Event-Ankündigung bekommt jetzt zwei Buttons: 'Anmelden' und 'Zum Event'. Der Anmelden-Button prüft alle Bedingungen (Status, Rollen-Requirement, Wartungsmodus, Doppelanmeldung, Plätze) und trägt dich direkt ein — inklusive Warteliste und automatischer Bestätigung."
+            "title": "🧩 Echte Discord-Komponenten im Anmelde-Dialog",
+            "content": "Das Anmelde-Popup in Discord besteht nicht mehr nur aus Textfeldern: Dropdowns sind jetzt echte Auswahlmenüs, Checkboxen werden mit Ja/Nein beantwortet und jedes Feld steht in einer Label-Komponente mit Feldname und Hinweistext. Über dem Formular zeigt eine Text-Display-Komponente Titel, Termin und Teilnehmerzahl."
         },
         {
-            "title": "📝 Event-Formulare als Discord-Dialog",
-            "content": "Hat ein Event ein Formular, öffnet der Anmelden-Button ein Popup direkt in Discord. Die Antworten werden automatisch übernommen und landen genauso in der Anmeldung wie über die Website. Dropdowns und Checkboxen werden dabei geprüft und normalisiert."
+            "title": "👥 Neue Feldtypen für Mitglieder, Rollen und Channels",
+            "content": "Formulare können jetzt ein Discord-Mitglied, eine Rolle, einen Channel oder beides kombiniert abfragen. In Discord erscheinen dafür die passenden Auswahlmenüs, im Web eine Suche bzw. eine Auswahlliste. Neu sind außerdem mehrzeilige Textfelder und ein optionaler Hinweistext je Feld."
         },
         {
-            "title": "🔗 Link-Button immer dabei",
-            "content": "Der zweite Button führt immer zur Event-Seite. Passt ein Formular nicht in einen Discord-Dialog (mehr als 5 Felder), bleibt nur dieser Button übrig und der Hinweis führt zur Website."
+            "title": "📋 Einheitliches Antwortformat",
+            "content": "Ausgewählte Mitglieder, Rollen und Channels werden überall gleich gespeichert — als '@Name (ID)' bzw. '#Name (ID)'. Damit bleiben Anmeldungen aus Discord und aus dem Web in Übersicht und CSV-Export direkt vergleichbar."
         },
         {
-            "title": "👀 Herkunft in der Oberfläche sichtbar",
-            "content": "In der Anmeldungs-Übersicht eines Events steht jetzt bei jeder Anmeldung, ob sie über Discord oder die Website kam. Der CSV-Export enthält die neue Spalte 'Quelle'."
-        },
-        {
-            "title": "♻️ Eine gemeinsame Anmeldelogik",
-            "content": "Website und Discord nutzen jetzt denselben Anmelde-Service. Damit gelten überall exakt dieselben Prüfungen, Bot-Nachrichten, Rollenvergaben und Channel-Freischaltungen."
+            "title": "🔒 Channel-Auswahl ohne Datenleck",
+            "content": "Die Channel-Liste im Web-Formular enthält nur Channels, die alle Mitglieder ohnehin sehen können. Private Channels tauchen dort nicht auf."
         }
     ]
 }

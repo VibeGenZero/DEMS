@@ -23,13 +23,26 @@ Jede Event-Ankündigung im Discord-Channel enthält zwei Buttons:
 | **Zum Event** | Link zur Event-Seite im Web-Interface — immer vorhanden. |
 
 **Events mit Formular:** Der Anmelden-Button öffnet ein Discord-Popup (Modal) mit den Formularfeldern des Events.
-Die Eingaben werden übernommen und wie eine Anmeldung über die Website gespeichert:
+Jeder Feldtyp wird auf die passende Discord-Komponente abgebildet, die Eingaben werden übernommen und wie eine
+Anmeldung über die Website gespeichert:
 
-*   *Text* wird direkt übernommen.
-*   *Dropdown* zeigt die möglichen Optionen im Platzhalter an und wird gegen diese geprüft.
-*   *Checkbox* wird mit `ja` oder `nein` beantwortet.
+| Feldtyp | Web-Formular | Discord-Modal |
+| --- | --- | --- |
+| Text | Eingabefeld | Text Input (kurz) |
+| Mehrzeiliger Text | Textarea | Text Input (Absatz) |
+| Dropdown | Auswahlliste | String Select mit den konfigurierten Optionen |
+| Checkbox | Checkbox | String Select mit Ja/Nein |
+| Discord-Mitglied | Mitgliedersuche | User Select |
+| Discord-Rolle | Rollenliste | Role Select |
+| Discord-Channel | Channelliste | Channel Select |
+| Mitglied oder Rolle | Kombinierte Suche | Mentionable Select |
 
-Discord erlaubt maximal fünf Eingabefelder pro Popup. Hat ein Event mehr Felder, entfällt der Anmelden-Button und
+Jedes Feld steht im Modal in einer Label-Komponente, sodass der Feldname und ein optionaler Hinweistext angezeigt
+werden. Über dem Formular steht eine Text-Display-Komponente mit Titel, Termin und Teilnehmerzahl des Events.
+Ausgewählte Mitglieder, Rollen und Channels werden als `@Name (ID)` bzw. `#Name (ID)` gespeichert — in Discord und
+im Web identisch.
+
+Discord erlaubt maximal fünf Felder pro Popup. Hat ein Event mehr Felder, entfällt der Anmelden-Button und
 die Ankündigung verweist über den Link-Button auf die Website. Im Ankündigungs-Dialog der Admin-Oberfläche wird
 vorab angezeigt, welche Buttons das Event bekommt.
 
