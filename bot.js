@@ -675,6 +675,24 @@ function buildFieldDescription(field) {
 }
 
 /**
+ * Apply the selection constraints shared by every modal select menu.
+ *
+ * Discord rejects a select that is marked as required but still allows zero
+ * values, so both flags are always set together -> required selects need at
+ * least one value, optional ones must not be marked required.
+ *
+ * @param {Object} select -> The select menu builder to configure.
+ * @param {boolean} required -> Whether the field has to be answered.
+ * @returns {Object} -> The same builder, for chaining.
+ */
+function applySelectConstraints(select, required) {
+    return select
+        .setRequired(required)
+        .setMinValues(required ? 1 : 0)
+        .setMaxValues(1);
+}
+
+/**
  * Build the input component of a single form field.
  *
  * Every field type is mapped onto the component Discord provides for it:
@@ -690,7 +708,6 @@ function buildFieldDescription(field) {
 function applyFieldComponent(label, field, index) {
     const customId = buildFieldCustomId(index);
     const required = !!field.required;
-    const minValues = required ? 1 : 0;
     const type = getFieldType(field);
     const options = Array.isArray(field.options) ? field.options.filter(Boolean) : [];
 
@@ -707,10 +724,8 @@ function applyFieldComponent(label, field, index) {
             // A select needs at least one option -> fall back to free text otherwise
             if (options.length === 0) break;
             return label.setStringSelectMenuComponent(
-                new StringSelectMenuBuilder()
+                applySelectConstraints(new StringSelectMenuBuilder(), required)
                     .setCustomId(customId)
-                    .setMinValues(minValues)
-                    .setMaxValues(1)
                     .setPlaceholder('Bitte wählen')
                     .addOptions(options.map((option, optionIndex) => ({
                         label: String(option).substring(0, SELECT_OPTION_LABEL_MAX_LENGTH),
@@ -720,10 +735,8 @@ function applyFieldComponent(label, field, index) {
 
         case FORM_FIELD_TYPE.CHECKBOX:
             return label.setStringSelectMenuComponent(
-                new StringSelectMenuBuilder()
+                applySelectConstraints(new StringSelectMenuBuilder(), required)
                     .setCustomId(customId)
-                    .setMinValues(minValues)
-                    .setMaxValues(1)
                     .setPlaceholder(required ? 'Zum Bestätigen "Ja" wählen' : 'Ja oder Nein')
                     .addOptions([
                         { label: 'Ja', value: CHECKBOX_VALUE_YES },
@@ -733,38 +746,30 @@ function applyFieldComponent(label, field, index) {
 
         case FORM_FIELD_TYPE.USER:
             return label.setUserSelectMenuComponent(
-                new UserSelectMenuBuilder()
+                applySelectConstraints(new UserSelectMenuBuilder(), required)
                     .setCustomId(customId)
-                    .setMinValues(minValues)
-                    .setMaxValues(1)
                     .setPlaceholder('Mitglied auswählen')
             );
 
         case FORM_FIELD_TYPE.ROLE:
             return label.setRoleSelectMenuComponent(
-                new RoleSelectMenuBuilder()
+                applySelectConstraints(new RoleSelectMenuBuilder(), required)
                     .setCustomId(customId)
-                    .setMinValues(minValues)
-                    .setMaxValues(1)
                     .setPlaceholder('Rolle auswählen')
             );
 
         case FORM_FIELD_TYPE.CHANNEL:
             return label.setChannelSelectMenuComponent(
-                new ChannelSelectMenuBuilder()
+                applySelectConstraints(new ChannelSelectMenuBuilder(), required)
                     .setCustomId(customId)
-                    .setMinValues(minValues)
-                    .setMaxValues(1)
                     .setChannelTypes(SELECTABLE_CHANNEL_TYPES)
                     .setPlaceholder('Channel auswählen')
             );
 
         case FORM_FIELD_TYPE.MENTIONABLE:
             return label.setMentionableSelectMenuComponent(
-                new MentionableSelectMenuBuilder()
+                applySelectConstraints(new MentionableSelectMenuBuilder(), required)
                     .setCustomId(customId)
-                    .setMinValues(minValues)
-                    .setMaxValues(1)
                     .setPlaceholder('Mitglied oder Rolle auswählen')
             );
 
