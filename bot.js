@@ -789,9 +789,10 @@ function applyFieldComponent(label, field, index) {
 /**
  * Build the registration modal for an event form.
  *
- * The modal opens with a text display that repeats the event data and then
- * shows one label per form field, each carrying the component that matches
- * the field type.
+ * The modal shows one label per form field, each carrying the component that
+ * matches the field type. A text display repeating the event data is put in
+ * front of them whenever the form leaves a component slot free -> Discord
+ * counts it as one of the five top level components of the modal.
  *
  * @param {Object} event -> The event document data.
  * @param {string} eventId -> The event document ID.
@@ -804,9 +805,16 @@ function buildRegistrationModal(event, eventId) {
         .setCustomId(`${REGISTER_MODAL_PREFIX}:${eventId}`)
         .setTitle(`Anmeldung: ${event.title}`.substring(0, MODAL_TITLE_MAX_LENGTH));
 
-    modal.addTextDisplayComponents(buildModalIntro(event));
+    const fields = getFormFields(event).slice(0, MODAL_MAX_FIELDS);
 
-    getFormFields(event).slice(0, MODAL_MAX_FIELDS).forEach((field, index) => {
+    // The intro shares the five top level component slots with the fields ->
+    // it is only added while a slot is left over, otherwise Discord rejects
+    // the modal with error 50035.
+    if (fields.length < MODAL_MAX_FIELDS) {
+        modal.addTextDisplayComponents(buildModalIntro(event));
+    }
+
+    fields.forEach((field, index) => {
         const label = new LabelBuilder()
             .setLabel(String(field.label).substring(0, MODAL_LABEL_MAX_LENGTH))
             .setDescription(buildFieldDescription(field));
