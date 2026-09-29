@@ -5,6 +5,9 @@ const {
     ChannelSelectMenuBuilder, MentionableSelectMenuBuilder, MessageFlags,
     REST, Routes, SlashCommandBuilder, PermissionsBitField, ChannelType, ActivityType, Events
 } = require('discord.js');
+// Loaded before firebaseAdmin.js so the mock environment is in place even
+// when bot.js is required without server.js (e.g. in tests)
+const { IS_MOCK_MODE } = require('./dev/mockMode');
 const { db, collection, doc, getDoc, getDocs, addDoc, setDoc, updateDoc, deleteDoc, query, where, orderBy } = require('./firebaseAdmin');
 const { debugLog } = require('./utils/debugLog');
 const { isRegistrationBlocked } = require('./middleware/maintenance');
@@ -2194,3 +2197,7 @@ module.exports = {
     buildEventComponents,
     canRegisterViaDiscord
 };
+
+// Dev mock mode: every call that would reach Discord goes to the simulated
+// server instead (see dev/mockBot.js)
+if (IS_MOCK_MODE) Object.assign(module.exports, require('./dev/mockBot'));

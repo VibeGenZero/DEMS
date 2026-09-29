@@ -110,7 +110,7 @@ Da alle Aufrufer die Exporte erst nach vollständigem Laden von `bot.js` destruk
 
 | Gruppe | Funktionen | Mock-Verhalten |
 |---|---|---|
-| Lebenszyklus | `startBot`, `stopBot` | loggen nur, `startBot` liefert `true` |
+| Lebenszyklus | `startBot` | loggt nur, liefert `true`. `stopBot` bleibt echt: es räumt die Scheduler-Intervalle auf, der Client ist nie eingeloggt |
 | Lesen | `getGuildName`, `getGuildRoles`, `getGuildChannels`, `getPublicGuildChannels`, `getGuildScheduledEvents`, `getUserRoles`, `isGuildMember`, `getBotStatus` | Daten aus `mockGuild`, im Format der echten Funktionen; `getPublicGuildChannels` filtert `#mod-intern` heraus |
 | Schreiben | `sendDM`, `sendChannelMessage`, `sendGuestInvitation`, `assignRole`, `removeRole`, `createEventChannels`, `addParticipantToEventChannels`, `removeParticipantFromEventChannels`, `deleteEventChannels`, `createScheduledEvent` | Konsolen-Log mit Präfix `[MOCK-DISCORD]` und Inhalt (Embeds als JSON), Rückgabewert wie im Erfolgsfall; `createEventChannels` speichert Fake-Channel-IDs am Event |
 
