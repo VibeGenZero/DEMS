@@ -1,5 +1,9 @@
 // dotenv >= 17 logs every load by default -> keep the startup output as before
 require('dotenv').config({ quiet: true });
+
+// Dev mock mode (DEV_MOCK=true) -> has to adjust the environment before
+// firebaseAdmin.js and bot.js read it (see dev/mockMode.js)
+const { IS_MOCK_MODE } = require('./dev/mockMode');
 const { debugLog, IS_DEBUG } = require('./utils/debugLog');
 
 const express = require('express');
@@ -61,14 +65,17 @@ const apiLimiter = rateLimit({
     max: 200,
     message: { error: 'Zu viele Anfragen. Bitte versuche es später erneut.' },
     standardHeaders: true,
-    legacyHeaders: false
+    legacyHeaders: false,
+    // Dev mock mode: frequent reloads while developing must not hit the limit
+    skip: () => IS_MOCK_MODE
 });
 app.use('/api/', apiLimiter);
 
 const authLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
     max: 30,
-    message: { error: 'Zu viele Login-Versuche.' }
+    message: { error: 'Zu viele Login-Versuche.' },
+    skip: () => IS_MOCK_MODE
 });
 app.use('/auth/', authLimiter);
 
@@ -160,6 +167,8 @@ if (IS_DEBUG) {
 }
 
 // ── Routes ──────────────────────────────────────────────────────────────
+// Dev mock mode: persona login instead of Discord OAuth2 (see dev/devAuth.js)
+if (IS_MOCK_MODE) app.use('/auth', require('./dev/devAuth'));
 app.use('/auth', require('./routes/auth'));
 app.use('/api/events', require('./routes/events'));
 app.use('/api/admin', require('./routes/admin'));

@@ -112,6 +112,25 @@ npm run dev
 
 Der Server läuft nun unter `http://localhost:3000`.
 
+## 🧪 Dev-Modus mit Dummy-Daten
+
+Zum Entwickeln und Ausprobieren ohne Discord-Token, OAuth und Firebase:
+
+```bash
+npm install
+npm run dev:mock
+```
+
+*   Öffne `http://localhost:3000` und klicke auf „Mit Discord anmelden“. Statt Discord erscheint eine Auswahl von Test-Personas: **Admin**, **Mitglied mit Rolle „Raid-Team“**, **Mitglied ohne Rollen** und ein **Neuling** (erster Login).
+*   Die Daten liegen in `data/dems.dev.sqlite`, getrennt von der normalen Datenbank. Beim ersten Start wird sie mit Beispiel-Events (Formular, Warteliste, Rollen-Event, laufendes Event, Serie, Entwurf, Archiv), Anmeldungen, Kommentaren, Audit-Log und Einstellungen gefüllt. Eigene Änderungen bleiben über Neustarts erhalten.
+*   `npm run dev:reset` setzt die Dev-Datenbank auf den Ausgangszustand zurück (geht auch bei laufendem Server).
+*   Discord ist simuliert: Rollen, Channels und Scheduled Events kommen von einem Fake-Server, DMs, Ankündigungen und Rollenvergaben erscheinen als `[MOCK-DISCORD]` in der Konsole.
+*   Check-in-Code des laufenden Beispiel-Events: `DEMO42`. Admin-Reset-Passwort (Panic-Mode, System-Reset): `dev`, sofern in der `.env` nichts anderes steht.
+*   Eine `.env` ist nicht nötig. Vorhandene Discord- und Firebase-Werte werden im Dev-Modus ignoriert.
+*   Der Dev-Modus lässt sich nicht in Produktion aktivieren: mit `NODE_ENV=production` bricht der Start ab.
+
+Tests: `npm test`
+
 ## 🐳 Docker
 
 Voraussetzung ist nur Docker (inkl. Compose). Die Konfiguration kommt wie oben aus der `.env`.

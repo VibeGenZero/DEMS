@@ -74,3 +74,9 @@ test('changes nothing without DEV_MOCK', () => {
     assert.equal(env.DISCORD_GUILD_ID, '999');
     assert.equal(env.SQLITE_PATH, undefined);
 });
+
+test('dev/start.js refuses to start in production', () => {
+    const result = runNode(`require(${repoPath('dev/start.js')})`, { NODE_ENV: 'production' });
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /DEV_MOCK=true ist in Produktion \(NODE_ENV=production\) nicht erlaubt/);
+});

@@ -89,6 +89,8 @@ Der Login verhält sich wie der echte OAuth-Callback (`routes/auth.js`):
 
 Ohne Mock-Modus existieren die Routen nicht: `/auth/discord` leitet wie bisher zu Discord weiter.
 
+Die Rate-Limits für `/api/` und `/auth/` sind im Mock-Modus abgeschaltet (`skip`), sonst führen häufige Reloads beim Entwickeln des Frontends nach 30 Aufrufen von `/auth/me` zu HTTP 429.
+
 ---
 
 ## Teil 4 — Fake-Discord-Server (`dev/mockGuild.js`, `dev/mockBot.js`)
@@ -204,7 +206,7 @@ Neue Test-Infrastruktur mit dem eingebauten `node:test` (keine neue Abhängigkei
 | `dev/start.js`, `dev/reset.js` | neu — Einstiegspunkte |
 | `test/*.test.js` | neu — Tests |
 | `compose.dev.yaml` | neu |
-| `server.js` | `mockMode` laden, `devAuth` im Mock-Modus einhängen |
+| `server.js` | `mockMode` laden, Rate-Limits im Mock-Modus aus, `devAuth` im Mock-Modus einhängen |
 | `bot.js` | Mock-Override am Dateiende |
 | `db/sqliteAdapter.js` | `doc()` mit Collection-Referenz |
 | `Dockerfile` | Stages `build-base` und `dev` |
