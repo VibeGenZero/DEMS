@@ -129,6 +129,17 @@ npm run dev:mock
 *   Eine `.env` ist nicht nötig. Vorhandene Discord- und Firebase-Werte werden im Dev-Modus ignoriert.
 *   Der Dev-Modus lässt sich nicht in Produktion aktivieren: mit `NODE_ENV=production` bricht der Start ab.
 
+### Dev-Modus mit Docker
+
+```bash
+docker compose -f compose.dev.yaml up --build
+```
+
+*   Der Code wird in den Container gemountet, Änderungen starten den Server automatisch neu (Frontend-Dateien unter `public/` brauchen nur einen Browser-Reload).
+*   Die Dev-Datenbank liegt im Volume `dems-dev-data`. Zurücksetzen: `docker compose -f compose.dev.yaml exec dems-dev npm run dev:reset`.
+*   Nach Änderungen an den Abhängigkeiten: `docker compose -f compose.dev.yaml up --build -V` (erneuert `node_modules` im Container).
+*   Anderer Host-Port: `DEMS_DEV_PORT` in der `.env`.
+
 Tests: `npm test`
 
 ## 🐳 Docker

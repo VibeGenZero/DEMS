@@ -1,6 +1,8 @@
 services:
   dems:
-    build: .
+    build:
+      context: .
+      target: runtime
     image: dems:latest
     init: true
     restart: unless-stopped

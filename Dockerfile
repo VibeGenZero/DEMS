@@ -2,11 +2,11 @@
 
 ARG NODE_VERSION=24
 
-# ── Stage 1: install production dependencies ────────────────────────────
+# ── Build base: Node + build tools ──────────────────────────────────────
 # better-sqlite3 ships prebuilt binaries for linux x64/arm64. The build tools
 # are only a fallback for platforms without a prebuild and never reach the
-# final image.
-FROM node:${NODE_VERSION}-bookworm-slim AS deps
+# production image.
+FROM node:${NODE_VERSION}-bookworm-slim AS build-base
 WORKDIR /app
 
 RUN apt-get update \
@@ -14,10 +14,26 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 COPY package.json package-lock.json ./
+
+# ── Stage: production dependencies ──────────────────────────────────────
+FROM build-base AS deps
 RUN --mount=type=cache,target=/root/.npm \
     npm ci --omit=dev
 
-# ── Stage 2: runtime image ──────────────────────────────────────────────
+# ── Stage: dev mock mode (compose.dev.yaml) ─────────────────────────────
+# All dependencies incl. nodemon. compose.dev.yaml mounts the source over
+# /app; the copy below only makes the image usable on its own.
+FROM build-base AS dev
+RUN --mount=type=cache,target=/root/.npm \
+    npm ci
+COPY . .
+ENV NODE_ENV=development \
+    PORT=3000
+EXPOSE 3000
+# Polling watcher: changes on Windows/macOS bind mounts send no inotify events
+CMD ["npx", "nodemon", "--legacy-watch", "dev/start.js"]
+
+# ── Stage: production runtime (default target, keep it last) ────────────
 FROM node:${NODE_VERSION}-bookworm-slim AS runtime
 WORKDIR /app
 

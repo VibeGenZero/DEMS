@@ -1,0 +1,25 @@
+# Dev mock mode: no Discord, no Firebase, dummy data, auto-reload.
+# Start: docker compose -f compose.dev.yaml up --build
+services:
+  dems-dev:
+    build:
+      context: .
+      target: dev
+    image: dems:dev
+    init: true
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      NODE_ENV: development
+      PORT: 3000
+    ports:
+      - "${DEMS_DEV_PORT:-3000}:3000"
+    volumes:
+      - .:/app
+      # Keep the Linux node_modules of the image instead of the host's
+      - /app/node_modules
+      - dems-dev-data:/app/data
+
+volumes:
+  dems-dev-data:
