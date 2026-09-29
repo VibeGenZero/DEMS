@@ -73,8 +73,8 @@ Folge diesen Schritten, um das Projekt lokal einzurichten:
 
 ### 1. Voraussetzungen
 Stelle sicher, dass du folgende Tools installiert hast:
-*   [Node.js](https://nodejs.org/) (Version 16 oder höher)
-*   Ein Firebase-Projekt
+*   [Node.js](https://nodejs.org/) (Version 22 oder höher) – oder nur [Docker](https://docs.docker.com/get-docker/), siehe unten
+*   Optional: ein Firebase-Projekt (sonst wird SQLite genutzt)
 *   Eine Discord-Applikation im [Developer Portal](https://discord.com/developers/applications)
 
 ### 2. Installation
@@ -111,6 +111,30 @@ npm run dev
 ```
 
 Der Server läuft nun unter `http://localhost:3000`.
+
+## 🐳 Docker
+
+Voraussetzung ist nur Docker (inkl. Compose). Die Konfiguration kommt wie oben aus der `.env`.
+
+```bash
+cp .env.example .env   # ausfüllen, mindestens SESSION_SECRET
+docker compose up -d --build
+docker compose logs -f dems
+```
+
+*   Die App läuft unter `http://localhost:3000`. Einen anderen Host-Port setzt du über `DEMS_PORT` in der `.env`.
+*   Die SQLite-Datenbank liegt im Volume `dems-data` (`/app/data` im Container) und überlebt Rebuilds und Updates.
+*   Der Container hat einen Healthcheck auf `GET /healthz` (`docker compose ps` zeigt den Status).
+*   Stoppen mit `docker compose down` – die Daten bleiben erhalten. `docker compose down -v` löscht auch das Volume.
+*   Update: `git pull && docker compose up -d --build`.
+
+Ohne Compose:
+
+```bash
+docker build -t dems .
+docker run -d --init --env-file .env -e PORT=3000 -e SQLITE_PATH=/app/data/dems.sqlite \
+  -p 3000:3000 -v dems-data:/app/data --name dems dems
+```
 
 ## 🤝 Mitwirken
 

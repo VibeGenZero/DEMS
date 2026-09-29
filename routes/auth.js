@@ -1,10 +1,4 @@
 const express = require('express');
-// node-fetch v2 has a known bug where gzip-compressed responses can fail with
-// ERR_STREAM_PREMATURE_CLOSE ("Premature close"). Prefer the native fetch
-// (Node 18+, undici-based) which is not affected; fall back to node-fetch on
-// older runtimes.
-const fetch = globalThis.fetch ? globalThis.fetch.bind(globalThis) : require('node-fetch');
-const usingNodeFetch = !globalThis.fetch;
 const router = express.Router();
 const { db, collection, doc, getDoc, setDoc } = require('../firebaseAdmin');
 const { debugLog } = require('../utils/debugLog');
@@ -25,10 +19,6 @@ const RETRYABLE_CODES = new Set([
  * (e.g. Discord/Cloudflare closing the connection mid-response).
  */
 async function discordFetch(url, options = {}, retries = 2) {
-    if (usingNodeFetch) {
-        // Disable gzip for node-fetch to avoid its Gunzip premature-close bug
-        options = { compress: false, ...options };
-    }
     for (let attempt = 0; ; attempt++) {
         try {
             return await fetch(url, options);
