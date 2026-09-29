@@ -6,7 +6,8 @@
  * exactly the session the real OAuth2 callback creates.
  */
 const express = require('express');
-const { db, doc, getDoc, setDoc } = require('../firebaseAdmin');
+const { getLoginBlockReason } = require('../middleware/maintenance');
+const { saveUserProfile } = require('../utils/userProfile');
 const { PERSONAS, defaultAvatar } = require('./mockGuild');
 
 const router = express.Router();
@@ -70,47 +71,6 @@ function renderPersonaPage() {
 }
 
 /**
- * Read the maintenance settings the same way routes/auth.js does.
- *
- * @returns {Promise<Object|null>} -> Settings, null when none are stored.
- */
-async function getMaintenanceSettings() {
-    try {
-        const snap = await getDoc(doc(db, 'maintenanceSettings', 'config'));
-        return snap.exists() ? snap.data() : null;
-    } catch {
-        return null;
-    }
-}
-
-/**
- * Create or refresh the users document of a persona.
- *
- * @param {Object} persona -> Persona from dev/mockGuild.js.
- * @param {string} avatar -> Avatar URL to store.
- * @returns {Promise<boolean>} -> True when the profile was created just now.
- */
-async function upsertUserProfile(persona, avatar) {
-    const userRef = doc(db, 'users', persona.userId);
-    const snap = await getDoc(userRef);
-    const now = new Date().toISOString();
-    const profile = {
-        id: persona.userId,
-        username: persona.username,
-        displayName: persona.displayName,
-        avatar,
-        updatedAt: now
-    };
-
-    if (!snap.exists()) {
-        await setDoc(userRef, { ...profile, acceptInvitations: true, createdAt: now });
-        return true;
-    }
-    await setDoc(userRef, { ...snap.data(), ...profile });
-    return false;
-}
-
-/**
  * GET /auth/discord — the existing login buttons land on the persona page
  */
 router.get('/discord', (req, res) => {
@@ -137,14 +97,21 @@ router.get('/dev-login/:personaId', async (req, res) => {
         const isAdmin = persona.roles.includes(process.env.DISCORD_ADMIN_ROLE_ID);
 
         // Same maintenance rules as the real OAuth2 callback
-        const maintenance = await getMaintenanceSettings();
-        if (maintenance && !isAdmin) {
-            if (maintenance.panicMode) return res.redirect('/?error=panic_mode');
-            if (maintenance.loginDisabled) return res.redirect('/?error=maintenance_login_disabled');
-        }
+        const blockReason = await getLoginBlockReason(isAdmin);
+        if (blockReason) return res.redirect(`/?error=${blockReason}`);
 
         const avatar = defaultAvatar(persona.userId);
-        const isNewUser = await upsertUserProfile(persona, avatar);
+        let isNewUser = false;
+        try {
+            isNewUser = await saveUserProfile({
+                id: persona.userId,
+                username: persona.username,
+                displayName: persona.displayName,
+                avatar
+            });
+        } catch (err) {
+            console.error('Failed to save user profile:', err.message);
+        }
 
         req.session.user = {
             id: persona.userId,

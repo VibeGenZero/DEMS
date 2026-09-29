@@ -152,10 +152,31 @@ test('members are locked out while login is disabled, admins are not', async () 
     assert.equal(enable.status, 200);
 
     try {
-        const member = await createClient(server.baseUrl).request('/auth/dev-login/member');
-        assert.equal(member.headers.get('location'), '/?error=maintenance_login_disabled');
+        const member = createClient(server.baseUrl);
+        const res = await member.request('/auth/dev-login/member');
+        assert.equal(res.status, 302);
+        assert.equal(res.headers.get('location'), '/?error=maintenance_login_disabled');
+        assert.equal(await currentUser(member), null);
         await loginAs('admin');
     } finally {
         await admin.send('PUT', '/api/admin/maintenance', { loginDisabled: false });
+    }
+});
+
+test('members are locked out in panic mode, admins are not', async () => {
+    const admin = await loginAs('admin');
+    const activate = await admin.send('POST', '/api/admin/maintenance/panic');
+    assert.equal(activate.status, 200);
+
+    try {
+        const member = createClient(server.baseUrl);
+        const res = await member.request('/auth/dev-login/member');
+        assert.equal(res.status, 302);
+        assert.equal(res.headers.get('location'), '/?error=panic_mode');
+        assert.equal(await currentUser(member), null);
+        await loginAs('admin');
+    } finally {
+        const deactivate = await admin.send('POST', '/api/admin/maintenance/panic/deactivate', { password: 'dev' });
+        assert.equal(deactivate.status, 200);
     }
 });

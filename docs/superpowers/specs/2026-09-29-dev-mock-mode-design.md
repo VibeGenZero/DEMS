@@ -207,6 +207,9 @@ Neue Test-Infrastruktur mit dem eingebauten `node:test` (keine neue Abhängigkei
 | `test/*.test.js` | neu — Tests |
 | `compose.dev.yaml` | neu |
 | `server.js` | `mockMode` laden, Rate-Limits im Mock-Modus aus, `devAuth` im Mock-Modus einhängen |
+| `middleware/maintenance.js` | `getLoginBlockReason()` — gemeinsame Login-Sperre für OAuth-Callback und Persona-Login |
+| `utils/userProfile.js` | neu — `saveUserProfile()`, gemeinsam genutzt von OAuth-Callback und Persona-Login |
+| `routes/auth.js` | nutzt `getLoginBlockReason()` und `saveUserProfile()` |
 | `bot.js` | Mock-Override am Dateiende |
 | `db/sqliteAdapter.js` | `doc()` mit Collection-Referenz |
 | `Dockerfile` | Stages `build-base` und `dev` |
