@@ -11,6 +11,11 @@ if (!IS_MOCK_MODE) {
 }
 
 const { db, collection, doc, getDoc, getDocs, writeBatch } = require('../firebaseAdmin');
+
+// Defense in depth: never seed or wipe anything but the local SQLite file
+if (db.__type !== 'sqlite-db') {
+    throw new Error('dev/seed.js darf nur die lokale SQLite-Datenbank befüllen, nicht Firebase.');
+}
 const { buildSeedData } = require('./seedData');
 
 /** Every collection the seed writes -> wiped completely by resetAndSeed(). */
@@ -59,7 +64,7 @@ function addSeedToBatch(batch, now) {
 async function seedIfEmpty(now = new Date()) {
     const marker = await getDoc(doc(db, MARKER_COLLECTION, MARKER_ID));
     if (marker.exists()) {
-        console.log('🌱 Dev-Daten vorhanden — neu anlegen mit: npm run dev:reset');
+        console.log(`🌱 Dev-Daten vom ${marker.data().seededAt} vorhanden — neu anlegen (Termine auf jetzt): npm run dev:reset`);
         return null;
     }
 

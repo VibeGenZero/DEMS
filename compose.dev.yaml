@@ -14,7 +14,7 @@ services:
       NODE_ENV: development
       PORT: 3000
     ports:
-      - "${DEMS_DEV_PORT:-3000}:3000"
+      - "127.0.0.1:${DEMS_DEV_PORT:-3000}:3000"
     volumes:
       - .:/app
       # Keep the Linux node_modules of the image instead of the host's

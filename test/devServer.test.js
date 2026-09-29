@@ -43,6 +43,12 @@ test('the login button leads to the persona page', async () => {
     }
 });
 
+test('the Discord callback does not reach Discord in mock mode', async () => {
+    const res = await createClient(server.baseUrl).request('/auth/discord/callback?code=abc');
+    assert.equal(res.status, 302);
+    assert.equal(res.headers.get('location'), '/auth/dev-login');
+});
+
 test('the admin persona gets into the admin area', async () => {
     const client = await loginAs('admin');
     const me = await currentUser(client);

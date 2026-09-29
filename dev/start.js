@@ -8,9 +8,10 @@ process.env.DEV_MOCK = 'true';
 require('./mockMode');
 const { seedIfEmpty } = require('./seed');
 
-seedIfEmpty()
-    .then(() => require('../server'))
-    .catch((err) => {
+seedIfEmpty().then(
+    () => require('../server'),
+    (err) => {
         console.error('❌ Dev-Seed fehlgeschlagen:', err);
         process.exit(1);
-    });
+    }
+);

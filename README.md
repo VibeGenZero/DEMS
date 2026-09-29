@@ -124,6 +124,7 @@ npm run dev:mock
 *   Öffne `http://localhost:3000` und klicke auf „Mit Discord anmelden“. Statt Discord erscheint eine Auswahl von Test-Personas: **Admin**, **Mitglied mit Rolle „Raid-Team“**, **Mitglied ohne Rollen** und ein **Neuling** (erster Login).
 *   Die Daten liegen in `data/dems.dev.sqlite`, getrennt von der normalen Datenbank. Beim ersten Start wird sie mit Beispiel-Events (Formular, Warteliste, Rollen-Event, laufendes Event, Serie, Entwurf, Archiv), Anmeldungen, Kommentaren, Audit-Log und Einstellungen gefüllt. Eigene Änderungen bleiben über Neustarts erhalten.
 *   `npm run dev:reset` setzt die Dev-Datenbank auf den Ausgangszustand zurück (geht auch bei laufendem Server).
+*   Alle Termine sind relativ zum Zeitpunkt des ersten Seedens. Nach ein paar Tagen liegen die Beispiel-Events in der Vergangenheit und das „laufende“ Event (Check-in `DEMO42`) läuft nur ca. 2,5 Stunden lang — `npm run dev:reset` setzt alle Termine wieder relativ zu jetzt.
 *   Discord ist simuliert: Rollen, Channels und Scheduled Events kommen von einem Fake-Server, DMs, Ankündigungen und Rollenvergaben erscheinen als `[MOCK-DISCORD]` in der Konsole.
 *   Check-in-Code des laufenden Beispiel-Events: `DEMO42`. Admin-Reset-Passwort (Panic-Mode, System-Reset): `dev`, sofern in der `.env` nichts anderes steht.
 *   Eine `.env` ist nicht nötig. Vorhandene Discord- und Firebase-Werte werden im Dev-Modus ignoriert.

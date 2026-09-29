@@ -122,7 +122,7 @@ Da alle Aufrufer die Exporte erst nach vollständigem Laden von `bot.js` destruk
 
 ## Teil 5 — Dummy-Daten (`dev/seedData.js`, `dev/seed.js`)
 
-**`dev/seedData.js`** baut den Datensatz als Funktion `buildSeedData(now)`. Alle Zeitangaben sind relativ zu `now`, damit Events nie veralten. Alle Dokumente haben feste IDs (z. B. `dev-event-open`) → Seeden ist idempotent, Links bleiben stabil.
+**`dev/seedData.js`** baut den Datensatz als Funktion `buildSeedData(now)`. Alle Zeitangaben sind relativ zum Zeitpunkt des Seedens (`now`); `npm run dev:reset` setzt sie neu relativ zu jetzt. Alle Dokumente haben feste IDs (z. B. `dev-event-open`) → Seeden ist idempotent, Links bleiben stabil.
 
 | Collection | Inhalt |
 |---|---|

@@ -9,6 +9,7 @@ services:
     env_file: .env
     environment:
       # Fixed inside the container; change the host port via DEMS_PORT instead
+      NODE_ENV: production
       PORT: 3000
       SQLITE_PATH: /app/data/dems.sqlite
     ports:

@@ -78,6 +78,13 @@ router.get('/discord', (req, res) => {
 });
 
 /**
+ * GET /auth/discord/callback — no Discord round trip in the mock mode
+ */
+router.get('/discord/callback', (req, res) => {
+    res.redirect('/auth/dev-login');
+});
+
+/**
  * GET /auth/dev-login — persona selection
  */
 router.get('/dev-login', (req, res) => {
