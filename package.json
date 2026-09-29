@@ -3,23 +3,31 @@
   "version": "2.5.0",
   "description": "Discord Event Management System",
   "main": "server.js",
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "start": "node server.js",
-    "dev": "npx nodemon server.js"
+    "dev": "nodemon server.js",
+    "dev:mock": "nodemon dev/start.js",
+    "dev:reset": "node dev/reset.js",
+    "test": "node --test \"test/**/*.test.js\""
   },
   "dependencies": {
-    "better-sqlite3": "^12.11.1",
+    "better-sqlite3": "^13.0.3",
     "cors": "^2.8.6",
-    "discord.js": "^14.14.1",
-    "dotenv": "^16.3.1",
-    "express": "^4.18.2",
-    "express-rate-limit": "^8.2.1",
-    "express-session": "^1.17.3",
-    "firebase": "^11.10.0",
-    "helmet": "^8.1.0",
-    "node-fetch": "^2.7.0"
+    "discord.js": "^14.27.0",
+    "dotenv": "^18.0.4",
+    "express": "^5.2.1",
+    "express-rate-limit": "^8.7.0",
+    "express-session": "^1.19.0",
+    "firebase": "^12.19.0",
+    "helmet": "^8.3.0"
   },
   "devDependencies": {
-    "nodemon": "^3.0.2"
+    "nodemon": "^3.1.14"
+  },
+  "nodemonConfig": {
+    "ignore": ["data/**", "public/**", "docs/**", "landing/**", "test/**"]
   }
 }

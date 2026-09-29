@@ -3,8 +3,11 @@ const {
     ModalBuilder, LabelBuilder, TextDisplayBuilder, TextInputBuilder, TextInputStyle,
     StringSelectMenuBuilder, UserSelectMenuBuilder, RoleSelectMenuBuilder,
     ChannelSelectMenuBuilder, MentionableSelectMenuBuilder, MessageFlags,
-    REST, Routes, SlashCommandBuilder, PermissionsBitField, ChannelType, ActivityType
+    REST, Routes, SlashCommandBuilder, PermissionsBitField, ChannelType, ActivityType, Events
 } = require('discord.js');
+// Loaded before firebaseAdmin.js so the mock environment is in place even
+// when bot.js is required without server.js (e.g. in tests)
+const { IS_MOCK_MODE } = require('./dev/mockMode');
 const { db, collection, doc, getDoc, getDocs, addDoc, setDoc, updateDoc, deleteDoc, query, where, orderBy } = require('./firebaseAdmin');
 const { debugLog } = require('./utils/debugLog');
 const { isRegistrationBlocked } = require('./middleware/maintenance');
@@ -61,7 +64,7 @@ let dmsSentCount = 0;
 let commandsProcessedCount = 0;
 let presenceUpdateInterval = null;
 
-client.once('ready', async () => {
+client.once(Events.ClientReady, async () => {
     console.log(`🤖 Bot logged in as ${client.user.tag}`);
     debugLog('bot.ready', { tag: client.user.tag, guildId: process.env.DISCORD_GUILD_ID });
     isReady = true;
@@ -220,7 +223,7 @@ client.on('interactionCreate', async (interaction) => {
         if ((action === 'guest_accept' || action === 'guest_decline') && registrationId && guestId) {
             // Only allow the invited user to respond
             if (interaction.user.id !== guestId) {
-                return interaction.reply({ content: '❌ Diese Einladung ist nicht für dich.', ephemeral: true });
+                return interaction.reply({ content: '❌ Diese Einladung ist nicht für dich.', flags: MessageFlags.Ephemeral });
             }
             try {
                 const regRef = doc(db, 'registrations', registrationId);
@@ -302,7 +305,7 @@ client.on('interactionCreate', async (interaction) => {
                 }
             } catch (err) {
                 console.error('Guest invitation button error:', err);
-                try { await interaction.reply({ content: '❌ Fehler beim Verarbeiten der Einladung.', ephemeral: true }); } catch {}
+                try { await interaction.reply({ content: '❌ Fehler beim Verarbeiten der Einladung.', flags: MessageFlags.Ephemeral }); } catch {}
             }
             return;
         }
@@ -319,7 +322,7 @@ client.on('interactionCreate', async (interaction) => {
             const snapshot = await getDocs(q);
 
             if (snapshot.empty) {
-                return interaction.reply({ content: '📭 Keine aktiven Events vorhanden.', ephemeral: true });
+                return interaction.reply({ content: '📭 Keine aktiven Events vorhanden.', flags: MessageFlags.Ephemeral });
             }
 
             // Convert to array and sort by startDate in memory
@@ -352,10 +355,10 @@ client.on('interactionCreate', async (interaction) => {
                 embeds.push(embed);
             }
 
-            await interaction.reply({ embeds, ephemeral: false });
+            await interaction.reply({ embeds });
         } catch (err) {
             console.error('Slash /events error:', err);
-            await interaction.reply({ content: '❌ Fehler beim Laden der Events.', ephemeral: true });
+            await interaction.reply({ content: '❌ Fehler beim Laden der Events.', flags: MessageFlags.Ephemeral });
         }
     }
 
@@ -366,7 +369,7 @@ client.on('interactionCreate', async (interaction) => {
             const eventSnap = await getDoc(doc(db, 'events', eventId));
 
             if (!eventSnap.exists()) {
-                return interaction.reply({ content: '❌ Event nicht gefunden.', ephemeral: true });
+                return interaction.reply({ content: '❌ Event nicht gefunden.', flags: MessageFlags.Ephemeral });
             }
 
             const event = eventSnap.data();
@@ -384,10 +387,10 @@ client.on('interactionCreate', async (interaction) => {
                 .setFooter({ text: 'DEMS — Event Management' })
                 .setTimestamp();
 
-            await interaction.reply({ embeds: [embed], ephemeral: true });
+            await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
         } catch (err) {
             console.error('Slash /register error:', err);
-            await interaction.reply({ content: '❌ Fehler.', ephemeral: true });
+            await interaction.reply({ content: '❌ Fehler.', flags: MessageFlags.Ephemeral });
         }
     }
 
@@ -400,7 +403,7 @@ client.on('interactionCreate', async (interaction) => {
             // Get event details
             const eventSnap = await getDoc(doc(db, 'events', eventId));
             if (!eventSnap.exists()) {
-                return interaction.reply({ content: '❌ Event nicht gefunden.', ephemeral: true });
+                return interaction.reply({ content: '❌ Event nicht gefunden.', flags: MessageFlags.Ephemeral });
             }
 
             const event = eventSnap.data();
@@ -414,7 +417,7 @@ client.on('interactionCreate', async (interaction) => {
             const regSnapshot = await getDocs(regQ);
 
             if (regSnapshot.empty) {
-                return interaction.reply({ content: '⚠️ Du bist für dieses Event nicht angemeldet.', ephemeral: true });
+                return interaction.reply({ content: '⚠️ Du bist für dieses Event nicht angemeldet.', flags: MessageFlags.Ephemeral });
             }
 
             const regDoc = regSnapshot.docs[0];
@@ -441,10 +444,10 @@ client.on('interactionCreate', async (interaction) => {
                 .setDescription(`Du wurdest erfolgreich von **${event.title}** abgemeldet.`)
                 .setTimestamp();
 
-            await interaction.reply({ embeds: [embed], ephemeral: true });
+            await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
         } catch (err) {
             console.error('Slash /unregister error:', err);
-            await interaction.reply({ content: '❌ Fehler bei der Abmeldung.', ephemeral: true });
+            await interaction.reply({ content: '❌ Fehler bei der Abmeldung.', flags: MessageFlags.Ephemeral });
         }
     }
 });
@@ -2194,3 +2197,7 @@ module.exports = {
     buildEventComponents,
     canRegisterViaDiscord
 };
+
+// Dev mock mode: every call that would reach Discord goes to the simulated
+// server instead (see dev/mockBot.js)
+if (IS_MOCK_MODE) Object.assign(module.exports, require('./dev/mockBot'));

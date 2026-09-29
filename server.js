@@ -1,4 +1,9 @@
-require('dotenv').config();
+// dotenv >= 17 logs every load by default -> keep the startup output as before
+require('dotenv').config({ quiet: true });
+
+// Dev mock mode (DEV_MOCK=true) -> has to adjust the environment before
+// firebaseAdmin.js and bot.js read it (see dev/mockMode.js)
+const { IS_MOCK_MODE } = require('./dev/mockMode');
 const { debugLog, IS_DEBUG } = require('./utils/debugLog');
 
 const express = require('express');
@@ -22,6 +27,13 @@ if (!process.env.SESSION_SECRET || process.env.SESSION_SECRET === 'your_random_s
     console.error('❌ SESSION_SECRET ist nicht gesetzt oder noch auf dem Standardwert. Bitte in .env setzen.');
     process.exit(1);
 }
+
+// ── Health check ────────────────────────────────────────────────────────
+// Registered before the session middleware so container health probes do
+// not create a new session on every call.
+app.get('/healthz', (req, res) => {
+    res.json({ status: 'ok' });
+});
 
 // ── Security ────────────────────────────────────────────────────────────
 app.use(helmet({
@@ -53,20 +65,29 @@ const apiLimiter = rateLimit({
     max: 200,
     message: { error: 'Zu viele Anfragen. Bitte versuche es später erneut.' },
     standardHeaders: true,
-    legacyHeaders: false
+    legacyHeaders: false,
+    // Dev mock mode: frequent reloads while developing must not hit the limit
+    skip: () => IS_MOCK_MODE
 });
 app.use('/api/', apiLimiter);
 
 const authLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
     max: 30,
-    message: { error: 'Zu viele Login-Versuche.' }
+    message: { error: 'Zu viele Login-Versuche.' },
+    skip: () => IS_MOCK_MODE
 });
 app.use('/auth/', authLimiter);
 
 // ── Middleware ───────────────────────────────────────────────────────────
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+// Express 5 leaves req.body undefined when a request carries no body ->
+// restore the Express 4 default so handlers can keep destructuring it.
+app.use((req, res, next) => {
+    if (req.body === undefined) req.body = {};
+    next();
+});
 app.use(session({
     secret: process.env.SESSION_SECRET,
     resave: false,
@@ -146,6 +167,8 @@ if (IS_DEBUG) {
 }
 
 // ── Routes ──────────────────────────────────────────────────────────────
+// Dev mock mode: persona login instead of Discord OAuth2 (see dev/devAuth.js)
+if (IS_MOCK_MODE) app.use('/auth', require('./dev/devAuth'));
 app.use('/auth', require('./routes/auth'));
 app.use('/api/events', require('./routes/events'));
 app.use('/api/admin', require('./routes/admin'));
@@ -217,13 +240,19 @@ app.get('/api/updates', (req, res) => {
     }
 });
 
-// SPA fallback
-app.get('*', (req, res) => {
+// SPA fallback (Express 5 path syntax: named wildcard, braces make it match "/" too)
+app.get('/{*splat}', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
 // ── Start server ────────────────────────────────────────────────────────
-const server = app.listen(PORT, () => {
+const server = app.listen(PORT, (err) => {
+    // Express 5 hands listen errors (e.g. EADDRINUSE) to this callback instead
+    // of crashing -> exit so a supervisor like Docker can restart the process.
+    if (err) {
+        console.error(`❌ Server konnte nicht auf Port ${PORT} starten:`, err.message);
+        process.exit(1);
+    }
     console.log(`\n🌐 DEMS Server running at http://localhost:${PORT}\n`);
 });
 

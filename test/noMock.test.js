@@ -1,0 +1,28 @@
+const { test, before, after } = require('node:test');
+const assert = require('node:assert/strict');
+const path = require('path');
+const { createTempDir, startServer, createClient } = require('./helpers');
+
+let server;
+
+before(async () => {
+    server = await startServer('server.js', {
+        SESSION_SECRET: 'no-mock-test-secret',
+        SQLITE_PATH: path.join(createTempDir('no-mock'), 'db.sqlite'),
+        DISCORD_CLIENT_ID: '123'
+    });
+});
+
+after(() => server.stop());
+
+test('without DEV_MOCK the login button still goes to Discord', async () => {
+    const res = await createClient(server.baseUrl).request('/auth/discord');
+    assert.equal(res.status, 302);
+    assert.match(res.headers.get('location'), /^https:\/\/discord\.com\/api\/oauth2\/authorize\?client_id=123/);
+});
+
+test('without DEV_MOCK the persona login does not exist', async () => {
+    const client = createClient(server.baseUrl);
+    await client.request('/auth/dev-login/admin');
+    assert.equal(await (await client.request('/auth/me')).json(), null);
+});

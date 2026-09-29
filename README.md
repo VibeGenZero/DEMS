@@ -73,8 +73,8 @@ Folge diesen Schritten, um das Projekt lokal einzurichten:
 
 ### 1. Voraussetzungen
 Stelle sicher, dass du folgende Tools installiert hast:
-*   [Node.js](https://nodejs.org/) (Version 16 oder höher)
-*   Ein Firebase-Projekt
+*   [Node.js](https://nodejs.org/) (Version 22 oder höher) – oder nur [Docker](https://docs.docker.com/get-docker/), siehe unten
+*   Optional: ein Firebase-Projekt (sonst wird SQLite genutzt)
 *   Eine Discord-Applikation im [Developer Portal](https://discord.com/developers/applications)
 
 ### 2. Installation
@@ -111,6 +111,61 @@ npm run dev
 ```
 
 Der Server läuft nun unter `http://localhost:3000`.
+
+## 🧪 Dev-Modus mit Dummy-Daten
+
+Zum Entwickeln und Ausprobieren ohne Discord-Token, OAuth und Firebase:
+
+```bash
+npm install
+npm run dev:mock
+```
+
+*   Öffne `http://localhost:3000` und klicke auf „Mit Discord anmelden“. Statt Discord erscheint eine Auswahl von Test-Personas: **Admin**, **Mitglied mit Rolle „Raid-Team“**, **Mitglied ohne Rollen** und ein **Neuling** (erster Login).
+*   Die Daten liegen in `data/dems.dev.sqlite`, getrennt von der normalen Datenbank. Beim ersten Start wird sie mit Beispiel-Events (Formular, Warteliste, Rollen-Event, laufendes Event, Serie, Entwurf, Archiv), Anmeldungen, Kommentaren, Audit-Log und Einstellungen gefüllt. Eigene Änderungen bleiben über Neustarts erhalten.
+*   `npm run dev:reset` setzt die Dev-Datenbank auf den Ausgangszustand zurück (geht auch bei laufendem Server).
+*   Alle Termine sind relativ zum Zeitpunkt des ersten Seedens. Nach ein paar Tagen liegen die Beispiel-Events in der Vergangenheit und das „laufende“ Event (Check-in `DEMO42`) läuft nur ca. 2,5 Stunden lang — `npm run dev:reset` setzt alle Termine wieder relativ zu jetzt.
+*   Discord ist simuliert: Rollen, Channels und Scheduled Events kommen von einem Fake-Server, DMs, Ankündigungen und Rollenvergaben erscheinen als `[MOCK-DISCORD]` in der Konsole.
+*   Check-in-Code des laufenden Beispiel-Events: `DEMO42`. Admin-Reset-Passwort (Panic-Mode, System-Reset): `dev`, sofern in der `.env` nichts anderes steht.
+*   Eine `.env` ist nicht nötig. Vorhandene Discord- und Firebase-Werte werden im Dev-Modus ignoriert.
+*   Der Dev-Modus lässt sich nicht in Produktion aktivieren: mit `NODE_ENV=production` bricht der Start ab.
+
+### Dev-Modus mit Docker
+
+```bash
+docker compose -f compose.dev.yaml up --build
+```
+
+*   Der Code wird in den Container gemountet, Änderungen starten den Server automatisch neu (Frontend-Dateien unter `public/` brauchen nur einen Browser-Reload).
+*   Die Dev-Datenbank liegt im Volume `dems-dev-data`. Zurücksetzen: `docker compose -f compose.dev.yaml exec dems-dev npm run dev:reset`.
+*   Nach Änderungen an den Abhängigkeiten: `docker compose -f compose.dev.yaml up --build -V` (erneuert `node_modules` im Container).
+*   Anderer Host-Port: `DEMS_DEV_PORT` in der `.env`.
+
+Tests: `npm test`
+
+## 🐳 Docker
+
+Voraussetzung ist nur Docker (inkl. Compose). Die Konfiguration kommt wie oben aus der `.env`.
+
+```bash
+cp .env.example .env   # ausfüllen, mindestens SESSION_SECRET
+docker compose up -d --build
+docker compose logs -f dems
+```
+
+*   Die App läuft unter `http://localhost:3000`. Einen anderen Host-Port setzt du über `DEMS_PORT` in der `.env`.
+*   Die SQLite-Datenbank liegt im Volume `dems-data` (`/app/data` im Container) und überlebt Rebuilds und Updates.
+*   Der Container hat einen Healthcheck auf `GET /healthz` (`docker compose ps` zeigt den Status).
+*   Stoppen mit `docker compose down` – die Daten bleiben erhalten. `docker compose down -v` löscht auch das Volume.
+*   Update: `git pull && docker compose up -d --build`.
+
+Ohne Compose:
+
+```bash
+docker build -t dems .
+docker run -d --init --env-file .env -e PORT=3000 -e SQLITE_PATH=/app/data/dems.sqlite \
+  -p 3000:3000 -v dems-data:/app/data --name dems dems
+```
 
 ## 🤝 Mitwirken
 

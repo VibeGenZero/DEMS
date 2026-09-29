@@ -1,0 +1,33 @@
+# Dependencies are installed inside the image
+node_modules/
+npm-debug.log*
+
+# Secrets and local data never go into the image
+.env
+.env.*
+!.env.example
+data/
+*.sqlite
+*.sqlite-journal
+*.sqlite-wal
+*.sqlite-shm
+
+# Not needed at runtime
+.git/
+.gitignore
+.gitattributes
+.idea/
+.vscode/
+.claude/
+docs/
+test/
+landing/
+*.md
+logs/
+*.log
+
+# Docker files themselves
+Dockerfile
+.dockerignore
+compose*.yaml
+docker-compose*.yml

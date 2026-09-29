@@ -154,7 +154,12 @@ function collection(_db, name) {
   return { __type: 'collection', collection: name, constraints: [] };
 }
 
-function doc(_db, name, id) {
+function doc(parent, name, id) {
+  // Firestore also accepts doc(collectionRef, id) -> the collection name then
+  // comes from the reference and the second argument is the document ID.
+  if (parent && parent.__type === 'collection') {
+    [name, id] = [parent.collection, name];
+  }
   return { __type: 'doc', collection: name, id: id != null ? String(id) : generateId() };
 }
 

@@ -1,0 +1,21 @@
+services:
+  dems:
+    build:
+      context: .
+      target: runtime
+    image: dems:latest
+    init: true
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      # Fixed inside the container; change the host port via DEMS_PORT instead
+      NODE_ENV: production
+      PORT: 3000
+      SQLITE_PATH: /app/data/dems.sqlite
+    ports:
+      - "${DEMS_PORT:-3000}:3000"
+    volumes:
+      - dems-data:/app/data
+
+volumes:
+  dems-data:
