@@ -1,6 +1,6 @@
 {
   "name": "dems",
-  "version": "2.5.1",
+  "version": "2.6.0",
   "description": "Discord Event Management System",
   "main": "server.js",
   "engines": {
@@ -30,6 +30,12 @@
     "nodemon": "^3.1.14"
   },
   "nodemonConfig": {
-    "ignore": ["data/**", "public/**", "docs/**", "landing/**", "test/**"]
+    "ignore": [
+      "data/**",
+      "public/**",
+      "docs/**",
+      "landing/**",
+      "test/**"
+    ]
   }
 }

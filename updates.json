@@ -1,14 +1,18 @@
 {
-    "version": "2.5.1",
+    "version": "2.6.0",
     "date": "2026-10-02",
     "news": [
         {
-            "title": "🔗 Event-Links aus Discord führen wieder zum Event",
-            "content": "„Hier anmelden“, der Button „Zum Event“, der /events-Befehl, Event-Channels und Bot-Nachrichten öffnen jetzt direkt die Detailseite des Events statt der Event-Übersicht. Auch Links in älteren Discord-Nachrichten funktionieren wieder."
+            "title": "🛡️ Rollen-Slots für Raids & Teams",
+            "content": "Events können jetzt Rollen wie Tank, Heiler oder Schaden mit eigener Platzzahl haben. Du wählst deine Hauptrolle und optional Ausweichrollen – ist deine Rolle voll, wirst du automatisch in einer freien Ausweichrolle eingeplant oder rückst später passend nach."
         },
         {
-            "title": "🔐 Nach dem Login direkt zum Event",
-            "content": "Wer einen Event-Link öffnet und noch nicht eingeloggt ist, landet nach dem Discord-Login automatisch auf genau diesem Event — nicht mehr auf der Übersicht."
+            "title": "🔄 Live-Ankündigungen in Discord",
+            "content": "Die Event-Ankündigung zeigt die Aufstellung mit Namen und aktualisiert sich bei jeder An- und Abmeldung von selbst. Pro Rolle gibt es einen eigenen Button."
+        },
+        {
+            "title": "↔️ Slot wechseln & Abmelden per Klick",
+            "content": "Auf der Event-Seite und direkt in Discord kannst du in einen freien Slot wechseln oder dich abmelden – ganz ohne Befehl."
         }
     ]
 }

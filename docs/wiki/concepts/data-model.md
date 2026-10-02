@@ -43,11 +43,15 @@ erDiagram
 | `discordChannelId`, `discordTextChannelId`, `discordScheduledEventId` | id or null | set by the bot |
 | `recurring`, `recurringInterval`, `recurringUntil`, `seriesId` | bool, `weekly`\|`biweekly`\|other=monthly, `YYYY-MM-DD`, uuid | series instances share `seriesId` |
 | `eventStartNotificationSent` | bool | start DM sent once |
+| `slots` | `[{ id, name, emoji, capacity }]` or absent | role slots, see [role-slots](role-slots.md); with slots `maxParticipants = Σ capacity` and `allowGuests = false` |
+| `announcements` | `[{ channelId, messageId }]` (max 5) | Discord announcements that are kept up to date live |
 | `createdAt`, `createdBy`, `updatedAt` | ISO, user id, ISO | |
 
 ## registrations (auto id) — written by `utils/registrationService.js`
 
-`{ eventId, userId, userName, status: pending|accepted|waitlisted|rejected, formAnswers: { [fieldLabel]: string|boolean }, guests: userId[], pendingGuests: [{ userId, displayName, avatar, status: pending|accepted }], source: web|discord, createdAt, checkedIn?, checkedInAt? }`
+`{ eventId, userId, userName, status: pending|accepted|waitlisted|rejected, formAnswers: { [fieldLabel]: string|boolean }, guests: userId[], pendingGuests: [{ userId, displayName, avatar, status: pending|accepted }], source: web|discord, createdAt, checkedIn?, checkedInAt?, slotId?, preferredSlotId?, altSlotIds? }`
+
+Slot fields exist only on slot events: `slotId` = the slot actually taken (`null` on the waitlist), `preferredSlotId` = main role, `altSlotIds` = fallback roles in slot order.
 
 ## users (id = Discord user id) — written by `utils/userProfile.js`, `bot.js#ensureUserProfile`
 
@@ -59,7 +63,7 @@ erDiagram
 
 ## auditLogs (auto id) — `utils/eventUtils.js#addAuditLog`
 
-`{ action, adminId, details, targetId, timestamp }`. Actions: `CREATE_EVENT`, `UPDATE_EVENT`, `UPDATE_EVENT_STATUS`, `CANCEL_EVENT`, `START_EVENT`, `END_EVENT`, `DELETE_EVENT`, `DELETE_SERIES`, `DUPLICATE_EVENT`, `GENERATE_CHECKIN`, `EXPORT_REGISTRATIONS`, `UPDATE_REGISTRATION_STATUS`, `ANNOUNCE_EVENT`, `SYNC_DISCORD_EVENT`, `UPDATE_TEMPLATES`, `UPDATE_BOT_SETTINGS`, `UPDATE_MAINTENANCE`, `PANIC_MODE_ACTIVATED`, `PANIC_MODE_DEACTIVATED`.
+`{ action, adminId, details, targetId, timestamp }`. Actions: `CREATE_EVENT`, `UPDATE_EVENT`, `UPDATE_EVENT_STATUS`, `CANCEL_EVENT`, `START_EVENT`, `END_EVENT`, `DELETE_EVENT`, `DELETE_SERIES`, `DUPLICATE_EVENT`, `GENERATE_CHECKIN`, `EXPORT_REGISTRATIONS`, `UPDATE_REGISTRATION_STATUS`, `MOVE_REGISTRATION_SLOT`, `ANNOUNCE_EVENT`, `SYNC_DISCORD_EVENT`, `UPDATE_TEMPLATES`, `UPDATE_BOT_SETTINGS`, `UPDATE_MAINTENANCE`, `PANIC_MODE_ACTIVATED`, `PANIC_MODE_DEACTIVATED`.
 
 ## Singletons
 

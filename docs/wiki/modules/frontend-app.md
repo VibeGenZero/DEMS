@@ -55,7 +55,8 @@ Logged-out users see `#login-section` for every route except `info`. An event ro
 | Form builder | `addFormField`, `toggleOptionsInput`, `getFormFieldsFromBuilder` |
 | Event admin actions | `deleteEvent`, `deleteEventSeries`, `changeEventStatus`, `duplicateEvent`, `startEvent`, `endEvent`, `exportRegistrations`, `syncDiscordEvent` |
 | Announcements | `announceEvent`, `renderAnnounceButtonsPreview`, `sendAnnouncement` |
-| Registrations review | `showRegistrations`, `updateRegStatus` |
+| Registrations review | `showRegistrations`, `updateRegStatus`, `renderRegistrationSlotCell`, `moveRegistrationSlot` |
+| Role slots | wizard: `renderSlotEditor`, `toggleSlotEditor`, `addSlotRow`, `removeSlotRow`, `applySlotPreset`, `getSlotsFromEditor`, `updateSlotTotals`; cards: `renderSlotChips`; event page: `eventHasSlots`, `renderSlotPicker`, `selectPrimarySlot`, `renderAltSlotChips`, `toggleAltSlot`, `renderRoster`, `renderRosterAvatar`, `renderOwnSlot`, `switchMySlot`; shared: `formatSlotLabel` |
 | Discord import | `showImportDiscordEventsModal`, `fetchDiscordEvents`, `selectDiscordEvent` |
 | Bot templates | `showBotMessagesModal`, `saveBotMessages` |
 | Maintenance | `checkMaintenanceStatus`, `showMaintenanceModal`, `saveMaintenanceSettings`, `activatePanicMode`, `deactivatePanicMode` |
@@ -66,7 +67,7 @@ Logged-out users see `#login-section` for every route except `info`. An event ro
 
 ## Globals
 
-`currentUser`, `csrfToken`, `serverName`, `cachedRoles`, `cachedEvents`, `countdownTimers`, `activeCategory`, `currentView`, `descriptionEditor` (EasyMDE), `startDatePicker`/`endDatePicker` (Flatpickr), `window.DEBUG_MODE`, `window.VERBOSE_LOG`, `window._demsGuildId`.
+`currentUser`, `csrfToken`, `serverName`, `cachedRoles`, `cachedEvents`, `countdownTimers`, `activeCategory`, `currentView`, `descriptionEditor` (EasyMDE), `startDatePicker`/`endDatePicker` (Flatpickr), `window.DEBUG_MODE`, `window.VERBOSE_LOG`, `window._demsGuildId`, slots: `selectedSlotId`, `selectedAltSlotIds`, `slotPickerSlots`, `MAX_SLOTS_PER_EVENT`, `SLOT_PRESETS`.
 
 ## Rules for changes
 

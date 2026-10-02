@@ -5,11 +5,11 @@ type: concept
 tags: [registration, waitlist, guests, approval, capacity, discord, web]
 sources: [utils/registrationService.js, utils/eventUtils.js, routes/events.js, routes/admin.js, bot.js]
 depends_on: [data-model, form-fields, maintenance-mode]
-see_also: [discord-integration, routes-events, event-lifecycle]
+see_also: [discord-integration, routes-events, event-lifecycle, role-slots]
 ---
 # Registration flow — rules, statuses, waitlist, guests
 
-> TL;DR: Every registration (web or Discord) goes through `registerUserForEvent()` in `utils/registrationService.js`. It checks event status, duplicates, role requirement, guest permission and required form fields, then decides the status: `waitlisted` when capacity (incl. guests) is exceeded, otherwise `accepted` (instant approval) or `pending` (manual). Admins move registrations between statuses; freed slots promote the oldest waitlisted registration.
+> TL;DR: Every registration (web or Discord) goes through `registerUserForEvent()` in `utils/registrationService.js`. It checks event status, duplicates, role requirement, guest permission and required form fields, then decides the status (slot events: main role, else first free fallback role, else waitlist): `waitlisted` when capacity (incl. guests) is exceeded, otherwise `accepted` (instant approval) or `pending` (manual). Admins move registrations between statuses; freed places promote the oldest waitlisted registration that fits.
 
 ## Checks in order (`registerUserForEvent`)
 
@@ -19,9 +19,12 @@ see_also: [discord-integration, routes-events, event-lifecycle]
 4. `accessMode === 'role-required'` → user must have one of `requiredRoles` (`missing_role`, 403). Web: roles from the session; Discord: live member roles.
 5. Guests sent but `allowGuests === false` → `guests_not_allowed`.
 6. `findMissingRequiredFields(formFields, formAnswers)` → `missing_fields` (checkbox must be `true`, others non-empty).
-7. Capacity (only if `maxParticipants > 0`): occupied = Σ over pending+accepted registrations of `1 + guests.length + pending guest invitations`; if `occupied + 1 + newGuests > max` → `waitlisted`.
-8. Otherwise `approvalMode === 'instant'` → `accepted`, else `pending`.
-9. Write the registration (`source: web|discord`), send guest invitation DMs, then `notifyRegistration` (DM by status; accepted → `assignRole` + event channel access).
+7. Slot events: `slotId` must be a slot of the event (`invalid_slot`, 400) and guests are refused (`guests_not_allowed`); `pickSlot` gives the main role, else the first free fallback (`altSlotIds`, slot order), else `waitlisted` — see [role-slots](role-slots.md).
+8. Events without slots, capacity (only if `maxParticipants > 0`): occupied = `countOccupiedPlaces` (`utils/capacity.js`: 1 + guests + open guest invitations per pending/accepted registration); if `occupied + 1 + newGuests > max` → `waitlisted`.
+9. Otherwise `approvalMode === 'instant'` → `accepted`, else `pending`.
+10. Write the registration (`source: web|discord`), send guest invitation DMs, then `notifyRegistration` (DM by status; accepted → `assignRole` + event channel access) and `notifyRegistrationsChanged` (live announcement).
+
+Steps 1–10 up to the write run under `withEventLock(eventId)` (one registration per event at a time); DMs and the announcement refresh run after the lock is released.
 
 Maintenance: `registrationDisabled`/`panicMode` block registrations before step 1 (web: `checkRegistrationAllowed` → 503; Discord: `checkRegistrationConditions`).
 
@@ -41,7 +44,7 @@ stateDiagram-v2
   pending --> [*]: unregister (promotes waitlist)
 ```
 
-Admin changes go through `PUT /api/admin/registrations/:id/status` (allowed targets: `accepted`, `rejected`, `waitlisted`).
+Admin changes go through `PUT /api/admin/registrations/:id/status` (allowed targets: `accepted`, `rejected`, `waitlisted`). On slot events, accepting a registration without a slot picks a free wanted slot or overbooks the main role (response `warning`); waitlisting clears `slotId`. Slots change via `PUT /api/admin/registrations/:id/slot` (admin, may overbook) and `PUT /api/events/:id/register/slot` (member, free slots only).
 
 ## Entry points
 
@@ -49,7 +52,8 @@ Admin changes go through `PUT /api/admin/registrations/:id/status` (allowed targ
 |---|---|
 | Web | `POST /api/events/:id/register` → `submitRegistration()` in `app.js` |
 | Discord button | `event_register:<eventId>` → `handleEventRegisterButton` → pre-checks → modal if the event has form fields that fit (≤5) → `handleEventRegisterModal` → `completeDiscordRegistration` → `registerUserForEvent({ source: 'discord' })` → `ensureUserProfile` |
-| Unregister | web `DELETE /api/events/:id/register`; Discord `/unregister` |
+| Discord slot button | `event_slot:<eventId>:<slotId>` → `handleEventSlotButton` → slot modal (`alt_slots` select + form) → `handleEventSlotModal` → `completeDiscordRegistration({ slotId, altSlotIds })` |
+| Unregister | `unregisterUserFromEvent`: web `DELETE /api/events/:id/register`, Discord `/unregister` and the "Abmelden" button |
 
 ## Guests
 
@@ -59,9 +63,9 @@ Admin changes go through `PUT /api/admin/registrations/:id/status` (allowed targ
 
 ## Message templates
 
-DM texts come from `event.customBotMessages[status]`, else `botMessages/templates[status]`, else a German default. Variables: `{user.id}`, `{user.name}`, `{user.mention}`, `{event.title}`, `{event.url}`, `{role.name}`, `{role.mention}` (replaced by `parseTemplate`).
+DM texts come from `event.customBotMessages[status]`, else `botMessages/templates[status]`, else a German default. Variables: `{user.id}`, `{user.name}`, `{user.mention}`, `{event.title}`, `{event.url}`, `{role.name}`, `{role.mention}`, `{slot.name}`, `{slot.emoji}` (replaced by `parseTemplate`).
 
 ## Gotchas
 
-- `promoteFromWaitlist` counts registrations without guests (inconsistent with step 7).
-- A double click on the Discord button is guarded only in memory (`pendingDiscordRegistrations`).
+- Registrations of one event are serialized by `withEventLock` (in memory, single process); a second server process would need a real transaction.
+- Promotion moves up every waitlisted registration that still fits (guests counted), oldest first.
