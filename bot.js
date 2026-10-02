@@ -10,6 +10,7 @@ const {
 const { IS_MOCK_MODE } = require('./dev/mockMode');
 const { db, collection, doc, getDoc, getDocs, addDoc, setDoc, updateDoc, deleteDoc, query, where, orderBy } = require('./firebaseAdmin');
 const { debugLog } = require('./utils/debugLog');
+const { buildEventUrl } = require('./utils/eventUrl');
 const { isRegistrationBlocked } = require('./middleware/maintenance');
 const {
     FORM_FIELD_TYPE, MODAL_MAX_FIELDS, getFormFields, getFieldType,
@@ -42,8 +43,6 @@ const SELECTABLE_CHANNEL_TYPES = [
 const REGISTER_BUTTON_PREFIX = 'event_register';
 const REGISTER_MODAL_PREFIX = 'event_register_modal';
 const MODAL_FIELD_PREFIX = 'field';
-
-const DEFAULT_BASE_URL = 'http://localhost:3000';
 
 // Registrations that are currently being processed -> guards against double clicks
 const pendingDiscordRegistrations = new Set();
@@ -258,8 +257,7 @@ client.on('interactionCreate', async (interaction) => {
                         const templateSnap = await getDoc(doc(db, 'botMessages', 'templates'));
                         const globalTemplates = templateSnap.exists() ? templateSnap.data() : {};
                         const customMsgs = event.customBotMessages || {};
-                        const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
-                        const eventUrl = `${baseUrl}/#events/${reg.eventId}`;
+                        const eventUrl = buildEventUrl(reg.eventId);
                         const vars = {
                             'user.id': guestId,
                             'user.name': inviteeName,
@@ -336,7 +334,6 @@ client.on('interactionCreate', async (interaction) => {
                 return dateA.localeCompare(dateB);
             });
 
-            const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
             const embeds = [];
             const maxEmbeds = Math.min(events.length, 10); // Max 10 embeds per message
 
@@ -349,7 +346,7 @@ client.on('interactionCreate', async (interaction) => {
                     .addFields(
                         { name: '📅 Datum', value: ev.startDate ? new Date(ev.startDate).toLocaleString('de-DE', { timeZone: TIMEZONE }) : 'TBD', inline: true },
                         { name: '👥 Plätze', value: ev.maxParticipants > 0 ? `${ev.currentParticipants || 0}/${ev.maxParticipants}` : 'Unbegrenzt', inline: true },
-                        { name: '🔗 Link', value: `[Zur Anmeldung](${baseUrl}/#events/${ev.id})`, inline: true }
+                        { name: '🔗 Link', value: `[Zur Anmeldung](${buildEventUrl(ev.id)})`, inline: true }
                     );
                 if (ev.category) embed.setFooter({ text: ev.category });
                 embeds.push(embed);
@@ -373,8 +370,7 @@ client.on('interactionCreate', async (interaction) => {
             }
 
             const event = eventSnap.data();
-            const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
-            const registrationUrl = `${baseUrl}/#event/${eventId}`;
+            const registrationUrl = buildEventUrl(eventId);
 
             const embed = new EmbedBuilder()
                 .setTitle('🌐 Registrierung über Website erforderlich')
@@ -565,17 +561,6 @@ function buildEventEmbed(event, registrationLink) {
     }
 
     return embed;
-}
-
-/**
- * Build the event page URL used in announcements and buttons.
- *
- * @param {string} eventId -> The event document ID.
- * @returns {string} -> Absolute URL of the event detail page.
- */
-function buildEventUrl(eventId) {
-    const baseUrl = process.env.BASE_URL || DEFAULT_BASE_URL;
-    return `${baseUrl}/#events/${eventId}`;
 }
 
 /**
@@ -1471,9 +1456,8 @@ async function checkReminders() {
 
                 for (const regDoc of regs.docs) {
                     const reg = regDoc.data();
-                    const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
                     await sendDM(reg.userId,
-                        `🎯 **${event.title}** hat gerade begonnen! Viel Spaß!\n\n🔗 Event ansehen: ${baseUrl}/#event/${eventId}`
+                        `🎯 **${event.title}** hat gerade begonnen! Viel Spaß!\n\n🔗 Event ansehen: ${buildEventUrl(eventId)}`
                     );
                 }
 
@@ -1713,14 +1697,13 @@ async function createEventChannels(event) {
         // Send an Embed to the text channel (or internal voice text chat)
         const targetChannel = createdTextChannel || createdVoiceChannel;
         if (targetChannel) {
-            const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
             const embed = new EmbedBuilder()
                 .setTitle(`🎉 Event: ${event.title}`)
                 .setColor(0x8b5cf6)
                 .setDescription(event.description ? event.description.substring(0, 1000) : 'Keine Beschreibung.')
                 .addFields(
                     { name: '📅 Start', value: event.startDate ? new Date(event.startDate).toLocaleString('de-DE', { timeZone: TIMEZONE, dateStyle: 'long', timeStyle: 'short' }) + ' Uhr' : 'TBD', inline: true },
-                    { name: '🔗 Link', value: `[Zur Event-Seite](${baseUrl}/#events/${event.id})`, inline: true }
+                    { name: '🔗 Link', value: `[Zur Event-Seite](${buildEventUrl(event.id)})`, inline: true }
                 )
                 .setFooter({ text: 'Automatisierter Event Channel' });
 
@@ -2095,7 +2078,6 @@ async function sendGuestInvitation(guestUserId, registrant, event, registrationI
     if (!isReady) return false;
     try {
         const user = await client.users.fetch(guestUserId);
-        const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
 
         const embed = new EmbedBuilder()
             .setTitle('🎟️ Gäste-Einladung erhalten')
@@ -2106,7 +2088,7 @@ async function sendGuestInvitation(guestUserId, registrant, event, registrationI
                 (event.startDate ? `**Datum:** ${new Date(event.startDate).toLocaleString('de-DE', { timeZone: TIMEZONE })}\n` : '') +
                 `\nMöchtest du die Einladung annehmen?`
             )
-            .addFields({ name: '🔗 Event', value: `[Zur Event-Seite](${baseUrl}/#events/${event.id})` })
+            .addFields({ name: '🔗 Event', value: `[Zur Event-Seite](${buildEventUrl(event.id)})` })
             .setFooter({ text: 'DEMS — Event Management' })
             .setTimestamp();
 

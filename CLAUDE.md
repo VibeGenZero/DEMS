@@ -48,7 +48,7 @@ Node ≥ 22. No build step, no TypeScript, no linter config.
 - **Express 5:** named wildcards (`/{*splat}`), `req.body` defaults to `{}` via a shim, never assign to `req.query`.
 - **CSRF:** mutating `/api/*` requests need header `X-CSRF-TOKEN` (frontend global `csrfToken`).
 - **Frontend:** global functions in `public/js/app.js` used by inline `onclick`; escape interpolated values with `escapeHtml`, Markdown only via `renderMarkdownSafe`; `showToast(msg, 'success'|'danger'|'warning'|'info')`.
-- **Discord:** new Discord calls go into exported `bot.js` helpers guarded by `if (!isReady) return <neutral>` + `try/catch`, and get a logging twin in `dev/mockBot.js`. Use `flags: MessageFlags.Ephemeral` and `Events.ClientReady`.
+- **Discord:** new Discord calls go into exported `bot.js` helpers guarded by `if (!isReady) return <neutral>` + `try/catch`, and get a logging twin in `dev/mockBot.js`. Use `flags: MessageFlags.Ephemeral` and `Events.ClientReady`. Links to an event only via `buildEventUrl(id)` from `utils/eventUrl.js`.
 - **Security:** never return `checkinCode` or other secrets in event responses; choose `requireAuth`/`requireAdmin` explicitly; new CDN hosts must be added to the CSP in `server.js`.
 - **Config:** document new env variables in `.env.example` (German comments) and `docs/wiki/ops/configuration.md`.
 - **Dev mock mode** (`DEV_MOCK=true`) must stay impossible with `NODE_ENV=production`.
@@ -66,9 +66,8 @@ When you change behaviour that a wiki node describes, update that node in the sa
 
 ## Top traps (details: `docs/wiki/reference/known-issues.md`)
 
-1. Links from Discord use `#events/<id>`, the SPA router opens details only for `#event/<id>`.
-2. Opening the app via plain `http://<ip>` (not localhost) hangs on the loading screen — helmet CSP `upgrade-insecure-requests`; serve via HTTPS.
-3. Sessions are in memory (logout on restart); `isAdmin` is cached for 24 h in the session.
-4. Event field changes must be whitelisted in BOTH `POST /events` and `PUT /events/:id` in `routes/admin.js`.
-5. Form answers are keyed by field label.
-6. Compose: `.env` reaches the container only via `env_file:`.
+1. Opening the app via plain `http://<ip>` (not localhost) hangs on the loading screen — helmet CSP `upgrade-insecure-requests`; serve via HTTPS.
+2. Sessions are in memory (logout on restart); `isAdmin` is cached for 24 h in the session.
+3. Event field changes must be whitelisted in BOTH `POST /events` and `PUT /events/:id` in `routes/admin.js`.
+4. Form answers are keyed by field label.
+5. Compose: `.env` reaches the container only via `env_file:`.

@@ -2,6 +2,7 @@ const { db, collection, doc, getDoc, getDocs, addDoc, query, where } = require('
 const { sendDM, assignRole, parseTemplate, getGuildRoles, addParticipantToEventChannels, sendGuestInvitation } = require('../bot');
 const { debugLog } = require('./debugLog');
 const { findMissingRequiredFields } = require('./formFields');
+const { buildEventUrl } = require('./eventUrl');
 
 /** Registration sources — where a registration was created. */
 const REGISTRATION_SOURCE = {
@@ -45,8 +46,6 @@ const STATUS_MESSAGES = {
     [REGISTRATION_STATUS.WAITLISTED]: 'Auf die Warteliste gesetzt.'
 };
 
-const DEFAULT_BASE_URL = 'http://localhost:3000';
-
 /**
  * Count the slots that are currently taken for an event.
  *
@@ -86,7 +85,6 @@ async function countOccupiedSlots(eventId) {
  * @returns {Promise<Object>} -> Variable map for parseTemplate().
  */
 async function buildTemplateVars({ user, eventId, event }) {
-    const baseUrl = process.env.BASE_URL || DEFAULT_BASE_URL;
     let roleName = '';
     let roleMention = '';
 
@@ -107,7 +105,7 @@ async function buildTemplateVars({ user, eventId, event }) {
         'user.name': user.displayName,
         'user.mention': `<@${user.id}>`,
         'event.title': event.title || 'Unbekanntes Event',
-        'event.url': `${baseUrl}/#events/${eventId}`,
+        'event.url': buildEventUrl(eventId),
         'role.name': roleName,
         'role.mention': roleMention
     };

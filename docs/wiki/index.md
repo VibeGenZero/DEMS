@@ -62,6 +62,7 @@ sources: [scripts/wiki-graph.js, docs/wiki/graph.json, CLAUDE.md]
 | `middleware/*.js` | middleware, maintenance-mode, auth-session |
 | `utils/registrationService.js` | registration-flow, utils |
 | `utils/formFields.js` | form-fields, utils |
+| `utils/eventUrl.js` | utils, discord-integration |
 | `utils/eventUtils.js`, `utils/userProfile.js`, `utils/debugLog.js` | utils |
 | `public/js/app.js` | frontend-app |
 | `public/index.html`, `public/css/style.css` | frontend-markup |

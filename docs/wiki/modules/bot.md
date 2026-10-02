@@ -18,7 +18,7 @@ see_also: [discord-integration, reminders-presence, form-fields]
 |---|---|
 | Setup | constants (`MODAL_*_MAX_LENGTH`, `REGISTER_BUTTON_PREFIX`, `REGISTER_MODAL_PREFIX`, `SELECTABLE_CHANNEL_TYPES`), `client` (intents: Guilds, GuildMembers, GuildMessages, DirectMessages, GuildScheduledEvents), `client.once(Events.ClientReady)` → `registerSlashCommands`, `logBotInviteUrl`, `applyBotSettings` |
 | Interaction dispatcher | `client.on('interactionCreate', ...)`: autocomplete → modal submit → buttons → slash commands |
-| Messaging | `sendDM`, `sendChannelMessage`, `buildEventEmbed`, `buildEventUrl`, `buildEventComponents`, `parseTemplate`, `sendGuestInvitation` |
+| Messaging | `sendDM`, `sendChannelMessage`, `buildEventEmbed`, `buildEventComponents`, `parseTemplate`, `sendGuestInvitation` |
 | Registration via Discord | `canRegisterViaDiscord`, `buildRegistrationModal` (+ `buildModalIntro`, `buildFieldDescription`, `applySelectConstraints`, `applyFieldComponent`, `buildFieldCustomId`), `readModalField`, `parseModalAnswers`, `resolveSelectedUserName`, `resolveInteractionRoles`, `ensureUserProfile`, `checkRegistrationConditions`, `completeDiscordRegistration`, `handleEventRegisterButton`, `handleEventRegisterModal` |
 | Guild data | `getGuildName`, `getGuildRoles`, `getGuildChannels`, `getPublicGuildChannels`, `getUserRoles`, `isGuildMember`, `assignRole`, `removeRole` |
 | Event channels & scheduled events | `createEventChannels`, `addParticipantToEventChannels`, `removeParticipantFromEventChannels`, `deleteEventChannels`, `getGuildScheduledEvents`, `createScheduledEvent` |
@@ -54,4 +54,4 @@ At the end of the file: `if (IS_MOCK_MODE) Object.assign(module.exports, require
 ## Gotchas
 
 - `parseTemplate` uses `String.replace` with the raw value → `$&`/`$1` in user names are interpreted (audit L-03).
-- Links built here mostly use `#events/<id>`, which the SPA router does not open as detail page — see [known-issues](../reference/known-issues.md).
+- Event links come from `buildEventUrl` in `utils/eventUrl.js` (`#event/<id>`); a hand-built `#events/<id>` would open the event list — see [utils](utils.md).

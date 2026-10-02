@@ -91,3 +91,10 @@ test('event channels are simulated and stored on the event', async () => {
     assert.equal((await getDoc(eventRef)).data().discordChannelId, null);
     assert.equal(await bot.deleteEventChannels('evt-channels'), false);
 });
+
+test('the "Zum Event" button of an announcement opens the event page', () => {
+    const [row] = bot.buildEventComponents({ title: 'Link-Test', status: 'active' }, 'evt-link');
+    const linkButton = row.toJSON().components.find(component => component.url);
+    assert.equal(linkButton.label, 'Zum Event');
+    assert.match(linkButton.url, /\/#event\/evt-link$/);
+});

@@ -208,6 +208,7 @@ async function finishLoading() {
 
     await checkAuth();
     await checkMaintenanceStatus();
+    restorePendingRoute();
     handleRoute();
     window.addEventListener('hashchange', handleRoute);
 
@@ -313,6 +314,43 @@ function showUserData() {
 }
 
 // ─── SPA Router ──────────────────────────────────
+// Discord messages sent before v2.5.1 link to #events/<id> instead of #event/<id>
+const LEGACY_EVENT_ROUTE = /^events\/(.+)$/;
+// Event a logged-out user opened -> shown after the Discord login
+const PENDING_ROUTE_KEY = 'dems_pending_route';
+const PENDING_ROUTE_MAX_AGE_MS = 15 * 60 * 1000;
+
+/**
+ * Remember the event a logged-out user opened, because the OAuth callback
+ * always redirects to #events.
+ */
+function rememberPendingRoute(route) {
+    localStorage.setItem(PENDING_ROUTE_KEY, JSON.stringify({ route, savedAt: Date.now() }));
+}
+
+/**
+ * Right after the login redirect (#events), go back to the event that was
+ * opened before the login. A remembered event is used at most once.
+ */
+function restorePendingRoute() {
+    if (!currentUser) return;
+    const stored = localStorage.getItem(PENDING_ROUTE_KEY);
+    if (!stored) return;
+    localStorage.removeItem(PENDING_ROUTE_KEY);
+
+    let pending;
+    try {
+        pending = JSON.parse(stored);
+    } catch {
+        return;
+    }
+    const isFresh = Date.now() - pending.savedAt < PENDING_ROUTE_MAX_AGE_MS;
+    const hash = window.location.hash.replace('#', '');
+    if (isFresh && (hash === '' || hash === 'events')) {
+        history.replaceState(null, '', '#' + pending.route);
+    }
+}
+
 function handleRoute() {
     // Clear countdown timers
     countdownTimers.forEach(t => clearInterval(t));
@@ -324,7 +362,12 @@ function handleRoute() {
         botStatusRefreshInterval = null;
     }
 
-    const hash = window.location.hash.replace('#', '') || 'events';
+    let hash = window.location.hash.replace('#', '') || 'events';
+    const legacyEvent = hash.match(LEGACY_EVENT_ROUTE);
+    if (legacyEvent) {
+        hash = 'event/' + legacyEvent[1];
+        history.replaceState(null, '', '#' + hash);
+    }
     const parts = hash.split('/');
     const route = parts[0];
     const param = parts[1];
@@ -339,6 +382,7 @@ function handleRoute() {
     });
 
     if (!currentUser && route !== 'login' && route !== 'info') {
+        if (route === 'event' && param) rememberPendingRoute(hash);
         document.getElementById('login-section').style.display = 'block';
         return;
     }
