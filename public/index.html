@@ -1164,13 +1164,13 @@
                     <textarea class="form-control" id="event-msg-registration" rows="2"
                       placeholder="Standard verwenden..."></textarea>
                     <small class="text-muted d-block mt-1">Variablen: {user.name}, {user.mention}, {event.title},
-                      {event.url}</small>
+                      {event.url}, {slot.name}, {slot.emoji}</small>
                   </div>
                   <div class="mb-3">
                     <label class="form-label">Angenommen-Nachricht</label>
                     <textarea class="form-control" id="event-msg-accepted" rows="2"
                       placeholder="Standard verwenden..."></textarea>
-                    <small class="text-muted d-block mt-1">Zusätzlich: {role.name}, {role.mention}</small>
+                    <small class="text-muted d-block mt-1">Zusätzlich: {role.name}, {role.mention}, {slot.name}, {slot.emoji}</small>
                   </div>
                   <div class="mb-3">
                     <label class="form-label">Abgelehnt-Nachricht</label>
@@ -1382,6 +1382,7 @@
                   <th>User</th>
                   <th>Gäste</th>
                   <th>Status</th>
+                  <th>Slot</th>
                   <th>Formular-Antworten</th>
                   <th>Datum</th>
                   <th>Aktionen</th>
@@ -1410,7 +1411,7 @@
         <div class="modal-body">
           <div class="alert alert-secondary small">
             <strong>Verfügbare Variablen:</strong>
-            <code>{user.id}</code>, <code>{user.name}</code>, <code>{event.title}</code>
+            <code>{user.id}</code>, <code>{user.name}</code>, <code>{event.title}</code>, <code>{slot.name}</code>, <code>{slot.emoji}</code>
           </div>
           <div class="mb-3">
             <label class="form-label">📋 Eingangsbestätigung</label>

@@ -4298,7 +4298,7 @@ async function showRegistrations(eventId, eventTitle) {
     document.getElementById('reg-event-title').textContent = eventTitle;
     const tbody = document.getElementById('registrations-tbody');
     const empty = document.getElementById('registrations-empty');
-    tbody.innerHTML = '<tr><td colspan="5" class="text-center py-4"><div class="spinner-border spinner-border-sm text-secondary"></div></td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7" class="text-center py-4"><div class="spinner-border spinner-border-sm text-secondary"></div></td></tr>';
     empty.style.display = 'none';
 
     const modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('registrationsModal'));
@@ -4308,6 +4308,7 @@ async function showRegistrations(eventId, eventTitle) {
         const res = await fetch(`/api/admin/events/${eventId}/registrations`);
         const result = await res.json();
         const regs = result.data || result;
+        const slots = Array.isArray(result.slots) ? result.slots : [];
 
         if (!regs.length) {
             tbody.innerHTML = '';
@@ -4344,6 +4345,9 @@ async function showRegistrations(eventId, eventTitle) {
           </span>
         </td>
         <td>
+          ${renderRegistrationSlotCell(reg, slots, eventId, eventTitle)}
+        </td>
+        <td>
           ${Object.entries(reg.formAnswers || {}).map(([k, v]) =>
                 `<small><strong>${escapeHtml(k)}:</strong> ${escapeHtml(String(v))}</small>`
             ).join('<br>') || '<small class="text-muted">—</small>'}
@@ -4363,7 +4367,7 @@ async function showRegistrations(eventId, eventTitle) {
     `;
         }).join('');
     } catch {
-        tbody.innerHTML = '<tr><td colspan="5" class="text-center text-danger">Fehler</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="7" class="text-center text-danger">Fehler</td></tr>';
     }
 }
 
@@ -4378,7 +4382,9 @@ async function updateRegStatus(regId, status, eventId, eventTitle) {
             body: JSON.stringify({ status })
         });
         if (res.ok) {
+            const result = await res.json();
             showToast(status === 'accepted' ? 'Angenommen!' : 'Abgelehnt.', status === 'accepted' ? 'success' : 'warning');
+            if (result.warning) showToast(result.warning, 'warning');
             showRegistrations(eventId, eventTitle);
         } else {
             const err = await res.json();
@@ -4387,6 +4393,43 @@ async function updateRegStatus(regId, status, eventId, eventTitle) {
     } catch {
         showToast('Netzwerkfehler.', 'danger');
     }
+}
+
+function renderRegistrationSlotCell(reg, slots, eventId, eventTitle) {
+    if (slots.length === 0) return '<span class="text-muted">—</span>';
+    const preferred = slots.find(slot => slot.id === reg.preferredSlotId);
+    const wish = preferred && reg.preferredSlotId !== reg.slotId
+        ? `<br><small class="text-muted">Wunsch: ${escapeHtml(formatSlotLabel(preferred))}</small>`
+        : '';
+    if (reg.status !== 'accepted' && reg.status !== 'pending') {
+        return `<span class="text-muted">—</span>${wish}`;
+    }
+    const options = slots.map(slot =>
+        `<option value="${escapeHtml(slot.id)}"${slot.id === reg.slotId ? ' selected' : ''}>${escapeHtml(formatSlotLabel(slot))}</option>`
+    ).join('');
+    return `<select class="form-select form-select-sm" aria-label="Slot"
+        data-reg-id="${escapeHtml(reg.id)}" data-event-id="${escapeHtml(eventId)}" data-event-title="${escapeHtml(eventTitle)}"
+        onchange="moveRegistrationSlot(this)">${options}</select>${wish}`;
+}
+
+async function moveRegistrationSlot(select) {
+    const { regId, eventId, eventTitle } = select.dataset;
+    try {
+        const res = await fetch(`/api/admin/registrations/${regId}/slot`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrfToken },
+            body: JSON.stringify({ slotId: select.value })
+        });
+        const result = await res.json();
+        if (res.ok) {
+            showToast(result.warning || 'Slot geändert.', result.warning ? 'warning' : 'success');
+        } else {
+            showToast(result.error || 'Slot konnte nicht geändert werden.', 'danger');
+        }
+    } catch {
+        showToast('Netzwerkfehler.', 'danger');
+    }
+    showRegistrations(eventId, eventTitle);
 }
 
 // ─── Bot Messages ────────────────────────────────
