@@ -3264,3 +3264,54 @@ body {
   text-align: center;
   word-break: break-all;
 }
+
+/* ============================================ */
+/* ROLE SLOTS                                   */
+/* ============================================ */
+.slot-editor-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.slot-editor-row {
+  display: grid;
+  grid-template-columns: 4rem 1fr 6rem auto;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.slot-emoji-input {
+  text-align: center;
+}
+
+@media (max-width: 576px) {
+  .slot-editor-row {
+    grid-template-columns: 3.5rem 1fr 4.5rem auto;
+  }
+}
+
+.slot-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  width: 100%;
+  margin-top: 0.35rem;
+}
+
+.slot-chip {
+  font-size: 0.75rem;
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  background: rgba(139, 92, 246, 0.12);
+  border: 1px solid var(--border-accent);
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+
+.slot-chip.full {
+  background: rgba(239, 68, 68, 0.1);
+  border-color: rgba(239, 68, 68, 0.35);
+  color: var(--text-secondary);
+}

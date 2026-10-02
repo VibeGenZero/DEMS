@@ -686,6 +686,7 @@ async function showEventsSection() {
                   ${event.approvalMode === 'instant' ? 'Instant' : 'Manuell'}
                 </span>
                 ${getParticipantWarningBadge(event)}
+                ${renderSlotChips(event.slotSummary)}
               </div>
             </div>
           </div>
@@ -3159,6 +3160,16 @@ function getParticipantWarningBadge(event) {
     return '';
 }
 
+function renderSlotChips(slotSummary) {
+    if (!Array.isArray(slotSummary) || slotSummary.length === 0) return '';
+    const chips = slotSummary.map(slot => {
+        const free = slot.capacity - slot.taken;
+        const text = free > 0 ? `${free} frei` : 'voll';
+        return `<span class="slot-chip${free > 0 ? '' : ' full'}" title="${escapeHtml(slot.name)}: ${slot.taken}/${slot.capacity}">${escapeHtml(slot.emoji || slot.name)} ${text}</span>`;
+    }).join('');
+    return `<div class="slot-chips">${chips}</div>`;
+}
+
 // ─── Series Toggle ──────────────────────────────
 function toggleSeriesDates(seriesCardId) {
     const hidden = document.getElementById(`${seriesCardId}-hidden`);
@@ -3418,6 +3429,7 @@ async function showCreateEventModal() {
     document.getElementById('event-voice-name').value = '';
     document.getElementById('event-text-name').value = '';
     document.getElementById('event-allow-guests').checked = true;
+    renderSlotEditor([]);
     document.getElementById('form-fields-builder').innerHTML = '';
     document.getElementById('role-requirement-area').style.display = 'none';
 
@@ -3547,6 +3559,7 @@ async function editEvent(eventId) {
 
         // Allow Guests Toggle
         document.getElementById('event-allow-guests').checked = event.allowGuests !== false;
+        renderSlotEditor(event.slots || []);
 
         // Recurring fields
         const recurringCb = document.getElementById('event-recurring');
@@ -3626,6 +3639,7 @@ async function saveEvent() {
             textName: document.getElementById('event-text-name').value.trim()
         },
         allowGuests: document.getElementById('event-allow-guests').checked,
+        slots: getSlotsFromEditor(),
         customBotMessages: {
             registration: document.getElementById('event-msg-registration').value,
             accepted: document.getElementById('event-msg-accepted').value,
@@ -3981,6 +3995,93 @@ function getFormFieldsFromBuilder() {
         }
         return field;
     }).filter(f => f.label);
+}
+
+// ─── Role Slots (wizard) ─────────────────────────
+const MAX_SLOTS_PER_EVENT = 10;
+const SLOT_PRESETS = {
+    'mmo-raid': [
+        { emoji: '🛡️', name: 'Tank', capacity: 2 },
+        { emoji: '💚', name: 'Heiler', capacity: 3 },
+        { emoji: '⚔️', name: 'Schaden', capacity: 10 }
+    ]
+};
+
+function formatSlotLabel(slot) {
+    if (!slot) return '';
+    return slot.emoji ? `${slot.emoji} ${slot.name}` : slot.name;
+}
+
+function renderSlotEditor(slots) {
+    const list = Array.isArray(slots) ? slots : [];
+    document.getElementById('event-use-slots').checked = list.length > 0;
+    document.getElementById('slot-editor-rows').innerHTML = '';
+    list.forEach(slot => addSlotRow(slot));
+    toggleSlotEditor();
+}
+
+function toggleSlotEditor() {
+    const enabled = document.getElementById('event-use-slots').checked;
+    document.getElementById('slot-editor-area').style.display = enabled ? 'block' : 'none';
+    if (enabled && document.querySelectorAll('#slot-editor-rows .slot-editor-row').length === 0) {
+        addSlotRow();
+    }
+    updateSlotTotals();
+}
+
+function addSlotRow(slot = {}) {
+    const rows = document.getElementById('slot-editor-rows');
+    if (rows.querySelectorAll('.slot-editor-row').length >= MAX_SLOTS_PER_EVENT) {
+        showToast(`Es sind höchstens ${MAX_SLOTS_PER_EVENT} Slots möglich.`, 'warning');
+        return;
+    }
+    const row = document.createElement('div');
+    row.className = 'slot-editor-row';
+    row.dataset.slotId = slot.id || '';
+    row.innerHTML = `
+        <input type="text" class="form-control slot-emoji-input" maxlength="8" placeholder="🎯" value="${escapeHtml(slot.emoji || '')}" aria-label="Emoji">
+        <input type="text" class="form-control slot-name-input" maxlength="30" placeholder="Name, z. B. Tank" value="${escapeHtml(slot.name || '')}" aria-label="Slot-Name">
+        <input type="number" class="form-control slot-capacity-input" min="1" max="100" value="${escapeHtml(String(slot.capacity || 1))}" aria-label="Plätze" oninput="updateSlotTotals()">
+        <button type="button" class="btn btn-sm btn-outline-danger" onclick="removeSlotRow(this)" title="Slot entfernen"><i class="bi bi-trash"></i></button>`;
+    rows.appendChild(row);
+    updateSlotTotals();
+}
+
+function removeSlotRow(button) {
+    const row = button.closest('.slot-editor-row');
+    if (row) row.remove();
+    updateSlotTotals();
+}
+
+function applySlotPreset(presetName) {
+    const preset = SLOT_PRESETS[presetName];
+    if (!preset) return;
+    document.getElementById('slot-editor-rows').innerHTML = '';
+    preset.forEach(slot => addSlotRow(slot));
+}
+
+function getSlotsFromEditor() {
+    if (!document.getElementById('event-use-slots').checked) return [];
+    return [...document.querySelectorAll('#slot-editor-rows .slot-editor-row')].map(row => ({
+        id: row.dataset.slotId || undefined,
+        emoji: row.querySelector('.slot-emoji-input').value.trim(),
+        name: row.querySelector('.slot-name-input').value.trim(),
+        capacity: parseInt(row.querySelector('.slot-capacity-input').value, 10) || 0
+    }));
+}
+
+function updateSlotTotals() {
+    const enabled = document.getElementById('event-use-slots').checked;
+    const maxInput = document.getElementById('event-max');
+    const guestToggle = document.getElementById('event-allow-guests');
+    const guestHint = document.getElementById('event-guests-slot-hint');
+    maxInput.disabled = enabled;
+    guestToggle.disabled = enabled;
+    if (guestHint) guestHint.style.display = enabled ? 'block' : 'none';
+    if (enabled) {
+        maxInput.value = getSlotsFromEditor().reduce((sum, slot) => sum + Math.max(0, slot.capacity), 0);
+        guestToggle.checked = false;
+    }
 }
 
 // ─── Registrations ───────────────────────────────
