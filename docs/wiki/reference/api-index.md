@@ -1,0 +1,78 @@
+---
+id: api-index
+title: API index — every HTTP endpoint
+type: reference
+tags: [api, endpoints, rest, index, routes]
+sources: [server.js, routes/auth.js, routes/events.js, routes/user.js, routes/admin.js, dev/devAuth.js]
+depends_on: [routes-auth, routes-events, routes-admin, routes-user, server]
+see_also: [request-lifecycle, add-api-endpoint]
+---
+# API index — every HTTP endpoint
+
+> TL;DR: One line per endpoint with its guard and the node that documents it. Guards: `—` public, `U` logged-in user (`requireAuth`), `A` admin (`requireAuth` + `requireAdmin`). All mutating `/api/*` calls also need the `X-CSRF-TOKEN` header.
+
+## server.js — [server](../modules/server.md)
+
+| Method | Path | Guard |
+|---|---|---|
+| GET | `/healthz` | — |
+| GET | `/api/csrf-token` | — |
+| GET | `/api/maintenance/status` | — |
+| GET | `/api/server-info` | — |
+| GET | `/api/updates` | — |
+| GET | `/{*splat}` (SPA fallback) | — |
+
+## /auth — [routes-auth](../modules/routes-auth.md)
+
+| Method | Path | Guard |
+|---|---|---|
+| GET | `/auth/discord` | — |
+| GET | `/auth/discord/callback` | — |
+| GET | `/auth/me` | — |
+| GET | `/auth/logout` | — |
+| GET | `/auth/dev-login`, `/auth/dev-login/:personaId` | — (only with `DEV_MOCK=true`) |
+
+## /api/events — [routes-events](../modules/routes-events.md)
+
+| Method | Path | Guard |
+|---|---|---|
+| GET | `/api/events` | — (non-active `?status=` → A) |
+| GET | `/api/events/series/:seriesId` | — |
+| GET | `/api/events/categories` | — |
+| GET | `/api/events/form-options` | U |
+| GET | `/api/events/:id` | — |
+| POST / DELETE | `/api/events/:id/register` | U (POST also maintenance gate) |
+| GET | `/api/events/:id/my-registration` | U |
+| GET | `/api/events/:id/participants` | U |
+| POST | `/api/events/:id/checkin` | U |
+| GET / POST | `/api/events/:id/comments` | U |
+| DELETE | `/api/events/:id/comments/:commentId` | U (owner or admin) |
+
+## /api/user — [routes-user](../modules/routes-user.md)
+
+| Method | Path | Guard |
+|---|---|---|
+| GET | `/api/user/registrations` | U |
+| GET | `/api/user/profile` | U |
+| GET | `/api/user/search?q=` | U |
+| GET / PUT | `/api/user/settings` | U |
+| DELETE | `/api/user/account` | U |
+
+## /api/admin — [routes-admin](../modules/routes-admin.md) (all A)
+
+| Method | Path |
+|---|---|
+| GET | `/api/admin/roles`, `/channels`, `/stats`, `/all-events`, `/import/discord-events` |
+| POST | `/api/admin/events` |
+| PUT | `/api/admin/events/:id`, `/events/:id/status`, `/events/:id/cancel` |
+| POST | `/api/admin/events/:id/start`, `/events/:id/end`, `/events/:id/duplicate`, `/events/:id/generate-checkin`, `/events/:id/announce`, `/events/:id/sync-discord` |
+| DELETE | `/api/admin/events/:id`, `/events/series/:seriesId` |
+| GET | `/api/admin/events/:id/checkin-stats`, `/events/:id/registrations`, `/events/:id/registrations/export` |
+| PUT | `/api/admin/registrations/:id/status` |
+| GET / PUT | `/api/admin/bot-messages` |
+| GET | `/api/admin/audit-log` |
+| DELETE | `/api/admin/reset` |
+| GET | `/api/admin/bot/status`, `/bot/running-events` |
+| GET / PUT | `/api/admin/bot/settings` |
+| GET / PUT | `/api/admin/maintenance` |
+| POST | `/api/admin/maintenance/panic`, `/maintenance/panic/deactivate` |

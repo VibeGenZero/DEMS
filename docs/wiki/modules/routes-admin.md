@@ -1,0 +1,59 @@
+---
+id: routes-admin
+title: routes/admin.js — admin API
+type: module
+tags: [api, admin, events, registrations, discord, bot-control, maintenance, audit-log, csv]
+sources: [routes/admin.js, middleware/validators.js, utils/eventUtils.js]
+part_of: [architecture]
+depends_on: [middleware, utils, data-layer, bot]
+see_also: [event-lifecycle, maintenance-mode, discord-integration, api-index]
+---
+# routes/admin.js — admin API
+
+> TL;DR: Mounted at `/api/admin`; every route requires `requireAuth` + `requireAdmin` (`router.use` at the top). Covers event CRUD and lifecycle, registration review, CSV export, Discord announce/sync/import, bot message templates, audit log, full system reset, bot control center and maintenance/panic mode. Most mutations write an audit log entry via `addAuditLog`.
+
+## Endpoints
+
+| Method | Path | Notes | Audit action |
+|---|---|---|---|
+| GET | `/roles` | guild roles (`getGuildRoles`) | — |
+| GET | `/channels` | guild channels for location autocomplete | — |
+| GET | `/stats` | counts of events by status and registrations by status (guests counted) | — |
+| GET | `/all-events` | all events incl. draft/archived, `orderBy('createdAt','desc')` | — |
+| GET | `/import/discord-events` | Discord scheduled events (`getGuildScheduledEvents`) | — |
+| POST | `/events` | `validateEvent`; creates one event or, with `recurring` + `recurringUntil`, a series (`seriesId`, weekly/biweekly/monthly); may `createEventChannels` | `CREATE_EVENT` |
+| PUT | `/events/:id` | `validateEvent`; full update; creates/deletes channels when `autoCreateChannels`/status changes | `UPDATE_EVENT` |
+| PUT | `/events/:id/status` | body `{ status: draft\|active\|archived\|cancelled }` | `UPDATE_EVENT_STATUS` |
+| PUT | `/events/:id/cancel` | status `cancelled` + DM to accepted/pending | `CANCEL_EVENT` |
+| POST | `/events/:id/start` | status `active`, sets `startDate` if empty | `START_EVENT` |
+| POST | `/events/:id/end` | status `archived`, `endDate = now` | `END_EVENT` |
+| DELETE | `/events/:id` | deletes event + its registrations | `DELETE_EVENT` |
+| DELETE | `/events/series/:seriesId` | deletes all events + registrations of a series | `DELETE_SERIES` |
+| POST | `/events/:id/duplicate` | copy as `draft`, title `"<title> (Kopie)"`, `checkinCode` reset | `DUPLICATE_EVENT` |
+| POST | `/events/:id/generate-checkin` | 6-digit code (`Math.random`), `checkinEnabled: true` | `GENERATE_CHECKIN` |
+| GET | `/events/:id/checkin-stats` | `{ total, checkedIn, code }` over accepted registrations | — |
+| GET | `/events/:id/registrations` | paginated (`page`, `limit` 50), newest first | — |
+| GET | `/events/:id/registrations/export` | CSV with BOM, columns incl. source + all form answers | `EXPORT_REGISTRATIONS` |
+| PUT | `/registrations/:id/status` | `validateRegStatus` (`accepted`\|`rejected`\|`waitlisted`); accepted → DM template + `assignRole`; rejected → DM + `promoteFromWaitlist` | `UPDATE_REGISTRATION_STATUS` |
+| POST | `/events/:id/announce` | body `{ text, roleIds, pingEveryone }` → `sendChannelMessage` to `DISCORD_ANNOUNCE_CHANNEL_ID` with embed + buttons | `ANNOUNCE_EVENT` |
+| POST | `/events/:id/sync-discord` | creates a Discord scheduled event once, stores `discordScheduledEventId` | `SYNC_DISCORD_EVENT` |
+| GET / PUT | `/bot-messages` | templates `registration`, `accepted`, `rejected` (`validateBotMessages`, ≤2000 chars) | `UPDATE_TEMPLATES` |
+| GET | `/audit-log` | paginated, newest first | — |
+| DELETE | `/reset` | body `{ password, targets[] }`; `ADMIN_RESET_PASSWORD` required; wipes `events`, `users`, `registrations`, `comments`, `auditLogs` | (console only) |
+| GET | `/bot/status` | `getBotStatus()` | — |
+| GET / PUT | `/bot/settings` | presence + feature toggles (`saveBotSettings` → `applyBotSettings`) | `UPDATE_BOT_SETTINGS` |
+| GET | `/bot/running-events` | active events with registration stats | — |
+| GET / PUT | `/maintenance` | warning, login/registration toggles, planned maintenance (panic state preserved) | `UPDATE_MAINTENANCE` |
+| POST | `/maintenance/panic` | lockdown, no password | `PANIC_MODE_ACTIVATED` |
+| POST | `/maintenance/panic/deactivate` | body `{ password }` = `ADMIN_RESET_PASSWORD` | `PANIC_MODE_DEACTIVATED` |
+
+## Where in code
+
+grep `router.(get|post|put|delete)('/<path>` in `routes/admin.js`; the file is grouped as: roles/channels/stats → event CRUD → lifecycle → check-in → registrations → announce/sync → templates → audit log → reset → `BOT CONTROL CENTER` → `MAINTENANCE MODE`.
+
+## Gotchas
+
+- `POST /events/:id/start|end` use `doc(collectionRef, id)`; the SQLite adapter supports that form since 2026-09 (it used to 404).
+- `DELETE /events/:id` deletes the event document BEFORE calling `deleteEventChannels(id)`, which reads that document → auto-created channels are never removed. See [known-issues](../reference/known-issues.md).
+- The event payload is whitelisted field by field in POST and PUT (`baseEvent`, `updates`) — adding an event field means editing both. See [add-event-field](../howto/add-event-field.md).
+- CSV export does not neutralise `= + - @` (audit L-04, open).

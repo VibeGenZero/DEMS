@@ -97,20 +97,52 @@ test('buildGraph derives reverse edges and sorts deterministically', () => {
     writePage(dir, 'modules/server.md', page('server', { type: 'module' }));
     writePage(dir, 'concepts/auth.md', page('auth', { depends_on: ['server'], see_also: ['csrf'] }));
     writePage(dir, 'concepts/csrf.md', page('csrf', { part_of: ['auth'] }));
+    writePage(dir, 'concepts/session.md', page('session', { see_also: ['auth'] }));
 
     const graph = buildGraph(loadNodes(dir));
     const byId = Object.fromEntries(graph.nodes.map(node => [node.id, node]));
 
-    assert.deepEqual(graph.nodes.map(node => node.id), ['auth', 'csrf', 'server']);
+    assert.deepEqual(graph.nodes.map(node => node.id), ['auth', 'csrf', 'server', 'session']);
     assert.deepEqual(byId.server.used_by, ['auth']);
     assert.deepEqual(byId.auth.parts, ['csrf']);
-    assert.deepEqual(byId.csrf.see_also, ['auth']);
+    assert.deepEqual(byId.csrf.part_of, ['auth']);
     assert.equal(byId.auth.path, 'concepts/auth.md');
+    assert.equal(byId.auth.summary, 'Example page.');
     assert.deepEqual(graph.edges, [
         { from: 'auth', to: 'csrf', type: 'see_also' },
         { from: 'auth', to: 'server', type: 'depends_on' },
-        { from: 'csrf', to: 'auth', type: 'part_of' }
+        { from: 'csrf', to: 'auth', type: 'part_of' },
+        { from: 'session', to: 'auth', type: 'see_also' }
     ]);
+});
+
+test('see_also is symmetric and skips nodes already linked by a stronger relation', () => {
+    const dir = createTempDir('wiki-see-also');
+    writePage(dir, 'concepts/auth.md', page('auth', { see_also: ['csrf'] }));
+    writePage(dir, 'concepts/csrf.md', page('csrf', { part_of: ['auth'] }));
+    writePage(dir, 'concepts/session.md', page('session', { see_also: ['auth'] }));
+
+    const byId = Object.fromEntries(buildGraph(loadNodes(dir)).nodes.map(node => [node.id, node]));
+    assert.deepEqual(byId.auth.see_also, ['session']);
+    assert.deepEqual(byId.session.see_also, ['auth']);
+    assert.deepEqual(byId.csrf.see_also, []);
+});
+
+test('serializeGraph writes valid JSON with one node and one edge per line', () => {
+    const dir = createTempDir('wiki-serialize');
+    writePage(dir, 'modules/server.md', page('server', { type: 'module' }));
+    writePage(dir, 'concepts/auth.md', page('auth', { depends_on: ['server'] }));
+
+    const graph = buildGraph(loadNodes(dir));
+    const text = serializeGraph(graph);
+    assert.deepEqual(JSON.parse(text), graph);
+
+    const lines = text.trimEnd().split('\n');
+    for (const node of graph.nodes) {
+        assert.equal(lines.filter(line => line.includes(`"id":"${node.id}"`)).length, 1, node.id);
+    }
+    assert.ok(lines.some(line => line.trim().startsWith('{"from":"auth","to":"server"')));
+    assert.ok(text.endsWith('\n'));
 });
 
 test('the project wiki is valid and graph.json is up to date', () => {

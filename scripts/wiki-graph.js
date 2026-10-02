@@ -204,7 +204,9 @@ function asList(value) {
  * declared edges.
  *
  * Derived neighbours: `used_by` (reverse of depends_on), `parts` (reverse of
- * part_of); see_also is treated as symmetric.
+ * part_of); see_also is treated as symmetric and leaves out nodes that are
+ * already linked through one of the stronger relations, so every neighbour
+ * appears in exactly one list.
  *
  * @param {Array<Object>} nodes -> Valid result of loadNodes().
  * @returns {{ nodes: Array<Object>, edges: Array<Object> }} -> Deterministic graph.
@@ -224,20 +226,29 @@ function buildGraph(nodes) {
     const unique = (list) => [...new Set(list)].sort();
 
     const graphNodes = nodes
-        .map(node => ({
-            id: node.id,
-            title: node.title,
-            type: node.type,
-            path: node.path,
-            summary: node.summary,
-            tags: [...asList(node.tags)].sort(),
-            sources: [...asList(node.sources)].sort(),
-            depends_on: unique(neighbours(node.id, 'depends_on', 'out')),
-            used_by: unique(neighbours(node.id, 'depends_on', 'in')),
-            part_of: unique(neighbours(node.id, 'part_of', 'out')),
-            parts: unique(neighbours(node.id, 'part_of', 'in')),
-            see_also: unique([...neighbours(node.id, 'see_also', 'out'), ...neighbours(node.id, 'see_also', 'in')])
-        }))
+        .map(node => {
+            const related = {
+                depends_on: unique(neighbours(node.id, 'depends_on', 'out')),
+                used_by: unique(neighbours(node.id, 'depends_on', 'in')),
+                part_of: unique(neighbours(node.id, 'part_of', 'out')),
+                parts: unique(neighbours(node.id, 'part_of', 'in'))
+            };
+            const stronglyLinked = new Set(Object.values(related).flat());
+            const seeAlso = unique([...neighbours(node.id, 'see_also', 'out'), ...neighbours(node.id, 'see_also', 'in')])
+                .filter(id => !stronglyLinked.has(id));
+
+            return {
+                id: node.id,
+                title: node.title,
+                type: node.type,
+                path: node.path,
+                summary: node.summary,
+                tags: [...asList(node.tags)].sort(),
+                sources: [...asList(node.sources)].sort(),
+                ...related,
+                see_also: seeAlso
+            };
+        })
         .sort((a, b) => a.id.localeCompare(b.id));
 
     return { nodes: graphNodes, edges };
@@ -246,11 +257,15 @@ function buildGraph(nodes) {
 /**
  * Serialize the graph exactly as it is stored in graph.json.
  *
+ * One node and one edge per line: compact for LLM context and grep-friendly
+ * (`grep '"waitlist"' docs/wiki/graph.json` returns complete nodes).
+ *
  * @param {Object} graph -> Result of buildGraph().
- * @returns {string} -> Pretty-printed JSON with a trailing newline.
+ * @returns {string} -> Valid JSON with a trailing newline.
  */
 function serializeGraph(graph) {
-    return `${JSON.stringify(graph, null, 2)}\n`;
+    const block = (items) => items.map(item => `    ${JSON.stringify(item)}`).join(',\n');
+    return `{\n  "nodes": [\n${block(graph.nodes)}\n  ],\n  "edges": [\n${block(graph.edges)}\n  ]\n}\n`;
 }
 
 function main() {

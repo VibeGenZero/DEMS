@@ -1,0 +1,76 @@
+---
+id: data-model
+title: Data model — collections and document shapes
+type: concept
+tags: [data-model, schema, collections, events, registrations, users, firestore]
+sources: [routes/admin.js, utils/registrationService.js, utils/userProfile.js, routes/events.js, utils/eventUtils.js, bot.js, dev/seedData.js]
+depends_on: [data-layer]
+see_also: [registration-flow, event-lifecycle, maintenance-mode, glossary]
+---
+# Data model — collections and document shapes
+
+> TL;DR: Nine schemaless collections. `events`, `registrations`, `comments`, `auditLogs` use auto ids; `users` uses the Discord user id; `botMessages/templates`, `botSettings/config`, `maintenanceSettings/config` are singleton documents; `devMeta/seed` exists only in dev mock mode. All dates are ISO-8601 strings. Shapes are defined by the code that writes them (no schema file) — the producers are listed per collection.
+
+```mermaid
+erDiagram
+  events ||--o{ registrations : "eventId"
+  events ||--o{ comments : "eventId"
+  users ||--o{ registrations : "userId"
+  users ||--o{ comments : "userId"
+  registrations }o--o{ users : "guests[] / pendingGuests[].userId"
+  auditLogs }o--|| users : "adminId"
+```
+
+## events (auto id) — written by `POST/PUT /api/admin/events*`
+
+| Field | Type | Meaning |
+|---|---|---|
+| `title`, `description` | string | description is Markdown (EasyMDE), ≤5000 chars |
+| `status` | `draft` \| `active` \| `archived` \| `cancelled` | only `active` is public and accepts registrations |
+| `startDate`, `endDate` | ISO string or `''` | |
+| `maxParticipants` | int | `0` = unlimited; guests count against it |
+| `accessMode` / `requiredRoles` | `open` \| `role-required` / role id[] | role gate for registration |
+| `approvalMode` | `manual` \| `instant` | `instant` → accepted directly, `manual` → pending |
+| `assignRoleId` | role id or `''` | role given on acceptance, removed on unregister |
+| `formFields` | `[{ label, type, required, options[], description }]` | see [form-fields](form-fields.md) |
+| `allowGuests` | bool (default true) | |
+| `category`, `bannerUrl`, `accentColor` | string | UI only, not validated |
+| `location` | `{ text, channelId, channelType }` or `null` | |
+| `reminderHours` | `[{ hours, sent }]` (legacy: number) | see [reminders-presence](reminders-presence.md) |
+| `customBotMessages` | `{ registration?, accepted?, rejected? }` | per-event DM templates |
+| `checkinMessage` / `checkinEnabled` / `checkinCode` | string / bool / 6-digit string | code never sent by `GET /api/events/:id` |
+| `autoCreateChannels`, `channelConfig` | bool, `{ type: voice\|text\|both, voiceName?, textName? }` | private event channels |
+| `discordChannelId`, `discordTextChannelId`, `discordScheduledEventId` | id or null | set by the bot |
+| `recurring`, `recurringInterval`, `recurringUntil`, `seriesId` | bool, `weekly`\|`biweekly`\|other=monthly, `YYYY-MM-DD`, uuid | series instances share `seriesId` |
+| `eventStartNotificationSent` | bool | start DM sent once |
+| `createdAt`, `createdBy`, `updatedAt` | ISO, user id, ISO | |
+
+## registrations (auto id) — written by `utils/registrationService.js`
+
+`{ eventId, userId, userName, status: pending|accepted|waitlisted|rejected, formAnswers: { [fieldLabel]: string|boolean }, guests: userId[], pendingGuests: [{ userId, displayName, avatar, status: pending|accepted }], source: web|discord, createdAt, checkedIn?, checkedInAt? }`
+
+## users (id = Discord user id) — written by `utils/userProfile.js`, `bot.js#ensureUserProfile`
+
+`{ id, username, displayName, avatar (URL), acceptInvitations (bool), createdAt, updatedAt }`
+
+## comments (auto id) — `POST /api/events/:id/comments`
+
+`{ eventId, userId, userName, userAvatar, text (≤1000), isAdmin, replyTo (comment id|null), createdAt }`
+
+## auditLogs (auto id) — `utils/eventUtils.js#addAuditLog`
+
+`{ action, adminId, details, targetId, timestamp }`. Actions: `CREATE_EVENT`, `UPDATE_EVENT`, `UPDATE_EVENT_STATUS`, `CANCEL_EVENT`, `START_EVENT`, `END_EVENT`, `DELETE_EVENT`, `DELETE_SERIES`, `DUPLICATE_EVENT`, `GENERATE_CHECKIN`, `EXPORT_REGISTRATIONS`, `UPDATE_REGISTRATION_STATUS`, `ANNOUNCE_EVENT`, `SYNC_DISCORD_EVENT`, `UPDATE_TEMPLATES`, `UPDATE_BOT_SETTINGS`, `UPDATE_MAINTENANCE`, `PANIC_MODE_ACTIVATED`, `PANIC_MODE_DEACTIVATED`.
+
+## Singletons
+
+| Document | Fields |
+|---|---|
+| `botMessages/templates` | `registration`, `accepted`, `rejected` (template strings, ≤2000) |
+| `botSettings/config` | `statusType`, `activityType`, `activityText`, `dmNotifications`, `reminderEnabled`, `eventStartNotifications`, `autoChannelCreation`, `autoUpdatePresence`, `autoStatusCalendarEvents`, `announceChannel`, `welcomeMessage`, `updatedAt` |
+| `maintenanceSettings/config` | `warningEnabled`, `warningText`, `loginDisabled`, `registrationDisabled`, `plannedMaintenance`, `plannedMaintenanceStart/End/Text`, `panicMode`, `panicActivatedAt`, `panicActivatedBy`, `updatedAt`, `updatedBy` |
+| `devMeta/seed` (mock only) | `seededAt` |
+
+## Gotchas
+
+- `formAnswers` is keyed by the field **label** — renaming a form field orphans existing answers in UI and CSV.
+- Several `botSettings` flags are stored but not enforced — see [known-issues](../reference/known-issues.md).
