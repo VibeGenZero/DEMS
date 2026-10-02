@@ -257,3 +257,90 @@ test('duplicating keeps the slots but not the announcements', async () => {
     assert.deepEqual(copy.slots, created.slots);
     assert.deepEqual(copy.announcements, []);
 });
+
+test('a full main role falls back to the alternative, then to the waitlist', async () => {
+    const admin = await loginAs('admin');
+    const event = await createSlotEvent(admin, 'Raid-Ausweich', RAID_SLOTS);
+    const [tank, heal] = event.slots;
+    const raider = await loginAs('raider');
+    const member = await loginAs('member');
+    const newbie = await loginAs('newbie');
+
+    const first = await (await raider.send('POST', `/api/events/${event.id}/register`, { slotId: tank.id })).json();
+    assert.deepEqual([first.status, first.slotId, first.isAlt], ['accepted', tank.id, false]);
+
+    const second = await (await member.send('POST', `/api/events/${event.id}/register`, { slotId: tank.id, altSlotIds: [heal.id] })).json();
+    assert.deepEqual([second.slotId, second.isAlt], [heal.id, true]);
+    assert.ok(second.message.includes('🛡️ Tank war voll'));
+
+    const third = await (await newbie.send('POST', `/api/events/${event.id}/register`, { slotId: tank.id, altSlotIds: [heal.id] })).json();
+    assert.equal(third.status, 'waitlisted');
+
+    const detail = await (await raider.request(`/api/events/${event.id}`)).json();
+    assert.deepEqual(detail.slotSummary.map(slot => slot.taken), [1, 1]);
+
+    assert.equal((await member.send('DELETE', `/api/events/${event.id}/register`)).status, 200);
+    const promoted = await (await newbie.request(`/api/events/${event.id}/my-registration`)).json();
+    assert.deepEqual([promoted.status, promoted.slotId], ['accepted', heal.id]);
+});
+
+test('registering for a slot event needs a valid slot', async () => {
+    const admin = await loginAs('admin');
+    const event = await createSlotEvent(admin, 'Raid-Pflichtslot', RAID_SLOTS);
+    const member = await loginAs('member');
+    const res = await member.send('POST', `/api/events/${event.id}/register`, {});
+    assert.equal(res.status, 400);
+    assert.equal((await res.json()).error, 'Bitte wähle einen gültigen Slot.');
+});
+
+test('members switch into free slots only and the line-up follows', async () => {
+    const admin = await loginAs('admin');
+    const event = await createSlotEvent(admin, 'Raid-Wechsel', [
+        { name: 'Alpha', capacity: 1 }, { name: 'Beta', capacity: 1 }, { name: 'Gamma', capacity: 1 }
+    ]);
+    const [alpha, beta, gamma] = event.slots;
+    const raider = await loginAs('raider');
+    const member = await loginAs('member');
+    await raider.send('POST', `/api/events/${event.id}/register`, { slotId: alpha.id });
+    await member.send('POST', `/api/events/${event.id}/register`, { slotId: beta.id });
+
+    const full = await raider.send('PUT', `/api/events/${event.id}/register/slot`, { slotId: beta.id });
+    assert.equal(full.status, 409);
+    assert.equal((await full.json()).error, 'Dieser Slot ist bereits voll.');
+
+    const moved = await raider.send('PUT', `/api/events/${event.id}/register/slot`, { slotId: gamma.id });
+    assert.equal(moved.status, 200);
+    assert.equal((await moved.json()).slotId, gamma.id);
+
+    const participants = await (await raider.request(`/api/events/${event.id}/participants`)).json();
+    assert.deepEqual(participants.slots.map(slot => slot.taken), [0, 1, 1]);
+    assert.equal(participants.slots[2].members[0].displayName, personaById('raider').displayName);
+    assert.deepEqual(participants.waitlist, []);
+});
+
+test('a slot that still has registrations cannot be removed', async () => {
+    const admin = await loginAs('admin');
+    const event = await createSlotEvent(admin, 'Raid-Umbau', RAID_SLOTS);
+    const raider = await loginAs('raider');
+    await raider.send('POST', `/api/events/${event.id}/register`, { slotId: event.slots[0].id });
+
+    const removed = await admin.send('PUT', `/api/admin/events/${event.id}`, { ...event, slots: event.slots.slice(1) });
+    assert.equal(removed.status, 400);
+    assert.equal((await removed.json()).error, 'Slot „Tank“ hat noch 1 Anmeldung – bitte zuerst verschieben.');
+
+    const grown = await admin.send('PUT', `/api/admin/events/${event.id}`, {
+        ...event, slots: event.slots.map(slot => ({ ...slot, capacity: 3 }))
+    });
+    assert.equal(grown.status, 200);
+    assert.equal((await grown.json()).maxParticipants, 6);
+});
+
+test('a new registration refreshes the live announcement', async () => {
+    const admin = await loginAs('admin');
+    const event = await createSlotEvent(admin, 'Live-Embed-Test', RAID_SLOTS);
+    assert.equal((await admin.send('POST', `/api/admin/events/${event.id}/announce`, {})).status, 200);
+
+    const raider = await loginAs('raider');
+    await raider.send('POST', `/api/events/${event.id}/register`, { slotId: event.slots[0].id });
+    await server.waitForOutput('Ankündigung von "Live-Embed-Test" aktualisiert', 6000);
+});
