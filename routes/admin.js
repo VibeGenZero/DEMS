@@ -722,7 +722,8 @@ router.put('/registrations/:id/status', validateRegStatus, async (req, res) => {
         const { slotId, warning } = await withEventLock(reg.eventId, async () => {
             const update = { status };
             let overbookedWarning = null;
-            if (slots.length > 0 && status === 'waitlisted') {
+            // Waitlisted and rejected registrations give up their place -> a later acceptance picks a slot again
+            if (slots.length > 0 && (status === 'waitlisted' || status === 'rejected')) {
                 update.slotId = null;
             }
             if (slots.length > 0 && status === 'accepted' && !findSlot(slots, reg.slotId)) {

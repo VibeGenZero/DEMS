@@ -394,6 +394,22 @@ test('the export lists slot and wish of every registration', async () => {
     assert.ok(csv.includes('"🛡️ Tank","🛡️ Tank"'));
 });
 
+test('re-accepting a rejected registration does not silently overbook its old slot', async () => {
+    const admin = await loginAs('admin');
+    const event = await createSlotEvent(admin, 'Raid-Wiederaufnahme', [{ name: 'Tank', emoji: '🛡️', capacity: 1 }]);
+    const [tank] = event.slots;
+    await (await loginAs('raider')).send('POST', `/api/events/${event.id}/register`, { slotId: tank.id });
+    const { registration } = await adminRegistrationOf(admin, event.id, 'raider');
+
+    assert.equal((await admin.send('PUT', `/api/admin/registrations/${registration.id}/status`, { status: 'rejected' })).status, 200);
+    await (await loginAs('member')).send('POST', `/api/events/${event.id}/register`, { slotId: tank.id });
+
+    const res = await admin.send('PUT', `/api/admin/registrations/${registration.id}/status`, { status: 'accepted' });
+    const body = await res.json();
+    assert.equal(body.slotId, tank.id);
+    assert.equal(body.warning, 'Slot „Tank“ ist jetzt überbucht.');
+});
+
 // Keep this test last -> it deletes the newbie persona's account
 test('deleting an account lets the waitlist move up', async () => {
     const admin = await loginAs('admin');
