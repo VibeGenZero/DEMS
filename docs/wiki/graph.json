@@ -1,0 +1,24 @@
+{
+  "nodes": [
+    {
+      "id": "index",
+      "title": "DEMS wiki — entry point",
+      "type": "overview",
+      "path": "index.md",
+      "summary": "Entry point of the DEMS knowledge graph. Every page is a node with frontmatter (id, type, tags, sources, typed edges); `npm run wiki` writes the machine-readable index `graph.json`.",
+      "tags": [
+        "index",
+        "navigation"
+      ],
+      "sources": [
+        "scripts/wiki-graph.js"
+      ],
+      "depends_on": [],
+      "used_by": [],
+      "part_of": [],
+      "parts": [],
+      "see_also": []
+    }
+  ],
+  "edges": []
+}

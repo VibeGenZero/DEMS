@@ -20,6 +20,7 @@ data/
 .vscode/
 .claude/
 docs/
+scripts/
 test/
 landing/
 *.md
