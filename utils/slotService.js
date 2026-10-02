@@ -7,7 +7,7 @@
  * `altSlotIds`, `userId`, `userName` and `createdAt`.
  */
 const crypto = require('crypto');
-const { OCCUPYING_STATUSES } = require('./capacity');
+const { OCCUPYING_STATUSES, countOccupiedPlaces, byCreatedAt } = require('./capacity');
 
 /** Limits of the slot editor. */
 const MAX_SLOTS = 10;
@@ -210,6 +210,155 @@ function pickSlot(slots, occupancy, preferredSlotId, altSlotIds = []) {
     return null;
 }
 
+/**
+ * Decide which waitlisted registrations move into free slots.
+ *
+ * The waitlist is walked oldest first; every entry whose main role or one of
+ * its alternatives has a free place moves up. Overbooked slots stay closed.
+ *
+ * @param {Array<Object>} slots -> Slots of the event.
+ * @param {Array<Object>} registrations -> All registrations of the event.
+ * @returns {Array<{ registrationId: string, slotId: string }>} -> Promotions in order.
+ */
+function pickWaitlistPromotions(slots, registrations) {
+    const occupancy = countSlotOccupancy(slots, registrations);
+    const promotions = [];
+
+    registrations
+        .filter(registration => registration.status === 'waitlisted')
+        .sort(byCreatedAt)
+        .forEach(registration => {
+            const slotId = pickSlot(slots, occupancy, registration.preferredSlotId, registration.altSlotIds || []);
+            if (!slotId) return;
+            occupancy[slotId] += 1;
+            promotions.push({ registrationId: registration.id, slotId });
+        });
+
+    return promotions;
+}
+
+/**
+ * Pick the slot for a registration an admin accepts manually.
+ *
+ * @param {Array<Object>} slots -> Slots of the event.
+ * @param {Array<Object>} registrations -> All registrations of the event.
+ * @param {Object} registration -> The registration being accepted.
+ * @returns {{ slotId: string, overbooked: boolean }} -> Wanted free slot, or the main role overbooked.
+ */
+function resolveAcceptanceSlot(slots, registrations, registration) {
+    const others = registrations.filter(entry => entry.id !== registration.id);
+    const occupancy = countSlotOccupancy(slots, others);
+    const slotId = pickSlot(slots, occupancy, registration.preferredSlotId, registration.altSlotIds || []);
+    if (slotId) return { slotId, overbooked: false };
+
+    const fallback = findSlot(slots, registration.preferredSlotId) || slots[0];
+    return { slotId: fallback.id, overbooked: true };
+}
+
+/**
+ * Compact slot overview for event cards: taken places per slot.
+ *
+ * @param {Array<Object>} slots -> Slots of the event.
+ * @param {Array<Object>} registrations -> Registrations of the event.
+ * @returns {Array<Object>} -> `[{ id, name, emoji, capacity, taken }]`.
+ */
+function buildSlotSummary(slots, registrations) {
+    const occupancy = countSlotOccupancy(slots, registrations);
+    return slots.map(slot => ({
+        id: slot.id,
+        name: slot.name,
+        emoji: slot.emoji,
+        capacity: slot.capacity,
+        taken: occupancy[slot.id] || 0
+    }));
+}
+
+/**
+ * Attach the slot summary to an event of an API response.
+ *
+ * @param {Object} event -> Event with its ID.
+ * @param {Array<Object>} registrations -> Registrations of the event.
+ * @returns {Object} -> The event, with `slotSummary` when it uses slots.
+ */
+function withSlotSummary(event, registrations) {
+    if (!hasSlots(event)) return event;
+    return { ...event, slotSummary: buildSlotSummary(getSlots(event), registrations) };
+}
+
+/**
+ * Line-up of an event for the event page and the Discord embed.
+ *
+ * @param {Object} event -> The event document data.
+ * @param {Array<Object>} registrations -> All registrations of the event.
+ * @param {Object} [usersById] -> User profiles keyed by user ID, for names and avatars.
+ * @returns {Object} -> `{ taken, capacity, waitlistCount, slots, waitlist }`.
+ */
+function buildRoster(event, registrations, usersById = {}) {
+    const slots = getSlots(event);
+    const describe = (registration) => {
+        const profile = usersById[registration.userId] || {};
+        return {
+            displayName: profile.displayName || registration.userName || 'Unbekannt',
+            avatar: profile.avatar || ''
+        };
+    };
+    const occupying = registrations
+        .filter(registration => OCCUPYING_STATUSES.includes(registration.status))
+        .sort(byCreatedAt);
+    const waitlisted = registrations
+        .filter(registration => registration.status === 'waitlisted')
+        .sort(byCreatedAt);
+
+    return {
+        taken: countOccupiedPlaces(registrations),
+        capacity: event.maxParticipants > 0 ? event.maxParticipants : 0,
+        waitlistCount: waitlisted.length,
+        slots: slots.map(slot => {
+            const members = occupying
+                .filter(registration => registration.slotId === slot.id)
+                .map(registration => ({
+                    ...describe(registration),
+                    pending: registration.status === 'pending',
+                    isAlt: registration.slotId !== registration.preferredSlotId
+                }));
+            return { id: slot.id, name: slot.name, emoji: slot.emoji, capacity: slot.capacity, taken: members.length, members };
+        }),
+        waitlist: slots.length === 0 ? [] : waitlisted.map(registration => ({
+            ...describe(registration),
+            preferredSlotId: registration.preferredSlotId || null,
+            altSlotIds: registration.altSlotIds || []
+        }))
+    };
+}
+
+/**
+ * Check whether an admin may change the slots of an event.
+ *
+ * @param {Object} params -> Check input.
+ * @param {Array<Object>} params.oldSlots -> Slots stored so far.
+ * @param {Array<Object>} params.newSlots -> Normalized new slots.
+ * @param {Array<Object>} params.registrations -> All registrations of the event.
+ * @returns {string|null} -> German error message, or null when the change is fine.
+ */
+function validateSlotChange({ oldSlots, newSlots, registrations }) {
+    if (oldSlots.length === 0 && newSlots.length > 0) {
+        const hasOpenRegistrations = registrations.some(registration => registration.status !== 'rejected');
+        return hasOpenRegistrations ? 'Slots können nur aktiviert werden, solange es keine Anmeldungen gibt.' : null;
+    }
+    // Turning slots off is always allowed -> the slot fields of the registrations are ignored then
+    if (newSlots.length === 0) return null;
+
+    const keptIds = new Set(newSlots.map(slot => slot.id));
+    const occupancy = countSlotOccupancy(oldSlots, registrations);
+    for (const slot of oldSlots) {
+        const count = occupancy[slot.id] || 0;
+        if (!keptIds.has(slot.id) && count > 0) {
+            return `Slot „${slot.name}“ hat noch ${count} ${count === 1 ? 'Anmeldung' : 'Anmeldungen'} – bitte zuerst verschieben.`;
+        }
+    }
+    return null;
+}
+
 module.exports = {
     MAX_SLOTS,
     getSlots,
@@ -222,5 +371,11 @@ module.exports = {
     countSlotOccupancy,
     hasFreePlace,
     sanitizeAltSlotIds,
-    pickSlot
+    pickSlot,
+    pickWaitlistPromotions,
+    resolveAcceptanceSlot,
+    buildSlotSummary,
+    withSlotSummary,
+    buildRoster,
+    validateSlotChange
 };
