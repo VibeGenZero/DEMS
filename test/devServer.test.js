@@ -197,3 +197,63 @@ test('members are locked out in panic mode, admins are not', async () => {
         assert.equal(deactivate.status, 200);
     }
 });
+
+// ── Role slots ──────────────────────────────────────────────────────────
+
+const RAID_SLOTS = [
+    { name: 'Tank', emoji: '🛡️', capacity: 1 },
+    { name: 'Heiler', emoji: '💚', capacity: 1 }
+];
+
+/** Create an active instant-approval event with role slots; returns the API response. */
+async function createSlotEvent(admin, title, slots, fields = {}) {
+    const res = await admin.send('POST', '/api/admin/events', {
+        title, status: 'active', accessMode: 'open', approvalMode: 'instant', slots, ...fields
+    });
+    const body = await res.json();
+    assert.equal(res.status, 200, JSON.stringify(body));
+    return body;
+}
+
+test('admins create events with role slots', async () => {
+    const admin = await loginAs('admin');
+    const created = await createSlotEvent(admin, 'Slot-Anlage', [
+        { name: 'Tank', emoji: '🛡️', capacity: 2 },
+        { name: 'Heiler', emoji: '💚', capacity: 3 }
+    ], { maxParticipants: 99, allowGuests: true });
+
+    assert.equal(created.maxParticipants, 5);
+    assert.equal(created.allowGuests, false);
+    assert.deepEqual(created.slots.map(slot => slot.name), ['Tank', 'Heiler']);
+    assert.ok(created.slots.every(slot => /^[0-9a-f]{8}$/.test(slot.id)));
+
+    const detail = await (await admin.request(`/api/events/${created.id}`)).json();
+    assert.deepEqual(detail.slots, created.slots);
+});
+
+test('invalid slots are rejected with a German message', async () => {
+    const admin = await loginAs('admin');
+    const res = await admin.send('POST', '/api/admin/events', {
+        title: 'Kaputte Slots', status: 'active', slots: [{ name: 'Tank', emoji: ':shield:', capacity: 1 }]
+    });
+    assert.equal(res.status, 400);
+    assert.equal((await res.json()).error, 'Das Emoji von Slot „Tank“ muss ein einzelnes Emoji sein.');
+});
+
+test('slots cannot be switched on while people are registered', async () => {
+    const admin = await loginAs('admin');
+    const event = await (await admin.request(`/api/events/${EVENT_ID.OPEN}`)).json();
+    const res = await admin.send('PUT', `/api/admin/events/${EVENT_ID.OPEN}`, { ...event, slots: [{ name: 'Tank', capacity: 2 }] });
+    assert.equal(res.status, 400);
+    assert.equal((await res.json()).error, 'Slots können nur aktiviert werden, solange es keine Anmeldungen gibt.');
+});
+
+test('duplicating keeps the slots but not the announcements', async () => {
+    const admin = await loginAs('admin');
+    const created = await createSlotEvent(admin, 'Slot-Kopie', RAID_SLOTS);
+    assert.equal((await admin.send('POST', `/api/admin/events/${created.id}/announce`, {})).status, 200);
+
+    const copy = await (await admin.send('POST', `/api/admin/events/${created.id}/duplicate`)).json();
+    assert.deepEqual(copy.slots, created.slots);
+    assert.deepEqual(copy.announcements, []);
+});

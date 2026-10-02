@@ -8,7 +8,9 @@ const {
 const { requireAuth, requireAdmin } = require('../middleware/auth');
 const { validateEvent, validateRegStatus, validateBotMessages } = require('../middleware/validators');
 const { sendDM, assignRole, parseTemplate, getGuildRoles, sendChannelMessage, buildEventEmbed, buildEventComponents, getGuildScheduledEvents, createEventChannels, deleteEventChannels, createScheduledEvent, getBotStatus, getBotSettings, saveBotSettings, getRunningEvents, getGuildChannels } = require('../bot');
-const { promoteFromWaitlist, addAuditLog, loadEventRoster } = require('../utils/eventUtils');
+const { promoteFromWaitlist, addAuditLog, loadEventRoster, loadEventRegistrations } = require('../utils/eventUtils');
+const { getSlots, normalizeSlots, sumCapacity, validateSlotChange } = require('../utils/slotService');
+const { notifyRegistrationsChanged } = require('../utils/announcementRefresh');
 const { debugLog } = require('../utils/debugLog');
 const { buildEventUrl } = require('../utils/eventUrl');
 
@@ -135,10 +137,16 @@ router.post('/events', validateEvent, async (req, res) => {
             accentColor, location
         } = req.body;
 
+        const slotResult = normalizeSlots(req.body.slots);
+        if (slotResult.error) {
+            return res.status(400).json({ error: slotResult.error });
+        }
+        const { slots } = slotResult;
+
         const baseEvent = {
             title,
             description,
-            maxParticipants: parseInt(maxParticipants) || 0,
+            maxParticipants: slots.length > 0 ? sumCapacity(slots) : (parseInt(maxParticipants) || 0),
             accessMode: accessMode || 'open',
             requiredRoles: requiredRoles || [],
             approvalMode: approvalMode || 'manual',
@@ -154,7 +162,8 @@ router.post('/events', validateEvent, async (req, res) => {
             customBotMessages: customBotMessages || {},
             autoCreateChannels: !!autoCreateChannels,
             channelConfig: channelConfig || {},
-            allowGuests: allowGuests !== false,
+            allowGuests: slots.length > 0 ? false : allowGuests !== false,
+            slots,
             accentColor: accentColor || '',
             location: location || null,
             eventStartNotificationSent: false,
@@ -227,10 +236,21 @@ router.put('/events/:id', validateEvent, async (req, res) => {
             accentColor, location
         } = req.body;
 
+        const slotResult = normalizeSlots(req.body.slots, getSlots(oldEvent));
+        if (slotResult.error) {
+            return res.status(400).json({ error: slotResult.error });
+        }
+        const { slots } = slotResult;
+        const registrations = await loadEventRegistrations(req.params.id);
+        const slotError = validateSlotChange({ oldSlots: getSlots(oldEvent), newSlots: slots, registrations });
+        if (slotError) {
+            return res.status(400).json({ error: slotError });
+        }
+
         const updates = {
             title,
             description,
-            maxParticipants: parseInt(maxParticipants) || 0,
+            maxParticipants: slots.length > 0 ? sumCapacity(slots) : (parseInt(maxParticipants) || 0),
             accessMode: accessMode || 'open',
             requiredRoles: requiredRoles || [],
             approvalMode: approvalMode || 'manual',
@@ -246,7 +266,8 @@ router.put('/events/:id', validateEvent, async (req, res) => {
             customBotMessages: customBotMessages || {},
             autoCreateChannels: !!autoCreateChannels,
             channelConfig: channelConfig || {},
-            allowGuests: allowGuests !== false,
+            allowGuests: slots.length > 0 ? false : allowGuests !== false,
+            slots,
             accentColor: accentColor || '',
             location: location || null,
             recurring: !!req.body.recurring,
@@ -267,6 +288,9 @@ router.put('/events/:id', validateEvent, async (req, res) => {
             deleteEventChannels(req.params.id).catch(console.error);
         }
 
+        // More places or new slots can let waitlisted members move up
+        await promoteFromWaitlist(req.params.id, { ...oldEvent, ...updates });
+        notifyRegistrationsChanged(req.params.id);
         res.json({ id: req.params.id, ...updates });
     } catch (err) {
         console.error('Update event error:', err);
@@ -289,6 +313,7 @@ router.put('/events/:id/status', async (req, res) => {
 
         await updateDoc(doc(db, 'events', req.params.id), { status, updatedAt: new Date().toISOString() });
         await addAuditLog('UPDATE_EVENT_STATUS', req.session.user.id, `Changed status to ${status}`, req.params.id);
+        notifyRegistrationsChanged(req.params.id);
 
         if (oldEvent.autoCreateChannels) {
             if (status === 'active' && oldEvent.status !== 'active') {
@@ -339,6 +364,7 @@ router.put('/events/:id/cancel', async (req, res) => {
         }
 
         await addAuditLog('CANCEL_EVENT', req.session.user.id, `Cancelled event "${event.title}" and notified ${notifiedCount} users`, eventId);
+        notifyRegistrationsChanged(eventId);
 
         res.json({ success: true, notifiedCount });
     } catch (err) {
@@ -370,6 +396,7 @@ router.post('/events/:id/start', async (req, res) => {
 
         await updateDoc(doc(col, eventId), updates);
         await addAuditLog('START_EVENT', req.session.user.id, `Manually started event "${data.title}"`, eventId);
+        notifyRegistrationsChanged(eventId);
 
         if (data.autoCreateChannels && data.status !== 'active') {
             createEventChannels({ id: eventId, ...data, ...updates }).catch(console.error);
@@ -401,6 +428,7 @@ router.post('/events/:id/end', async (req, res) => {
 
         await updateDoc(doc(col, eventId), updates);
         await addAuditLog('END_EVENT', req.session.user.id, `Manually ended event "${data.title}"`, eventId);
+        notifyRegistrationsChanged(eventId);
 
         if (data.autoCreateChannels && data.status === 'active') {
             deleteEventChannels(eventId).catch(console.error);
@@ -506,6 +534,7 @@ router.post('/events/:id/duplicate', async (req, res) => {
             createdAt: new Date().toISOString(),
             createdBy: req.session.user.id,
             checkinCode: '',  // Reset check-in code
+            announcements: [],  // Each copy is announced on its own
         };
         // Remove fields that shouldn't be copied
         delete duplicate.updatedAt;
