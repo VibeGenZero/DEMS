@@ -6,6 +6,8 @@
  * types and the answer format in one place.
  */
 
+const { getSlots } = require('./slotService');
+
 /** Supported form field types. */
 const FORM_FIELD_TYPE = {
     TEXT: 'text',
@@ -93,6 +95,19 @@ function formatEntityAnswer(type, name, id) {
 }
 
 /**
+ * Number of form fields that fit into the Discord modal of an event.
+ *
+ * Slot events with more than one slot show a select for the fallback roles,
+ * which takes one of the five top level components.
+ *
+ * @param {Object} event -> The event document data.
+ * @returns {number} -> Maximum number of form fields.
+ */
+function getModalFieldLimit(event) {
+    return getSlots(event).length > 1 ? MODAL_MAX_FIELDS - 1 : MODAL_MAX_FIELDS;
+}
+
+/**
  * Check whether an event form fits into a single Discord modal.
  *
  * @param {Object} event -> The event document data.
@@ -100,7 +115,7 @@ function formatEntityAnswer(type, name, id) {
  */
 function fitsIntoDiscordModal(event) {
     const formFields = getFormFields(event);
-    if (formFields.length > MODAL_MAX_FIELDS) return false;
+    if (formFields.length > getModalFieldLimit(event)) return false;
     return formFields.every(field => FORM_FIELD_TYPES.includes(getFieldType(field)));
 }
 
@@ -134,6 +149,7 @@ module.exports = {
     getFieldType,
     isEntityFieldType,
     formatEntityAnswer,
+    getModalFieldLimit,
     fitsIntoDiscordModal,
     findMissingRequiredFields
 };

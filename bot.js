@@ -3,7 +3,8 @@ const {
     ModalBuilder, LabelBuilder, TextDisplayBuilder, TextInputBuilder, TextInputStyle,
     StringSelectMenuBuilder, UserSelectMenuBuilder, RoleSelectMenuBuilder,
     ChannelSelectMenuBuilder, MentionableSelectMenuBuilder, MessageFlags,
-    REST, Routes, SlashCommandBuilder, PermissionsBitField, ChannelType, ActivityType, Events
+    REST, Routes, SlashCommandBuilder, PermissionsBitField, ChannelType, ActivityType, Events,
+    escapeMarkdown
 } = require('discord.js');
 // Loaded before firebaseAdmin.js so the mock environment is in place even
 // when bot.js is required without server.js (e.g. in tests)
@@ -14,8 +15,9 @@ const { buildEventUrl } = require('./utils/eventUrl');
 const { isRegistrationBlocked } = require('./middleware/maintenance');
 const {
     FORM_FIELD_TYPE, MODAL_MAX_FIELDS, getFormFields, getFieldType,
-    formatEntityAnswer, fitsIntoDiscordModal
+    formatEntityAnswer, fitsIntoDiscordModal, getModalFieldLimit
 } = require('./utils/formFields');
+const { getSlots, hasSlots, findSlot, formatSlotLabel, countSlotOccupancy, hasFreePlace } = require('./utils/slotService');
 
 const TIMEZONE = process.env.TIMEZONE || 'Europe/Berlin';
 
@@ -43,6 +45,16 @@ const SELECTABLE_CHANNEL_TYPES = [
 const REGISTER_BUTTON_PREFIX = 'event_register';
 const REGISTER_MODAL_PREFIX = 'event_register_modal';
 const MODAL_FIELD_PREFIX = 'field';
+const SLOT_BUTTON_PREFIX = 'event_slot';
+const SLOT_MODAL_PREFIX = 'event_slot_modal';
+const SLOT_SWITCH_PREFIX = 'slot_switch';
+const SLOT_LEAVE_PREFIX = 'slot_leave';
+const ALT_SLOTS_FIELD_ID = 'alt_slots';
+
+// Discord allows five buttons per action row
+const BUTTONS_PER_ROW = 5;
+// Names listed per slot in the announcement embed
+const ROSTER_NAMES_MAX = 5;
 
 // Registrations that are currently being processed -> guards against double clicks
 const pendingDiscordRegistrations = new Set();
@@ -530,22 +542,37 @@ async function sendChannelMessage(channelId, embed, options = {}) {
 }
 
 /**
- * Build an event announcement embed
- * @param {Object} event - Event data
- * @param {string} [registrationLink] - Optional link to the registration page
+ * Build an event announcement embed.
+ *
+ * With a roster the embed shows live numbers: the participant count and,
+ * for slot events, one field per slot with the first names.
+ *
+ * @param {Object} event -> Event data.
+ * @param {string} [registrationLink] -> Link to the event page.
+ * @param {Object} [roster] -> Line-up from loadEventRoster().
+ * @returns {EmbedBuilder} -> The embed.
  */
-function buildEventEmbed(event, registrationLink) {
+function buildEventEmbed(event, registrationLink, roster) {
     const embed = new EmbedBuilder()
         .setColor(0x8b5cf6)
         .setTitle(`🎉 ${event.title}`)
         .setDescription(event.description || 'Keine Beschreibung.')
         .addFields(
             { name: '🗓️ Datum', value: event.startDate ? new Date(event.startDate).toLocaleString('de-DE', { timeZone: TIMEZONE }) : 'TBA', inline: true },
-            { name: '👥 Teilnehmer', value: event.maxParticipants > 0 ? `Max. ${event.maxParticipants}` : 'Unbegrenzt', inline: true },
+            { name: '👥 Teilnehmer', value: formatParticipantCount(event, roster), inline: true },
             { name: '🔓 Zugang', value: event.accessMode === 'open' ? 'Offen für alle' : 'Rollen-Requirement', inline: true }
         )
         .setFooter({ text: 'DEMS — Event Management' })
         .setTimestamp();
+
+    if (roster && roster.slots.length > 0) {
+        roster.slots.forEach(slot => {
+            embed.addFields({ name: formatRosterSlotTitle(slot), value: formatRosterMembers(slot), inline: true });
+        });
+        if (roster.waitlistCount > 0) {
+            embed.addFields({ name: '⏳ Warteliste', value: String(roster.waitlistCount), inline: true });
+        }
+    }
 
     if (event.bannerUrl) {
         embed.setImage(event.bannerUrl);
@@ -555,12 +582,49 @@ function buildEventEmbed(event, registrationLink) {
         embed.addFields({ name: '🏷️ Kategorie', value: event.category, inline: true });
     }
 
-    // Add registration link
     if (registrationLink) {
         embed.addFields({ name: '📋 Anmeldung', value: `[Hier anmelden](${registrationLink})`, inline: false });
     }
 
     return embed;
+}
+
+/**
+ * Participant field of the embed.
+ *
+ * @param {Object} event -> Event data.
+ * @param {Object} [roster] -> Line-up with live numbers.
+ * @returns {string} -> "3/10", "3 (unbegrenzt)" or the static capacity.
+ */
+function formatParticipantCount(event, roster) {
+    if (!roster) return event.maxParticipants > 0 ? `Max. ${event.maxParticipants}` : 'Unbegrenzt';
+    return roster.capacity > 0 ? `${roster.taken}/${roster.capacity}` : `${roster.taken} (unbegrenzt)`;
+}
+
+/**
+ * Field title of one slot, e.g. "🛡️ Tank 2/2 ✅".
+ *
+ * @param {Object} slot -> Roster slot.
+ * @returns {string} -> Title with ✅ when full and ⚠️ when overbooked.
+ */
+function formatRosterSlotTitle(slot) {
+    let marker = '';
+    if (slot.taken > slot.capacity) marker = ' ⚠️';
+    else if (slot.taken === slot.capacity) marker = ' ✅';
+    return `${formatSlotLabel(slot)} ${slot.taken}/${slot.capacity}${marker}`;
+}
+
+/**
+ * Field value of one slot: the first names, then "+N".
+ *
+ * @param {Object} slot -> Roster slot.
+ * @returns {string} -> Names, escaped for Discord markdown.
+ */
+function formatRosterMembers(slot) {
+    if (slot.members.length === 0) return '— frei —';
+    const names = slot.members.slice(0, ROSTER_NAMES_MAX).map(member => escapeMarkdown(member.displayName));
+    const hidden = slot.members.length - ROSTER_NAMES_MAX;
+    return hidden > 0 ? `${names.join(', ')}, +${hidden}` : names.join(', ');
 }
 
 /**
@@ -582,41 +646,71 @@ function canRegisterViaDiscord(event) {
 }
 
 /**
- * Build the button row that is attached to an event announcement.
+ * Build the button rows that are attached to an event announcement.
  *
- * The link button is always present. The registration button is only added
- * when the event can be joined straight from Discord -> otherwise the user is
- * sent to the web interface through the link button.
+ * Slot events get one button per slot, normal events the "Anmelden" button,
+ * both only while the event can be joined from Discord. The link button is
+ * always the last button.
  *
  * @param {Object} event -> The event document data.
  * @param {string} eventId -> The event document ID.
+ * @param {Object} [roster] -> Line-up, marks full slots.
  * @returns {ActionRowBuilder[]} -> Components array ready for channel.send().
  * @example
- * await channel.send({ embeds: [embed], components: buildEventComponents(event, eventId) });
+ * await channel.send({ embeds: [embed], components: buildEventComponents(event, eventId, roster) });
  */
-function buildEventComponents(event, eventId) {
-    const eventUrl = buildEventUrl(eventId);
-    const row = new ActionRowBuilder();
+function buildEventComponents(event, eventId, roster) {
+    const buttons = [];
 
     if (canRegisterViaDiscord(event)) {
-        row.addComponents(
-            new ButtonBuilder()
-                .setCustomId(`${REGISTER_BUTTON_PREFIX}:${eventId}`)
-                .setLabel('Anmelden')
-                .setStyle(ButtonStyle.Success)
-                .setEmoji('✅')
-        );
+        if (hasSlots(event)) {
+            getSlots(event).forEach(slot => buttons.push(buildSlotButton(eventId, slot, roster)));
+        } else {
+            buttons.push(
+                new ButtonBuilder()
+                    .setCustomId(`${REGISTER_BUTTON_PREFIX}:${eventId}`)
+                    .setLabel('Anmelden')
+                    .setStyle(ButtonStyle.Success)
+                    .setEmoji('✅')
+            );
+        }
     }
 
-    row.addComponents(
+    buttons.push(
         new ButtonBuilder()
             .setLabel('Zum Event')
             .setStyle(ButtonStyle.Link)
-            .setURL(eventUrl)
+            .setURL(buildEventUrl(eventId))
             .setEmoji('🔗')
     );
 
-    return [row];
+    const rows = [];
+    for (let index = 0; index < buttons.length; index += BUTTONS_PER_ROW) {
+        rows.push(new ActionRowBuilder().addComponents(...buttons.slice(index, index + BUTTONS_PER_ROW)));
+    }
+    return rows;
+}
+
+/**
+ * Build the button of one slot.
+ *
+ * Full slots stay clickable -> the click can still lead to a fallback role
+ * or the waitlist.
+ *
+ * @param {string} eventId -> The event document ID.
+ * @param {Object} slot -> The slot.
+ * @param {Object} [roster] -> Line-up with the taken places.
+ * @returns {ButtonBuilder} -> The slot button.
+ */
+function buildSlotButton(eventId, slot, roster) {
+    const rosterSlot = roster ? roster.slots.find(entry => entry.id === slot.id) : null;
+    const isFull = !!rosterSlot && rosterSlot.taken >= slot.capacity;
+    const button = new ButtonBuilder()
+        .setCustomId(`${SLOT_BUTTON_PREFIX}:${eventId}:${slot.id}`)
+        .setLabel(isFull ? `${slot.name} (voll)` : slot.name)
+        .setStyle(isFull ? ButtonStyle.Secondary : ButtonStyle.Primary);
+    if (slot.emoji) button.setEmoji(slot.emoji);
+    return button;
 }
 
 /**

@@ -1,5 +1,6 @@
-const { db, collection, doc, getDocs, addDoc, updateDoc, query, where, orderBy } = require('../firebaseAdmin');
+const { db, collection, doc, getDocs, addDoc, updateDoc, query, where } = require('../firebaseAdmin');
 const { sendDM, assignRole } = require('../bot');
+const { buildRoster } = require('./slotService');
 
 /**
  * Promote the oldest waitlisted user when a spot opens
@@ -58,6 +59,48 @@ async function promoteFromWaitlist(eventId, event) {
 }
 
 /**
+ * Load every registration of an event.
+ *
+ * @param {string} eventId -> The event document ID.
+ * @returns {Promise<Array<Object>>} -> Registrations with their `id`.
+ */
+async function loadEventRegistrations(eventId) {
+    const snapshot = await getDocs(query(collection(db, 'registrations'), where('eventId', '==', eventId)));
+    return snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
+}
+
+/**
+ * Find the registration of one user for an event.
+ *
+ * @param {string} eventId -> The event document ID.
+ * @param {string} userId -> Discord user ID.
+ * @returns {Promise<Object|null>} -> The registration with its `id`, or null.
+ */
+async function findUserRegistration(eventId, userId) {
+    const registrations = await loadEventRegistrations(eventId);
+    return registrations.find(registration => registration.userId === userId) || null;
+}
+
+/**
+ * Load the line-up of an event.
+ *
+ * @param {string} eventId -> The event document ID.
+ * @param {Object} event -> The event document data.
+ * @param {Object} [options] -> Load options.
+ * @param {boolean} [options.withProfiles] -> Also load user profiles for names and avatars.
+ * @returns {Promise<Object>} -> Roster from buildRoster().
+ */
+async function loadEventRoster(eventId, event, { withProfiles = false } = {}) {
+    const registrations = await loadEventRegistrations(eventId);
+    const usersById = {};
+    if (withProfiles) {
+        const usersSnap = await getDocs(collection(db, 'users'));
+        usersSnap.forEach(userDoc => { usersById[userDoc.id] = userDoc.data(); });
+    }
+    return buildRoster(event, registrations, usersById);
+}
+
+/**
  * Log admin action to auditing collection
  */
 async function addAuditLog(action, adminId, details, targetId = null) {
@@ -74,4 +117,4 @@ async function addAuditLog(action, adminId, details, targetId = null) {
     }
 }
 
-module.exports = { promoteFromWaitlist, addAuditLog };
+module.exports = { promoteFromWaitlist, addAuditLog, loadEventRegistrations, findUserRegistration, loadEventRoster };
