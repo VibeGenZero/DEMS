@@ -340,6 +340,13 @@ client.on('interactionCreate', async (interaction) => {
                         ],
                         components: []
                     });
+
+                    // The declined invitation frees a place -> the waitlist may move up
+                    const declinedEventSnap = await getDoc(doc(db, 'events', reg.eventId));
+                    if (declinedEventSnap.exists()) {
+                        const { promoteFromWaitlist } = require('./utils/eventUtils');
+                        await promoteFromWaitlist(reg.eventId, declinedEventSnap.data());
+                    }
                 }
             } catch (err) {
                 console.error('Guest invitation button error:', err);
@@ -433,13 +440,15 @@ client.on('interactionCreate', async (interaction) => {
     // /unregister command
     if (interaction.commandName === 'unregister') {
         try {
+            // Acknowledge first -> clean-up and waitlist DMs can exceed Discord's 3 second limit
+            await interaction.deferReply({ flags: MessageFlags.Ephemeral });
             const eventId = interaction.options.getString('event');
             const userId = interaction.user.id;
 
             // Get event details
             const eventSnap = await getDoc(doc(db, 'events', eventId));
             if (!eventSnap.exists()) {
-                return interaction.reply({ content: '❌ Event nicht gefunden.', flags: MessageFlags.Ephemeral });
+                return interaction.editReply({ content: '❌ Event nicht gefunden.' });
             }
 
             const event = eventSnap.data();
@@ -447,7 +456,7 @@ client.on('interactionCreate', async (interaction) => {
             const { unregisterUserFromEvent } = require('./utils/registrationService');
             const result = await unregisterUserFromEvent({ eventId, userId });
             if (!result.ok) {
-                return interaction.reply({ content: `⚠️ ${result.error}`, flags: MessageFlags.Ephemeral });
+                return interaction.editReply({ content: `⚠️ ${result.error}` });
             }
 
             const embed = new EmbedBuilder()
@@ -456,10 +465,16 @@ client.on('interactionCreate', async (interaction) => {
                 .setDescription(`Du wurdest erfolgreich von **${event.title}** abgemeldet.`)
                 .setTimestamp();
 
-            await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
+            await interaction.editReply({ embeds: [embed] });
         } catch (err) {
             console.error('Slash /unregister error:', err);
-            await interaction.reply({ content: '❌ Fehler bei der Abmeldung.', flags: MessageFlags.Ephemeral });
+            try {
+                if (interaction.deferred) {
+                    await interaction.editReply({ content: '❌ Fehler bei der Abmeldung.' });
+                } else {
+                    await interaction.reply({ content: '❌ Fehler bei der Abmeldung.', flags: MessageFlags.Ephemeral });
+                }
+            } catch { /* interaction already expired */ }
         }
     }
 });
@@ -1610,12 +1625,14 @@ async function handleEventSlotModal(interaction, eventId, slotId) {
  * @returns {Promise<void>}
  */
 async function handleSlotSwitchButton(interaction, eventId, slotId) {
+    // Acknowledge first -> DMs and role changes can exceed Discord's 3 second limit
+    await interaction.deferUpdate();
     if (await isRegistrationBlocked()) {
-        return interaction.update({ content: '❌ Event-Registrierungen sind wegen Wartungsarbeiten vorübergehend deaktiviert.', components: [] });
+        return interaction.editReply({ content: '❌ Event-Registrierungen sind wegen Wartungsarbeiten vorübergehend deaktiviert.', components: [] });
     }
     const { switchOwnSlot } = require('./utils/registrationService');
     const result = await switchOwnSlot({ eventId, userId: interaction.user.id, slotId });
-    await interaction.update({ content: result.ok ? `✅ ${result.message}` : `❌ ${result.error}`, components: [] });
+    await interaction.editReply({ content: result.ok ? `✅ ${result.message}` : `❌ ${result.error}`, components: [] });
 }
 
 /**
@@ -1626,10 +1643,12 @@ async function handleSlotSwitchButton(interaction, eventId, slotId) {
  * @returns {Promise<void>}
  */
 async function handleSlotLeaveButton(interaction, eventId) {
+    // Acknowledge first -> removing roles and promoting the waitlist can take a while
+    await interaction.deferUpdate();
     const { unregisterUserFromEvent } = require('./utils/registrationService');
     const result = await unregisterUserFromEvent({ eventId, userId: interaction.user.id });
     const title = result.event && result.event.title ? result.event.title : 'dem Event';
-    await interaction.update({
+    await interaction.editReply({
         content: result.ok ? `✅ Du wurdest von **${title}** abgemeldet.` : `❌ ${result.error}`,
         components: []
     });
