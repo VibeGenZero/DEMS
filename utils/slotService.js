@@ -251,8 +251,11 @@ function resolveAcceptanceSlot(slots, registrations, registration) {
     const slotId = pickSlot(slots, occupancy, registration.preferredSlotId, registration.altSlotIds || []);
     if (slotId) return { slotId, overbooked: false };
 
-    const fallback = findSlot(slots, registration.preferredSlotId) || slots[0];
-    return { slotId: fallback.id, overbooked: true };
+    // A main role that no longer exists must not cause a false overbooking -> take a free slot then
+    const fallback = findSlot(slots, registration.preferredSlotId)
+        || slots.find(slot => hasFreePlace(slot, occupancy))
+        || slots[0];
+    return { slotId: fallback.id, overbooked: !hasFreePlace(fallback, occupancy) };
 }
 
 /**
@@ -349,10 +352,14 @@ function validateSlotChange({ oldSlots, newSlots, registrations }) {
     if (newSlots.length === 0) return null;
 
     const keptIds = new Set(newSlots.map(slot => slot.id));
-    const occupancy = countSlotOccupancy(oldSlots, registrations);
     for (const slot of oldSlots) {
-        const count = occupancy[slot.id] || 0;
-        if (!keptIds.has(slot.id) && count > 0) {
+        if (keptIds.has(slot.id)) continue;
+        // Taken places and waitlisted members whose main role this is would be stranded
+        const count = registrations.filter(registration =>
+            (OCCUPYING_STATUSES.includes(registration.status) && registration.slotId === slot.id)
+            || (registration.status === 'waitlisted' && registration.preferredSlotId === slot.id)
+        ).length;
+        if (count > 0) {
             return `Slot „${slot.name}“ hat noch ${count} ${count === 1 ? 'Anmeldung' : 'Anmeldungen'} – bitte zuerst verschieben.`;
         }
     }

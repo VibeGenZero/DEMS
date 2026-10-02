@@ -217,3 +217,19 @@ test('slots can only be switched on while nobody is registered', () => {
     );
     assert.equal(validateSlotChange({ oldSlots: [], newSlots: SLOTS, registrations: rejectedOnly }), null);
 });
+
+test('a slot that waitlisted members want as main role cannot be removed', () => {
+    const registrations = [slotReg('w', 'waitlisted', null, '1', { preferredSlotId: 'tank', altSlotIds: [] })];
+    assert.equal(
+        validateSlotChange({ oldSlots: SLOTS, newSlots: SLOTS.slice(1), registrations }),
+        'Slot „Tank“ hat noch 1 Anmeldung – bitte zuerst verschieben.'
+    );
+});
+
+test('accepting without a known main role prefers a free slot over a false overbooking', () => {
+    const registrations = [
+        slotReg('a', 'accepted', 'tank', '1'),
+        slotReg('w', 'waitlisted', null, '2', { preferredSlotId: 'gone', altSlotIds: [] })
+    ];
+    assert.deepEqual(resolveAcceptanceSlot(SLOTS, registrations, registrations[1]), { slotId: 'heal', overbooked: false });
+});
