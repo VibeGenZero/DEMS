@@ -11,7 +11,9 @@
     "dev": "nodemon server.js",
     "dev:mock": "nodemon dev/start.js",
     "dev:reset": "node dev/reset.js",
-    "test": "node --test \"test/**/*.test.js\""
+    "test": "node --test \"test/**/*.test.js\"",
+    "wiki": "node scripts/wiki-graph.js",
+    "wiki:check": "node scripts/wiki-graph.js --check"
   },
   "dependencies": {
     "better-sqlite3": "^13.0.3",
