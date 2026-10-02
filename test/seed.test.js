@@ -91,6 +91,17 @@ test('the full event is exactly full', async () => {
     assert.ok(registrations.some(registration => registration.status === 'waitlisted'));
 });
 
+test('the raid event has a line-up with a fallback role and a waitlist', async () => {
+    const raid = await getEvent(EVENT_ID.ROLE);
+    assert.deepEqual(raid.slots.map(slot => slot.id), ['tank', 'heal', 'dps']);
+    assert.equal(raid.maxParticipants, 6);
+    assert.equal(raid.allowGuests, false);
+
+    const registrations = await registrationsOf(EVENT_ID.ROLE);
+    assert.ok(registrations.some(r => r.status === 'accepted' && r.slotId !== r.preferredSlotId));
+    assert.ok(registrations.some(r => r.status === 'waitlisted' && r.slotId === null && r.preferredSlotId === 'tank'));
+});
+
 test('the newcomer persona has no profile yet', async () => {
     const newcomer = PERSONAS.find(persona => persona.isNewcomer);
     assert.equal((await getDoc(doc(db, 'users', newcomer.userId))).exists(), false);

@@ -25,6 +25,8 @@ const EVENT_ID = {
 };
 const SERIES_ID = 'dev-series-training';
 const SERIES_EVENT_IDS = ['dev-event-series-1', 'dev-event-series-2', 'dev-event-series-3'];
+/** Role slots of the raid event. */
+const RAID_SLOT_ID = { TANK: 'tank', HEAL: 'heal', DPS: 'dps' };
 
 /** Check-in code of the running event. */
 const CHECKIN_CODE = 'DEMO42';
@@ -148,7 +150,13 @@ function buildEvents(clock) {
         [EVENT_ID.ROLE]: buildEvent(clock, {
             title: 'Raid: Schattenfestung',
             description: 'Nur für Mitglieder mit der Rolle **Raid-Team**.',
-            maxParticipants: 10,
+            maxParticipants: 6,
+            allowGuests: false,
+            slots: [
+                { id: RAID_SLOT_ID.TANK, name: 'Tank', emoji: '🛡️', capacity: 1 },
+                { id: RAID_SLOT_ID.HEAL, name: 'Heiler', emoji: '💚', capacity: 2 },
+                { id: RAID_SLOT_ID.DPS, name: 'Schaden', emoji: '⚔️', capacity: 3 }
+            ],
             accessMode: 'role-required',
             requiredRoles: [ROLE_ID.RAID_TEAM],
             startDate: clock.slot(5, 20),
@@ -307,10 +315,18 @@ function buildRegistrations(clock) {
         entry('full-elif', EVENT_ID.FULL, elif, { status: 'waitlisted', createdAt: clock.offset(-1 * DAY) }),
         entry('full-greta', EVENT_ID.FULL, greta, { status: 'waitlisted', createdAt: clock.offset(-12 * HOUR) }),
 
-        // Role event -> Raid-Team members only
-        entry('role-ben', EVENT_ID.ROLE, ben),
-        entry('role-felix', EVENT_ID.ROLE, felix),
-        entry('role-kira', EVENT_ID.ROLE, kira, { source: 'discord' }),
+        // Raid with role slots -> the tank slot is full, Kira plays her fallback role,
+        // Felix waits for the tank slot; Lena (raider persona) can still pick a role
+        entry('role-ben', EVENT_ID.ROLE, ben, {
+            slotId: RAID_SLOT_ID.TANK, preferredSlotId: RAID_SLOT_ID.TANK, altSlotIds: [], createdAt: clock.offset(-4 * DAY)
+        }),
+        entry('role-kira', EVENT_ID.ROLE, kira, {
+            source: 'discord', slotId: RAID_SLOT_ID.HEAL, preferredSlotId: RAID_SLOT_ID.TANK,
+            altSlotIds: [RAID_SLOT_ID.HEAL], createdAt: clock.offset(-3 * DAY)
+        }),
+        entry('role-felix', EVENT_ID.ROLE, felix, {
+            status: 'waitlisted', slotId: null, preferredSlotId: RAID_SLOT_ID.TANK, altSlotIds: [], createdAt: clock.offset(-2 * DAY)
+        }),
 
         // Workshop -> web-only form
         entry('bigform-chiara', EVENT_ID.BIG_FORM, chiara, {
@@ -459,4 +475,4 @@ function buildSeedData(now = new Date()) {
     };
 }
 
-module.exports = { buildSeedData, EVENT_ID, SERIES_EVENT_IDS, CHECKIN_CODE };
+module.exports = { buildSeedData, EVENT_ID, SERIES_EVENT_IDS, CHECKIN_CODE, RAID_SLOT_ID };
