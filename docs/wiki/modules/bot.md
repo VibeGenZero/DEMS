@@ -58,5 +58,6 @@ At the end of the file: `if (IS_MOCK_MODE) Object.assign(module.exports, require
 ## Gotchas
 
 - `sendChannelMessage` returns `{ channelId, messageId }` (it used to return `true`).
+- `slot_switch`, `slot_leave` and `/unregister` call `deferUpdate`/`deferReply` first and answer with `editReply` — their side effects can exceed Discord's 3 s limit. A guest decline promotes the waitlist after answering.
 - `parseTemplate` uses `String.replace` with the raw value → `$&`/`$1` in user names are interpreted (audit L-03).
 - Event links come from `buildEventUrl` in `utils/eventUrl.js` (`#event/<id>`); a hand-built `#events/<id>` would open the event list — see [utils](utils.md).

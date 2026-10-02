@@ -23,8 +23,8 @@ see_also: [discord-integration, event-lifecycle, bot, frontend-app]
 | `normalizeSlots` | ≤10 slots, name 1–30 chars and unique, emoji empty or one Unicode emoji, capacity 1–100; IDs kept only if they already belong to the event |
 | `pickSlot` | main role → first free fallback → `null` (waitlist) |
 | `pickWaitlistPromotions` | waitlist oldest first; everyone whose main role or fallback has a free place moves up; overbooked slots stay closed |
-| `resolveAcceptanceSlot` | admin accepts a slot-less registration: free wanted slot, else the main role overbooked (+ warning) |
-| `validateSlotChange` | refuses removing a slot with pending/accepted registrations and switching slots on while open registrations exist |
+| `resolveAcceptanceSlot` | admin accepts a slot-less registration: free wanted slot, else the main role overbooked (+ warning); an unknown main role falls back to a free slot |
+| `validateSlotChange` | refuses removing a slot that has pending/accepted registrations or is the main role of a waitlisted registration, and switching slots on while open registrations exist |
 | `buildRoster` | line-up for the event page and the embed |
 
 Normal events use `utils/capacity.js`: places = 1 + guests + open invitations; promotion moves up every waitlisted registration that still fits (fixes the old guest overbooking).
@@ -45,11 +45,13 @@ Normal events use `utils/capacity.js`: places = 1 + guests + open invitations; p
 
 ## Concurrency
 
-`withEventLock(eventId, fn)` (`utils/eventLock.js`) serializes registration, switch, move, admin status change and promotion per event. It is not reentrant: inside the lock call `promoteFromWaitlistLocked`, then `announcePromotions` after releasing it.
+`withEventLock(eventId, fn)` (`utils/eventLock.js`) serializes registration, switch, move, admin status change, promotion and slot edits of the event (`saveEventWithSlots`) per event. It is not reentrant: inside the lock call `promoteFromWaitlistLocked`, then `announcePromotions` after releasing it.
 
 ## Gotchas
 
 - Guests are not possible on slot events.
+- Rejecting or waitlisting a registration clears its `slotId`; a later acceptance picks a slot again.
+- The slot buttons and `/unregister` acknowledge the click first (`deferUpdate` / `deferReply`) because role changes and waitlist DMs can exceed Discord's 3 s limit.
 - Nobody is moved back from a fallback to the main role automatically.
 - Turning slots on is only allowed while the event has no open registrations.
 - Live announcements need the message stored at announce time; announcements sent before 2.6.0 stay static.
