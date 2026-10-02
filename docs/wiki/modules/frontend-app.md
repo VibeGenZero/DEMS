@@ -15,7 +15,7 @@ see_also: [frontend-markup, api-index]
 ## Boot sequence
 
 1. `DOMContentLoaded` #1 → boot animation (`runBootAnimation`, GSAP) or skip if `localStorage.dems_boot_ts` is <24 h old → `finishLoading()`.
-2. `finishLoading()` → `fetchCSRFToken()` → `loadServerInfo()` (server name, guild id, `window.DEBUG_MODE`) → show `?error=` message → `checkAuth()` → `checkMaintenanceStatus()` → `handleRoute()` + `hashchange` listener.
+2. `finishLoading()` → `fetchCSRFToken()` → `loadServerInfo()` (server name, guild id, `window.DEBUG_MODE`) → show `?error=` message → `checkAuth()` → `checkMaintenanceStatus()` → `restorePendingRoute()` → `handleRoute()` + `hashchange` listener.
 3. `DOMContentLoaded` #2 ("Initialization") → `checkUpdates()` and a second `/auth/me` fetch (buggy, see gotchas).
 
 ## Router (`handleRoute`)
@@ -24,13 +24,14 @@ see_also: [frontend-markup, api-index]
 |---|---|---|
 | `#events` (default) | `showEventsSection()` | login required |
 | `#event/<id>` | `showEventDetail(id)` | login required |
+| `#events/<id>` (old Discord links) | rewritten to `#event/<id>` with `history.replaceState` | login required |
 | `#profile` | `showProfileSection()` | login required |
 | `#admin` | `showAdminSection()` | `currentUser.isAdmin` |
 | `#bot-control` | `showBotControlSection()` | `currentUser.isAdmin` |
 | `#info` | `showInfoSection()` | public |
 | `#debug` | `showDebugSection()` | `window.DEBUG_MODE` |
 
-Logged-out users see `#login-section` for every route except `info`. Navigate with `navigateTo('event/' + id)`.
+Logged-out users see `#login-section` for every route except `info`. An event route is stored in `localStorage.dems_pending_route` (15 min); after the login redirect to `#events`, `restorePendingRoute()` opens that event once. Navigate with `navigateTo('event/' + id)`.
 
 ## Function map by section (grep `function <name>`)
 
@@ -38,7 +39,7 @@ Logged-out users see `#login-section` for every route except `info`. Navigate wi
 |---|---|
 | Boot | `createParticles`, `runBootAnimation`, `fetchCSRFToken`, `loadServerInfo`, `updateServerNameInUI`, `finishLoading`, `getErrorMessage` |
 | Auth | `checkAuth`, `showLoggedIn`, `showLoggedOut`, `showUserData` (declared twice!) |
-| Router | `handleRoute`, `navigateTo` |
+| Router | `handleRoute`, `navigateTo`, `rememberPendingRoute`, `restorePendingRoute` |
 | Countdown | `formatCountdown`, `renderCountdownHTML`, `startCountdown` |
 | Event list | `showEventsSection`, `loadCategories`, `filterByCategory`, `debouncedSearch`, `switchView`, `renderCalendar`, `toggleSeriesDates`, `getParticipantWarningBadge` |
 | Location autocomplete | `loadChannelsForAutocomplete`, `handleLocationInput`, `selectLocationChannel` |
@@ -78,4 +79,3 @@ Logged-out users see `#login-section` for every route except `info`. Navigate wi
 
 - `showUserData` is declared twice; the later `async` version wins (function hoisting).
 - The second `DOMContentLoaded` handler calls `setupEventListeners()`, which does not exist → its `.catch` runs `showLoggedOut()`; this can race with `checkAuth()`.
-- Deep links from Discord use `#events/<id>` → the router shows the list, not the event. Detail route is `#event/<id>`.

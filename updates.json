@@ -1,22 +1,14 @@
 {
-    "version": "2.5.0",
-    "date": "2026-09-08",
+    "version": "2.5.1",
+    "date": "2026-10-02",
     "news": [
         {
-            "title": "🧩 Echte Discord-Komponenten im Anmelde-Dialog",
-            "content": "Das Anmelde-Popup in Discord besteht nicht mehr nur aus Textfeldern: Dropdowns sind jetzt echte Auswahlmenüs, Checkboxen werden mit Ja/Nein beantwortet und jedes Feld steht in einer Label-Komponente mit Feldname und Hinweistext. Über dem Formular zeigt eine Text-Display-Komponente Titel, Termin und Teilnehmerzahl."
+            "title": "🔗 Event-Links aus Discord führen wieder zum Event",
+            "content": "„Hier anmelden“, der Button „Zum Event“, der /events-Befehl, Event-Channels und Bot-Nachrichten öffnen jetzt direkt die Detailseite des Events statt der Event-Übersicht. Auch Links in älteren Discord-Nachrichten funktionieren wieder."
         },
         {
-            "title": "👥 Neue Feldtypen für Mitglieder, Rollen und Channels",
-            "content": "Formulare können jetzt ein Discord-Mitglied, eine Rolle, einen Channel oder beides kombiniert abfragen. In Discord erscheinen dafür die passenden Auswahlmenüs, im Web eine Suche bzw. eine Auswahlliste. Neu sind außerdem mehrzeilige Textfelder und ein optionaler Hinweistext je Feld."
-        },
-        {
-            "title": "📋 Einheitliches Antwortformat",
-            "content": "Ausgewählte Mitglieder, Rollen und Channels werden überall gleich gespeichert — als '@Name (ID)' bzw. '#Name (ID)'. Damit bleiben Anmeldungen aus Discord und aus dem Web in Übersicht und CSV-Export direkt vergleichbar."
-        },
-        {
-            "title": "🔒 Channel-Auswahl ohne Datenleck",
-            "content": "Die Channel-Liste im Web-Formular enthält nur Channels, die alle Mitglieder ohnehin sehen können. Private Channels tauchen dort nicht auf."
+            "title": "🔐 Nach dem Login direkt zum Event",
+            "content": "Wer einen Event-Link öffnet und noch nicht eingeloggt ist, landet nach dem Discord-Login automatisch auf genau diesem Event — nicht mehr auf der Übersicht."
         }
     ]
 }

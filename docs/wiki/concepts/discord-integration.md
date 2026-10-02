@@ -3,7 +3,7 @@ id: discord-integration
 title: Discord integration — what DEMS does in Discord
 type: concept
 tags: [discord, announcements, roles, channels, scheduled-events, dm, slash-commands, permissions, intents]
-sources: [bot.js, routes/admin.js, utils/registrationService.js, utils/eventUtils.js]
+sources: [bot.js, routes/admin.js, utils/registrationService.js, utils/eventUtils.js, utils/eventUrl.js]
 depends_on: [bot]
 see_also: [form-fields, registration-flow, reminders-presence, configuration]
 ---
@@ -41,5 +41,5 @@ see_also: [form-fields, registration-flow, reminders-presence, configuration]
 ## Gotchas
 
 - Without `DISCORD_BOT_TOKEN` the web app runs, but every Discord helper is a no-op (`isReady` false).
-- Links in DMs and embeds mostly use `#events/<id>` (opens the list, not the event) — see [known-issues](../reference/known-issues.md).
+- Every event link in embeds, buttons, DMs and `{event.url}` comes from `buildEventUrl` (`utils/eventUrl.js`) and opens `#event/<id>`. Messages sent before v2.5.1 still contain `#events/<id>`; the SPA router rewrites those.
 - `botSettings.announceChannel` is stored but announcements always use `DISCORD_ANNOUNCE_CHANNEL_ID`.

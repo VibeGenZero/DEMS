@@ -10,6 +10,7 @@ const { validateEvent, validateRegStatus, validateBotMessages } = require('../mi
 const { sendDM, assignRole, parseTemplate, getGuildRoles, sendChannelMessage, buildEventEmbed, buildEventComponents, getGuildScheduledEvents, createEventChannels, deleteEventChannels, createScheduledEvent, getBotStatus, getBotSettings, saveBotSettings, getRunningEvents, getGuildChannels } = require('../bot');
 const { promoteFromWaitlist, addAuditLog } = require('../utils/eventUtils');
 const { debugLog } = require('../utils/debugLog');
+const { buildEventUrl } = require('../utils/eventUrl');
 
 // All admin routes require auth + admin
 router.use(requireAuth, requireAdmin);
@@ -682,8 +683,7 @@ router.put('/registrations/:id/status', validateRegStatus, async (req, res) => {
         const globalTemplates = templateSnap.exists() ? templateSnap.data() : {};
 
         // Prepare variables
-        const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
-        const eventUrl = `${baseUrl}/#events/${reg.eventId}`;
+        const eventUrl = buildEventUrl(reg.eventId);
 
         let roleName = '';
         let roleMention = '';
@@ -764,8 +764,7 @@ router.post('/events/:id/announce', async (req, res) => {
         const event = eventSnap.data();
         const { text, roleIds, pingEveryone } = req.body;
 
-        const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
-        const registrationLink = `${baseUrl}/#events/${req.params.id}`;
+        const registrationLink = buildEventUrl(req.params.id);
 
         const embed = buildEventEmbed(event, registrationLink);
         const success = await sendChannelMessage(channelId, embed, {
