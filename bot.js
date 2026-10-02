@@ -190,7 +190,16 @@ client.on('interactionCreate', async (interaction) => {
 
     // Handle the registration modal of an event announcement
     if (interaction.isModalSubmit()) {
-        const [modalAction, modalEventId] = interaction.customId.split(':');
+        const [modalAction, modalEventId, modalSlotId] = interaction.customId.split(':');
+        if (modalAction === SLOT_MODAL_PREFIX && modalEventId && modalSlotId) {
+            try {
+                await handleEventSlotModal(interaction, modalEventId, modalSlotId);
+            } catch (err) {
+                console.error('Event slot modal error:', err);
+                await replyWithFailure(interaction);
+            }
+            return;
+        }
         if (modalAction === REGISTER_MODAL_PREFIX && modalEventId) {
             try {
                 await handleEventRegisterModal(interaction, modalEventId);
@@ -211,6 +220,23 @@ client.on('interactionCreate', async (interaction) => {
 
     // Handle guest invitation and event registration button interactions
     if (interaction.isButton()) {
+        const [buttonAction, buttonEventId, buttonSlotId] = interaction.customId.split(':');
+        if ([SLOT_BUTTON_PREFIX, SLOT_SWITCH_PREFIX, SLOT_LEAVE_PREFIX].includes(buttonAction) && buttonEventId) {
+            try {
+                if (buttonAction === SLOT_BUTTON_PREFIX) {
+                    await handleEventSlotButton(interaction, buttonEventId, buttonSlotId);
+                } else if (buttonAction === SLOT_SWITCH_PREFIX) {
+                    await handleSlotSwitchButton(interaction, buttonEventId, buttonSlotId);
+                } else {
+                    await handleSlotLeaveButton(interaction, buttonEventId);
+                }
+            } catch (err) {
+                console.error('Slot button error:', err);
+                await replyWithFailure(interaction);
+            }
+            return;
+        }
+
         const [action, registrationId, guestId] = interaction.customId.split(':');
 
         if (action === REGISTER_BUTTON_PREFIX && registrationId) {
@@ -300,6 +326,8 @@ client.on('interactionCreate', async (interaction) => {
                     // Remove from pendingGuests
                     pendingGuests.splice(guestIndex, 1);
                     await updateDoc(regRef, { pendingGuests });
+                    // The open invitation no longer reserves a place
+                    require('./utils/announcementRefresh').notifyRegistrationsChanged(reg.eventId);
 
                     // Notify registrant
                     await sendDM(reg.userId, `❌ Deine Gäste-Einladung wurde abgelehnt.`);
@@ -416,34 +444,10 @@ client.on('interactionCreate', async (interaction) => {
 
             const event = eventSnap.data();
 
-            // Find user's registration
-            const regQ = query(
-                collection(db, 'registrations'),
-                where('eventId', '==', eventId),
-                where('userId', '==', userId)
-            );
-            const regSnapshot = await getDocs(regQ);
-
-            if (regSnapshot.empty) {
-                return interaction.reply({ content: '⚠️ Du bist für dieses Event nicht angemeldet.', flags: MessageFlags.Ephemeral });
-            }
-
-            const regDoc = regSnapshot.docs[0];
-            const regData = regDoc.data();
-            const wasAccepted = regData.status === 'accepted';
-
-            // Delete registration
-            await deleteDoc(doc(db, 'registrations', regDoc.id));
-
-            // Remove role if user was accepted
-            if (wasAccepted && event.assignRoleId) {
-                await removeRole(userId, event.assignRoleId, process.env.DISCORD_GUILD_ID);
-            }
-
-            // Promote from waitlist if a spot opened up
-            if (wasAccepted || regData.status === 'pending') {
-                const { promoteFromWaitlist } = require('./utils/eventUtils');
-                await promoteFromWaitlist(eventId, event);
+            const { unregisterUserFromEvent } = require('./utils/registrationService');
+            const result = await unregisterUserFromEvent({ eventId, userId });
+            if (!result.ok) {
+                return interaction.reply({ content: `⚠️ ${result.error}`, flags: MessageFlags.Ephemeral });
             }
 
             const embed = new EmbedBuilder()
@@ -931,6 +935,23 @@ function applyFieldComponent(label, field, index) {
 }
 
 /**
+ * Add one label per form field to a modal.
+ *
+ * @param {ModalBuilder} modal -> The modal to extend.
+ * @param {Array<Object>} fields -> Form fields that fit into the modal.
+ * @returns {void}
+ */
+function addFormFieldLabels(modal, fields) {
+    fields.forEach((field, index) => {
+        const label = new LabelBuilder()
+            .setLabel(String(field.label).substring(0, MODAL_LABEL_MAX_LENGTH))
+            .setDescription(buildFieldDescription(field));
+
+        modal.addLabelComponents(applyFieldComponent(label, field, index));
+    });
+}
+
+/**
  * Build the registration modal for an event form.
  *
  * The modal shows one label per form field, each carrying the component that
@@ -949,7 +970,7 @@ function buildRegistrationModal(event, eventId) {
         .setCustomId(`${REGISTER_MODAL_PREFIX}:${eventId}`)
         .setTitle(`Anmeldung: ${event.title}`.substring(0, MODAL_TITLE_MAX_LENGTH));
 
-    const fields = getFormFields(event).slice(0, MODAL_MAX_FIELDS);
+    const fields = getFormFields(event).slice(0, getModalFieldLimit(event));
 
     // The intro shares the five top level component slots with the fields ->
     // it is only added while a slot is left over, otherwise Discord rejects
@@ -958,15 +979,119 @@ function buildRegistrationModal(event, eventId) {
         modal.addTextDisplayComponents(buildModalIntro(event));
     }
 
-    fields.forEach((field, index) => {
-        const label = new LabelBuilder()
-            .setLabel(String(field.label).substring(0, MODAL_LABEL_MAX_LENGTH))
-            .setDescription(buildFieldDescription(field));
-
-        modal.addLabelComponents(applyFieldComponent(label, field, index));
-    });
+    addFormFieldLabels(modal, fields);
 
     return modal;
+}
+
+/**
+ * Build the registration modal behind a slot button.
+ *
+ * It starts with a select for the fallback roles (all other slots) when the
+ * event has more than one slot, followed by the form fields. The intro text
+ * is only added while one of the five component places is left.
+ *
+ * @param {Object} event -> The event document data.
+ * @param {string} eventId -> The event document ID.
+ * @param {Object} slot -> The slot the user clicked.
+ * @returns {ModalBuilder} -> Modal ready for interaction.showModal().
+ */
+function buildSlotModal(event, eventId, slot) {
+    const modal = new ModalBuilder()
+        .setCustomId(`${SLOT_MODAL_PREFIX}:${eventId}:${slot.id}`)
+        .setTitle(`${slot.name}: ${event.title}`.substring(0, MODAL_TITLE_MAX_LENGTH));
+
+    const otherSlots = getSlots(event).filter(entry => entry.id !== slot.id);
+    const fields = getFormFields(event).slice(0, getModalFieldLimit(event));
+    const usedComponents = fields.length + (otherSlots.length > 0 ? 1 : 0);
+
+    if (usedComponents < MODAL_MAX_FIELDS) {
+        modal.addTextDisplayComponents(buildModalIntro(event));
+    }
+
+    if (otherSlots.length > 0) {
+        const select = new StringSelectMenuBuilder()
+            .setCustomId(ALT_SLOTS_FIELD_ID)
+            .setPlaceholder('Keine Ausweichrolle')
+            .setRequired(false)
+            .setMinValues(0)
+            .setMaxValues(otherSlots.length)
+            .addOptions(otherSlots.map(entry => ({
+                label: entry.name,
+                value: entry.id,
+                ...(entry.emoji ? { emoji: { name: entry.emoji } } : {})
+            })));
+        modal.addLabelComponents(
+            new LabelBuilder()
+                .setLabel('Ausweichrollen (optional)')
+                .setDescription(`Falls ${slot.name} voll ist, wirst du hier eingeplant.`.substring(0, MODAL_DESCRIPTION_MAX_LENGTH))
+                .setStringSelectMenuComponent(select)
+        );
+    }
+
+    addFormFieldLabels(modal, fields);
+    return modal;
+}
+
+/**
+ * Read the fallback roles chosen in a slot modal.
+ *
+ * @param {import('discord.js').ModalSubmitInteraction} interaction -> The submitted modal.
+ * @returns {string[]} -> Selected slot IDs, empty when the select is missing.
+ */
+function readAltSlotIds(interaction) {
+    try {
+        return interaction.fields.getStringSelectValues(ALT_SLOTS_FIELD_ID) || [];
+    } catch {
+        return [];
+    }
+}
+
+/**
+ * Answer for a member who clicks a slot button while already registered.
+ *
+ * @param {Object} event -> The event document data.
+ * @param {string} eventId -> The event document ID.
+ * @param {Object} registration -> The member's registration.
+ * @param {Object} clickedSlot -> The slot behind the clicked button.
+ * @param {Array<Object>} registrations -> All registrations of the event.
+ * @returns {Object} -> Ephemeral reply payload.
+ */
+function buildRegisteredSlotReply(event, eventId, registration, clickedSlot, registrations) {
+    const slots = getSlots(event);
+
+    if (registration.status === 'rejected') {
+        return {
+            content: `❌ Deine Anmeldung für **${event.title}** wurde abgelehnt.`,
+            components: [],
+            flags: MessageFlags.Ephemeral
+        };
+    }
+
+    const current = findSlot(slots, registration.slotId);
+    const content = registration.status === 'waitlisted' || !current
+        ? `⏳ Du stehst für **${event.title}** auf der Warteliste.`
+        : `Du bist für **${event.title}** als **${formatSlotLabel(current)}** eingeplant${registration.status === 'pending' ? ' (Anfrage ausstehend)' : ''}.`;
+
+    const row = new ActionRowBuilder();
+    const canSwitch = clickedSlot.id !== registration.slotId
+        && hasFreePlace(clickedSlot, countSlotOccupancy(slots, registrations));
+    if (canSwitch) {
+        const switchButton = new ButtonBuilder()
+            .setCustomId(`${SLOT_SWITCH_PREFIX}:${eventId}:${clickedSlot.id}`)
+            .setLabel(`Zu ${clickedSlot.name} wechseln`)
+            .setStyle(ButtonStyle.Primary);
+        if (clickedSlot.emoji) switchButton.setEmoji(clickedSlot.emoji);
+        row.addComponents(switchButton);
+    }
+    row.addComponents(
+        new ButtonBuilder()
+            .setCustomId(`${SLOT_LEAVE_PREFIX}:${eventId}`)
+            .setLabel('Abmelden')
+            .setStyle(ButtonStyle.Danger)
+    );
+
+    return { content, components: [row], flags: MessageFlags.Ephemeral };
 }
 
 /**
@@ -1076,7 +1201,7 @@ function parseModalAnswers(interaction, event) {
     const answers = {};
     const errors = [];
 
-    getFormFields(event).slice(0, MODAL_MAX_FIELDS).forEach((field, index) => {
+    getFormFields(event).slice(0, getModalFieldLimit(event)).forEach((field, index) => {
         const type = getFieldType(field);
         try {
             const { value, error } = readModalField(interaction, field, index);
@@ -1204,7 +1329,7 @@ async function checkRegistrationConditions({ event, eventId, userId, roleIds }) 
  * @param {Object} params.formAnswers -> Answers keyed by form field label.
  * @returns {Promise<void>} -> Resolves once the interaction was answered.
  */
-async function completeDiscordRegistration(interaction, { eventId, event, roleIds, formAnswers }) {
+async function completeDiscordRegistration(interaction, { eventId, event, roleIds, formAnswers, slotId = null, altSlotIds = [] }) {
     const { registerUserForEvent, REGISTRATION_SOURCE } = require('./utils/registrationService');
     const displayName = interaction.member?.displayName
         || interaction.user.globalName
@@ -1224,7 +1349,9 @@ async function completeDiscordRegistration(interaction, { eventId, event, roleId
             user: { id: interaction.user.id, displayName, roles: roleIds },
             formAnswers,
             guests: [],
-            source: REGISTRATION_SOURCE.DISCORD
+            source: REGISTRATION_SOURCE.DISCORD,
+            slotId,
+            altSlotIds
         });
     } finally {
         pendingDiscordRegistrations.delete(pendingKey);
@@ -1238,10 +1365,17 @@ async function completeDiscordRegistration(interaction, { eventId, event, roleId
     // Store the profile so the participant shows up with name and avatar in the web interface
     await ensureUserProfile(interaction.user, displayName);
 
+    const slots = getSlots(event);
+    const slot = findSlot(slots, result.slotId);
+    const wantedSlot = findSlot(slots, slotId);
+    const placement = slot ? ` als **${formatSlotLabel(slot)}**` : '';
+    const altNote = result.isAlt && wantedSlot ? ` (${formatSlotLabel(wantedSlot)} war voll)` : '';
     const statusDescriptions = {
-        accepted: `Du bist für **${event.title}** angemeldet. Deine Anmeldung ist ab sofort auch im Event-System sichtbar.`,
-        pending: `Deine Anfrage für **${event.title}** ist eingegangen und wartet auf Bestätigung. Du siehst den Status im Event-System.`,
-        waitlisted: `**${event.title}** ist aktuell voll — du stehst auf der Warteliste und rückst automatisch nach.`
+        accepted: `Du bist für **${event.title}**${placement} angemeldet${altNote}. Deine Anmeldung ist ab sofort auch im Event-System sichtbar.`,
+        pending: `Deine Anfrage für **${event.title}**${placement}${altNote} ist eingegangen und wartet auf Bestätigung. Du siehst den Status im Event-System.`,
+        waitlisted: slots.length > 0
+            ? `Für **${event.title}** sind gerade alle gewünschten Slots belegt — du stehst auf der Warteliste und rückst automatisch nach.`
+            : `**${event.title}** ist aktuell voll — du stehst auf der Warteliste und rückst automatisch nach.`
     };
     const statusColors = { accepted: 0x22c55e, pending: 0xf59e0b, waitlisted: 0x8b5cf6 };
     const statusTitles = {
@@ -1346,6 +1480,159 @@ async function handleEventRegisterModal(interaction, eventId) {
     }
 
     await completeDiscordRegistration(interaction, { eventId, event, roleIds, formAnswers: answers });
+}
+
+/**
+ * Answer a failed interaction without throwing.
+ *
+ * @param {import('discord.js').Interaction} interaction -> The interaction.
+ * @returns {Promise<void>}
+ */
+async function replyWithFailure(interaction) {
+    const content = '❌ Fehler bei der Anmeldung.';
+    try {
+        if (interaction.deferred || interaction.replied) {
+            await interaction.editReply({ content });
+        } else {
+            await interaction.reply({ content, flags: MessageFlags.Ephemeral });
+        }
+    } catch { /* interaction already expired */ }
+}
+
+/**
+ * Handle a click on a slot button of an event announcement.
+ *
+ * Registered members get their status with switch/leave buttons; everybody
+ * else is checked and gets the slot modal (or is registered directly when
+ * there is nothing to ask).
+ *
+ * @param {import('discord.js').ButtonInteraction} interaction -> The button interaction.
+ * @param {string} eventId -> The event document ID.
+ * @param {string} slotId -> The clicked slot.
+ * @returns {Promise<void>}
+ */
+async function handleEventSlotButton(interaction, eventId, slotId) {
+    debugLog('bot.slotButton', { eventId, slotId, userId: interaction.user.id });
+
+    const eventSnap = await getDoc(doc(db, 'events', eventId));
+    if (!eventSnap.exists()) {
+        return interaction.reply({ content: '❌ Event nicht gefunden.', flags: MessageFlags.Ephemeral });
+    }
+    const event = eventSnap.data();
+    const slot = findSlot(getSlots(event), slotId);
+    if (!slot) {
+        return interaction.reply({
+            content: `❌ Diesen Slot gibt es nicht mehr. Bitte melde dich hier an: ${buildEventUrl(eventId)}`,
+            flags: MessageFlags.Ephemeral
+        });
+    }
+
+    const { loadEventRegistrations } = require('./utils/eventUtils');
+    const registrations = await loadEventRegistrations(eventId);
+    const registration = registrations.find(entry => entry.userId === interaction.user.id);
+    if (registration) {
+        return interaction.reply(buildRegisteredSlotReply(event, eventId, registration, slot, registrations));
+    }
+
+    const roleIds = await resolveInteractionRoles(interaction);
+    const conditionError = await checkRegistrationConditions({ event, eventId, userId: interaction.user.id, roleIds });
+    if (conditionError) {
+        return interaction.reply({ content: `❌ ${conditionError}`, flags: MessageFlags.Ephemeral });
+    }
+
+    const needsModal = getFormFields(event).length > 0 || getSlots(event).length > 1;
+    if (needsModal) {
+        if (!fitsIntoDiscordModal(event)) {
+            return interaction.reply({
+                content: `📝 Für dieses Event ist das Formular zu umfangreich für Discord (max. ${getModalFieldLimit(event)} Felder). Bitte melde dich hier an: ${buildEventUrl(eventId)}`,
+                flags: MessageFlags.Ephemeral
+            });
+        }
+        return interaction.showModal(buildSlotModal(event, eventId, slot));
+    }
+
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    await completeDiscordRegistration(interaction, { eventId, event, roleIds, formAnswers: {}, slotId, altSlotIds: [] });
+}
+
+/**
+ * Handle the submitted slot modal.
+ *
+ * @param {import('discord.js').ModalSubmitInteraction} interaction -> The submitted modal.
+ * @param {string} eventId -> The event document ID.
+ * @param {string} slotId -> The slot of the clicked button.
+ * @returns {Promise<void>}
+ */
+async function handleEventSlotModal(interaction, eventId, slotId) {
+    debugLog('bot.slotModal', { eventId, slotId, userId: interaction.user.id });
+
+    const eventSnap = await getDoc(doc(db, 'events', eventId));
+    if (!eventSnap.exists()) {
+        return interaction.reply({ content: '❌ Event nicht gefunden.', flags: MessageFlags.Ephemeral });
+    }
+    const event = eventSnap.data();
+
+    // Slots or the form may have changed while the modal was open
+    if (!canRegisterViaDiscord(event) || !findSlot(getSlots(event), slotId)) {
+        return interaction.reply({
+            content: `📝 Das Event hat sich geändert. Bitte melde dich hier an: ${buildEventUrl(eventId)}`,
+            flags: MessageFlags.Ephemeral
+        });
+    }
+
+    const { answers, errors } = parseModalAnswers(interaction, event);
+    if (errors.length > 0) {
+        return interaction.reply({
+            content: `❌ Bitte korrigiere deine Angaben:\n${errors.map(e => `• ${e}`).join('\n')}`,
+            flags: MessageFlags.Ephemeral
+        });
+    }
+
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+    const roleIds = await resolveInteractionRoles(interaction);
+    const conditionError = await checkRegistrationConditions({ event, eventId, userId: interaction.user.id, roleIds });
+    if (conditionError) {
+        return interaction.editReply({ content: `❌ ${conditionError}` });
+    }
+
+    await completeDiscordRegistration(interaction, {
+        eventId, event, roleIds, formAnswers: answers, slotId, altSlotIds: readAltSlotIds(interaction)
+    });
+}
+
+/**
+ * Handle "Zu <Slot> wechseln" in the ephemeral status answer.
+ *
+ * @param {import('discord.js').ButtonInteraction} interaction -> The button interaction.
+ * @param {string} eventId -> The event document ID.
+ * @param {string} slotId -> Target slot.
+ * @returns {Promise<void>}
+ */
+async function handleSlotSwitchButton(interaction, eventId, slotId) {
+    if (await isRegistrationBlocked()) {
+        return interaction.update({ content: '❌ Event-Registrierungen sind wegen Wartungsarbeiten vorübergehend deaktiviert.', components: [] });
+    }
+    const { switchOwnSlot } = require('./utils/registrationService');
+    const result = await switchOwnSlot({ eventId, userId: interaction.user.id, slotId });
+    await interaction.update({ content: result.ok ? `✅ ${result.message}` : `❌ ${result.error}`, components: [] });
+}
+
+/**
+ * Handle "Abmelden" in the ephemeral status answer.
+ *
+ * @param {import('discord.js').ButtonInteraction} interaction -> The button interaction.
+ * @param {string} eventId -> The event document ID.
+ * @returns {Promise<void>}
+ */
+async function handleSlotLeaveButton(interaction, eventId) {
+    const { unregisterUserFromEvent } = require('./utils/registrationService');
+    const result = await unregisterUserFromEvent({ eventId, userId: interaction.user.id });
+    const title = result.event && result.event.title ? result.event.title : 'dem Event';
+    await interaction.update({
+        content: result.ok ? `✅ Du wurdest von **${title}** abgemeldet.` : `❌ ${result.error}`,
+        components: []
+    });
 }
 
 /**
@@ -2312,6 +2599,8 @@ module.exports = {
     sendChannelMessage,
     refreshEventAnnouncements,
     isGoneDiscordError,
+    buildSlotModal,
+    buildRegisteredSlotReply,
     buildEventEmbed,
     assignRole,
     removeRole,
