@@ -287,10 +287,11 @@
             <!-- Participants (only shown when logged in) -->
             <div id="detail-participants-section" class="glass-card p-4 mb-4" style="display:none;">
               <h6 class="section-label mb-3">
-                <i class="bi bi-people me-2"></i>TEILNEHMER
+                <i class="bi bi-people me-2"></i><span id="detail-participants-title">TEILNEHMER</span>
                 <span id="detail-participants-count" class="ms-1 fw-normal text-secondary"></span>
               </h6>
               <div id="detail-participants-avatars" class="participants-avatar-stack"></div>
+              <div id="detail-roster" style="display:none;"></div>
             </div>
 
             <!-- Series dates (rendered by JS) -->
@@ -301,6 +302,7 @@
               <div class="glass-card p-4 mb-4">
                 <h5 class="mb-3"><i class="bi bi-pencil-square me-2"></i>Anmeldung</h5>
                 <form id="registration-form">
+                  <div id="slot-picker-area" class="mb-3" style="display:none;"></div>
                   <div id="dynamic-form-fields"></div>
 
                   <div class="mt-3 mb-2" id="guest-tickets-area">
@@ -352,6 +354,7 @@
                   <div class="flex-grow-1">
                     <h5 class="mb-1">Bereits registriert</h5>
                     <p class="text-secondary mb-0">Status: <span id="detail-reg-status" class="fw-bold"></span></p>
+                    <div id="detail-reg-slot" class="mt-2"></div>
                   </div>
                   <button class="btn btn-outline-danger" onclick="unregisterFromEvent()" id="unregister-btn">
                     <i class="bi bi-x-circle me-1"></i>Abmelden

@@ -916,7 +916,8 @@ function renderSidebarAction(state, event = null) {
     const area = document.getElementById('sidebar-action-area');
     if (!area) return;
 
-    const hasFormFields = event && Array.isArray(event.formFields) && event.formFields.length > 0;
+    // Slot events need the role picker in the form -> the sidebar scrolls there instead of submitting
+    const hasFormFields = event && ((Array.isArray(event.formFields) && event.formFields.length > 0) || eventHasSlots(event));
 
     if (state === 'register' || state === 'waitlist') {
         const isWaitlist = state === 'waitlist';
@@ -985,6 +986,22 @@ async function loadDetailParticipants(eventId) {
         if (!section || !avatarsEl) return;
 
         section.style.display = 'block';
+        const rosterEl = document.getElementById('detail-roster');
+        const titleEl = document.getElementById('detail-participants-title');
+        if (Array.isArray(data.slots)) {
+            if (titleEl) titleEl.textContent = 'AUFSTELLUNG';
+            avatarsEl.style.display = 'none';
+            rosterEl.style.display = 'block';
+            rosterEl.innerHTML = renderRoster(data);
+            if (countEl) countEl.textContent = `(${data.slots.reduce((sum, slot) => sum + slot.taken, 0)})`;
+            return;
+        }
+        if (titleEl) titleEl.textContent = 'TEILNEHMER';
+        avatarsEl.style.display = '';
+        if (rosterEl) {
+            rosterEl.style.display = 'none';
+            rosterEl.innerHTML = '';
+        }
         if (countEl) countEl.textContent = `(${data.total})`;
 
         if (!data.participants.length) {
@@ -1001,6 +1018,183 @@ async function loadDetailParticipants(eventId) {
             return `<div class="participant-avatar-placeholder" title="${escapeHtml(p.displayName)}">${initials}</div>`;
         }).join('') + (overflow > 0 ? `<div class="participants-overflow-badge">+${overflow}</div>` : '');
     } catch { /* non-fatal */ }
+}
+
+// ─── Role Slots (event page) ─────────────────────
+let selectedSlotId = null;
+let selectedAltSlotIds = [];
+let slotPickerSlots = [];
+
+function eventHasSlots(event) {
+    return !!event && Array.isArray(event.slots) && event.slots.length > 0;
+}
+
+function renderSlotPicker(event) {
+    const area = document.getElementById('slot-picker-area');
+    if (!area) return;
+    selectedSlotId = null;
+    selectedAltSlotIds = [];
+    slotPickerSlots = eventHasSlots(event) ? event.slots : [];
+    if (slotPickerSlots.length === 0) {
+        area.style.display = 'none';
+        area.innerHTML = '';
+        return;
+    }
+
+    const summary = Array.isArray(event.slotSummary)
+        ? event.slotSummary
+        : event.slots.map(slot => ({ ...slot, taken: 0 }));
+    area.style.display = 'block';
+    area.innerHTML = `
+        <label class="form-label mb-2"><i class="bi bi-diagram-3 me-1"></i>Deine Rolle <span class="text-danger">*</span></label>
+        <div class="slot-picker" id="slot-picker-cards">
+            ${summary.map(slot => {
+                const full = slot.taken >= slot.capacity;
+                return `
+                <button type="button" class="slot-card${full ? ' full' : ''}" data-slot-id="${escapeHtml(slot.id)}" onclick="selectPrimarySlot(this.dataset.slotId)">
+                    <span class="slot-card-emoji">${escapeHtml(slot.emoji || '🎯')}</span>
+                    <span class="slot-card-name">${escapeHtml(slot.name)}</span>
+                    <span class="slot-card-count">${slot.taken}/${slot.capacity}</span>
+                    ${full ? '<span class="slot-card-hint">voll – Ausweich/Warteliste</span>' : ''}
+                </button>`;
+            }).join('')}
+        </div>
+        <div id="slot-alt-area" class="mt-3" style="display:none;">
+            <label class="form-label mb-1">Ausweichrollen <small class="text-muted">(optional – falls deine Rolle voll ist)</small></label>
+            <div class="d-flex flex-wrap gap-2" id="slot-alt-chips"></div>
+        </div>`;
+}
+
+function selectPrimarySlot(slotId) {
+    selectedSlotId = slotId;
+    selectedAltSlotIds = selectedAltSlotIds.filter(id => id !== slotId);
+    document.querySelectorAll('#slot-picker-cards .slot-card').forEach(card => {
+        card.classList.toggle('selected', card.dataset.slotId === slotId);
+    });
+    renderAltSlotChips();
+}
+
+function renderAltSlotChips() {
+    const area = document.getElementById('slot-alt-area');
+    const chips = document.getElementById('slot-alt-chips');
+    if (!area || !chips) return;
+    const others = slotPickerSlots.filter(slot => slot.id !== selectedSlotId);
+    if (!selectedSlotId || others.length === 0) {
+        area.style.display = 'none';
+        return;
+    }
+    area.style.display = 'block';
+    chips.innerHTML = others.map(slot => `
+        <button type="button" class="slot-alt-chip${selectedAltSlotIds.includes(slot.id) ? ' selected' : ''}" data-slot-id="${escapeHtml(slot.id)}" onclick="toggleAltSlot(this.dataset.slotId)">
+            ${escapeHtml(formatSlotLabel(slot))}
+        </button>`).join('');
+}
+
+function toggleAltSlot(slotId) {
+    selectedAltSlotIds = selectedAltSlotIds.includes(slotId)
+        ? selectedAltSlotIds.filter(id => id !== slotId)
+        : [...selectedAltSlotIds, slotId];
+    renderAltSlotChips();
+}
+
+function renderRosterAvatar(person) {
+    const initial = escapeHtml((person.displayName || '?').charAt(0).toUpperCase());
+    if (person.avatar) {
+        return `<img src="${escapeHtml(person.avatar)}" class="roster-avatar" alt="" onerror="this.style.visibility='hidden'">`;
+    }
+    return `<span class="roster-avatar roster-avatar-fallback">${initial}</span>`;
+}
+
+function renderRoster(data) {
+    const maxFreeSeats = 5;
+    const slotsHtml = data.slots.map(slot => {
+        const overbooked = slot.taken > slot.capacity;
+        const pct = Math.min(100, Math.round((slot.taken / slot.capacity) * 100));
+        const members = slot.members.map(member => `
+            <div class="roster-member">
+                ${renderRosterAvatar(member)}
+                <span class="roster-name">${escapeHtml(member.displayName)}</span>
+                ${member.pending ? '<span class="roster-tag" title="Anfrage ausstehend">⏳</span>' : ''}
+                ${member.isAlt ? '<span class="roster-tag roster-tag-alt">Ausweich</span>' : ''}
+            </div>`).join('');
+        const freeSeats = Math.max(0, slot.capacity - slot.taken);
+        const seats = Array.from({ length: Math.min(freeSeats, maxFreeSeats) }, () =>
+            '<div class="roster-member roster-seat-free"><span class="roster-seat-dot"></span><span class="roster-name text-muted">frei</span></div>'
+        ).join('');
+        const moreFree = freeSeats > maxFreeSeats
+            ? `<div class="text-muted small">+${freeSeats - maxFreeSeats} weitere freie Plätze</div>`
+            : '';
+        return `
+            <div class="roster-slot${overbooked ? ' overbooked' : ''}">
+                <div class="roster-slot-head">
+                    <span>${escapeHtml(formatSlotLabel(slot))}</span>
+                    <span class="roster-slot-count">${slot.taken}/${slot.capacity}</span>
+                </div>
+                <div class="capacity-progress"><div class="capacity-progress-bar${pct >= 100 ? ' danger' : ''}" style="width:${pct}%"></div></div>
+                <div class="roster-members">${members}${seats}${moreFree}</div>
+            </div>`;
+    }).join('');
+
+    const slotById = Object.fromEntries(data.slots.map(slot => [slot.id, slot]));
+    const waitlist = data.waitlist.length === 0 ? '' : `
+        <div class="mt-3">
+            <div class="section-label mb-2"><i class="bi bi-hourglass-split me-1"></i>WARTELISTE (${data.waitlist.length})</div>
+            ${data.waitlist.map(entry => {
+                const wishes = [entry.preferredSlotId, ...entry.altSlotIds]
+                    .map(id => slotById[id])
+                    .filter(Boolean)
+                    .map(slot => escapeHtml(slot.emoji || slot.name))
+                    .join(' ');
+                return `<div class="roster-member">${renderRosterAvatar(entry)}<span class="roster-name">${escapeHtml(entry.displayName)}</span><span class="roster-wishes">${wishes}</span></div>`;
+            }).join('')}
+        </div>`;
+
+    return `<div class="roster-grid">${slotsHtml}</div>${waitlist}`;
+}
+
+function renderOwnSlot(event, registration) {
+    const area = document.getElementById('detail-reg-slot');
+    if (!area) return;
+    if (!eventHasSlots(event) || registration.asGuest || registration.status === 'rejected') {
+        area.innerHTML = '';
+        return;
+    }
+    const summary = Array.isArray(event.slotSummary) ? event.slotSummary : [];
+    const current = summary.find(slot => slot.id === registration.slotId);
+    const isAlt = !!current && registration.slotId !== registration.preferredSlotId;
+    const freeSlots = summary.filter(slot => slot.id !== registration.slotId && slot.taken < slot.capacity);
+    const placement = current
+        ? `Du bist als <strong>${escapeHtml(formatSlotLabel(current))}</strong> eingeplant${isAlt ? ' <span class="roster-tag roster-tag-alt">Ausweich</span>' : ''}.`
+        : 'Du stehst auf der Warteliste.';
+    const switcher = freeSlots.length === 0 ? '' : `
+        <div class="input-group input-group-sm mt-2">
+            <select class="form-select" id="own-slot-select" aria-label="Neuer Slot">
+                ${freeSlots.map(slot => `<option value="${escapeHtml(slot.id)}">${escapeHtml(formatSlotLabel(slot))} (${slot.taken}/${slot.capacity})</option>`).join('')}
+            </select>
+            <button class="btn btn-outline-light" type="button" data-event-id="${escapeHtml(event.id)}" onclick="switchMySlot(this.dataset.eventId)">Slot wechseln</button>
+        </div>`;
+    area.innerHTML = `<div class="small">${placement}</div>${switcher}`;
+}
+
+async function switchMySlot(eventId) {
+    const select = document.getElementById('own-slot-select');
+    if (!select || !select.value) return;
+    try {
+        const res = await fetch(`/api/events/${eventId}/register/slot`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrfToken },
+            body: JSON.stringify({ slotId: select.value })
+        });
+        const result = await res.json();
+        if (res.ok) {
+            showToast(result.message || 'Slot gewechselt.', 'success');
+            showEventDetail(eventId);
+        } else {
+            showToast(result.error || 'Slot konnte nicht gewechselt werden.', 'danger');
+        }
+    } catch {
+        showToast('Netzwerkfehler.', 'danger');
+    }
 }
 
 // ─── Event Detail ────────────────────────────────
@@ -1128,6 +1322,7 @@ async function showEventDetail(eventId) {
                 ? 'Angenommen (Gast)'
                 : (statusTexts[regData.status] || regData.status);
             statusEl.className = 'fw-bold text-' + (statusColors[regData.status] || 'secondary');
+            renderOwnSlot(event, regData);
 
             renderSidebarAction('registered');
             gsap.from('.col-lg-8', { y: 20, opacity: 0, duration: 0.4, ease: 'power3.out' });
@@ -1152,7 +1347,8 @@ async function showEventDetail(eventId) {
         }
 
         // Check capacity — show waitlist if full
-        const isFull = event.maxParticipants > 0 && event.currentParticipants >= event.maxParticipants;
+        // Slot events always show the form -> the server picks slot, fallback or waitlist
+        const isFull = !eventHasSlots(event) && event.maxParticipants > 0 && event.currentParticipants >= event.maxParticipants;
 
         if (isFull) {
             waitlistArea.style.display = 'block';
@@ -1179,10 +1375,11 @@ async function showEventDetail(eventId) {
             // Show registration form
             registerArea.style.display = 'block';
             renderFormFields(event.formFields || []);
+            renderSlotPicker(event);
 
             const guestArea = document.getElementById('guest-tickets-area');
             if (guestArea) {
-                guestArea.style.display = event.allowGuests === false ? 'none' : 'block';
+                guestArea.style.display = event.allowGuests === false || eventHasSlots(event) ? 'none' : 'block';
             }
 
             const form = document.getElementById('registration-form');
@@ -1542,13 +1739,20 @@ async function submitRegistration(eventId, event, btnId, formContainerId) {
         return;
     }
 
+    const usesSlots = eventHasSlots(event) && formContainerId === 'dynamic-form-fields';
+    if (usesSlots && !selectedSlotId) {
+        showToast('Bitte wähle eine Rolle aus.', 'danger');
+        document.getElementById('slot-picker-area')?.scrollIntoView({ behavior: 'smooth' });
+        return;
+    }
+
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Wird gesendet...';
 
     const formAnswers = collectFormAnswers(formFields, formContainerId);
 
     let guests = [];
-    if (formContainerId === 'dynamic-form-fields') {
+    if (formContainerId === 'dynamic-form-fields' && !eventHasSlots(event)) {
         guests = selectedGuests.map(g => ({ id: g.id, displayName: g.displayName, avatar: g.avatar }));
     }
 
@@ -1563,7 +1767,12 @@ async function submitRegistration(eventId, event, btnId, formContainerId) {
                 'Content-Type': 'application/json',
                 'X-CSRF-TOKEN': csrfToken
             },
-            body: JSON.stringify({ formAnswers, guests }),
+            body: JSON.stringify({
+                formAnswers,
+                guests,
+                slotId: usesSlots ? selectedSlotId : undefined,
+                altSlotIds: usesSlots ? selectedAltSlotIds : undefined
+            }),
             signal: controller.signal
         });
 
