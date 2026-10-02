@@ -8,8 +8,8 @@ const {
 const { requireAuth, requireAdmin } = require('../middleware/auth');
 const { validateEvent, validateRegStatus, validateBotMessages } = require('../middleware/validators');
 const { sendDM, assignRole, parseTemplate, getGuildRoles, sendChannelMessage, buildEventEmbed, buildEventComponents, getGuildScheduledEvents, createEventChannels, deleteEventChannels, createScheduledEvent, getBotStatus, getBotSettings, saveBotSettings, getRunningEvents, getGuildChannels } = require('../bot');
-const { promoteFromWaitlist, addAuditLog, loadEventRoster, loadEventRegistrations } = require('../utils/eventUtils');
-const { getSlots, findSlot, formatSlotLabel, normalizeSlots, sumCapacity, validateSlotChange, resolveAcceptanceSlot } = require('../utils/slotService');
+const { promoteFromWaitlist, addAuditLog, loadEventRoster, loadEventRegistrations, saveEventWithSlots } = require('../utils/eventUtils');
+const { getSlots, findSlot, formatSlotLabel, normalizeSlots, sumCapacity, resolveAcceptanceSlot } = require('../utils/slotService');
 const { withEventLock } = require('../utils/eventLock');
 const { moveRegistrationToSlot, buildTemplateVars } = require('../utils/registrationService');
 const { notifyRegistrationsChanged } = require('../utils/announcementRefresh');
@@ -227,9 +227,6 @@ router.post('/events', validateEvent, async (req, res) => {
  */
 router.put('/events/:id', validateEvent, async (req, res) => {
     try {
-        const eventSnap = await getDoc(doc(db, 'events', req.params.id));
-        const oldEvent = eventSnap.exists() ? eventSnap.data() : {};
-
         const {
             title, description, maxParticipants, accessMode, requiredRoles,
             approvalMode, assignRoleId, formFields,
@@ -238,18 +235,9 @@ router.put('/events/:id', validateEvent, async (req, res) => {
             accentColor, location
         } = req.body;
 
-        const slotResult = normalizeSlots(req.body.slots, getSlots(oldEvent));
-        if (slotResult.error) {
-            return res.status(400).json({ error: slotResult.error });
-        }
-        const { slots } = slotResult;
-        const registrations = await loadEventRegistrations(req.params.id);
-        const slotError = validateSlotChange({ oldSlots: getSlots(oldEvent), newSlots: slots, registrations });
-        if (slotError) {
-            return res.status(400).json({ error: slotError });
-        }
-
-        const updates = {
+        // Slots are validated and written under the event lock -> a parallel
+        // registration cannot land in a slot that is being removed
+        const saved = await saveEventWithSlots(req.params.id, req.body.slots, (slots) => ({
             title,
             description,
             maxParticipants: slots.length > 0 ? sumCapacity(slots) : (parseInt(maxParticipants) || 0),
@@ -276,9 +264,11 @@ router.put('/events/:id', validateEvent, async (req, res) => {
             recurringInterval: req.body.recurringInterval || '',
             recurringUntil: req.body.recurringUntil || '',
             updatedAt: new Date().toISOString()
-        };
-
-        await updateDoc(doc(db, 'events', req.params.id), updates);
+        }));
+        if (!saved.ok) {
+            return res.status(400).json({ error: saved.error });
+        }
+        const { oldEvent, updates } = saved;
         await addAuditLog('UPDATE_EVENT', req.session.user.id, `Updated event "${title}"`, req.params.id);
 
         const isNowActive = updates.status === 'active';

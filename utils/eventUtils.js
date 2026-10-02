@@ -1,7 +1,9 @@
-const { db, collection, doc, getDocs, addDoc, updateDoc, query, where } = require('../firebaseAdmin');
+const { db, collection, doc, getDoc, getDocs, addDoc, updateDoc, query, where } = require('../firebaseAdmin');
 const { sendDM, assignRole, addParticipantToEventChannels } = require('../bot');
 const { pickCapacityPromotions } = require('./capacity');
-const { getSlots, hasSlots, findSlot, formatSlotLabel, pickWaitlistPromotions, buildRoster } = require('./slotService');
+const {
+    getSlots, hasSlots, findSlot, formatSlotLabel, pickWaitlistPromotions, buildRoster, normalizeSlots, validateSlotChange
+} = require('./slotService');
 const { withEventLock } = require('./eventLock');
 const { notifyRegistrationsChanged } = require('./announcementRefresh');
 
@@ -136,6 +138,35 @@ async function loadEventRoster(eventId, event, { withProfiles = false } = {}) {
 }
 
 /**
+ * Validate new slots and write an event update under the event lock.
+ *
+ * Holding the lock keeps a parallel registration from landing in a slot that
+ * is being removed at the same moment.
+ *
+ * @param {string} eventId -> The event document ID.
+ * @param {*} rawSlots -> Slots from the admin form.
+ * @param {Function} buildUpdates -> `(slots, oldEvent) => fields` to write.
+ * @returns {Promise<Object>} -> `{ ok: true, oldEvent, updates }` or `{ ok: false, error }`.
+ */
+async function saveEventWithSlots(eventId, rawSlots, buildUpdates) {
+    return withEventLock(eventId, async () => {
+        const eventSnap = await getDoc(doc(db, 'events', eventId));
+        const oldEvent = eventSnap.exists() ? eventSnap.data() : {};
+
+        const slotResult = normalizeSlots(rawSlots, getSlots(oldEvent));
+        if (slotResult.error) return { ok: false, error: slotResult.error };
+
+        const registrations = await loadEventRegistrations(eventId);
+        const slotError = validateSlotChange({ oldSlots: getSlots(oldEvent), newSlots: slotResult.slots, registrations });
+        if (slotError) return { ok: false, error: slotError };
+
+        const updates = buildUpdates(slotResult.slots, oldEvent);
+        await updateDoc(doc(db, 'events', eventId), updates);
+        return { ok: true, oldEvent, updates };
+    });
+}
+
+/**
  * Log admin action to auditing collection
  */
 async function addAuditLog(action, adminId, details, targetId = null) {
@@ -159,5 +190,6 @@ module.exports = {
     addAuditLog,
     loadEventRegistrations,
     findUserRegistration,
-    loadEventRoster
+    loadEventRoster,
+    saveEventWithSlots
 };
