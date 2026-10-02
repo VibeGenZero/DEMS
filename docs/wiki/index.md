@@ -3,7 +3,7 @@ id: index
 title: DEMS wiki — entry point
 type: overview
 tags: [index, navigation, graph, rag]
-sources: [scripts/wiki-graph.js, docs/wiki/graph.json]
+sources: [scripts/wiki-graph.js, docs/wiki/graph.json, CLAUDE.md]
 ---
 # DEMS wiki — entry point
 

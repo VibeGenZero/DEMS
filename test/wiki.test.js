@@ -145,6 +145,16 @@ test('serializeGraph writes valid JSON with one node and one edge per line', () 
     assert.ok(text.endsWith('\n'));
 });
 
+test('CLAUDE.md exists and points only to existing wiki pages', () => {
+    const claudeMd = fs.readFileSync(path.join(REPO_ROOT, 'CLAUDE.md'), 'utf8');
+    const referenced = [...claudeMd.matchAll(/docs\/wiki\/[\w/.-]+\.(md|json)/g)].map(match => match[0]);
+
+    assert.ok(referenced.includes('docs/wiki/index.md'), 'CLAUDE.md must point to the wiki index');
+    for (const file of referenced) {
+        assert.ok(fs.existsSync(path.join(REPO_ROOT, file)), `CLAUDE.md references missing ${file}`);
+    }
+});
+
 test('the project wiki is valid and graph.json is up to date', () => {
     const nodes = loadNodes(WIKI_DIR);
     assert.deepEqual(validateNodes(nodes, REPO_ROOT), []);
