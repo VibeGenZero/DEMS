@@ -8,9 +8,12 @@ const {
 const { requireAuth, requireAdmin } = require('../middleware/auth');
 const { validateEvent, validateRegStatus, validateBotMessages } = require('../middleware/validators');
 const { sendDM, assignRole, parseTemplate, getGuildRoles, sendChannelMessage, buildEventEmbed, buildEventComponents, getGuildScheduledEvents, createEventChannels, deleteEventChannels, createScheduledEvent, getBotStatus, getBotSettings, saveBotSettings, getRunningEvents, getGuildChannels } = require('../bot');
-const { promoteFromWaitlist, addAuditLog } = require('../utils/eventUtils');
+const { promoteFromWaitlist, addAuditLog, loadEventRoster } = require('../utils/eventUtils');
 const { debugLog } = require('../utils/debugLog');
 const { buildEventUrl } = require('../utils/eventUrl');
+
+// Announcements per event that are kept up to date live
+const MAX_TRACKED_ANNOUNCEMENTS = 5;
 
 // All admin routes require auth + admin
 router.use(requireAuth, requireAdmin);
@@ -766,15 +769,21 @@ router.post('/events/:id/announce', async (req, res) => {
 
         const registrationLink = buildEventUrl(req.params.id);
 
-        const embed = buildEventEmbed(event, registrationLink);
-        const success = await sendChannelMessage(channelId, embed, {
+        const roster = await loadEventRoster(req.params.id, event);
+        const embed = buildEventEmbed(event, registrationLink, roster);
+        const sent = await sendChannelMessage(channelId, embed, {
             text: text || '',
             roleIds: roleIds || [],
             pingEveryone: !!pingEveryone,
-            components: buildEventComponents(event, req.params.id)
+            components: buildEventComponents(event, req.params.id, roster)
         });
 
-        if (success) {
+        if (sent) {
+            const announcements = [
+                ...(Array.isArray(event.announcements) ? event.announcements : []),
+                { channelId: sent.channelId, messageId: sent.messageId }
+            ].slice(-MAX_TRACKED_ANNOUNCEMENTS);
+            await updateDoc(doc(db, 'events', req.params.id), { announcements });
             await addAuditLog('ANNOUNCE_EVENT', req.session.user.id, `Announced event "${event.title}"`, req.params.id);
             res.json({ success: true, message: 'Event im Discord-Channel angekündigt!' });
         } else {

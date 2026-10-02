@@ -490,6 +490,7 @@ async function sendDM(userId, message) {
  * @param {string[]} [options.roleIds] - Role IDs to mention
  * @param {boolean} [options.pingEveryone] - Whether to mention @everyone
  * @param {ActionRowBuilder[]} [options.components] - Button rows below the embed
+ * @returns {Promise<Object|false>} -> { channelId, messageId } of the sent message, false on failure.
  */
 async function sendChannelMessage(channelId, embed, options = {}) {
     if (!isReady) {
@@ -524,7 +525,7 @@ async function sendChannelMessage(channelId, embed, options = {}) {
 
         const content = contentParts.length > 0 ? contentParts.join('\n') : undefined;
 
-        await channel.send({
+        const message = await channel.send({
             content,
             embeds: [embed],
             components: options.components || [],
@@ -534,7 +535,7 @@ async function sendChannelMessage(channelId, embed, options = {}) {
             }
         });
         console.log(`📢 Announcement sent to channel ${channelId}`);
-        return true;
+        return { channelId: channel.id, messageId: message.id };
     } catch (err) {
         console.error(`Failed to send channel message:`, err.message);
         return false;
@@ -711,6 +712,67 @@ function buildSlotButton(eventId, slot, roster) {
         .setStyle(isFull ? ButtonStyle.Secondary : ButtonStyle.Primary);
     if (slot.emoji) button.setEmoji(slot.emoji);
     return button;
+}
+
+// Discord error codes for "Unknown Channel" and "Unknown Message"
+const DISCORD_GONE_ERROR_CODES = [10003, 10008];
+
+/**
+ * Whether a Discord API error means the channel or message no longer exists.
+ *
+ * @param {*} err -> Error thrown by discord.js.
+ * @returns {boolean} -> True for deleted channels or messages.
+ */
+function isGoneDiscordError(err) {
+    return !!err && DISCORD_GONE_ERROR_CODES.includes(err.code);
+}
+
+/**
+ * Re-render every stored announcement of an event with the live line-up.
+ *
+ * Deleted messages are dropped from `event.announcements`; other errors are
+ * logged and the message is kept for the next attempt.
+ *
+ * @param {string} eventId -> The event document ID.
+ * @returns {Promise<boolean>} -> True when announcements were processed.
+ */
+async function refreshEventAnnouncements(eventId) {
+    if (!isReady) return false;
+    try {
+        const eventSnap = await getDoc(doc(db, 'events', eventId));
+        if (!eventSnap.exists()) return false;
+
+        const event = eventSnap.data();
+        const announcements = Array.isArray(event.announcements) ? event.announcements : [];
+        if (announcements.length === 0) return false;
+
+        const { loadEventRoster } = require('./utils/eventUtils');
+        const roster = await loadEventRoster(eventId, event);
+        const embed = buildEventEmbed(event, buildEventUrl(eventId), roster);
+        const components = buildEventComponents(event, eventId, roster);
+
+        const kept = [];
+        for (const announcement of announcements) {
+            try {
+                const channel = await client.channels.fetch(announcement.channelId);
+                const message = await channel.messages.fetch(announcement.messageId);
+                await message.edit({ embeds: [embed], components });
+                kept.push(announcement);
+            } catch (err) {
+                if (isGoneDiscordError(err)) continue;
+                console.error('Failed to refresh announcement:', err.message);
+                kept.push(announcement);
+            }
+        }
+
+        if (kept.length !== announcements.length) {
+            await updateDoc(doc(db, 'events', eventId), { announcements: kept });
+        }
+        return true;
+    } catch (err) {
+        console.error('refreshEventAnnouncements failed:', err.message);
+        return false;
+    }
 }
 
 /**
@@ -2248,6 +2310,8 @@ module.exports = {
     stopBot,
     sendDM,
     sendChannelMessage,
+    refreshEventAnnouncements,
+    isGoneDiscordError,
     buildEventEmbed,
     assignRole,
     removeRole,

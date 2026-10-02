@@ -58,11 +58,13 @@ test('messages are logged and reported as sent', async () => {
 
     assert.equal(await bot.startBot(''), true);
     assert.equal(await bot.sendDM(raider.userId, 'Hallo Lena'), true);
-    assert.equal(await bot.sendChannelMessage(CHANNEL_ID.ANNOUNCEMENTS, bot.buildEventEmbed(event), {
+    const sent = await bot.sendChannelMessage(CHANNEL_ID.ANNOUNCEMENTS, bot.buildEventEmbed(event), {
         text: 'Neues Event!',
         roleIds: [ROLE_ID.RAID_TEAM],
         components: bot.buildEventComponents(event, 'evt-mock')
-    }), true);
+    });
+    assert.equal(sent.channelId, CHANNEL_ID.ANNOUNCEMENTS);
+    assert.match(sent.messageId, /^\d+$/);
     assert.equal(await bot.sendGuestInvitation(raider.userId, { id: '1', displayName: 'Tom' }, { id: 'evt-mock', title: 'Mock-Test' }, 'reg-1'), true);
     assert.equal(await bot.assignRole(raider.userId, ROLE_ID.VIP, GUILD.id), true);
     assert.equal(await bot.removeRole(raider.userId, ROLE_ID.VIP, GUILD.id), true);
@@ -97,4 +99,39 @@ test('the "Zum Event" button of an announcement opens the event page', () => {
     const linkButton = row.toJSON().components.find(component => component.url);
     assert.equal(linkButton.label, 'Zum Event');
     assert.match(linkButton.url, /\/#event\/evt-link$/);
+});
+
+/** Collect everything printed with console.log while `fn` runs. */
+async function captureLogs(fn) {
+    const lines = [];
+    const original = console.log;
+    console.log = (...args) => lines.push(args.map(String).join(' '));
+    try {
+        await fn();
+    } finally {
+        console.log = original;
+    }
+    return lines.join('\n');
+}
+
+test('announcements are refreshed only when the event has stored messages', async () => {
+    await setDoc(doc(db, 'events', 'evt-refresh'), { title: 'Live-Test', status: 'active', maxParticipants: 5 });
+    assert.equal(await bot.refreshEventAnnouncements('evt-refresh'), false);
+
+    await setDoc(doc(db, 'events', 'evt-refresh'), {
+        title: 'Live-Test', status: 'active', maxParticipants: 5,
+        announcements: [{ channelId: CHANNEL_ID.ANNOUNCEMENTS, messageId: '123' }]
+    });
+    let result;
+    const output = await captureLogs(async () => { result = await bot.refreshEventAnnouncements('evt-refresh'); });
+    assert.equal(result, true);
+    assert.ok(output.includes('Ankündigung von "Live-Test" aktualisiert'));
+    assert.equal(await bot.refreshEventAnnouncements('does-not-exist'), false);
+});
+
+test('deleted Discord messages count as gone', () => {
+    assert.equal(bot.isGoneDiscordError({ code: 10008 }), true);
+    assert.equal(bot.isGoneDiscordError({ code: 10003 }), true);
+    assert.equal(bot.isGoneDiscordError({ code: 50013 }), false);
+    assert.equal(bot.isGoneDiscordError(null), false);
 });

@@ -126,6 +126,17 @@ test('announcing an event is logged instead of sent to Discord', async () => {
     assert.ok(server.output().includes('[MOCK-DISCORD]'));
 });
 
+test('announcing stores the message for live updates', async () => {
+    const admin = await loginAs('admin');
+    const res = await admin.send('POST', `/api/admin/events/${EVENT_ID.OPEN}/announce`, { text: 'Live!' });
+    assert.equal(res.status, 200);
+
+    const events = await (await admin.request('/api/admin/all-events')).json();
+    const announcements = events.find(event => event.id === EVENT_ID.OPEN).announcements;
+    assert.ok(announcements.length >= 1);
+    assert.match(announcements[announcements.length - 1].messageId, /^\d+$/);
+});
+
 test('starting a draft event works on SQLite', async () => {
     const admin = await loginAs('admin');
     const res = await admin.send('POST', `/api/admin/events/${EVENT_ID.DRAFT}/start`);
