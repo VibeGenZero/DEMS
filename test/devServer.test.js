@@ -344,3 +344,67 @@ test('a new registration refreshes the live announcement', async () => {
     await raider.send('POST', `/api/events/${event.id}/register`, { slotId: event.slots[0].id });
     await server.waitForOutput('Ankündigung von "Live-Embed-Test" aktualisiert', 6000);
 });
+
+/** Registration of a persona in the admin list of an event. */
+async function adminRegistrationOf(admin, eventId, personaId) {
+    const result = await (await admin.request(`/api/admin/events/${eventId}/registrations`)).json();
+    return { registration: result.data.find(entry => entry.userId === personaById(personaId).userId), slots: result.slots };
+}
+
+test('admins move a registration into a full slot with a warning', async () => {
+    const admin = await loginAs('admin');
+    const event = await createSlotEvent(admin, 'Raid-Verschieben', RAID_SLOTS);
+    const [tank, heal] = event.slots;
+    await (await loginAs('raider')).send('POST', `/api/events/${event.id}/register`, { slotId: tank.id });
+    await (await loginAs('member')).send('POST', `/api/events/${event.id}/register`, { slotId: heal.id });
+
+    const { registration, slots } = await adminRegistrationOf(admin, event.id, 'member');
+    assert.deepEqual(slots, event.slots);
+    const res = await admin.send('PUT', `/api/admin/registrations/${registration.id}/slot`, { slotId: tank.id });
+    assert.equal(res.status, 200);
+    assert.equal((await res.json()).warning, 'Slot „Tank“ ist jetzt überbucht.');
+
+    const detail = await (await admin.request(`/api/events/${event.id}`)).json();
+    assert.deepEqual(detail.slotSummary.map(slot => slot.taken), [2, 0]);
+});
+
+test('accepting a waitlisted registration gives it a slot', async () => {
+    const admin = await loginAs('admin');
+    const event = await createSlotEvent(admin, 'Raid-Annehmen', RAID_SLOTS);
+    const [tank] = event.slots;
+    await (await loginAs('raider')).send('POST', `/api/events/${event.id}/register`, { slotId: tank.id });
+    await (await loginAs('member')).send('POST', `/api/events/${event.id}/register`, { slotId: tank.id });
+
+    const { registration } = await adminRegistrationOf(admin, event.id, 'member');
+    assert.equal(registration.status, 'waitlisted');
+    const res = await admin.send('PUT', `/api/admin/registrations/${registration.id}/status`, { status: 'accepted' });
+    const body = await res.json();
+    assert.equal(res.status, 200);
+    assert.equal(body.slotId, tank.id);
+    assert.equal(body.warning, 'Slot „Tank“ ist jetzt überbucht.');
+});
+
+test('the export lists slot and wish of every registration', async () => {
+    const admin = await loginAs('admin');
+    const event = await createSlotEvent(admin, 'Raid-Export', RAID_SLOTS);
+    await (await loginAs('raider')).send('POST', `/api/events/${event.id}/register`, { slotId: event.slots[0].id });
+
+    const csv = await (await admin.request(`/api/admin/events/${event.id}/registrations/export`)).text();
+    assert.ok(csv.split('\n')[0].includes('Slot,Wunschrolle'));
+    assert.ok(csv.includes('"🛡️ Tank","🛡️ Tank"'));
+});
+
+// Keep this test last -> it deletes the newbie persona's account
+test('deleting an account lets the waitlist move up', async () => {
+    const admin = await loginAs('admin');
+    const event = await createSlotEvent(admin, 'Raid-Konto', [{ name: 'Tank', emoji: '🛡️', capacity: 1 }]);
+    const slotId = event.slots[0].id;
+    const newbie = await loginAs('newbie');
+    const member = await loginAs('member');
+    await newbie.send('POST', `/api/events/${event.id}/register`, { slotId });
+    await member.send('POST', `/api/events/${event.id}/register`, { slotId });
+
+    assert.equal((await newbie.send('DELETE', '/api/user/account')).status, 200);
+    const promoted = await (await member.request(`/api/events/${event.id}/my-registration`)).json();
+    assert.deepEqual([promoted.status, promoted.slotId], ['accepted', slotId]);
+});

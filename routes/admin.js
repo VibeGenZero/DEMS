@@ -9,7 +9,9 @@ const { requireAuth, requireAdmin } = require('../middleware/auth');
 const { validateEvent, validateRegStatus, validateBotMessages } = require('../middleware/validators');
 const { sendDM, assignRole, parseTemplate, getGuildRoles, sendChannelMessage, buildEventEmbed, buildEventComponents, getGuildScheduledEvents, createEventChannels, deleteEventChannels, createScheduledEvent, getBotStatus, getBotSettings, saveBotSettings, getRunningEvents, getGuildChannels } = require('../bot');
 const { promoteFromWaitlist, addAuditLog, loadEventRoster, loadEventRegistrations } = require('../utils/eventUtils');
-const { getSlots, normalizeSlots, sumCapacity, validateSlotChange } = require('../utils/slotService');
+const { getSlots, findSlot, formatSlotLabel, normalizeSlots, sumCapacity, validateSlotChange, resolveAcceptanceSlot } = require('../utils/slotService');
+const { withEventLock } = require('../utils/eventLock');
+const { moveRegistrationToSlot, buildTemplateVars } = require('../utils/registrationService');
 const { notifyRegistrationsChanged } = require('../utils/announcementRefresh');
 const { debugLog } = require('../utils/debugLog');
 const { buildEventUrl } = require('../utils/eventUrl');
@@ -620,9 +622,13 @@ router.get('/events/:id/registrations', async (req, res) => {
         const startIndex = (page - 1) * limit;
         const paginatedRegs = allRegs.slice(startIndex, startIndex + limit);
 
+        const eventSnap = await getDoc(doc(db, 'events', req.params.id));
+        const slots = eventSnap.exists() ? getSlots(eventSnap.data()) : [];
+
         res.json({
             data: paginatedRegs,
-            meta: { total, page, limit, totalPages }
+            meta: { total, page, limit, totalPages },
+            slots
         });
     } catch (err) {
         console.error('Get registrations error:', err);
@@ -636,7 +642,10 @@ router.get('/events/:id/registrations', async (req, res) => {
 router.get('/events/:id/registrations/export', async (req, res) => {
     try {
         const eventSnap = await getDoc(doc(db, 'events', req.params.id));
-        const eventTitle = eventSnap.exists() ? eventSnap.data().title : 'Event';
+        const event = eventSnap.exists() ? eventSnap.data() : {};
+        const eventTitle = event.title || 'Event';
+        const slots = getSlots(event);
+        const slotLabel = (slotId) => `"${formatSlotLabel(findSlot(slots, slotId)).replace(/"/g, '""')}"`;
 
         const q = query(
             collection(db, 'registrations'),
@@ -658,7 +667,8 @@ router.get('/events/:id/registrations/export', async (req, res) => {
         const formKeysArr = [...allFormKeys];
 
         // Build CSV
-        const headers = ['User', 'UserID', 'Status', 'Quelle', 'Datum', 'Gäste (Anzahl)', 'Gäste IDs', ...formKeysArr];
+        const slotHeaders = slots.length > 0 ? ['Slot', 'Wunschrolle'] : [];
+        const headers = ['User', 'UserID', 'Status', 'Quelle', 'Datum', 'Gäste (Anzahl)', 'Gäste IDs', ...slotHeaders, ...formKeysArr];
         const rows = registrations.map(r => {
             const guestCount = Array.isArray(r.guests) ? r.guests.length : 0;
             const guestIds = Array.isArray(r.guests) ? r.guests.join('; ') : '';
@@ -675,7 +685,8 @@ router.get('/events/:id/registrations/export', async (req, res) => {
                 const val = r.formAnswers ? r.formAnswers[k] : '';
                 return `"${String(val || '').replace(/"/g, '""')}"`;
             });
-            return [...base, ...formVals].join(',');
+            const slotValues = slots.length > 0 ? [slotLabel(r.slotId), slotLabel(r.preferredSlotId)] : [];
+            return [...base, ...slotValues, ...formVals].join(',');
         });
 
         const csv = [headers.join(','), ...rows].join('\n');
@@ -702,58 +713,50 @@ router.put('/registrations/:id/status', validateRegStatus, async (req, res) => {
             return res.status(404).json({ error: 'Anmeldung nicht gefunden' });
         }
 
-        const reg = regSnap.data();
-        await updateDoc(doc(db, 'registrations', req.params.id), { status });
-        debugLog('admin.updateRegStatus', { regId: req.params.id, newStatus: req.body.status });
-
-        // Fetch event for template variables & role
+        const reg = { id: req.params.id, ...regSnap.data() };
         const eventSnap = await getDoc(doc(db, 'events', reg.eventId));
         const event = eventSnap.exists() ? eventSnap.data() : {};
+        const slots = getSlots(event);
 
-        // Get message templates
+        // Status and slot change under the event lock -> no race with new registrations
+        const { slotId, warning } = await withEventLock(reg.eventId, async () => {
+            const update = { status };
+            let overbookedWarning = null;
+            if (slots.length > 0 && status === 'waitlisted') {
+                update.slotId = null;
+            }
+            if (slots.length > 0 && status === 'accepted' && !findSlot(slots, reg.slotId)) {
+                const registrations = await loadEventRegistrations(reg.eventId);
+                const choice = resolveAcceptanceSlot(slots, registrations, reg);
+                update.slotId = choice.slotId;
+                if (choice.overbooked) {
+                    overbookedWarning = `Slot „${findSlot(slots, choice.slotId).name}“ ist jetzt überbucht.`;
+                }
+            }
+            await updateDoc(doc(db, 'registrations', req.params.id), update);
+            return { slotId: 'slotId' in update ? update.slotId : reg.slotId, warning: overbookedWarning };
+        });
+        debugLog('admin.updateRegStatus', { regId: req.params.id, newStatus: status });
+
         const templateSnap = await getDoc(doc(db, 'botMessages', 'templates'));
         const globalTemplates = templateSnap.exists() ? templateSnap.data() : {};
-
-        // Prepare variables
-        const eventUrl = buildEventUrl(reg.eventId);
-
-        let roleName = '';
-        let roleMention = '';
-
-        if (event.assignRoleId) {
-            // Try to find role name from cache or fetch
-            const roles = await getGuildRoles(process.env.DISCORD_GUILD_ID);
-            const role = roles.find(r => r.id === event.assignRoleId);
-            if (role) {
-                roleName = role.name;
-                roleMention = `<@&${role.id}>`;
-            } else {
-                roleName = 'Unbekannte Rolle';
-                roleMention = 'Unbekannte Rolle';
-            }
-        }
-
-        const vars = {
-            'user.id': reg.userId,
-            'user.name': reg.userName,
-            'user.mention': `<@${reg.userId}>`,
-            'event.title': event.title || 'Unbekanntes Event',
-            'event.url': eventUrl,
-            'role.name': roleName,
-            'role.mention': roleMention
-        };
-
         const customMsgs = event.customBotMessages || {};
+        const slot = findSlot(slots, slotId);
+        const vars = await buildTemplateVars({
+            user: { id: reg.userId, displayName: reg.userName },
+            eventId: reg.eventId,
+            event,
+            slot
+        });
+        const slotLine = slot ? `\n🎯 Dein Slot: **${formatSlotLabel(slot)}**` : '';
 
         if (status === 'accepted') {
             const template = customMsgs.accepted || globalTemplates.accepted;
             const msg = template
                 ? parseTemplate(template, vars)
-                : `✅ Du wurdest für **${event.title}** angenommen! Willkommen dabei!`;
-
+                : `✅ Du wurdest für **${event.title}** angenommen! Willkommen dabei!${slotLine}`;
             await sendDM(reg.userId, msg);
 
-            // Assign role
             if (event.assignRoleId) {
                 await assignRole(reg.userId, event.assignRoleId, process.env.DISCORD_GUILD_ID);
             }
@@ -762,19 +765,38 @@ router.put('/registrations/:id/status', validateRegStatus, async (req, res) => {
             const msg = template
                 ? parseTemplate(template, vars)
                 : `❌ Leider wurde deine Anfrage für **${event.title}** abgelehnt.`;
-
             await sendDM(reg.userId, msg);
 
-            // Auto-promote from waitlist
             await promoteFromWaitlist(reg.eventId, event);
         }
 
+        notifyRegistrationsChanged(reg.eventId);
         await addAuditLog('UPDATE_REGISTRATION_STATUS', req.session.user.id, `Set status to ${status} for user ${reg.userName}`, req.params.id);
 
-        res.json({ id: req.params.id, status });
+        res.json({ id: req.params.id, status, slotId: slotId || null, ...(warning ? { warning } : {}) });
     } catch (err) {
         console.error('Update registration status error:', err);
         res.status(500).json({ error: 'Fehler beim Aktualisieren des Status' });
+    }
+});
+
+/**
+ * PUT /api/admin/registrations/:id/slot — Move a registration into another slot
+ */
+router.put('/registrations/:id/slot', async (req, res) => {
+    try {
+        const result = await moveRegistrationToSlot({
+            registrationId: req.params.id,
+            slotId: typeof req.body.slotId === 'string' ? req.body.slotId : ''
+        });
+        if (!result.ok) {
+            return res.status(result.httpStatus).json({ error: result.error });
+        }
+        await addAuditLog('MOVE_REGISTRATION_SLOT', req.session.user.id, `Moved ${result.userName} to slot "${result.slotName}"`, req.params.id);
+        res.json({ id: req.params.id, slotId: result.slotId, ...(result.warning ? { warning: result.warning } : {}) });
+    } catch (err) {
+        console.error('Move registration slot error:', err);
+        res.status(500).json({ error: 'Fehler beim Verschieben' });
     }
 });
 
