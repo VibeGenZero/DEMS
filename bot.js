@@ -226,8 +226,31 @@ client.on('interactionCreate', async (interaction) => {
     }
 
     // Handle guest invitation and event registration button interactions
+    // Vote selects in the ephemeral answer of a poll
+    if (interaction.isStringSelectMenu()) {
+        const [selectAction, selectPollId] = interaction.customId.split(':');
+        if ([POLL_YES_PREFIX, POLL_MAYBE_PREFIX].includes(selectAction) && selectPollId) {
+            try {
+                await handlePollVoteSelect(interaction, selectPollId, selectAction === POLL_YES_PREFIX ? 'yes' : 'maybe');
+            } catch (err) {
+                console.error('Poll vote select error:', err);
+                await replyWithFailure(interaction, '❌ Fehler bei der Abstimmung.');
+            }
+        }
+        return;
+    }
+
     if (interaction.isButton()) {
         const [buttonAction, buttonEventId, buttonSlotId] = interaction.customId.split(':');
+        if (buttonAction === POLL_VOTE_PREFIX && buttonEventId) {
+            try {
+                await handlePollVoteButton(interaction, buttonEventId);
+            } catch (err) {
+                console.error('Poll vote button error:', err);
+                await replyWithFailure(interaction, '❌ Fehler bei der Abstimmung.');
+            }
+            return;
+        }
         if ([SLOT_BUTTON_PREFIX, SLOT_SWITCH_PREFIX, SLOT_LEAVE_PREFIX].includes(buttonAction) && buttonEventId) {
             try {
                 if (buttonAction === SLOT_BUTTON_PREFIX) {
@@ -1687,10 +1710,10 @@ async function handleEventRegisterModal(interaction, eventId) {
  * Answer a failed interaction without throwing.
  *
  * @param {import('discord.js').Interaction} interaction -> The interaction.
+ * @param {string} [content] -> Error text.
  * @returns {Promise<void>}
  */
-async function replyWithFailure(interaction) {
-    const content = '❌ Fehler bei der Anmeldung.';
+async function replyWithFailure(interaction, content = '❌ Fehler bei der Anmeldung.') {
     try {
         if (interaction.deferred || interaction.replied) {
             await interaction.editReply({ content });
@@ -1838,6 +1861,77 @@ async function handleSlotLeaveButton(interaction, eventId) {
         content: result.ok ? `✅ Du wurdest von **${title}** abgemeldet.` : `❌ ${result.error}`,
         components: []
     });
+}
+
+/**
+ * Handle "Abstimmen" below a poll message.
+ *
+ * @param {import('discord.js').ButtonInteraction} interaction -> The button interaction.
+ * @param {string} pollId -> The poll document ID.
+ * @returns {Promise<void>}
+ */
+async function handlePollVoteButton(interaction, pollId) {
+    // Acknowledge first -> loading the poll and the roles can take a moment
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    const { loadPoll, loadUserVote } = require('./utils/pollStore');
+    const poll = await loadPoll(pollId);
+    if (!poll) {
+        return interaction.editReply({ content: '❌ Diese Abstimmung gibt es nicht mehr.' });
+    }
+    if (!isPollOpen(poll)) {
+        return interaction.editReply({ content: '🔒 Die Abstimmung ist beendet.' });
+    }
+    if (await isRegistrationBlocked()) {
+        return interaction.editReply({ content: '❌ Abstimmungen sind wegen Wartungsarbeiten vorübergehend deaktiviert.' });
+    }
+    const roleIds = await resolveInteractionRoles(interaction);
+    if (!canVote(poll, roleIds)) {
+        return interaction.editReply({ content: '❌ Du hast nicht die erforderliche Rolle für diese Abstimmung.' });
+    }
+    const vote = await loadUserVote(pollId, interaction.user.id);
+    await interaction.editReply(buildPollVoteReply(poll, vote));
+}
+
+/**
+ * Handle a change in one of the two vote selects.
+ *
+ * The changed list wins: a date picked as "wenn nötig" leaves "passt" and
+ * the other way round.
+ *
+ * @param {import('discord.js').StringSelectMenuInteraction} interaction -> The select interaction.
+ * @param {string} pollId -> The poll document ID.
+ * @param {'yes'|'maybe'} kind -> Which list was changed.
+ * @returns {Promise<void>}
+ */
+async function handlePollVoteSelect(interaction, pollId, kind) {
+    await interaction.deferUpdate();
+    if (await isRegistrationBlocked()) {
+        return interaction.editReply({ content: '❌ Abstimmungen sind wegen Wartungsarbeiten vorübergehend deaktiviert.', components: [] });
+    }
+    const { loadPoll, loadUserVote, savePollVote } = require('./utils/pollStore');
+    const current = await loadUserVote(pollId, interaction.user.id);
+    const picked = Array.isArray(interaction.values) ? interaction.values : [];
+    const next = kind === 'yes'
+        ? { yes: picked, maybe: current.maybe.filter(id => !picked.includes(id)) }
+        : { yes: current.yes.filter(id => !picked.includes(id)), maybe: picked };
+
+    const roleIds = await resolveInteractionRoles(interaction);
+    const displayName = interaction.member?.displayName || interaction.user.globalName || interaction.user.username;
+    const result = await savePollVote({
+        pollId,
+        user: { id: interaction.user.id, displayName, roles: roleIds },
+        yes: next.yes,
+        maybe: next.maybe
+    });
+    if (!result.ok) {
+        return interaction.editReply({ content: `❌ ${result.error}`, components: [] });
+    }
+
+    // Discord voters show up with name and avatar on the website
+    await ensureUserProfile(interaction.user, displayName);
+    const poll = await loadPoll(pollId);
+    const status = `💾 Gespeichert: ${result.vote.yes.length}× passt, ${result.vote.maybe.length}× wenn nötig.`;
+    await interaction.editReply(buildPollVoteReply(poll, result.vote, status));
 }
 
 /**

@@ -194,6 +194,54 @@ function createClient(baseUrl) {
     return { request, send };
 }
 
+/**
+ * Discord interaction double that records every answer in call order.
+ * `answered` resolves with the first answer that is not a defer.
+ *
+ * @param {Object} options -> `{ kind: 'button'|'select'|'command', customId, userId, commandName, eventOption, values, roles }`.
+ * @returns {Object} -> The fake interaction.
+ */
+function createFakeInteraction({ kind, customId, userId, commandName, eventOption, values = [], roles = null }) {
+    const calls = [];
+    let resolveAnswered;
+    const answered = new Promise(resolve => { resolveAnswered = resolve; });
+    const interaction = {
+        customId, commandName, values, calls, answered,
+        user: { id: userId, username: userId, globalName: userId },
+        member: roles ? { roles, displayName: userId } : null,
+        deferred: false,
+        replied: false,
+        options: { getString: () => eventOption },
+        isAutocomplete: () => false,
+        isModalSubmit: () => false,
+        isStringSelectMenu: () => kind === 'select',
+        isButton: () => kind === 'button',
+        isChatInputCommand: () => kind === 'command',
+        async deferUpdate() { calls.push(['deferUpdate']); interaction.deferred = true; },
+        async deferReply(payload) { calls.push(['deferReply', payload]); interaction.deferred = true; },
+        async update(payload) { calls.push(['update', payload]); interaction.replied = true; resolveAnswered(); },
+        async reply(payload) { calls.push(['reply', payload]); interaction.replied = true; resolveAnswered(); },
+        async editReply(payload) { calls.push(['editReply', payload]); resolveAnswered(); }
+    };
+    return interaction;
+}
+
+/**
+ * Emit an interaction on the bot client and wait for its first answer.
+ *
+ * @param {Object} client -> The discord.js client of bot.js.
+ * @param {Object} interaction -> Result of createFakeInteraction().
+ * @param {number} [timeoutMs] -> Give up after this time.
+ * @returns {Promise<void>}
+ */
+async function dispatchInteraction(client, interaction, timeoutMs = 3000) {
+    client.emit('interactionCreate', interaction);
+    await Promise.race([
+        interaction.answered,
+        new Promise((_, reject) => setTimeout(() => reject(new Error('no answer')), timeoutMs))
+    ]);
+}
+
 module.exports = {
     REPO_ROOT,
     createTempDir,
@@ -202,5 +250,7 @@ module.exports = {
     runNode,
     parseLastLine,
     startServer,
-    createClient
+    createClient,
+    createFakeInteraction,
+    dispatchInteraction
 };
