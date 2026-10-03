@@ -9,18 +9,19 @@ see_also: [routes-polls, discord-integration, event-lifecycle, role-slots]
 ---
 # Date polls — finding a date with "passt" / "wenn nötig"
 
-> TL;DR: Admins propose 2–10 dates (`polls`), members vote per date with "passt" or "wenn nötig" on the web or through a Discord button with two prefilled selects (`pollVotes`, one document per member). The posted Discord message shows the tally live. A scheduler closes polls after their deadline and DMs the creator; "Event erstellen" opens the event wizard prefilled and `POST /api/admin/events` with `fromPoll` decides the poll and DMs every voter.
+> TL;DR: Admins propose 2–10 dates (`polls`), members vote per date with "passt" or "wenn nötig" (admins can rename the three answers per poll) on the web or through a Discord button with two prefilled selects (`pollVotes`, one document per member). The posted Discord message shows the tally live. A scheduler closes polls after their deadline and DMs the creator; "Event erstellen" opens the event wizard prefilled and `POST /api/admin/events` with `fromPoll` decides the poll and DMs every voter.
 
 ## Data
 
-- `polls`: `title`, `description`, `options: [{ id, startDate, endDate }]`, `deadline`, `status: open|closed|decided`, `accessMode`/`requiredRoles`, `winnerOptionId`, `eventId`, `announcements`, `createdBy`, `createdAt`, `updatedAt`, `closedAt`.
+- `polls`: `title`, `description`, `options: [{ id, startDate, endDate }]`, `deadline`, `status: open|closed|decided`, `accessMode`/`requiredRoles`, `labels: { yes, maybe, no }`, `winnerOptionId`, `eventId`, `announcements`, `createdBy`, `createdAt`, `updatedAt`, `closedAt`. A poll without `labels` (older dev data) gets `DEFAULT_POLL_LABELS` through `getPollLabels`.
 - `pollVotes` (ID `<pollId>_<userId>`): `{ pollId, userId, userName, yes: optionId[], maybe: optionId[], updatedAt }`; an empty vote is deleted.
 
 ## Rules (`utils/pollService.js`, pure)
 
 | Function | Rule |
 |---|---|
-| `normalizePollInput` | 2–10 dates, new or moved dates in the future, no duplicates; dates with votes may not be removed or moved; only open polls can be edited |
+| `normalizePollInput` | 2–10 dates, new or moved dates in the future, no duplicates; dates with votes may not be removed or moved; only open polls can be edited; `labels` via `normalizePollLabels` (max. 30 characters, empty = default, the three must differ, missing on edit = keep) |
+| `getPollLabels` | the three answers of a poll, defaults `passt` / `wenn nötig` / `passt nicht` |
 | `normalizeVote` | known dates only, date order; "passt" wins if a date is in both lists |
 | `applyVoteChange` | sets one date to `yes`, `maybe` or `no` (`VOTE_STATES`) and keeps the others |
 | `isPollOpen` / `effectivePollStatus` | open = status `open` and before the deadline; members see an expired open poll as `closed` |
@@ -32,7 +33,7 @@ All writes run under `withEventLock('poll:<id>')`: `savePollVote`, `updatePoll`,
 
 ## Discord
 
-`buildPollEmbed` / `buildPollComponents` (🏆 favorite, up to 5 names per date, status-dependent title and buttons). `poll_vote:<id>` → `deferReply` → `buildPollVoteReply` with `poll_yes:<id>` / `poll_maybe:<id>` selects; a change → `deferUpdate`, the changed list wins (a date picked as "wenn nötig" leaves "passt"), merged into the stored vote under the lock and saved at once. `refreshPollMessages` edits posted messages; a deleted poll's messages become "🗑️ Abstimmung gelöscht" (`markPollMessagesDeleted`).
+`buildPollEmbed` / `buildPollComponents` (🏆 favorite, up to 5 names per date, status-dependent title and buttons). `poll_vote:<id>` → `deferReply` → `buildPollVoteReply` with `poll_yes:<id>` / `poll_maybe:<id>` selects; a change → `deferUpdate`, the changed list wins (a date picked as "wenn nötig" leaves "passt"), merged into the stored vote under the lock and saved at once. The poll's `labels` appear in the select placeholders, the "Gespeichert" line, the "nur „…“" line of the embed and the decision DM; Discord keeps its emojis (✅/🤔), the website uses Bootstrap Icons instead. `refreshPollMessages` edits posted messages; a deleted poll's messages become "🗑️ Abstimmung gelöscht" (`markPollMessagesDeleted`).
 
 ## Gotchas
 

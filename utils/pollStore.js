@@ -11,8 +11,10 @@ const { withEventLock } = require('./eventLock');
 const { notifyPollChanged } = require('./announcementRefresh');
 const { buildEventUrl, buildPollUrl } = require('./eventUrl');
 const {
-    POLL_STATUS, normalizePollInput, normalizeVote, isPollOpen, canVote, tallyPoll, getFavoriteOptionId, formatPollOption
+    POLL_STATUS, normalizePollInput, normalizeVote, isPollOpen, canVote, tallyPoll, getFavoriteOptionId, formatPollOption,
+    getPollLabels
 } = require('./pollService');
+const { escapeMarkdown } = require('discord.js');
 
 /** Machine readable failure codes. */
 const POLL_ERROR = {
@@ -285,10 +287,11 @@ async function notifyVotersAboutDecision(poll, option) {
     const votes = await loadPollVotes(poll.id);
     const date = formatPollOption(option);
     const link = buildEventUrl(poll.eventId);
+    const labels = getPollLabels(poll);
     for (const vote of votes) {
         let detail = `Er passt dir leider nicht – vielleicht klappt es trotzdem? ${link}`;
-        if ((vote.yes || []).includes(option.id)) detail = `Du hattest ✅ *passt* angegeben – jetzt anmelden: ${link}`;
-        else if ((vote.maybe || []).includes(option.id)) detail = `Du hattest 🤔 *wenn nötig* angegeben – jetzt anmelden: ${link}`;
+        if ((vote.yes || []).includes(option.id)) detail = `Du hattest ✅ *${escapeMarkdown(labels.yes)}* angegeben – jetzt anmelden: ${link}`;
+        else if ((vote.maybe || []).includes(option.id)) detail = `Du hattest 🤔 *${escapeMarkdown(labels.maybe)}* angegeben – jetzt anmelden: ${link}`;
         try {
             await sendDM(vote.userId, `📅 Der Termin für **${poll.title}** steht: **${date}**. ${detail}`);
         } catch (err) {

@@ -3564,6 +3564,29 @@ body {
   background: rgba(234, 179, 8, 0.7);
 }
 
+/* Answer icons -> same colors as the bars */
+.poll-icon-yes {
+  color: var(--success);
+}
+
+.poll-icon-maybe,
+.poll-icon-favorite {
+  color: rgb(234, 179, 8);
+}
+
+.poll-icon-no {
+  color: var(--text-secondary);
+}
+
+.poll-counts {
+  display: inline-flex;
+  gap: 0.75rem;
+}
+
+.poll-count {
+  white-space: nowrap;
+}
+
 .poll-option-foot {
   display: flex;
   justify-content: space-between;

@@ -193,3 +193,13 @@ test('per-date changes at the same time keep each other', async () => {
     await Promise.all([change(A.id, 'yes'), change(B.id, 'maybe')]);
     assert.deepEqual(await loadUserVote(pollId, voter.id), { yes: [A.id], maybe: [B.id] });
 });
+
+test('the decision DM uses the own answers of the poll', async () => {
+    const pollId = await createPoll({ labels: { yes: 'Bin dabei', maybe: 'Vielleicht', no: 'Kann nicht' } });
+    await savePollVote({ pollId, user: user('Jan'), yes: [A.id] });
+    await savePollVote({ pollId, user: user('Kim'), maybe: [A.id] });
+
+    const output = await captureLogs(() => decidePoll({ pollId, optionId: A.id, eventId: 'label-event' }));
+    assert.ok(output.includes('Du hattest ✅ *Bin dabei* angegeben'));
+    assert.ok(output.includes('Du hattest 🤔 *Vielleicht* angegeben'));
+});

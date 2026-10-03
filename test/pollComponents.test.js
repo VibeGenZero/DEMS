@@ -130,3 +130,11 @@ test('posted poll messages are refreshed through the mock', async () => {
     assert.equal(marked, true);
     assert.ok(deletedOutput.includes('Abstimmung "Raid-Termin" als gelöscht markiert'));
 });
+
+test('own answers show up in Discord', () => {
+    const labels = { yes: 'Bin dabei', maybe: 'Vielleicht', no: 'Kann nicht' };
+    const reply = bot.buildPollVoteReply(poll({ labels }), { yes: [], maybe: [] });
+    assert.deepEqual(reply.components.map(row => row.toJSON().components[0].placeholder), ['✅ Bin dabei …', '🤔 Vielleicht …']);
+    const [, second] = bot.buildPollEmbed(poll({ labels }), tallyPoll(poll(), votes)).toJSON().fields;
+    assert.equal(second.value, '✅ 0 · 🤔 1\n🤔 nur „Vielleicht“');
+});

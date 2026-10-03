@@ -17,6 +17,10 @@ const TITLE_MAX_LENGTH = 200;
 const DESCRIPTION_MAX_LENGTH = 5000;
 const OPTION_ID_LENGTH = 8;
 
+/** Answers members pick from -> admins can rename them per poll. */
+const DEFAULT_POLL_LABELS = { yes: 'passt', maybe: 'wenn nötig', no: 'passt nicht' };
+const LABEL_MAX_LENGTH = 30;
+
 const TIMEZONE = process.env.TIMEZONE || 'Europe/Berlin';
 
 /**
@@ -73,6 +77,42 @@ function formatPollOption(option) {
             : ` – ${end.day}.${end.month}. ${end.hour}:${end.minute}`;
     }
     return label;
+}
+
+/**
+ * Answers of a poll -> missing ones (older polls) fall back to the defaults.
+ *
+ * @param {Object} poll -> The poll (or `{ labels }`).
+ * @returns {{ yes: string, maybe: string, no: string }} -> The three answers.
+ */
+function getPollLabels(poll) {
+    const stored = poll && poll.labels && typeof poll.labels === 'object' ? poll.labels : {};
+    const labels = {};
+    for (const key of Object.keys(DEFAULT_POLL_LABELS)) {
+        const value = typeof stored[key] === 'string' ? stored[key].trim() : '';
+        labels[key] = value || DEFAULT_POLL_LABELS[key];
+    }
+    return labels;
+}
+
+/**
+ * Validate the answers of the poll editor; an empty answer gets its default.
+ *
+ * @param {Object} raw -> `{ yes, maybe, no }` from the request, may be missing.
+ * @param {Object|null} existingPoll -> Stored poll when editing -> kept when `raw` is missing.
+ * @returns {Object} -> `{ labels }` or `{ error }`.
+ */
+function normalizePollLabels(raw, existingPoll) {
+    if (!raw || typeof raw !== 'object') return { labels: getPollLabels(existingPoll) };
+    const labels = getPollLabels({ labels: raw });
+    const values = Object.values(labels);
+    if (values.some(label => label.length > LABEL_MAX_LENGTH)) {
+        return { error: `Antworttexte dürfen höchstens ${LABEL_MAX_LENGTH} Zeichen lang sein.` };
+    }
+    if (new Set(values.map(label => label.toLowerCase())).size !== values.length) {
+        return { error: 'Die drei Antworten brauchen unterschiedliche Texte.' };
+    }
+    return { labels };
 }
 
 /**
@@ -160,7 +200,10 @@ function normalizePollInput(raw, existingPoll = null, votes = [], now = new Date
         return { error: 'Bitte wähle mindestens eine Rolle aus.' };
     }
 
-    return { poll: { title, description, options, deadline, accessMode, requiredRoles } };
+    const labelResult = normalizePollLabels(body.labels, existingPoll);
+    if (labelResult.error) return { error: labelResult.error };
+
+    return { poll: { title, description, options, deadline, accessMode, requiredRoles, labels: labelResult.labels } };
 }
 
 /**
@@ -297,6 +340,8 @@ module.exports = {
     POLL_STATUS,
     MIN_OPTIONS,
     MAX_OPTIONS,
+    DEFAULT_POLL_LABELS,
+    getPollLabels,
     normalizePollInput,
     VOTE_STATES,
     normalizeVote,

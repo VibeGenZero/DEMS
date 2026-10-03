@@ -18,7 +18,7 @@ const {
     formatEntityAnswer, fitsIntoDiscordModal, getModalFieldLimit
 } = require('./utils/formFields');
 const { getSlots, hasSlots, findSlot, formatSlotLabel, countSlotOccupancy, hasFreePlace } = require('./utils/slotService');
-const { tallyPoll, getFavoriteOptionId, formatPollOption, isPollOpen, canVote } = require('./utils/pollService');
+const { tallyPoll, getFavoriteOptionId, formatPollOption, isPollOpen, canVote, getPollLabels } = require('./utils/pollService');
 
 const TIMEZONE = process.env.TIMEZONE || 'Europe/Berlin';
 
@@ -861,11 +861,12 @@ function buildPollEmbed(poll, tally) {
     if (description) embed.setDescription(description);
 
     const highlightId = decided ? poll.winnerOptionId : getFavoriteOptionId(tally);
+    const labels = getPollLabels(poll);
     tally.options.forEach(entry => {
         const option = poll.options.find(candidate => candidate.id === entry.optionId);
         let marker = '';
         if (entry.optionId === highlightId) marker = decided ? '✅ ' : '🏆 ';
-        embed.addFields({ name: `${marker}${formatPollOption(option)}`, value: `✅ ${entry.yes} · 🤔 ${entry.maybe}\n${formatPollVoters(entry)}`, inline: false });
+        embed.addFields({ name: `${marker}${formatPollOption(option)}`, value: `✅ ${entry.yes} · 🤔 ${entry.maybe}\n${formatPollVoters(entry, labels)}`, inline: false });
     });
 
     const votes = `${tally.voterCount} ${tally.voterCount === 1 ? 'Stimme' : 'Stimmen'}`;
@@ -883,11 +884,12 @@ function buildPollEmbed(poll, tally) {
  * Second line of a poll field: the first "passt" names.
  *
  * @param {Object} entry -> Tally option.
+ * @param {Object} [labels] -> Answers of the poll (getPollLabels).
  * @returns {string} -> Names, escaped for Discord markdown.
  */
-function formatPollVoters(entry) {
+function formatPollVoters(entry, labels = getPollLabels(null)) {
     if (entry.yes + entry.maybe === 0) return '— noch keine Stimmen —';
-    if (entry.yes === 0) return '🤔 nur „wenn nötig“';
+    if (entry.yes === 0) return `🤔 nur „${escapeMarkdown(labels.maybe)}“`;
     const names = entry.yesVoters.slice(0, POLL_NAMES_MAX).map(voter => escapeMarkdown(voter.displayName));
     const hidden = entry.yesVoters.length - POLL_NAMES_MAX;
     return hidden > 0 ? `${names.join(', ')}, +${hidden}` : names.join(', ');
@@ -939,13 +941,15 @@ function buildPollVoteReply(poll, vote, statusLine = '') {
                 default: selected.includes(option.id)
             })))
     );
+    const labels = getPollLabels(poll);
+    const capitalize = (text) => text.charAt(0).toUpperCase() + text.slice(1);
     const lines = [`🗳️ **${poll.title}**`, 'Wähle deine Termine – Änderungen werden sofort gespeichert.'];
     if (statusLine) lines.push(statusLine);
     return {
         content: lines.join('\n'),
         components: [
-            select(POLL_YES_PREFIX, '✅ Passt mir …', vote.yes || []),
-            select(POLL_MAYBE_PREFIX, '🤔 Wenn nötig …', vote.maybe || [])
+            select(POLL_YES_PREFIX, `✅ ${capitalize(labels.yes)} …`, vote.yes || []),
+            select(POLL_MAYBE_PREFIX, `🤔 ${capitalize(labels.maybe)} …`, vote.maybe || [])
         ]
     };
 }
@@ -1929,7 +1933,8 @@ async function handlePollVoteSelect(interaction, pollId, kind) {
     // Discord voters show up with name and avatar on the website
     await ensureUserProfile(interaction.user, displayName);
     const poll = await loadPoll(pollId);
-    const status = `💾 Gespeichert: ${result.vote.yes.length}× passt, ${result.vote.maybe.length}× wenn nötig.`;
+    const labels = getPollLabels(poll);
+    const status = `💾 Gespeichert: ${result.vote.yes.length}× ${escapeMarkdown(labels.yes)}, ${result.vote.maybe.length}× ${escapeMarkdown(labels.maybe)}.`;
     await interaction.editReply(buildPollVoteReply(poll, result.vote, status));
 }
 

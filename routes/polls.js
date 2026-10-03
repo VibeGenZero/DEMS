@@ -4,7 +4,8 @@ const { db, collection, getDocs } = require('../firebaseAdmin');
 const { requireAuth } = require('../middleware/auth');
 const { checkRegistrationAllowed } = require('../middleware/maintenance');
 const {
-    tallyPoll, getFavoriteOptionId, isPollOpen, effectivePollStatus, canVote, normalizeVote, VOTE_STATES, applyVoteChange
+    tallyPoll, getFavoriteOptionId, isPollOpen, effectivePollStatus, canVote, normalizeVote, VOTE_STATES, applyVoteChange,
+    getPollLabels
 } = require('../utils/pollService');
 const { loadPoll, loadPollVotes, savePollVote } = require('../utils/pollStore');
 const { debugLog } = require('../utils/debugLog');
@@ -39,6 +40,7 @@ function buildPollResponse(poll, votes, user, usersById) {
     return {
         ...publicPoll,
         status: effectivePollStatus(poll),
+        labels: getPollLabels(poll),
         tally,
         favoriteOptionId: getFavoriteOptionId(tally),
         myVote: own ? normalizeVote(poll.options, own) : { yes: [], maybe: [] },
@@ -86,6 +88,7 @@ router.get('/', async (req, res) => {
                 deadline: poll.deadline || '',
                 optionCount: poll.options.length,
                 voterCount: tally.voterCount,
+                labels: getPollLabels(poll),
                 favorite: favorite ? { optionId: favorite.optionId, startDate: favorite.startDate, endDate: favorite.endDate, yes: favorite.yes, maybe: favorite.maybe } : null,
                 myVoteStatus: votes.some(vote => vote.userId === user.id) ? 'voted' : 'open',
                 canVote: canVote(poll, user.roles || []),

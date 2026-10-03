@@ -1123,7 +1123,7 @@ function renderRoster(data) {
             <div class="roster-member">
                 ${renderRosterAvatar(member)}
                 <span class="roster-name">${escapeHtml(member.displayName)}</span>
-                ${member.pending ? '<span class="roster-tag" title="Anfrage ausstehend">⏳</span>' : ''}
+                ${member.pending ? '<span class="roster-tag" title="Anfrage ausstehend"><i class="bi bi-hourglass-split"></i></span>' : ''}
                 ${member.isAlt ? '<span class="roster-tag roster-tag-alt">Ausweich</span>' : ''}
             </div>`).join('');
         const freeSeats = Math.max(0, slot.capacity - slot.taken);
@@ -1441,6 +1441,27 @@ function formatPollOptionLabel(option) {
     return label;
 }
 
+// Answers of a date poll -> fixed icons, the texts come from the poll (admins can rename them)
+const POLL_ANSWER_ICONS = { yes: 'bi-check-circle', maybe: 'bi-question-circle', no: 'bi-x-circle' };
+const DEFAULT_POLL_LABELS = { yes: 'passt', maybe: 'wenn nötig', no: 'passt nicht' };
+
+function getPollLabels(poll) {
+    const labels = { ...DEFAULT_POLL_LABELS };
+    Object.keys(labels).forEach(key => {
+        if (poll && poll.labels && poll.labels[key]) labels[key] = poll.labels[key];
+    });
+    return labels;
+}
+
+function renderPollAnswerIcon(state, colored = true) {
+    return `<i class="bi ${POLL_ANSWER_ICONS[state]}${colored ? ` poll-icon-${state}` : ''}" aria-hidden="true"></i>`;
+}
+
+function renderPollCounts(entry, labels) {
+    return ['yes', 'maybe'].map(state => `
+        <span class="poll-count" title="${escapeHtml(labels[state])}">${renderPollAnswerIcon(state)} ${entry[state]}<span class="visually-hidden"> ${escapeHtml(labels[state])}</span></span>`).join('');
+}
+
 async function refreshPollBadge() {
     const badge = document.getElementById('nav-polls-badge');
     if (!badge || !currentUser) return;
@@ -1496,7 +1517,7 @@ function renderPollCard(poll) {
         }
     }
     const favorite = poll.favorite
-        ? `<div class="poll-card-favorite">🏆 ${escapeHtml(formatPollOptionLabel(poll.favorite))} <span class="text-secondary">✅ ${poll.favorite.yes} · 🤔 ${poll.favorite.maybe}</span></div>`
+        ? `<div class="poll-card-favorite"><i class="bi bi-trophy poll-icon-favorite me-1" title="Favorit"></i>${escapeHtml(formatPollOptionLabel(poll.favorite))} <span class="poll-counts ms-2">${renderPollCounts(poll.favorite, getPollLabels(poll))}</span></div>`
         : '<div class="poll-card-favorite text-secondary">Noch keine Stimmen</div>';
     let deadline = '';
     if (poll.status === 'open') deadline = poll.deadline ? ` · bis ${escapeHtml(formatPollDate(poll.deadline))}` : ' · ohne Deadline';
@@ -1533,9 +1554,9 @@ function renderPollDetail(poll) {
     const winner = poll.options.find(option => option.id === poll.winnerOptionId);
     let banner = '';
     if (poll.status === 'decided' && winner) {
-        banner = `<div class="poll-banner poll-banner-decided"><div><strong>✅ Termin steht:</strong> ${escapeHtml(formatPollOptionLabel(winner))}</div>${poll.eventId ? `<a class="btn btn-sm btn-accent" href="#event/${escapeHtml(poll.eventId)}">Zum Event</a>` : ''}</div>`;
+        banner = `<div class="poll-banner poll-banner-decided"><div><strong><i class="bi bi-calendar-check me-1"></i>Termin steht:</strong> ${escapeHtml(formatPollOptionLabel(winner))}</div>${poll.eventId ? `<a class="btn btn-sm btn-accent" href="#event/${escapeHtml(poll.eventId)}">Zum Event</a>` : ''}</div>`;
     } else if (poll.status === 'closed') {
-        banner = '<div class="poll-banner"><strong>🔒 Abstimmung beendet</strong></div>';
+        banner = '<div class="poll-banner"><strong><i class="bi bi-lock me-1"></i>Abstimmung beendet</strong></div>';
     } else if (!poll.canVote) {
         banner = '<div class="poll-banner"><i class="bi bi-lock me-1"></i>Nur Mitglieder mit der erforderlichen Rolle können abstimmen.</div>';
     }
@@ -1564,22 +1585,23 @@ function renderPollOptionRow(poll, entry) {
     if (poll.myVote.yes.includes(entry.optionId)) myState = 'yes';
     else if (poll.myVote.maybe.includes(entry.optionId)) myState = 'maybe';
 
+    const labels = getPollLabels(poll);
     const avatars = [...entry.yesVoters, ...entry.maybeVoters].slice(0, 8).map(renderRosterAvatar).join('');
     const names = (list) => list.map(voter => escapeHtml(voter.displayName)).join(', ') || '—';
     const toggle = poll.isOpen && poll.canVote ? `
         <div class="btn-group btn-group-sm poll-vote-toggle" role="group" aria-label="Deine Stimme">
-            ${[['yes', '✅ passt'], ['maybe', '🤔 wenn nötig'], ['no', '— passt nicht']].map(([state, label]) => `
-                <button type="button" class="btn ${myState === state ? 'btn-accent' : 'btn-outline-light'}" data-option-id="${escapeHtml(entry.optionId)}" data-state="${state}" onclick="setPollVote(this.dataset.optionId, this.dataset.state)">${label}</button>`).join('')}
+            ${['yes', 'maybe', 'no'].map(state => `
+                <button type="button" class="btn ${myState === state ? 'btn-accent' : 'btn-outline-light'}" data-option-id="${escapeHtml(entry.optionId)}" data-state="${state}" aria-pressed="${myState === state}" onclick="setPollVote(this.dataset.optionId, this.dataset.state)">${renderPollAnswerIcon(state, false)}<span class="ms-1">${escapeHtml(labels[state])}</span></button>`).join('')}
         </div>` : '';
     let marker = '';
-    if (isWinner) marker = '✅ ';
-    else if (isFavorite) marker = '🏆 ';
+    if (isWinner) marker = '<i class="bi bi-calendar-check poll-icon-yes me-1" title="Gewählter Termin"></i>';
+    else if (isFavorite) marker = '<i class="bi bi-trophy poll-icon-favorite me-1" title="Favorit"></i>';
 
     return `
         <div class="poll-option glass-card${isWinner || isFavorite ? ' highlight' : ''}">
             <div class="poll-option-head">
                 <span class="poll-option-date">${marker}${escapeHtml(formatPollOptionLabel(option))}</span>
-                <span class="poll-option-count">✅ ${entry.yes} · 🤔 ${entry.maybe}</span>
+                <span class="poll-option-count poll-counts">${renderPollCounts(entry, labels)}</span>
             </div>
             <div class="poll-bar">
                 <div class="poll-bar-yes" style="width:${Math.round((entry.yes / total) * 100)}%"></div>
@@ -1589,7 +1611,7 @@ function renderPollOptionRow(poll, entry) {
                 <div class="poll-voters">${avatars}</div>
                 ${toggle}
             </div>
-            ${entry.yes + entry.maybe > 0 ? `<details class="poll-voter-names"><summary>Namen anzeigen</summary><div>✅ ${names(entry.yesVoters)}</div><div>🤔 ${names(entry.maybeVoters)}</div></details>` : ''}
+            ${entry.yes + entry.maybe > 0 ? `<details class="poll-voter-names"><summary>Namen anzeigen</summary><div>${renderPollAnswerIcon('yes')} <strong>${escapeHtml(labels.yes)}:</strong> ${names(entry.yesVoters)}</div><div>${renderPollAnswerIcon('maybe')} <strong>${escapeHtml(labels.maybe)}:</strong> ${names(entry.maybeVoters)}</div></details>` : ''}
         </div>`;
 }
 
@@ -1671,6 +1693,11 @@ async function showPollEditor(pollId = null) {
     document.getElementById('poll-title').value = poll ? poll.title : '';
     document.getElementById('poll-description').value = poll ? poll.description || '' : '';
     document.getElementById('poll-access').value = poll ? poll.accessMode : 'open';
+    // Empty fields fall back to the default answers -> only renamed answers are filled in
+    ['yes', 'maybe', 'no'].forEach(state => {
+        const custom = poll ? getPollLabels(poll)[state] : '';
+        document.getElementById(`poll-label-${state}`).value = custom === DEFAULT_POLL_LABELS[state] ? '' : custom;
+    });
     await renderPollRoleCheckboxes(poll ? poll.requiredRoles || [] : []);
     togglePollRoles();
 
@@ -1722,6 +1749,11 @@ function collectPollEditor() {
         options,
         deadline: deadline ? deadline.toISOString() : '',
         accessMode,
+        labels: {
+            yes: document.getElementById('poll-label-yes').value,
+            maybe: document.getElementById('poll-label-maybe').value,
+            no: document.getElementById('poll-label-no').value
+        },
         requiredRoles: accessMode === 'role-required'
             ? [...document.querySelectorAll('#poll-role-checkboxes input:checked')].map(cb => cb.value)
             : []
@@ -1855,7 +1887,7 @@ function showPollDecideDialog(pollId) {
             <label class="poll-decide-option">
                 <input class="form-check-input me-2" type="radio" name="poll-decide" value="${escapeHtml(entry.optionId)}"${entry.optionId === preselected ? ' checked' : ''}>
                 <span>${escapeHtml(formatPollOptionLabel(option))}</span>
-                <span class="text-secondary ms-auto">✅ ${entry.yes} · 🤔 ${entry.maybe}</span>
+                <span class="text-secondary ms-auto poll-counts">${renderPollCounts(entry, getPollLabels(poll))}</span>
             </label>`;
     }).join('');
     bootstrap.Modal.getOrCreateInstance(document.getElementById('pollDecideModal')).show();

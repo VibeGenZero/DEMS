@@ -2,7 +2,8 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const {
     POLL_STATUS, normalizePollInput, normalizeVote, isPollOpen, canVote, tallyPoll,
-    rankOptions, getFavoriteOptionId, formatPollOption, effectivePollStatus, applyVoteChange
+    rankOptions, getFavoriteOptionId, formatPollOption, effectivePollStatus, applyVoteChange,
+    DEFAULT_POLL_LABELS, getPollLabels
 } = require('../utils/pollService');
 
 const NOW = new Date('2026-10-03T10:00:00.000Z');
@@ -27,6 +28,27 @@ test('a new poll is trimmed, sorted by date and gets option IDs', () => {
     assert.equal(poll.options[1].endDate, '');
     assert.equal(poll.deadline, '2026-10-09T16:00:00.000Z');
     assert.equal(poll.accessMode, 'open');
+});
+
+test('answers default to passt, wenn nötig and passt nicht and can be renamed', () => {
+    assert.deepEqual(DEFAULT_POLL_LABELS, { yes: 'passt', maybe: 'wenn nötig', no: 'passt nicht' });
+    assert.deepEqual(normalizePollInput(input(), null, [], NOW).poll.labels, DEFAULT_POLL_LABELS);
+    const renamed = normalizePollInput(input({ labels: { yes: '  Bin dabei ', maybe: 'Vielleicht', no: '' } }), null, [], NOW);
+    assert.deepEqual(renamed.poll.labels, { yes: 'Bin dabei', maybe: 'Vielleicht', no: 'passt nicht' });
+
+    assert.equal(normalizePollInput(input({ labels: { yes: 'x'.repeat(31) } }), null, [], NOW).error,
+        'Antworttexte dürfen höchstens 30 Zeichen lang sein.');
+    assert.equal(normalizePollInput(input({ labels: { yes: 'Ja', maybe: ' ja ' } }), null, [], NOW).error,
+        'Die drei Antworten brauchen unterschiedliche Texte.');
+
+    const existing = { ...POLL, labels: { yes: 'Bin dabei', maybe: 'Vielleicht', no: 'Kann nicht' } };
+    const edited = normalizePollInput(input({ options: [A, B] }), existing, [], NOW);
+    assert.deepEqual(edited.poll.labels, existing.labels);
+});
+
+test('older polls without answers get the default ones', () => {
+    assert.deepEqual(getPollLabels({}), DEFAULT_POLL_LABELS);
+    assert.deepEqual(getPollLabels({ labels: { yes: 'Bin dabei', maybe: '' } }), { yes: 'Bin dabei', maybe: 'wenn nötig', no: 'passt nicht' });
 });
 
 test('invalid polls are refused with a German message', () => {

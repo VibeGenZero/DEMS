@@ -440,6 +440,24 @@ test('admins create date polls', async () => {
     assert.equal(poll.createdBy, personaById('admin').userId);
 });
 
+test('admins choose their own answers for a poll', async () => {
+    const admin = await loginAs('admin');
+    const labels = { yes: 'Bin dabei', maybe: 'Vielleicht', no: 'Kann nicht' };
+    const poll = await createPollViaApi(admin, 'Antwort-Abstimmung', { labels });
+    assert.deepEqual(poll.labels, labels);
+
+    const raider = await loginAs('raider');
+    assert.deepEqual((await (await raider.request(`/api/polls/${poll.id}`)).json()).labels, labels);
+    const entry = (await (await raider.request('/api/polls')).json()).find(item => item.id === poll.id);
+    assert.deepEqual(entry.labels, labels);
+
+    const renamed = await admin.send('PUT', `/api/admin/polls/${poll.id}`, {
+        title: poll.title, options: poll.options, labels: { ...labels, no: 'Bin raus' }
+    });
+    assert.equal(renamed.status, 200);
+    assert.equal((await renamed.json()).labels.no, 'Bin raus');
+});
+
 test('invalid date polls are refused with a German message', async () => {
     const admin = await loginAs('admin');
     const res = await admin.send('POST', '/api/admin/polls', { title: 'Zu wenig', options: [{ startDate: futureDate(8) }] });

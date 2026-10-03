@@ -77,3 +77,12 @@ test('the vote button refuses members without the role', async () => {
     await dispatchInteraction(bot.client, interaction);
     assert.equal(interaction.calls[1][1].content, '❌ Du hast nicht die erforderliche Rolle für diese Abstimmung.');
 });
+
+test('the saved line uses the own answers of the poll', async () => {
+    await seedPoll('ip-labels', { labels: { yes: 'Bin dabei', maybe: 'Vielleicht', no: 'Kann nicht' } });
+
+    const interaction = createFakeInteraction({ kind: 'select', customId: 'poll_yes:ip-labels', userId: 'ip-user-labels', values: [A.id] });
+    await dispatchInteraction(bot.client, interaction);
+
+    assert.ok(interaction.calls[1][1].content.includes('Gespeichert: 1× Bin dabei, 0× Vielleicht.'));
+});

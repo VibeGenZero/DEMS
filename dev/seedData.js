@@ -486,6 +486,8 @@ function buildPolls(clock) {
             status: 'open',
             accessMode: 'role-required',
             requiredRoles: [ROLE_ID.RAID_TEAM],
+            // Own answers instead of passt / wenn nötig / passt nicht
+            labels: { yes: 'Bin dabei', maybe: 'Vielleicht', no: 'Kann nicht' },
             options: [
                 { id: 'raid-a', startDate: clock.slot(7, 20), endDate: clock.slot(7, 23) },
                 { id: 'raid-b', startDate: clock.slot(9, 19), endDate: '' },

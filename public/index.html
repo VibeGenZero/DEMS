@@ -1686,6 +1686,28 @@
           <div id="poll-role-area" class="mt-3" style="display:none;">
             <div id="poll-role-checkboxes" class="d-flex flex-wrap gap-2"></div>
           </div>
+          <label class="form-label mt-3">Antworten</label>
+          <div class="row g-2">
+            <div class="col-md-4">
+              <div class="input-group">
+                <span class="input-group-text bg-transparent border-secondary"><i class="bi bi-check-circle poll-icon-yes"></i></span>
+                <input type="text" class="form-control" id="poll-label-yes" maxlength="30" placeholder="passt" aria-label="Antwort für Zusagen">
+              </div>
+            </div>
+            <div class="col-md-4">
+              <div class="input-group">
+                <span class="input-group-text bg-transparent border-secondary"><i class="bi bi-question-circle poll-icon-maybe"></i></span>
+                <input type="text" class="form-control" id="poll-label-maybe" maxlength="30" placeholder="wenn nötig" aria-label="Antwort für Vielleicht">
+              </div>
+            </div>
+            <div class="col-md-4">
+              <div class="input-group">
+                <span class="input-group-text bg-transparent border-secondary"><i class="bi bi-x-circle poll-icon-no"></i></span>
+                <input type="text" class="form-control" id="poll-label-no" maxlength="30" placeholder="passt nicht" aria-label="Antwort für Absagen">
+              </div>
+            </div>
+          </div>
+          <small class="text-muted d-block mt-1">Leer lassen für den Standardtext. Die Antworten erscheinen auf der Website, in Discord und in den Benachrichtigungen.</small>
         </div>
         <div class="modal-footer border-0">
           <button type="button" class="btn btn-outline-light" data-bs-dismiss="modal">Abbrechen</button>

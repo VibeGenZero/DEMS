@@ -70,7 +70,7 @@ Slot fields exist only on slot events: `slotId` = the slot actually taken (`null
 
 ## polls (auto id) — written by `routes/admin.js` and `utils/pollStore.js`
 
-`{ title, description, options: [{ id, startDate, endDate }], deadline, status: open|closed|decided, accessMode, requiredRoles, winnerOptionId, eventId, announcements, createdBy, createdAt, updatedAt, closedAt }` — see [date-polls](date-polls.md).
+`{ title, description, options: [{ id, startDate, endDate }], deadline, status: open|closed|decided, accessMode, requiredRoles, labels: { yes, maybe, no }, winnerOptionId, eventId, announcements, createdBy, createdAt, updatedAt, closedAt }` — see [date-polls](date-polls.md).
 
 ## pollVotes (id = `<pollId>_<userId>`) — written by `utils/pollStore.js#savePollVote`
 
