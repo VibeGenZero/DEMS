@@ -1,10 +1,22 @@
 {
-    "version": "2.7.0",
+    "version": "2.6.0",
     "date": "2026-10-03",
     "news": [
         {
+            "title": "🛡️ Rollen-Slots für Raids & Teams",
+            "content": "Events können jetzt Rollen wie Tank, Heiler oder Schaden mit eigener Platzzahl haben. Du wählst deine Hauptrolle und optional Ausweichrollen – ist deine Rolle voll, wirst du automatisch in einer freien Ausweichrolle eingeplant oder rückst später passend nach."
+        },
+        {
+            "title": "🔄 Live-Ankündigungen in Discord",
+            "content": "Die Event-Ankündigung zeigt die Aufstellung mit Namen und aktualisiert sich bei jeder An- und Abmeldung von selbst. Pro Rolle gibt es einen eigenen Button."
+        },
+        {
+            "title": "↔️ Slot wechseln & Abmelden per Klick",
+            "content": "Auf der Event-Seite und direkt in Discord kannst du in einen freien Slot wechseln oder dich abmelden – ganz ohne Befehl."
+        },
+        {
             "title": "🗳️ Terminabstimmungen",
-            "content": "Admins schlagen mehrere Termine vor, ihr stimmt pro Termin mit „passt“ oder „wenn nötig“ ab – auf der Website unter „Abstimmungen“ oder direkt in Discord. Die Discord-Nachricht zeigt den Zwischenstand live."
+            "content": "Admins schlagen mehrere Termine vor, ihr stimmt pro Termin ab – auf der Website unter „Abstimmungen“ oder direkt in Discord. Die Antworten („passt“, „wenn nötig“, „passt nicht“) können Admins pro Abstimmung selbst benennen, und die Discord-Nachricht zeigt den Zwischenstand live."
         },
         {
             "title": "📅 Vom Termin zum Event",
