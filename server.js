@@ -14,6 +14,7 @@ const helmet = require('helmet');
 const cors = require('cors');
 const rateLimit = require('express-rate-limit');
 const { startBot, startReminderScheduler, stopBot, getGuildName } = require('./bot');
+const { startPollScheduler, stopPollScheduler } = require('./utils/pollStore');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -171,6 +172,7 @@ if (IS_DEBUG) {
 if (IS_MOCK_MODE) app.use('/auth', require('./dev/devAuth'));
 app.use('/auth', require('./routes/auth'));
 app.use('/api/events', require('./routes/events'));
+app.use('/api/polls', require('./routes/polls'));
 app.use('/api/admin', require('./routes/admin'));
 app.use('/api/user', require('./routes/user'));
 
@@ -261,6 +263,7 @@ startBot(process.env.DISCORD_BOT_TOKEN);
 
 // Start reminder scheduler (checks every 5 min)
 startReminderScheduler();
+startPollScheduler();
 
 // ── Graceful Shutdown ───────────────────────────────────────────────────
 function gracefulShutdown(signal) {
@@ -268,6 +271,7 @@ function gracefulShutdown(signal) {
     server.close(() => {
         console.log('✅ HTTP Server geschlossen.');
         stopBot();
+        stopPollScheduler();
         console.log('✅ Bot & Scheduler gestoppt. Auf Wiedersehen!');
         process.exit(0);
     });
