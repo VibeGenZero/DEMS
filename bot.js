@@ -11,13 +11,14 @@ const {
 const { IS_MOCK_MODE } = require('./dev/mockMode');
 const { db, collection, doc, getDoc, getDocs, addDoc, setDoc, updateDoc, deleteDoc, query, where, orderBy } = require('./firebaseAdmin');
 const { debugLog } = require('./utils/debugLog');
-const { buildEventUrl } = require('./utils/eventUrl');
+const { buildEventUrl, buildPollUrl } = require('./utils/eventUrl');
 const { isRegistrationBlocked } = require('./middleware/maintenance');
 const {
     FORM_FIELD_TYPE, MODAL_MAX_FIELDS, getFormFields, getFieldType,
     formatEntityAnswer, fitsIntoDiscordModal, getModalFieldLimit
 } = require('./utils/formFields');
 const { getSlots, hasSlots, findSlot, formatSlotLabel, countSlotOccupancy, hasFreePlace } = require('./utils/slotService');
+const { tallyPoll, getFavoriteOptionId, formatPollOption, isPollOpen, canVote } = require('./utils/pollService');
 
 const TIMEZONE = process.env.TIMEZONE || 'Europe/Berlin';
 
@@ -55,6 +56,12 @@ const ALT_SLOTS_FIELD_ID = 'alt_slots';
 const BUTTONS_PER_ROW = 5;
 // Names listed per slot in the announcement embed
 const ROSTER_NAMES_MAX = 5;
+const POLL_VOTE_PREFIX = 'poll_vote';
+const POLL_YES_PREFIX = 'poll_yes';
+const POLL_MAYBE_PREFIX = 'poll_maybe';
+// Names listed per date in the poll embed
+const POLL_NAMES_MAX = 5;
+const POLL_DESCRIPTION_MAX_LENGTH = 1000;
 
 // Registrations that are currently being processed -> guards against double clicks
 const pendingDiscordRegistrations = new Set();
@@ -747,6 +754,30 @@ function isGoneDiscordError(err) {
 }
 
 /**
+ * Edit every stored Discord message with the same payload.
+ *
+ * @param {Array<Object>} announcements -> `[{ channelId, messageId }]`.
+ * @param {Object} payload -> Message edit payload.
+ * @returns {Promise<Array<Object>>} -> The announcements that still exist.
+ */
+async function editStoredMessages(announcements, payload) {
+    const kept = [];
+    for (const announcement of announcements) {
+        try {
+            const channel = await client.channels.fetch(announcement.channelId);
+            const message = await channel.messages.fetch(announcement.messageId);
+            await message.edit(payload);
+            kept.push(announcement);
+        } catch (err) {
+            if (isGoneDiscordError(err)) continue;
+            console.error('Failed to edit a stored message:', err.message);
+            kept.push(announcement);
+        }
+    }
+    return kept;
+}
+
+/**
  * Re-render every stored announcement of an event with the live line-up.
  *
  * Deleted messages are dropped from `event.announcements`; other errors are
@@ -770,19 +801,7 @@ async function refreshEventAnnouncements(eventId) {
         const embed = buildEventEmbed(event, buildEventUrl(eventId), roster);
         const components = buildEventComponents(event, eventId, roster);
 
-        const kept = [];
-        for (const announcement of announcements) {
-            try {
-                const channel = await client.channels.fetch(announcement.channelId);
-                const message = await channel.messages.fetch(announcement.messageId);
-                await message.edit({ embeds: [embed], components });
-                kept.push(announcement);
-            } catch (err) {
-                if (isGoneDiscordError(err)) continue;
-                console.error('Failed to refresh announcement:', err.message);
-                kept.push(announcement);
-            }
-        }
+        const kept = await editStoredMessages(announcements, { embeds: [embed], components });
 
         if (kept.length !== announcements.length) {
             await updateDoc(doc(db, 'events', eventId), { announcements: kept });
@@ -790,6 +809,173 @@ async function refreshEventAnnouncements(eventId) {
         return true;
     } catch (err) {
         console.error('refreshEventAnnouncements failed:', err.message);
+        return false;
+    }
+}
+
+/**
+ * Build the embed of a date poll.
+ *
+ * @param {Object} poll -> The poll with its `id`.
+ * @param {Object} tally -> Result of tallyPoll().
+ * @returns {EmbedBuilder} -> The embed.
+ */
+function buildPollEmbed(poll, tally) {
+    const decided = poll.status === 'decided';
+    const closed = !decided && !isPollOpen(poll);
+    let title = `📅 ${poll.title}`;
+    if (decided) title = `✅ Termin steht: ${poll.title}`;
+    else if (closed) title = `🔒 Abstimmung beendet: ${poll.title}`;
+
+    const embed = new EmbedBuilder()
+        .setColor(decided ? 0x22c55e : 0x8b5cf6)
+        .setTitle(title.substring(0, 256));
+
+    const winner = decided ? poll.options.find(option => option.id === poll.winnerOptionId) : null;
+    const description = winner
+        ? `**${formatPollOption(winner)}**`
+        : (poll.description || '').substring(0, POLL_DESCRIPTION_MAX_LENGTH);
+    if (description) embed.setDescription(description);
+
+    const highlightId = decided ? poll.winnerOptionId : getFavoriteOptionId(tally);
+    tally.options.forEach(entry => {
+        const option = poll.options.find(candidate => candidate.id === entry.optionId);
+        let marker = '';
+        if (entry.optionId === highlightId) marker = decided ? '✅ ' : '🏆 ';
+        embed.addFields({ name: `${marker}${formatPollOption(option)}`, value: `✅ ${entry.yes} · 🤔 ${entry.maybe}\n${formatPollVoters(entry)}`, inline: false });
+    });
+
+    const votes = `${tally.voterCount} ${tally.voterCount === 1 ? 'Stimme' : 'Stimmen'}`;
+    let footer = `Abstimmung beendet · ${votes}`;
+    if (!decided && !closed) {
+        footer = poll.deadline
+            ? `⏰ Abstimmung bis ${formatPollOption({ startDate: poll.deadline })} · ${votes}`
+            : `Abstimmung offen · ${votes}`;
+    }
+    embed.setFooter({ text: footer });
+    return embed;
+}
+
+/**
+ * Second line of a poll field: the first "passt" names.
+ *
+ * @param {Object} entry -> Tally option.
+ * @returns {string} -> Names, escaped for Discord markdown.
+ */
+function formatPollVoters(entry) {
+    if (entry.yes + entry.maybe === 0) return '— noch keine Stimmen —';
+    if (entry.yes === 0) return '🤔 nur „wenn nötig“';
+    const names = entry.yesVoters.slice(0, POLL_NAMES_MAX).map(voter => escapeMarkdown(voter.displayName));
+    const hidden = entry.yesVoters.length - POLL_NAMES_MAX;
+    return hidden > 0 ? `${names.join(', ')}, +${hidden}` : names.join(', ');
+}
+
+/**
+ * Buttons below a poll message.
+ *
+ * @param {Object} poll -> The poll with its `id`.
+ * @returns {ActionRowBuilder[]} -> One row.
+ */
+function buildPollComponents(poll) {
+    const row = new ActionRowBuilder();
+    if (poll.status === 'decided' && poll.eventId) {
+        row.addComponents(
+            new ButtonBuilder().setLabel('Zum Event').setStyle(ButtonStyle.Link).setURL(buildEventUrl(poll.eventId)).setEmoji('🔗')
+        );
+        return [row];
+    }
+    if (isPollOpen(poll)) {
+        row.addComponents(
+            new ButtonBuilder().setCustomId(`${POLL_VOTE_PREFIX}:${poll.id}`).setLabel('Abstimmen').setStyle(ButtonStyle.Primary).setEmoji('🗳️')
+        );
+    }
+    row.addComponents(
+        new ButtonBuilder().setLabel('Im Web ansehen').setStyle(ButtonStyle.Link).setURL(buildPollUrl(poll.id)).setEmoji('🔗')
+    );
+    return [row];
+}
+
+/**
+ * Ephemeral voting answer with two prefilled selects.
+ *
+ * @param {Object} poll -> The poll with its `id`.
+ * @param {{ yes: string[], maybe: string[] }} vote -> The member's current vote.
+ * @param {string} [statusLine] -> Extra line, e.g. the saved confirmation.
+ * @returns {Object} -> `{ content, components }` for reply/editReply.
+ */
+function buildPollVoteReply(poll, vote, statusLine = '') {
+    const select = (prefix, placeholder, selected) => new ActionRowBuilder().addComponents(
+        new StringSelectMenuBuilder()
+            .setCustomId(`${prefix}:${poll.id}`)
+            .setPlaceholder(placeholder)
+            .setMinValues(0)
+            .setMaxValues(poll.options.length)
+            .addOptions(poll.options.map(option => ({
+                label: formatPollOption(option).substring(0, SELECT_OPTION_LABEL_MAX_LENGTH),
+                value: option.id,
+                default: selected.includes(option.id)
+            })))
+    );
+    const lines = [`🗳️ **${poll.title}**`, 'Wähle deine Termine – Änderungen werden sofort gespeichert.'];
+    if (statusLine) lines.push(statusLine);
+    return {
+        content: lines.join('\n'),
+        components: [
+            select(POLL_YES_PREFIX, '✅ Passt mir …', vote.yes || []),
+            select(POLL_MAYBE_PREFIX, '🤔 Wenn nötig …', vote.maybe || [])
+        ]
+    };
+}
+
+/**
+ * Re-render every posted message of a poll.
+ *
+ * @param {string} pollId -> The poll document ID.
+ * @returns {Promise<boolean>} -> True when messages were processed.
+ */
+async function refreshPollMessages(pollId) {
+    if (!isReady) return false;
+    try {
+        const { loadPoll, loadPollVotes } = require('./utils/pollStore');
+        const poll = await loadPoll(pollId);
+        if (!poll) return false;
+        const announcements = Array.isArray(poll.announcements) ? poll.announcements : [];
+        if (announcements.length === 0) return false;
+
+        const tally = tallyPoll(poll, await loadPollVotes(pollId));
+        const kept = await editStoredMessages(announcements, {
+            embeds: [buildPollEmbed(poll, tally)],
+            components: buildPollComponents(poll)
+        });
+        if (kept.length !== announcements.length) {
+            await updateDoc(doc(db, 'polls', pollId), { announcements: kept });
+        }
+        return true;
+    } catch (err) {
+        console.error('refreshPollMessages failed:', err.message);
+        return false;
+    }
+}
+
+/**
+ * Turn the posted messages of a deleted poll into a short notice.
+ *
+ * @param {Object} poll -> The poll that is being deleted.
+ * @returns {Promise<boolean>} -> True when messages were processed.
+ */
+async function markPollMessagesDeleted(poll) {
+    if (!isReady) return false;
+    try {
+        const announcements = Array.isArray(poll.announcements) ? poll.announcements : [];
+        if (announcements.length === 0) return false;
+        const embed = new EmbedBuilder()
+            .setColor(0x6b7280)
+            .setTitle(`🗑️ Abstimmung gelöscht: ${poll.title}`.substring(0, 256))
+            .setDescription('Diese Abstimmung wurde von einem Admin gelöscht.');
+        await editStoredMessages(announcements, { embeds: [embed], components: [] });
+        return true;
+    } catch (err) {
+        console.error('markPollMessagesDeleted failed:', err.message);
         return false;
     }
 }
@@ -2618,6 +2804,11 @@ module.exports = {
     sendChannelMessage,
     refreshEventAnnouncements,
     isGoneDiscordError,
+    buildPollEmbed,
+    buildPollComponents,
+    buildPollVoteReply,
+    refreshPollMessages,
+    markPollMessagesDeleted,
     buildSlotModal,
     buildRegisteredSlotReply,
     buildEventEmbed,

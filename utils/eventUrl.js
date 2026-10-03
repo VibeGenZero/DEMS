@@ -20,4 +20,15 @@ function buildEventUrl(eventId) {
     return `${baseUrl}/#event/${eventId}`;
 }
 
-module.exports = { buildEventUrl };
+/**
+ * Build the absolute URL of a poll page.
+ *
+ * @param {string} pollId -> The poll document ID.
+ * @returns {string} -> URL that opens the poll in the web interface.
+ */
+function buildPollUrl(pollId) {
+    const baseUrl = process.env.BASE_URL || DEFAULT_BASE_URL;
+    return `${baseUrl}/#poll/${pollId}`;
+}
+
+module.exports = { buildEventUrl, buildPollUrl };
