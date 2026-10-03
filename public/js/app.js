@@ -280,6 +280,8 @@ function showLoggedIn() {
 
     document.getElementById('user-name').textContent = currentUser.displayName;
     document.getElementById('nav-profile').style.display = 'block';
+    document.getElementById('nav-polls').style.display = 'block';
+    refreshPollBadge();
 
     if (currentUser.isAdmin) {
         document.getElementById('nav-admin').style.display = 'block';
@@ -293,6 +295,7 @@ function showLoggedOut() {
     document.getElementById('nav-admin').style.display = 'none';
     document.getElementById('nav-bot-control').style.display = 'none';
     document.getElementById('nav-profile').style.display = 'none';
+    document.getElementById('nav-polls').style.display = 'none';
 
     // Clear sensitive data from UI
     document.getElementById('user-avatar').src = '';
@@ -382,7 +385,7 @@ function handleRoute() {
     });
 
     if (!currentUser && route !== 'login' && route !== 'info') {
-        if (route === 'event' && param) rememberPendingRoute(hash);
+        if ((route === 'event' || route === 'poll') && param) rememberPendingRoute(hash);
         document.getElementById('login-section').style.display = 'block';
         return;
     }
@@ -393,6 +396,12 @@ function handleRoute() {
             break;
         case 'event':
             showEventDetail(param);
+            break;
+        case 'polls':
+            showPollsSection();
+            break;
+        case 'poll':
+            showPollDetail(param);
             break;
         case 'profile':
             showProfileSection();
@@ -1407,6 +1416,204 @@ async function showEventDetail(eventId) {
     } catch {
         showToast('Event nicht gefunden.', 'danger');
         navigateTo('events');
+    }
+}
+
+// ─── Date Polls ──────────────────────────────────
+let currentPoll = null;
+
+function formatPollDate(isoDate) {
+    const date = new Date(isoDate);
+    const day = date.toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit' }).replace('.,', ',');
+    const time = date.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+    return `${day} · ${time}`;
+}
+
+function formatPollOptionLabel(option) {
+    let label = formatPollDate(option.startDate);
+    if (option.endDate) {
+        const end = new Date(option.endDate);
+        const sameDay = new Date(option.startDate).toDateString() === end.toDateString();
+        label += sameDay
+            ? `–${end.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}`
+            : ` – ${formatPollDate(option.endDate)}`;
+    }
+    return label;
+}
+
+async function refreshPollBadge() {
+    const badge = document.getElementById('nav-polls-badge');
+    if (!badge || !currentUser) return;
+    try {
+        const res = await fetch('/api/polls');
+        if (!res.ok) return;
+        const polls = await res.json();
+        const pending = polls.filter(poll => poll.status === 'open' && poll.canVote && poll.myVoteStatus === 'open').length;
+        badge.textContent = pending;
+        badge.style.display = pending > 0 ? 'inline-block' : 'none';
+    } catch { /* non-fatal */ }
+}
+
+async function showPollsSection() {
+    document.getElementById('polls-section').style.display = 'block';
+    const createBtn = document.getElementById('polls-create-btn');
+    if (createBtn) createBtn.style.display = currentUser && currentUser.isAdmin ? '' : 'none';
+
+    const openGrid = document.getElementById('polls-open');
+    const closedGrid = document.getElementById('polls-closed');
+    openGrid.innerHTML = '<div class="col-12 text-center py-4"><div class="spinner-border spinner-border-sm text-secondary"></div></div>';
+    try {
+        const res = await fetch('/api/polls');
+        if (!res.ok) throw new Error('load failed');
+        const polls = await res.json();
+        const open = polls.filter(poll => poll.status === 'open');
+        const done = polls.filter(poll => poll.status !== 'open');
+        openGrid.innerHTML = open.length
+            ? open.map(renderPollCard).join('')
+            : '<div class="col-12"><div class="glass-card p-4 text-center text-secondary">Gerade läuft keine Abstimmung.</div></div>';
+        closedGrid.innerHTML = done.map(renderPollCard).join('');
+        document.getElementById('polls-closed-wrapper').style.display = done.length ? '' : 'none';
+        refreshPollBadge();
+    } catch {
+        openGrid.innerHTML = '<div class="col-12 text-danger">Abstimmungen konnten nicht geladen werden.</div>';
+    }
+}
+
+function renderPollCard(poll) {
+    const statusBadges = {
+        open: '<span class="badge-pill status-accepted">Offen</span>',
+        closed: '<span class="badge-pill">Beendet</span>',
+        decided: '<span class="badge-pill status-accepted">Entschieden</span>'
+    };
+    let voteBadge = '';
+    if (poll.status === 'open') {
+        if (!poll.canVote) {
+            voteBadge = '<span class="badge-pill"><i class="bi bi-lock"></i>Nur für bestimmte Rollen</span>';
+        } else if (poll.myVoteStatus === 'voted') {
+            voteBadge = '<span class="badge-pill status-accepted"><i class="bi bi-check2"></i>Abgestimmt</span>';
+        } else {
+            voteBadge = '<span class="badge-pill status-pending"><i class="bi bi-hourglass-split"></i>Noch nicht abgestimmt</span>';
+        }
+    }
+    const favorite = poll.favorite
+        ? `<div class="poll-card-favorite">🏆 ${escapeHtml(formatPollOptionLabel(poll.favorite))} <span class="text-secondary">✅ ${poll.favorite.yes} · 🤔 ${poll.favorite.maybe}</span></div>`
+        : '<div class="poll-card-favorite text-secondary">Noch keine Stimmen</div>';
+    let deadline = '';
+    if (poll.status === 'open') deadline = poll.deadline ? ` · bis ${escapeHtml(formatPollDate(poll.deadline))}` : ' · ohne Deadline';
+    return `
+        <div class="col-md-6 col-lg-4">
+            <a class="poll-card glass-card" href="#poll/${escapeHtml(poll.id)}">
+                <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
+                    <h5 class="mb-0">${escapeHtml(poll.title)}</h5>${statusBadges[poll.status] || ''}
+                </div>
+                <div class="text-secondary small mb-2"><i class="bi bi-calendar3 me-1"></i>${poll.optionCount} Termine · ${poll.voterCount} ${poll.voterCount === 1 ? 'Stimme' : 'Stimmen'}${deadline}</div>
+                ${favorite}
+                <div class="mt-2">${voteBadge}</div>
+            </a>
+        </div>`;
+}
+
+async function showPollDetail(pollId) {
+    document.getElementById('poll-detail-section').style.display = 'block';
+    const container = document.getElementById('poll-detail');
+    container.innerHTML = '<div class="text-center py-5"><div class="spinner-border text-secondary"></div></div>';
+    try {
+        const res = await fetch(`/api/polls/${encodeURIComponent(pollId)}`);
+        if (!res.ok) throw new Error('not found');
+        currentPoll = await res.json();
+        renderPollDetail(currentPoll);
+    } catch {
+        showToast('Abstimmung nicht gefunden.', 'danger');
+        navigateTo('polls');
+    }
+}
+
+function renderPollDetail(poll) {
+    const container = document.getElementById('poll-detail');
+    const winner = poll.options.find(option => option.id === poll.winnerOptionId);
+    let banner = '';
+    if (poll.status === 'decided' && winner) {
+        banner = `<div class="poll-banner poll-banner-decided"><div><strong>✅ Termin steht:</strong> ${escapeHtml(formatPollOptionLabel(winner))}</div>${poll.eventId ? `<a class="btn btn-sm btn-accent" href="#event/${escapeHtml(poll.eventId)}">Zum Event</a>` : ''}</div>`;
+    } else if (poll.status === 'closed') {
+        banner = '<div class="poll-banner"><strong>🔒 Abstimmung beendet</strong></div>';
+    } else if (!poll.canVote) {
+        banner = '<div class="poll-banner"><i class="bi bi-lock me-1"></i>Nur Mitglieder mit der erforderlichen Rolle können abstimmen.</div>';
+    }
+    const voters = poll.tally.voterCount;
+    const deadline = poll.deadline
+        ? `<span><i class="bi bi-alarm me-1"></i>${poll.status === 'open' ? 'Abstimmung bis' : 'Deadline'} ${escapeHtml(formatPollDate(poll.deadline))}</span>`
+        : '';
+    container.innerHTML = `
+        <div class="glass-card p-4 mb-4">
+            <h2 class="mb-2">${escapeHtml(poll.title)}</h2>
+            <div class="text-secondary small d-flex flex-wrap gap-3 mb-3">${deadline}<span><i class="bi bi-people me-1"></i>${voters} ${voters === 1 ? 'Stimme' : 'Stimmen'}</span></div>
+            ${poll.description ? `<div class="markdown-body mb-3">${renderMarkdownSafe(poll.description)}</div>` : ''}
+            ${banner}
+            <div id="poll-admin-bar"></div>
+        </div>
+        <div class="poll-options">${poll.tally.options.map(entry => renderPollOptionRow(poll, entry)).join('')}</div>`;
+}
+
+function renderPollOptionRow(poll, entry) {
+    const option = poll.options.find(candidate => candidate.id === entry.optionId);
+    const total = Math.max(poll.tally.voterCount, 1);
+    const isWinner = poll.status === 'decided' && entry.optionId === poll.winnerOptionId;
+    const isFavorite = poll.status !== 'decided' && entry.optionId === poll.favoriteOptionId;
+    let myState = 'no';
+    if (poll.myVote.yes.includes(entry.optionId)) myState = 'yes';
+    else if (poll.myVote.maybe.includes(entry.optionId)) myState = 'maybe';
+
+    const avatars = [...entry.yesVoters, ...entry.maybeVoters].slice(0, 8).map(renderRosterAvatar).join('');
+    const names = (list) => list.map(voter => escapeHtml(voter.displayName)).join(', ') || '—';
+    const toggle = poll.isOpen && poll.canVote ? `
+        <div class="btn-group btn-group-sm poll-vote-toggle" role="group" aria-label="Deine Stimme">
+            ${[['yes', '✅ passt'], ['maybe', '🤔 wenn nötig'], ['no', '— passt nicht']].map(([state, label]) => `
+                <button type="button" class="btn ${myState === state ? 'btn-accent' : 'btn-outline-light'}" data-option-id="${escapeHtml(entry.optionId)}" data-state="${state}" onclick="setPollVote(this.dataset.optionId, this.dataset.state)">${label}</button>`).join('')}
+        </div>` : '';
+    let marker = '';
+    if (isWinner) marker = '✅ ';
+    else if (isFavorite) marker = '🏆 ';
+
+    return `
+        <div class="poll-option glass-card${isWinner || isFavorite ? ' highlight' : ''}">
+            <div class="poll-option-head">
+                <span class="poll-option-date">${marker}${escapeHtml(formatPollOptionLabel(option))}</span>
+                <span class="poll-option-count">✅ ${entry.yes} · 🤔 ${entry.maybe}</span>
+            </div>
+            <div class="poll-bar">
+                <div class="poll-bar-yes" style="width:${Math.round((entry.yes / total) * 100)}%"></div>
+                <div class="poll-bar-maybe" style="width:${Math.round((entry.maybe / total) * 100)}%"></div>
+            </div>
+            <div class="poll-option-foot">
+                <div class="poll-voters">${avatars}</div>
+                ${toggle}
+            </div>
+            ${entry.yes + entry.maybe > 0 ? `<details class="poll-voter-names"><summary>Namen anzeigen</summary><div>✅ ${names(entry.yesVoters)}</div><div>🤔 ${names(entry.maybeVoters)}</div></details>` : ''}
+        </div>`;
+}
+
+async function setPollVote(optionId, state) {
+    if (!currentPoll) return;
+    const yes = currentPoll.myVote.yes.filter(id => id !== optionId);
+    const maybe = currentPoll.myVote.maybe.filter(id => id !== optionId);
+    if (state === 'yes') yes.push(optionId);
+    if (state === 'maybe') maybe.push(optionId);
+    try {
+        const res = await fetch(`/api/polls/${encodeURIComponent(currentPoll.id)}/vote`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrfToken },
+            body: JSON.stringify({ yes, maybe })
+        });
+        const result = await res.json();
+        if (!res.ok) {
+            showToast(result.error || 'Stimme konnte nicht gespeichert werden.', 'danger');
+            return;
+        }
+        currentPoll = result;
+        renderPollDetail(currentPoll);
+        refreshPollBadge();
+    } catch {
+        showToast('Netzwerkfehler.', 'danger');
     }
 }
 
