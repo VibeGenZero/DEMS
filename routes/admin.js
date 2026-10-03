@@ -151,6 +151,10 @@ router.post('/events', validateEvent, async (req, res) => {
 
         // An event can be created from a date poll -> checked and decided together with the creation below
         const fromPoll = req.body.fromPoll && typeof req.body.fromPoll === 'object' ? req.body.fromPoll : null;
+        // Voters get a DM with the event link -> the event must be visible to members
+        if (fromPoll && (status || 'active') !== 'active') {
+            return res.status(400).json({ error: 'Ein Event aus einer Abstimmung muss aktiv sein.' });
+        }
 
         const baseEvent = {
             title,

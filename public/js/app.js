@@ -1870,6 +1870,8 @@ async function startEventFromPoll() {
 
     await showCreateEventModal();
     document.getElementById('event-title').value = poll.title;
+    // Voters are notified with the event link -> the event is created active
+    document.getElementById('event-status').value = 'active';
     if (descriptionEditor) descriptionEditor.value(poll.description || '');
     // The date pickers are created when step 2 is shown for the first time
     wizardGoTo(2);

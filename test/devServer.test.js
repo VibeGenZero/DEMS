@@ -475,7 +475,24 @@ test('a poll can only be turned into an event once', async () => {
     assert.equal((await wrong.json()).error, 'Termin nicht gefunden');
 });
 
+test('a poll can only become an active event', async () => {
+    const admin = await loginAs('admin');
+    const poll = await createPollViaApi(admin, 'Entwurf-Abstimmung');
+    const [first] = poll.options;
+
+    const res = await admin.send('POST', '/api/admin/events', {
+        title: 'Entwurf aus Abstimmung', status: 'draft', startDate: first.startDate,
+        fromPoll: { pollId: poll.id, optionId: first.id }
+    });
+    assert.equal(res.status, 400);
+    assert.equal((await res.json()).error, 'Ein Event aus einer Abstimmung muss aktiv sein.');
+    assert.equal((await (await admin.request(`/api/polls/${poll.id}`)).json()).status, 'open');
+    const events = await (await admin.request('/api/admin/all-events')).json();
+    assert.equal(events.some(event => event.title === 'Entwurf aus Abstimmung'), false);
+});
+
 test('admins close and delete polls', async () => {
+
     const admin = await loginAs('admin');
     const poll = await createPollViaApi(admin, 'Weg damit');
     assert.equal((await admin.send('POST', `/api/admin/polls/${poll.id}/close`)).status, 200);

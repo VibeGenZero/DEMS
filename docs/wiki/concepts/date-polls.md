@@ -38,4 +38,5 @@ All writes run under `withEventLock('poll:<id>')`: `savePollVote`, `updatePoll`,
 
 - Voting is blocked during maintenance/panic like registrations (`checkRegistrationAllowed`, `isRegistrationBlocked`).
 - Check, event creation and decision run under the poll lock: a poll becomes at most one event (double click, two admins), and a failing creation leaves it open.
+- An event from a poll must be `active` (400 `Ein Event aus einer Abstimmung muss aktiv sein.`) because every voter gets a DM with its link; "Event erstellen" presets the wizard status to Aktiv.
 - Polls cannot be reopened.
