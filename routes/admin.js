@@ -7,9 +7,13 @@ const {
 } = require('../firebaseAdmin');
 const { requireAuth, requireAdmin } = require('../middleware/auth');
 const { validateEvent, validateRegStatus, validateBotMessages } = require('../middleware/validators');
-const { sendDM, assignRole, parseTemplate, getGuildRoles, sendChannelMessage, buildEventEmbed, buildEventComponents, getGuildScheduledEvents, createEventChannels, deleteEventChannels, createScheduledEvent, getBotStatus, getBotSettings, saveBotSettings, getRunningEvents, getGuildChannels } = require('../bot');
+const { sendDM, assignRole, parseTemplate, getGuildRoles, sendChannelMessage, buildEventEmbed, buildEventComponents, getGuildScheduledEvents, createEventChannels, deleteEventChannels, createScheduledEvent, getBotStatus, getBotSettings, saveBotSettings, getRunningEvents, getGuildChannels, buildPollEmbed, buildPollComponents } = require('../bot');
 const { promoteFromWaitlist, addAuditLog, loadEventRoster, loadEventRegistrations, saveEventWithSlots } = require('../utils/eventUtils');
 const { getSlots, findSlot, formatSlotLabel, normalizeSlots, sumCapacity, resolveAcceptanceSlot } = require('../utils/slotService');
+const { normalizePollInput, tallyPoll } = require('../utils/pollService');
+const {
+    loadPoll, loadPollVotes, updatePoll, closePoll, validateDecision, decidePoll, deletePoll
+} = require('../utils/pollStore');
 const { withEventLock } = require('../utils/eventLock');
 const { moveRegistrationToSlot, buildTemplateVars } = require('../utils/registrationService');
 const { notifyRegistrationsChanged } = require('../utils/announcementRefresh');
@@ -18,6 +22,26 @@ const { buildEventUrl } = require('../utils/eventUrl');
 
 // Announcements per event that are kept up to date live
 const MAX_TRACKED_ANNOUNCEMENTS = 5;
+
+/**
+ * Mark the source poll as decided after an event was created from it.
+ *
+ * The event already exists at this point -> a failure is only logged.
+ *
+ * @param {Object|null} fromPoll -> `{ pollId, optionId }` from the request.
+ * @param {string} eventId -> The created event (first instance of a series).
+ * @param {string} adminId -> Admin who created the event.
+ * @returns {Promise<void>}
+ */
+async function finishPollDecision(fromPoll, eventId, adminId) {
+    if (!fromPoll || !eventId) return;
+    const result = await decidePoll({ pollId: fromPoll.pollId, optionId: fromPoll.optionId, eventId });
+    if (result.ok) {
+        await addAuditLog('DECIDE_POLL', adminId, `Decided poll "${result.poll.title}" -> event ${eventId}`, fromPoll.pollId);
+    } else {
+        console.error('Poll decision after event creation failed:', result.error);
+    }
+}
 
 // All admin routes require auth + admin
 router.use(requireAuth, requireAdmin);
@@ -145,6 +169,15 @@ router.post('/events', validateEvent, async (req, res) => {
         }
         const { slots } = slotResult;
 
+        // An event can be created from a date poll -> check the poll before anything is written
+        const fromPoll = req.body.fromPoll && typeof req.body.fromPoll === 'object' ? req.body.fromPoll : null;
+        if (fromPoll) {
+            const check = await validateDecision({ pollId: fromPoll.pollId, optionId: fromPoll.optionId });
+            if (!check.ok) {
+                return res.status(check.httpStatus).json({ error: check.error });
+            }
+        }
+
         const baseEvent = {
             title,
             description,
@@ -166,6 +199,7 @@ router.post('/events', validateEvent, async (req, res) => {
             channelConfig: channelConfig || {},
             allowGuests: slots.length > 0 ? false : allowGuests !== false,
             slots,
+            sourcePollId: fromPoll ? String(fromPoll.pollId) : '',
             accentColor: accentColor || '',
             location: location || null,
             eventStartNotificationSent: false,
@@ -206,6 +240,7 @@ router.post('/events', validateEvent, async (req, res) => {
             }
 
             await addAuditLog('CREATE_EVENT', req.session.user.id, `Created ${createdEvents.length} recurring events "${title}"`, createdEvents[0]?.id);
+            await finishPollDecision(fromPoll, createdEvents[0]?.id, req.session.user.id);
             res.json({ count: createdEvents.length, events: createdEvents });
         } else {
             const ref = await addDoc(collection(db, 'events'), baseEvent);
@@ -214,6 +249,7 @@ router.post('/events', validateEvent, async (req, res) => {
             if (baseEvent.autoCreateChannels && baseEvent.status === 'active') {
                 createEventChannels({ id: ref.id, ...baseEvent }).catch(console.error);
             }
+            await finishPollDecision(fromPoll, ref.id, req.session.user.id);
             res.json({ id: ref.id, ...baseEvent });
         }
     } catch (err) {
@@ -237,7 +273,7 @@ router.put('/events/:id', validateEvent, async (req, res) => {
 
         // Slots are validated and written under the event lock -> a parallel
         // registration cannot land in a slot that is being removed
-        const saved = await saveEventWithSlots(req.params.id, req.body.slots, (slots) => ({
+        const saved = await saveEventWithSlots(req.params.id, req.body.slots, (slots, oldEvent) => ({
             title,
             description,
             maxParticipants: slots.length > 0 ? sumCapacity(slots) : (parseInt(maxParticipants) || 0),
@@ -258,6 +294,7 @@ router.put('/events/:id', validateEvent, async (req, res) => {
             channelConfig: channelConfig || {},
             allowGuests: slots.length > 0 ? false : allowGuests !== false,
             slots,
+            sourcePollId: oldEvent.sourcePollId || '',
             accentColor: accentColor || '',
             location: location || null,
             recurring: !!req.body.recurring,
@@ -871,6 +908,131 @@ router.post('/events/:id/sync-discord', async (req, res) => {
     }
 });
 
+// ═══════════════════════════════════════════════
+// DATE POLLS
+// ═══════════════════════════════════════════════
+
+/**
+ * POST /api/admin/polls — Create a date poll
+ */
+router.post('/polls', async (req, res) => {
+    try {
+        const result = normalizePollInput(req.body);
+        if (result.error) {
+            return res.status(400).json({ error: result.error });
+        }
+        const now = new Date().toISOString();
+        const poll = {
+            ...result.poll,
+            status: 'open',
+            winnerOptionId: '',
+            eventId: '',
+            announcements: [],
+            createdBy: req.session.user.id,
+            createdAt: now,
+            updatedAt: now,
+            closedAt: ''
+        };
+        const ref = await addDoc(collection(db, 'polls'), poll);
+        await addAuditLog('CREATE_POLL', req.session.user.id, `Created poll "${poll.title}"`, ref.id);
+        res.json({ id: ref.id, ...poll });
+    } catch (err) {
+        console.error('Create poll error:', err);
+        res.status(500).json({ error: 'Fehler beim Erstellen der Abstimmung' });
+    }
+});
+
+/**
+ * PUT /api/admin/polls/:id — Edit an open date poll
+ */
+router.put('/polls/:id', async (req, res) => {
+    try {
+        const result = await updatePoll(req.params.id, req.body);
+        if (!result.ok) {
+            return res.status(result.httpStatus).json({ error: result.error });
+        }
+        await addAuditLog('UPDATE_POLL', req.session.user.id, `Updated poll "${result.poll.title}"`, req.params.id);
+        res.json(result.poll);
+    } catch (err) {
+        console.error('Update poll error:', err);
+        res.status(500).json({ error: 'Fehler beim Speichern der Abstimmung' });
+    }
+});
+
+/**
+ * POST /api/admin/polls/:id/close — Close a date poll
+ */
+router.post('/polls/:id/close', async (req, res) => {
+    try {
+        const result = await closePoll(req.params.id);
+        if (!result.ok) {
+            return res.status(result.httpStatus).json({ error: result.error });
+        }
+        await addAuditLog('CLOSE_POLL', req.session.user.id, `Closed poll "${result.poll.title}"`, req.params.id);
+        res.json({ success: true });
+    } catch (err) {
+        console.error('Close poll error:', err);
+        res.status(500).json({ error: 'Fehler beim Beenden der Abstimmung' });
+    }
+});
+
+/**
+ * POST /api/admin/polls/:id/announce — Post a date poll to the announcement channel
+ */
+router.post('/polls/:id/announce', async (req, res) => {
+    try {
+        const channelId = process.env.DISCORD_ANNOUNCE_CHANNEL_ID;
+        if (!channelId) {
+            return res.status(400).json({ error: 'DISCORD_ANNOUNCE_CHANNEL_ID nicht konfiguriert in .env' });
+        }
+        const poll = await loadPoll(req.params.id);
+        if (!poll) {
+            return res.status(404).json({ error: 'Abstimmung nicht gefunden' });
+        }
+
+        const { text, roleIds, pingEveryone } = req.body;
+        const tally = tallyPoll(poll, await loadPollVotes(poll.id));
+        const sent = await sendChannelMessage(channelId, buildPollEmbed(poll, tally), {
+            text: text || '',
+            roleIds: Array.isArray(roleIds) ? roleIds : [],
+            pingEveryone: !!pingEveryone,
+            components: buildPollComponents(poll)
+        });
+        if (!sent) {
+            return res.status(500).json({ error: 'Konnte nicht in den Channel posten.' });
+        }
+
+        const announcements = [
+            ...(Array.isArray(poll.announcements) ? poll.announcements : []),
+            { channelId: sent.channelId, messageId: sent.messageId }
+        ].slice(-MAX_TRACKED_ANNOUNCEMENTS);
+        await updateDoc(doc(db, 'polls', poll.id), { announcements });
+        await addAuditLog('ANNOUNCE_POLL', req.session.user.id, `Announced poll "${poll.title}"`, poll.id);
+        res.json({ success: true, message: 'Abstimmung im Discord-Channel gepostet!' });
+    } catch (err) {
+        console.error('Announce poll error:', err);
+        res.status(500).json({ error: 'Fehler beim Posten der Abstimmung' });
+    }
+});
+
+/**
+ * DELETE /api/admin/polls/:id — Delete a date poll with its votes
+ */
+router.delete('/polls/:id', async (req, res) => {
+    try {
+        const poll = await loadPoll(req.params.id);
+        const result = await deletePoll(req.params.id);
+        if (!result.ok) {
+            return res.status(result.httpStatus).json({ error: result.error });
+        }
+        await addAuditLog('DELETE_POLL', req.session.user.id, `Deleted poll "${poll ? poll.title : req.params.id}"`, req.params.id);
+        res.json({ success: true });
+    } catch (err) {
+        console.error('Delete poll error:', err);
+        res.status(500).json({ error: 'Fehler beim Löschen der Abstimmung' });
+    }
+});
+
 /**
  * GET /api/admin/bot-messages — Get message templates
  */
@@ -965,7 +1127,9 @@ router.delete('/reset', async (req, res) => {
             users: 'users',
             registrations: 'registrations',
             comments: 'comments',
-            auditLogs: 'auditLogs'
+            auditLogs: 'auditLogs',
+            polls: 'polls',
+            pollVotes: 'pollVotes'
         };
 
         for (const target of targets) {

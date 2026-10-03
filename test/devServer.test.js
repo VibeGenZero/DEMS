@@ -410,6 +410,79 @@ test('re-accepting a rejected registration does not silently overbook its old sl
     assert.equal(body.warning, 'Slot „Tank“ ist jetzt überbucht.');
 });
 
+// ── Date polls ──────────────────────────────────────────────────────────
+
+/** ISO date `days` from now at `hour` UTC. */
+function futureDate(days, hour = 18) {
+    const date = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
+    date.setUTCHours(hour, 0, 0, 0);
+    return date.toISOString();
+}
+
+/** Create a date poll with two dates; returns the API response. */
+async function createPollViaApi(admin, title, fields = {}) {
+    const res = await admin.send('POST', '/api/admin/polls', {
+        title, description: 'Wann passt es euch?',
+        options: [{ startDate: futureDate(8) }, { startDate: futureDate(9) }],
+        ...fields
+    });
+    const body = await res.json();
+    assert.equal(res.status, 200, JSON.stringify(body));
+    return body;
+}
+
+test('admins create date polls', async () => {
+    const admin = await loginAs('admin');
+    const poll = await createPollViaApi(admin, 'Neue Abstimmung');
+    assert.equal(poll.status, 'open');
+    assert.equal(poll.options.length, 2);
+    assert.ok(poll.options.every(option => /^[0-9a-f]{8}$/.test(option.id)));
+    assert.equal(poll.createdBy, personaById('admin').userId);
+});
+
+test('invalid date polls are refused with a German message', async () => {
+    const admin = await loginAs('admin');
+    const res = await admin.send('POST', '/api/admin/polls', { title: 'Zu wenig', options: [{ startDate: futureDate(8) }] });
+    assert.equal(res.status, 400);
+    assert.equal((await res.json()).error, 'Eine Abstimmung braucht 2–10 Termine.');
+});
+
+test('posting a poll to Discord is logged', async () => {
+    const admin = await loginAs('admin');
+    const poll = await createPollViaApi(admin, 'Poster-Abstimmung');
+    const res = await admin.send('POST', `/api/admin/polls/${poll.id}/announce`, { text: 'Stimmt ab, Leute!' });
+    assert.equal(res.status, 200);
+    await server.waitForOutput('Stimmt ab, Leute!');
+});
+
+test('a poll can only be turned into an event once', async () => {
+    const admin = await loginAs('admin');
+    const poll = await createPollViaApi(admin, 'Event-Abstimmung');
+    const [first] = poll.options;
+    const body = { title: 'Aus der Abstimmung', status: 'active', startDate: first.startDate, fromPoll: { pollId: poll.id, optionId: first.id } };
+
+    const created = await admin.send('POST', '/api/admin/events', body);
+    assert.equal(created.status, 200);
+    assert.equal((await created.json()).sourcePollId, poll.id);
+
+    const again = await admin.send('POST', '/api/admin/events', body);
+    assert.equal(again.status, 400);
+    assert.equal((await again.json()).error, 'Diese Abstimmung ist bereits entschieden.');
+
+    const other = await createPollViaApi(admin, 'Falscher Termin');
+    const wrong = await admin.send('POST', '/api/admin/events', { ...body, fromPoll: { pollId: other.id, optionId: 'nope' } });
+    assert.equal(wrong.status, 400);
+    assert.equal((await wrong.json()).error, 'Termin nicht gefunden');
+});
+
+test('admins close and delete polls', async () => {
+    const admin = await loginAs('admin');
+    const poll = await createPollViaApi(admin, 'Weg damit');
+    assert.equal((await admin.send('POST', `/api/admin/polls/${poll.id}/close`)).status, 200);
+    assert.equal((await admin.send('DELETE', `/api/admin/polls/${poll.id}`)).status, 200);
+    assert.equal((await admin.send('DELETE', `/api/admin/polls/${poll.id}`)).status, 404);
+});
+
 // Keep this test last -> it deletes the newbie persona's account
 test('deleting an account lets the waitlist move up', async () => {
     const admin = await loginAs('admin');
