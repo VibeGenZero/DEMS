@@ -1552,6 +1552,7 @@ function renderPollDetail(poll) {
             <div id="poll-admin-bar"></div>
         </div>
         <div class="poll-options">${poll.tally.options.map(entry => renderPollOptionRow(poll, entry)).join('')}</div>`;
+    renderPollAdminBar(poll);
 }
 
 function renderPollOptionRow(poll, entry) {
@@ -1615,6 +1616,266 @@ async function setPollVote(optionId, state) {
     } catch {
         showToast('Netzwerkfehler.', 'danger');
     }
+}
+
+// ─── Date Polls (admin) ──────────────────────────
+let pendingPollDecision = null;
+let pollDeadlinePicker = null;
+const POLL_PICKER_CONFIG = { enableTime: true, dateFormat: 'Y-m-d H:i', time_24hr: true, locale: 'de' };
+
+function showConfirmDialog(message, confirmLabel = 'Bestätigen') {
+    return new Promise(resolve => {
+        const modalEl = document.getElementById('confirmModal');
+        const confirmBtn = document.getElementById('confirm-modal-ok');
+        document.getElementById('confirm-modal-text').textContent = message;
+        confirmBtn.textContent = confirmLabel;
+        const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+        let confirmed = false;
+        confirmBtn.onclick = () => { confirmed = true; modal.hide(); };
+        modalEl.addEventListener('hidden.bs.modal', () => resolve(confirmed), { once: true });
+        modal.show();
+    });
+}
+
+async function renderPollRoleCheckboxes(selected, containerId = 'poll-role-checkboxes') {
+    if (!cachedRoles.length) {
+        try {
+            cachedRoles = await (await fetch('/api/admin/roles')).json();
+        } catch {
+            cachedRoles = [];
+        }
+    }
+    document.getElementById(containerId).innerHTML = cachedRoles.map(role => `
+        <label class="badge-pill" style="cursor:pointer;border-color:${escapeHtml(role.color || '')}">
+            <input type="checkbox" value="${escapeHtml(role.id)}"${selected.includes(role.id) ? ' checked' : ''} style="margin-right:4px;"> ${escapeHtml(role.name)}
+        </label>`).join('');
+}
+
+function togglePollRoles() {
+    const restricted = document.getElementById('poll-access').value === 'role-required';
+    document.getElementById('poll-role-area').style.display = restricted ? 'block' : 'none';
+}
+
+async function showPollEditor(pollId = null) {
+    let poll = null;
+    if (pollId) {
+        poll = currentPoll && currentPoll.id === pollId
+            ? currentPoll
+            : await (await fetch(`/api/polls/${encodeURIComponent(pollId)}`)).json();
+    }
+    document.getElementById('poll-edit-id').value = pollId || '';
+    document.getElementById('poll-editor-title').textContent = pollId ? 'Abstimmung bearbeiten' : 'Neue Abstimmung';
+    document.getElementById('poll-title').value = poll ? poll.title : '';
+    document.getElementById('poll-description').value = poll ? poll.description || '' : '';
+    document.getElementById('poll-access').value = poll ? poll.accessMode : 'open';
+    await renderPollRoleCheckboxes(poll ? poll.requiredRoles || [] : []);
+    togglePollRoles();
+
+    document.getElementById('poll-option-rows').innerHTML = '';
+    (poll ? poll.options : [{}, {}]).forEach(option => addPollOptionRow(option));
+
+    if (!pollDeadlinePicker) pollDeadlinePicker = flatpickr('#poll-deadline', POLL_PICKER_CONFIG);
+    pollDeadlinePicker.clear();
+    if (poll && poll.deadline) pollDeadlinePicker.setDate(new Date(poll.deadline));
+
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('pollEditorModal')).show();
+}
+
+function addPollOptionRow(option = {}) {
+    const rows = document.getElementById('poll-option-rows');
+    if (rows.querySelectorAll('.poll-option-row').length >= 10) {
+        showToast('Es sind höchstens 10 Termine möglich.', 'warning');
+        return;
+    }
+    const row = document.createElement('div');
+    row.className = 'poll-option-row';
+    row.dataset.optionId = option.id || '';
+    row.innerHTML = `
+        <input type="text" class="form-control poll-option-start" placeholder="Beginn" aria-label="Beginn">
+        <input type="text" class="form-control poll-option-end" placeholder="Ende (optional)" aria-label="Ende">
+        <button type="button" class="btn btn-sm btn-outline-danger" onclick="this.closest('.poll-option-row').remove()" title="Termin entfernen"><i class="bi bi-trash"></i></button>`;
+    rows.appendChild(row);
+    const startPicker = flatpickr(row.querySelector('.poll-option-start'), POLL_PICKER_CONFIG);
+    const endPicker = flatpickr(row.querySelector('.poll-option-end'), POLL_PICKER_CONFIG);
+    if (option.startDate) startPicker.setDate(new Date(option.startDate));
+    if (option.endDate) endPicker.setDate(new Date(option.endDate));
+}
+
+function collectPollEditor() {
+    const options = [...document.querySelectorAll('#poll-option-rows .poll-option-row')].map(row => {
+        const start = row.querySelector('.poll-option-start')._flatpickr.selectedDates[0];
+        const end = row.querySelector('.poll-option-end')._flatpickr.selectedDates[0];
+        return {
+            id: row.dataset.optionId || undefined,
+            startDate: start ? start.toISOString() : '',
+            endDate: end ? end.toISOString() : ''
+        };
+    });
+    const deadline = pollDeadlinePicker && pollDeadlinePicker.selectedDates[0];
+    const accessMode = document.getElementById('poll-access').value;
+    return {
+        title: document.getElementById('poll-title').value,
+        description: document.getElementById('poll-description').value,
+        options,
+        deadline: deadline ? deadline.toISOString() : '',
+        accessMode,
+        requiredRoles: accessMode === 'role-required'
+            ? [...document.querySelectorAll('#poll-role-checkboxes input:checked')].map(cb => cb.value)
+            : []
+    };
+}
+
+async function savePoll() {
+    const pollId = document.getElementById('poll-edit-id').value;
+    try {
+        const res = await fetch(pollId ? `/api/admin/polls/${encodeURIComponent(pollId)}` : '/api/admin/polls', {
+            method: pollId ? 'PUT' : 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrfToken },
+            body: JSON.stringify(collectPollEditor())
+        });
+        const result = await res.json();
+        if (!res.ok) {
+            showToast(result.error || 'Abstimmung konnte nicht gespeichert werden.', 'danger');
+            return;
+        }
+        bootstrap.Modal.getInstance(document.getElementById('pollEditorModal')).hide();
+        showToast(pollId ? 'Abstimmung gespeichert!' : 'Abstimmung erstellt!', 'success');
+        if (pollId) {
+            showPollDetail(result.id);
+        } else {
+            navigateTo(`poll/${result.id}`);
+        }
+    } catch {
+        showToast('Netzwerkfehler.', 'danger');
+    }
+}
+
+function renderPollAdminBar(poll) {
+    const bar = document.getElementById('poll-admin-bar');
+    if (!bar) return;
+    if (!currentUser || !currentUser.isAdmin) {
+        bar.innerHTML = '';
+        return;
+    }
+    const id = escapeHtml(poll.id);
+    const button = (cls, handler, icon, label) =>
+        `<button class="btn btn-sm ${cls}" data-poll-id="${id}" onclick="${handler}(this.dataset.pollId)"><i class="bi ${icon} me-1"></i>${label}</button>`;
+    const buttons = [button('btn-outline-light', 'showPollAnnounceDialog', 'bi-discord', 'In Discord posten')];
+    if (poll.status === 'open') {
+        buttons.push(button('btn-outline-light', 'showPollEditor', 'bi-pencil', 'Bearbeiten'));
+        buttons.push(button('btn-outline-light', 'closePollFromUi', 'bi-lock', 'Abstimmung beenden'));
+    }
+    if (poll.status !== 'decided') {
+        buttons.push(button('btn-accent', 'showPollDecideDialog', 'bi-calendar-plus', 'Event erstellen'));
+    }
+    buttons.push(button('btn-outline-danger', 'deletePollFromUi', 'bi-trash', 'Löschen'));
+    bar.innerHTML = `<div class="poll-admin-bar">${buttons.join('')}</div>`;
+}
+
+async function showPollAnnounceDialog(pollId) {
+    document.getElementById('poll-announce-id').value = pollId;
+    document.getElementById('poll-announce-text').value = '';
+    document.getElementById('poll-announce-everyone').checked = false;
+    await renderPollRoleCheckboxes([], 'poll-announce-roles');
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('pollAnnounceModal')).show();
+}
+
+async function sendPollAnnouncement() {
+    const pollId = document.getElementById('poll-announce-id').value;
+    try {
+        const res = await fetch(`/api/admin/polls/${encodeURIComponent(pollId)}/announce`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrfToken },
+            body: JSON.stringify({
+                text: document.getElementById('poll-announce-text').value,
+                roleIds: [...document.querySelectorAll('#poll-announce-roles input:checked')].map(cb => cb.value),
+                pingEveryone: document.getElementById('poll-announce-everyone').checked
+            })
+        });
+        const result = await res.json();
+        if (!res.ok) {
+            showToast(result.error || 'Abstimmung konnte nicht gepostet werden.', 'danger');
+            return;
+        }
+        bootstrap.Modal.getInstance(document.getElementById('pollAnnounceModal')).hide();
+        showToast(result.message || 'Gepostet!', 'success');
+    } catch {
+        showToast('Netzwerkfehler.', 'danger');
+    }
+}
+
+async function closePollFromUi(pollId) {
+    if (!await showConfirmDialog('Abstimmung jetzt beenden? Danach sind keine Stimmen mehr möglich.', 'Beenden')) return;
+    try {
+        const res = await fetch(`/api/admin/polls/${encodeURIComponent(pollId)}/close`, {
+            method: 'POST',
+            headers: { 'X-CSRF-TOKEN': csrfToken }
+        });
+        const result = await res.json();
+        if (!res.ok) {
+            showToast(result.error || 'Abstimmung konnte nicht beendet werden.', 'danger');
+            return;
+        }
+        showToast('Abstimmung beendet.', 'success');
+        showPollDetail(pollId);
+    } catch {
+        showToast('Netzwerkfehler.', 'danger');
+    }
+}
+
+async function deletePollFromUi(pollId) {
+    if (!await showConfirmDialog('Abstimmung mit allen Stimmen löschen? Das lässt sich nicht rückgängig machen.', 'Löschen')) return;
+    try {
+        const res = await fetch(`/api/admin/polls/${encodeURIComponent(pollId)}`, {
+            method: 'DELETE',
+            headers: { 'X-CSRF-TOKEN': csrfToken }
+        });
+        const result = await res.json();
+        if (!res.ok) {
+            showToast(result.error || 'Abstimmung konnte nicht gelöscht werden.', 'danger');
+            return;
+        }
+        showToast('Abstimmung gelöscht.', 'success');
+        navigateTo('polls');
+    } catch {
+        showToast('Netzwerkfehler.', 'danger');
+    }
+}
+
+function showPollDecideDialog(pollId) {
+    const poll = currentPoll;
+    if (!poll || poll.id !== pollId) return;
+    const preselected = poll.favoriteOptionId || poll.options[0].id;
+    document.getElementById('poll-decide-options').innerHTML = poll.tally.options.map(entry => {
+        const option = poll.options.find(candidate => candidate.id === entry.optionId);
+        return `
+            <label class="poll-decide-option">
+                <input class="form-check-input me-2" type="radio" name="poll-decide" value="${escapeHtml(entry.optionId)}"${entry.optionId === preselected ? ' checked' : ''}>
+                <span>${escapeHtml(formatPollOptionLabel(option))}</span>
+                <span class="text-secondary ms-auto">✅ ${entry.yes} · 🤔 ${entry.maybe}</span>
+            </label>`;
+    }).join('');
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('pollDecideModal')).show();
+}
+
+async function startEventFromPoll() {
+    const poll = currentPoll;
+    const selected = document.querySelector('input[name="poll-decide"]:checked');
+    if (!poll || !selected) return;
+    const option = poll.options.find(candidate => candidate.id === selected.value);
+    bootstrap.Modal.getInstance(document.getElementById('pollDecideModal')).hide();
+
+    await showCreateEventModal();
+    document.getElementById('event-title').value = poll.title;
+    if (descriptionEditor) descriptionEditor.value(poll.description || '');
+    // The date pickers are created when step 2 is shown for the first time
+    wizardGoTo(2);
+    startDatePicker.setDate(new Date(option.startDate));
+    if (option.endDate) endDatePicker.setDate(new Date(option.endDate));
+    wizardGoTo(1);
+
+    pendingPollDecision = { pollId: poll.id, optionId: option.id };
+    showToast('Termin übernommen – richte das Event ein und speichere es.', 'info');
 }
 
 // ─── Check-in System ─────────────────────────────
@@ -3124,6 +3385,7 @@ async function performSystemReset() {
     if (document.getElementById('reset-registrations').checked) targets.push('registrations');
     if (document.getElementById('reset-comments').checked) targets.push('comments');
     if (document.getElementById('reset-auditLogs').checked) targets.push('auditLogs');
+    if (document.getElementById('reset-polls').checked) targets.push('polls', 'pollVotes');
     if (document.getElementById('reset-users').checked) targets.push('users');
 
     if (targets.length === 0) {
@@ -3825,6 +4087,7 @@ function wizardBack() {
 
 // ─── Event CRUD ──────────────────────────────────
 async function showCreateEventModal() {
+    pendingPollDecision = null;
     document.getElementById('eventModalTitle').textContent = 'Neues Event erstellen';
     document.getElementById('event-edit-id').value = '';
     document.getElementById('event-title').value = '';
@@ -3910,6 +4173,7 @@ function updateBannerPreview() {
 }
 
 async function editEvent(eventId) {
+    pendingPollDecision = null;
     try {
         const res = await fetch(`/api/events/${eventId}?status=all`);
         const event = await res.json();
@@ -4056,6 +4320,7 @@ async function saveEvent() {
         },
         allowGuests: document.getElementById('event-allow-guests').checked,
         slots: getSlotsFromEditor(),
+        fromPoll: pendingPollDecision || undefined,
         customBotMessages: {
             registration: document.getElementById('event-msg-registration').value,
             accepted: document.getElementById('event-msg-accepted').value,
@@ -4090,6 +4355,17 @@ async function saveEvent() {
             showToast(editId ? 'Event aktualisiert!' : 'Event erstellt!', 'success');
             loadAdminEvents();
             loadAdminStats();
+            if (!editId && pendingPollDecision) {
+                const decidedPollId = pendingPollDecision.pollId;
+                pendingPollDecision = null;
+                showToast('Abstimmung entschieden – alle Abstimmenden bekommen eine DM.', 'success');
+                // Usually started from the poll page -> the same hash does not fire hashchange
+                if (window.location.hash === `#poll/${decidedPollId}`) {
+                    showPollDetail(decidedPollId);
+                } else {
+                    navigateTo(`poll/${decidedPollId}`);
+                }
+            }
         } else {
             const err = await res.json();
             showToast(err.error || 'Fehler', 'danger');

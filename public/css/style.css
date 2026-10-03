@@ -3598,3 +3598,48 @@ body {
     flex: 1;
   }
 }
+
+.poll-admin-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.poll-option-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.poll-option-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+@media (max-width: 576px) {
+  .poll-option-row {
+    grid-template-columns: 1fr auto;
+  }
+
+  .poll-option-row .poll-option-end {
+    grid-column: 1 / 2;
+  }
+}
+
+.poll-decide-option {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 0.8rem;
+  border-radius: var(--radius);
+  border: 1px solid var(--border-subtle);
+  cursor: pointer;
+}
+
+.poll-decide-option:has(input:checked) {
+  border-color: var(--accent);
+  background: rgba(139, 92, 246, 0.1);
+}
