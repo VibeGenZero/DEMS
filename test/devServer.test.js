@@ -506,7 +506,28 @@ test('members vote on the web and see the tally', async () => {
     assert.equal(raiderList.find(item => item.id === poll.id).myVoteStatus, 'voted');
 });
 
+test('fast per-date clicks on the web keep every change', async () => {
+    const admin = await loginAs('admin');
+    const poll = await createPollViaApi(admin, 'Klick-Abstimmung');
+    const [first, second] = poll.options;
+    const raider = await loginAs('raider');
+    const url = `/api/polls/${poll.id}/vote`;
+
+    const responses = await Promise.all([
+        raider.send('PUT', url, { optionId: first.id, state: 'yes' }),
+        raider.send('PUT', url, { optionId: second.id, state: 'maybe' })
+    ]);
+    assert.deepEqual(responses.map(res => res.status), [200, 200]);
+    const stored = await (await raider.request(`/api/polls/${poll.id}`)).json();
+    assert.deepEqual(stored.myVote, { yes: [first.id], maybe: [second.id] });
+
+    const invalid = await raider.send('PUT', url, { optionId: first.id, state: 'egal' });
+    assert.equal(invalid.status, 400);
+    assert.equal((await invalid.json()).error, 'Ungültige Auswahl');
+});
+
 test('role-restricted polls refuse other members', async () => {
+
     const admin = await loginAs('admin');
     const poll = await createPollViaApi(admin, 'Raid-Abstimmung', { accessMode: 'role-required', requiredRoles: [ROLE_ID.RAID_TEAM] });
     const member = await loginAs('member');

@@ -16,4 +16,4 @@ see_also: [date-polls, api-index]
 |---|---|---|
 | GET | `/` | all polls: open first (by deadline), then closed/decided newest first; `{ id, title, status, deadline, optionCount, voterCount, favorite, myVoteStatus, canVote, eventId, createdAt }` |
 | GET | `/:id` | poll without `announcements`, effective `status`, `tally` (names/avatars), `favoriteOptionId`, `myVote`, `canVote`, `isOpen`; 404 when missing |
-| PUT | `/:id/vote` | `checkRegistrationAllowed`; body `{ yes, maybe }` → `savePollVote` → same shape as `GET /:id`; 400 closed, 403 role, 404 missing |
+| PUT | `/:id/vote` | `checkRegistrationAllowed`; body `{ optionId, state }` changes one date to `yes`, `maybe` or `no` (merged into the stored vote under the poll lock — the website sends this, so fast clicks keep each other; 400 `Ungültige Auswahl` for another state) or `{ yes, maybe }` replaces the whole vote → `savePollVote` → same shape as `GET /:id`; 400 closed, 403 role, 404 missing |

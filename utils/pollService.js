@@ -181,7 +181,29 @@ function normalizeVote(options, raw) {
 }
 
 /**
+ * Answers a member can give for one date.
+ */
+const VOTE_STATES = ['yes', 'maybe', 'no'];
+
+/**
+ * Change the answer for one date and keep every other date as it is.
+ *
+ * @param {{ yes: string[], maybe: string[] }} current -> The stored vote.
+ * @param {string} optionId -> The changed date.
+ * @param {string} state -> One of `VOTE_STATES`.
+ * @returns {{ yes: string[], maybe: string[] }} -> The new vote, not yet normalized.
+ */
+function applyVoteChange(current, optionId, state) {
+    const yes = (current.yes || []).filter(id => id !== optionId);
+    const maybe = (current.maybe || []).filter(id => id !== optionId);
+    if (state === 'yes') yes.push(optionId);
+    if (state === 'maybe') maybe.push(optionId);
+    return { yes, maybe };
+}
+
+/**
  * Whether votes are still accepted.
+
  *
  * @param {Object} poll -> The poll.
  * @param {Date} [now] -> Reference time.
@@ -276,7 +298,9 @@ module.exports = {
     MIN_OPTIONS,
     MAX_OPTIONS,
     normalizePollInput,
+    VOTE_STATES,
     normalizeVote,
+    applyVoteChange,
     isPollOpen,
     effectivePollStatus,
     canVote,

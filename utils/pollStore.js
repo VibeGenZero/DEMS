@@ -104,10 +104,11 @@ async function loadUserVote(pollId, userId) {
  * @param {Object} params.user -> `{ id, displayName, roles }`.
  * @param {string[]} [params.yes] -> Dates that fit.
  * @param {string[]} [params.maybe] -> Dates that fit if needed.
+ * @param {Function} [params.update] -> `(stored) => ({ yes, maybe })` -> runs under the lock on the stored vote and replaces `yes`/`maybe`.
  * @param {Date} [params.now] -> Reference time.
  * @returns {Promise<Object>} -> `{ ok: true, vote }` or a failure.
  */
-async function savePollVote({ pollId, user, yes = [], maybe = [], now = new Date() }) {
+async function savePollVote({ pollId, user, yes = [], maybe = [], update = null, now = new Date() }) {
     const outcome = await withEventLock(lockKey(pollId), async () => {
         const poll = await loadPoll(pollId);
         if (!poll) return pollFailure(POLL_ERROR.NOT_FOUND, 'Abstimmung nicht gefunden');
@@ -116,7 +117,9 @@ async function savePollVote({ pollId, user, yes = [], maybe = [], now = new Date
             return pollFailure(POLL_ERROR.MISSING_ROLE, 'Du hast nicht die erforderliche Rolle für diese Abstimmung.');
         }
 
-        const vote = normalizeVote(poll.options, { yes, maybe });
+        // A change read under the lock -> parallel clicks of the same member keep each other
+        const raw = update ? update(await loadUserVote(pollId, user.id)) : { yes, maybe };
+        const vote = normalizeVote(poll.options, raw);
         const voteRef = doc(db, 'pollVotes', voteDocId(pollId, user.id));
         if (vote.yes.length === 0 && vote.maybe.length === 0) {
             await deleteDoc(voteRef);

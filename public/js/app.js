@@ -1593,23 +1593,26 @@ function renderPollOptionRow(poll, entry) {
         </div>`;
 }
 
+let pollVoteSequence = 0;
+
 async function setPollVote(optionId, state) {
     if (!currentPoll) return;
-    const yes = currentPoll.myVote.yes.filter(id => id !== optionId);
-    const maybe = currentPoll.myVote.maybe.filter(id => id !== optionId);
-    if (state === 'yes') yes.push(optionId);
-    if (state === 'maybe') maybe.push(optionId);
+    const pollId = currentPoll.id;
+    const sequence = ++pollVoteSequence;
     try {
-        const res = await fetch(`/api/polls/${encodeURIComponent(currentPoll.id)}/vote`, {
+        // Only the clicked date is sent -> the server merges it, so fast clicks keep each other
+        const res = await fetch(`/api/polls/${encodeURIComponent(pollId)}/vote`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrfToken },
-            body: JSON.stringify({ yes, maybe })
+            body: JSON.stringify({ optionId, state })
         });
         const result = await res.json();
         if (!res.ok) {
             showToast(result.error || 'Stimme konnte nicht gespeichert werden.', 'danger');
             return;
         }
+        // An older, slower answer must not paint over a newer click
+        if (sequence !== pollVoteSequence || currentPoll?.id !== pollId) return;
         currentPoll = result;
         renderPollDetail(currentPoll);
         refreshPollBadge();

@@ -1908,20 +1908,19 @@ async function handlePollVoteSelect(interaction, pollId, kind) {
     if (await isRegistrationBlocked()) {
         return interaction.editReply({ content: '❌ Abstimmungen sind wegen Wartungsarbeiten vorübergehend deaktiviert.', components: [] });
     }
-    const { loadPoll, loadUserVote, savePollVote } = require('./utils/pollStore');
-    const current = await loadUserVote(pollId, interaction.user.id);
+    const { loadPoll, savePollVote } = require('./utils/pollStore');
     const picked = Array.isArray(interaction.values) ? interaction.values : [];
-    const next = kind === 'yes'
-        ? { yes: picked, maybe: current.maybe.filter(id => !picked.includes(id)) }
-        : { yes: current.yes.filter(id => !picked.includes(id)), maybe: picked };
+    // The changed list wins; merged under the poll lock -> a parallel web click is not lost
+    const merge = (stored) => (kind === 'yes'
+        ? { yes: picked, maybe: stored.maybe.filter(id => !picked.includes(id)) }
+        : { yes: stored.yes.filter(id => !picked.includes(id)), maybe: picked });
 
     const roleIds = await resolveInteractionRoles(interaction);
     const displayName = interaction.member?.displayName || interaction.user.globalName || interaction.user.username;
     const result = await savePollVote({
         pollId,
         user: { id: interaction.user.id, displayName, roles: roleIds },
-        yes: next.yes,
-        maybe: next.maybe
+        update: merge
     });
     if (!result.ok) {
         return interaction.editReply({ content: `❌ ${result.error}`, components: [] });

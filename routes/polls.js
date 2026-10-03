@@ -4,7 +4,7 @@ const { db, collection, getDocs } = require('../firebaseAdmin');
 const { requireAuth } = require('../middleware/auth');
 const { checkRegistrationAllowed } = require('../middleware/maintenance');
 const {
-    tallyPoll, getFavoriteOptionId, isPollOpen, effectivePollStatus, canVote, normalizeVote
+    tallyPoll, getFavoriteOptionId, isPollOpen, effectivePollStatus, canVote, normalizeVote, VOTE_STATES, applyVoteChange
 } = require('../utils/pollService');
 const { loadPoll, loadPollVotes, savePollVote } = require('../utils/pollStore');
 const { debugLog } = require('../utils/debugLog');
@@ -121,15 +121,29 @@ router.get('/:id', async (req, res) => {
 
 /**
  * PUT /api/polls/:id/vote — Store the own vote
+ * Body `{ optionId, state }` changes one date, `{ yes, maybe }` replaces the whole vote.
  */
 router.put('/:id/vote', checkRegistrationAllowed, async (req, res) => {
     try {
         const user = req.session.user;
+        const { optionId, state } = req.body;
+        let change;
+        if (typeof optionId === 'string') {
+            // One date at a time is merged into the stored vote -> fast clicks keep each other
+            if (!VOTE_STATES.includes(state)) {
+                return res.status(400).json({ error: 'Ungültige Auswahl' });
+            }
+            change = { update: stored => applyVoteChange(stored, optionId, state) };
+        } else {
+            change = {
+                yes: Array.isArray(req.body.yes) ? req.body.yes : [],
+                maybe: Array.isArray(req.body.maybe) ? req.body.maybe : []
+            };
+        }
         const result = await savePollVote({
             pollId: req.params.id,
             user: { id: user.id, displayName: user.displayName, roles: user.roles },
-            yes: Array.isArray(req.body.yes) ? req.body.yes : [],
-            maybe: Array.isArray(req.body.maybe) ? req.body.maybe : []
+            ...change
         });
         if (!result.ok) {
             return res.status(result.httpStatus).json({ error: result.error });

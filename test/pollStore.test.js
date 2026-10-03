@@ -16,6 +16,7 @@ const {
     loadPoll, loadPollVotes, loadUserVote, savePollVote, closePoll, validateDecision, decidePoll, decidePollWithEvent,
     updatePoll, closeExpiredPolls, deletePoll, deleteUserPollVotes
 } = require('../utils/pollStore');
+const { applyVoteChange } = require('../utils/pollService');
 
 after(async () => {
     await bot.client.destroy();
@@ -183,4 +184,12 @@ test('a failing event creation leaves the poll undecided', async () => {
         /Event kaputt/
     );
     assert.equal((await loadPoll(pollId)).status, 'open');
+});
+
+test('per-date changes at the same time keep each other', async () => {
+    const pollId = await createPoll();
+    const voter = user('Ida');
+    const change = (optionId, state) => savePollVote({ pollId, user: voter, update: current => applyVoteChange(current, optionId, state) });
+    await Promise.all([change(A.id, 'yes'), change(B.id, 'maybe')]);
+    assert.deepEqual(await loadUserVote(pollId, voter.id), { yes: [A.id], maybe: [B.id] });
 });

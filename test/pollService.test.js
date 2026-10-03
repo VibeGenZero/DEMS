@@ -2,7 +2,7 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const {
     POLL_STATUS, normalizePollInput, normalizeVote, isPollOpen, canVote, tallyPoll,
-    rankOptions, getFavoriteOptionId, formatPollOption, effectivePollStatus
+    rankOptions, getFavoriteOptionId, formatPollOption, effectivePollStatus, applyVoteChange
 } = require('../utils/pollService');
 
 const NOW = new Date('2026-10-03T10:00:00.000Z');
@@ -123,4 +123,12 @@ test('dates are formatted in German with the event time zone', () => {
     assert.equal(formatPollOption(A), 'So, 11.10. · 20:00–22:00');
     assert.equal(formatPollOption(B), 'Mo, 12.10. · 18:00');
     assert.equal(formatPollOption({ startDate: A.startDate, endDate: '2026-10-12T08:00:00.000Z' }), 'So, 11.10. · 20:00 – 12.10. 10:00');
+});
+
+test('a per-date change moves only that date', () => {
+    const current = { yes: [A.id], maybe: [B.id] };
+    assert.deepEqual(applyVoteChange(current, B.id, 'yes'), { yes: [A.id, B.id], maybe: [] });
+    assert.deepEqual(applyVoteChange(current, A.id, 'maybe'), { yes: [], maybe: [B.id, A.id] });
+    assert.deepEqual(applyVoteChange(current, A.id, 'no'), { yes: [], maybe: [B.id] });
+    assert.deepEqual(current, { yes: [A.id], maybe: [B.id] });
 });
