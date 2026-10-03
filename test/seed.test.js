@@ -11,7 +11,7 @@ process.env.DEV_MOCK = 'true';
 process.env.DEV_SQLITE_PATH = path.join(tmpDir, 'seed.sqlite');
 
 const { seedIfEmpty, resetAndSeed } = require('../dev/seed');
-const { EVENT_ID, SERIES_EVENT_IDS, CHECKIN_CODE } = require('../dev/seedData');
+const { EVENT_ID, SERIES_EVENT_IDS, CHECKIN_CODE, POLL_ID } = require('../dev/seedData');
 const { PERSONAS } = require('../dev/mockGuild');
 const { db, collection, doc, getDoc, getDocs, setDoc } = require('../firebaseAdmin');
 
@@ -21,6 +21,8 @@ const EXPECTED_COUNTS = {
     registrations: 32,
     comments: 6,
     auditLogs: 10,
+    polls: 2,
+    pollVotes: 5,
     botMessages: 1,
     botSettings: 1,
     maintenanceSettings: 1
@@ -83,12 +85,36 @@ test('the seed covers the scenarios of the spec', async () => {
     assert.ok(registrations.some(registration => registration.checkedIn));
 });
 
+test('the seed has an open poll for the raiders and a decided one', async () => {
+    const open = (await getDoc(doc(db, 'polls', POLL_ID.OPEN))).data();
+    assert.equal(open.status, 'open');
+    assert.equal(open.options.length, 3);
+    assert.ok(new Date(open.deadline) > new Date());
+    const raider = PERSONAS.find(persona => persona.id === 'raider');
+    assert.equal((await getDoc(doc(db, 'pollVotes', `${POLL_ID.OPEN}_${raider.userId}`))).exists(), false);
+
+    const decided = (await getDoc(doc(db, 'polls', POLL_ID.DECIDED))).data();
+    assert.deepEqual([decided.status, decided.eventId], ['decided', EVENT_ID.ARCHIVED]);
+    assert.equal((await getEvent(EVENT_ID.ARCHIVED)).sourcePollId, POLL_ID.DECIDED);
+});
+
 test('the full event is exactly full', async () => {
     const full = await getEvent(EVENT_ID.FULL);
     const registrations = await registrationsOf(EVENT_ID.FULL);
     const occupied = registrations.filter(registration => ['accepted', 'pending'].includes(registration.status)).length;
     assert.equal(occupied, full.maxParticipants);
     assert.ok(registrations.some(registration => registration.status === 'waitlisted'));
+});
+
+test('the raid event has a line-up with a fallback role and a waitlist', async () => {
+    const raid = await getEvent(EVENT_ID.ROLE);
+    assert.deepEqual(raid.slots.map(slot => slot.id), ['tank', 'heal', 'dps']);
+    assert.equal(raid.maxParticipants, 6);
+    assert.equal(raid.allowGuests, false);
+
+    const registrations = await registrationsOf(EVENT_ID.ROLE);
+    assert.ok(registrations.some(r => r.status === 'accepted' && r.slotId !== r.preferredSlotId));
+    assert.ok(registrations.some(r => r.status === 'waitlisted' && r.slotId === null && r.preferredSlotId === 'tank'));
 });
 
 test('the newcomer persona has no profile yet', async () => {

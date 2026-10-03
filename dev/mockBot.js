@@ -9,6 +9,7 @@
 const crypto = require('crypto');
 const { db, doc, getDoc, updateDoc } = require('../firebaseAdmin');
 const { GUILD, ROLES, CHANNELS, buildScheduledEvents, findMember } = require('./mockGuild');
+const { buildEventUrl } = require('../utils/eventUrl');
 
 const LOG_PREFIX = '\x1b[35m[MOCK-DISCORD]\x1b[0m';
 const startedAt = new Date();
@@ -161,6 +162,50 @@ async function sendChannelMessage(channelId, embed, options = {}) {
         embed: toPayload(embed),
         components: (options.components || []).map(toPayload)
     });
+    return { channelId, messageId: fakeSnowflake() };
+}
+
+async function refreshEventAnnouncements(eventId) {
+    const snap = await getDoc(doc(db, 'events', eventId));
+    if (!snap.exists()) return false;
+
+    const event = snap.data();
+    const announcements = Array.isArray(event.announcements) ? event.announcements : [];
+    if (announcements.length === 0) return false;
+
+    // Required lazily -> bot.js merges this module into its own exports
+    const { buildEventEmbed, buildEventComponents } = require('../bot');
+    const { loadEventRoster } = require('../utils/eventUtils');
+    const roster = await loadEventRoster(eventId, event);
+    mockLog(`Ankündigung von "${event.title}" aktualisiert (${announcements.length}×)`, {
+        embed: toPayload(buildEventEmbed(event, buildEventUrl(eventId), roster)),
+        components: buildEventComponents(event, eventId, roster).map(toPayload)
+    });
+    return true;
+}
+
+async function refreshPollMessages(pollId) {
+    const { loadPoll, loadPollVotes } = require('../utils/pollStore');
+    const poll = await loadPoll(pollId);
+    if (!poll) return false;
+    const announcements = Array.isArray(poll.announcements) ? poll.announcements : [];
+    if (announcements.length === 0) return false;
+
+    // Required lazily -> bot.js merges this module into its own exports
+    const { buildPollEmbed, buildPollComponents } = require('../bot');
+    const { tallyPoll } = require('../utils/pollService');
+    const tally = tallyPoll(poll, await loadPollVotes(pollId));
+    mockLog(`Abstimmung "${poll.title}" aktualisiert (${announcements.length}×)`, {
+        embed: toPayload(buildPollEmbed(poll, tally)),
+        components: buildPollComponents(poll).map(toPayload)
+    });
+    return true;
+}
+
+async function markPollMessagesDeleted(poll) {
+    const announcements = Array.isArray(poll.announcements) ? poll.announcements : [];
+    if (announcements.length === 0) return false;
+    mockLog(`Abstimmung "${poll.title}" als gelöscht markiert (${announcements.length}×)`);
     return true;
 }
 
@@ -242,6 +287,9 @@ module.exports = {
     getBotStatus,
     sendDM,
     sendChannelMessage,
+    refreshEventAnnouncements,
+    refreshPollMessages,
+    markPollMessagesDeleted,
     sendGuestInvitation,
     assignRole,
     removeRole,

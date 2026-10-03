@@ -15,7 +15,10 @@ see_also: [form-fields, registration-flow, reminders-presence, configuration]
 
 | Feature | Trigger | Implementation |
 |---|---|---|
-| Announcement | admin "Ankündigen" → `POST /api/admin/events/:id/announce` | `sendChannelMessage(DISCORD_ANNOUNCE_CHANNEL_ID, buildEventEmbed(event, link), { text, roleIds, pingEveryone, components: buildEventComponents(event, id) })` |
+| Announcement | admin "Ankündigen" → `POST /api/admin/events/:id/announce` | `sendChannelMessage(DISCORD_ANNOUNCE_CHANNEL_ID, buildEventEmbed(event, link, roster), { text, roleIds, pingEveryone, components: buildEventComponents(event, id, roster) })`; stores `{ channelId, messageId }` in `event.announcements` (max 5) |
+| Live announcement | every registration change → `notifyRegistrationsChanged` (2 s debounce) | `refreshEventAnnouncements` edits the stored messages (line-up, counts, buttons); deleted messages (Discord 10003/10008) are dropped |
+| Date polls | admin "In Discord posten" → `POST /api/admin/polls/:id/announce` | poll embed (tally, 🏆 favorite) + `poll_vote:<pollId>` → private answer with `poll_yes`/`poll_maybe` selects; live refresh via `notifyPollChanged` → `refreshPollMessages`; deleted polls become a notice — see [date-polls](date-polls.md) |
+| Slot buttons | slot events | one button per slot `event_slot:<eventId>:<slotId>` → modal with `alt_slots` + form; registered members get `slot_switch:*` / `slot_leave:*` — see [role-slots](role-slots.md) |
 | Register button + modal | "Anmelden" on an announcement | `handleEventRegisterButton` / `handleEventRegisterModal` → [registration-flow](registration-flow.md), fields → [form-fields](form-fields.md) |
 | Slash commands | `/events`, `/register`, `/unregister` | `registerSlashCommands` (guild commands, on ready); handled in the `interactionCreate` dispatcher |
 | Status DMs | registration created / accepted / rejected / waitlisted / promoted / cancelled | `sendDM` with templates (`parseTemplate`) |
@@ -36,10 +39,11 @@ see_also: [form-fields, registration-flow, reminders-presence, configuration]
 
 ## Announcement buttons
 
-`buildEventComponents(event, id)`: "Anmelden" (`event_register:<id>`, only if `canRegisterViaDiscord(event)`: active and form fits into a modal) + "Zum Event" link button. The admin dialog previews this via `renderAnnounceButtonsPreview` (app.js).
+`buildEventComponents(event, id, roster)`: slot events get one button per slot (5 per row, "(voll)" when full) instead of "Anmelden"; otherwise "Anmelden" (`event_register:<id>`, only if `canRegisterViaDiscord(event)`: active and form fits into a modal) + "Zum Event" link button. The admin dialog previews this via `renderAnnounceButtonsPreview` (app.js).
 
 ## Gotchas
 
 - Without `DISCORD_BOT_TOKEN` the web app runs, but every Discord helper is a no-op (`isReady` false).
 - Every event link in embeds, buttons, DMs and `{event.url}` comes from `buildEventUrl` (`utils/eventUrl.js`) and opens `#event/<id>`. Messages sent before v2.5.1 still contain `#events/<id>`; the SPA router rewrites those.
 - `botSettings.announceChannel` is stored but announcements always use `DISCORD_ANNOUNCE_CHANNEL_ID`.
+- Announcements sent before 2.6.0 have no stored message ID and stay static.

@@ -25,6 +25,11 @@ const EVENT_ID = {
 };
 const SERIES_ID = 'dev-series-training';
 const SERIES_EVENT_IDS = ['dev-event-series-1', 'dev-event-series-2', 'dev-event-series-3'];
+/** Role slots of the raid event. */
+const RAID_SLOT_ID = { TANK: 'tank', HEAL: 'heal', DPS: 'dps' };
+
+/** Date polls of the seed. */
+const POLL_ID = { OPEN: 'dev-poll-raid', DECIDED: 'dev-poll-summer' };
 
 /** Check-in code of the running event. */
 const CHECKIN_CODE = 'DEMO42';
@@ -148,7 +153,13 @@ function buildEvents(clock) {
         [EVENT_ID.ROLE]: buildEvent(clock, {
             title: 'Raid: Schattenfestung',
             description: 'Nur für Mitglieder mit der Rolle **Raid-Team**.',
-            maxParticipants: 10,
+            maxParticipants: 6,
+            allowGuests: false,
+            slots: [
+                { id: RAID_SLOT_ID.TANK, name: 'Tank', emoji: '🛡️', capacity: 1 },
+                { id: RAID_SLOT_ID.HEAL, name: 'Heiler', emoji: '💚', capacity: 2 },
+                { id: RAID_SLOT_ID.DPS, name: 'Schaden', emoji: '⚔️', capacity: 3 }
+            ],
             accessMode: 'role-required',
             requiredRoles: [ROLE_ID.RAID_TEAM],
             startDate: clock.slot(5, 20),
@@ -199,6 +210,7 @@ function buildEvents(clock) {
             startDate: clock.slot(-60, 16),
             endDate: clock.slot(-60, 23),
             category: 'Community',
+            sourcePollId: POLL_ID.DECIDED,
             eventStartNotificationSent: true,
             createdAt: clock.offset(-90 * DAY)
         }),
@@ -307,10 +319,18 @@ function buildRegistrations(clock) {
         entry('full-elif', EVENT_ID.FULL, elif, { status: 'waitlisted', createdAt: clock.offset(-1 * DAY) }),
         entry('full-greta', EVENT_ID.FULL, greta, { status: 'waitlisted', createdAt: clock.offset(-12 * HOUR) }),
 
-        // Role event -> Raid-Team members only
-        entry('role-ben', EVENT_ID.ROLE, ben),
-        entry('role-felix', EVENT_ID.ROLE, felix),
-        entry('role-kira', EVENT_ID.ROLE, kira, { source: 'discord' }),
+        // Raid with role slots -> the tank slot is full, Kira plays her fallback role,
+        // Felix waits for the tank slot; Lena (raider persona) can still pick a role
+        entry('role-ben', EVENT_ID.ROLE, ben, {
+            slotId: RAID_SLOT_ID.TANK, preferredSlotId: RAID_SLOT_ID.TANK, altSlotIds: [], createdAt: clock.offset(-4 * DAY)
+        }),
+        entry('role-kira', EVENT_ID.ROLE, kira, {
+            source: 'discord', slotId: RAID_SLOT_ID.HEAL, preferredSlotId: RAID_SLOT_ID.TANK,
+            altSlotIds: [RAID_SLOT_ID.HEAL], createdAt: clock.offset(-3 * DAY)
+        }),
+        entry('role-felix', EVENT_ID.ROLE, felix, {
+            status: 'waitlisted', slotId: null, preferredSlotId: RAID_SLOT_ID.TANK, altSlotIds: [], createdAt: clock.offset(-2 * DAY)
+        }),
 
         // Workshop -> web-only form
         entry('bigform-chiara', EVENT_ID.BIG_FORM, chiara, {
@@ -447,6 +467,70 @@ function buildSettings(clock) {
  * @param {Date} [now] -> Reference time; all dates are relative to it.
  * @returns {Object} -> `{ [collection]: { [documentId]: data } }`.
  */
+function buildPolls(clock) {
+    const base = {
+        description: '',
+        accessMode: 'open',
+        requiredRoles: [],
+        winnerOptionId: '',
+        eventId: '',
+        announcements: [],
+        createdBy: people.mori.userId
+    };
+    return {
+        // Open -> the raider persona (Lena) has not voted yet and can try it
+        [POLL_ID.OPEN]: {
+            ...base,
+            title: 'Termin für den Herbst-Raid',
+            description: 'Wann habt ihr Zeit für **Schattenfestung (heroisch)**?',
+            status: 'open',
+            accessMode: 'role-required',
+            requiredRoles: [ROLE_ID.RAID_TEAM],
+            // Own answers instead of passt / wenn nötig / passt nicht
+            labels: { yes: 'Bin dabei', maybe: 'Vielleicht', no: 'Kann nicht' },
+            options: [
+                { id: 'raid-a', startDate: clock.slot(7, 20), endDate: clock.slot(7, 23) },
+                { id: 'raid-b', startDate: clock.slot(9, 19), endDate: '' },
+                { id: 'raid-c', startDate: clock.slot(12, 20), endDate: '' }
+            ],
+            deadline: clock.offset(3 * DAY),
+            createdAt: clock.offset(-2 * DAY),
+            updatedAt: clock.offset(-2 * DAY),
+            closedAt: ''
+        },
+        // Decided -> led to the archived summer party
+        [POLL_ID.DECIDED]: {
+            ...base,
+            title: 'Sommerfest-Termin',
+            status: 'decided',
+            options: [
+                { id: 'summer-1', startDate: clock.slot(-60, 16), endDate: clock.slot(-60, 23) },
+                { id: 'summer-2', startDate: clock.slot(-59, 16), endDate: '' }
+            ],
+            deadline: '',
+            winnerOptionId: 'summer-1',
+            eventId: EVENT_ID.ARCHIVED,
+            createdAt: clock.offset(-95 * DAY),
+            updatedAt: clock.offset(-90 * DAY),
+            closedAt: clock.offset(-90 * DAY)
+        }
+    };
+}
+
+function buildPollVotes(clock) {
+    const { ben, kira, felix, lena, tom } = people;
+    const vote = (pollId, person, yes, maybe, daysAgo) => [`${pollId}_${person.userId}`, {
+        pollId, userId: person.userId, userName: person.displayName, yes, maybe, updatedAt: clock.offset(-daysAgo * DAY)
+    }];
+    return Object.fromEntries([
+        vote(POLL_ID.OPEN, ben, ['raid-a', 'raid-b'], [], 2),
+        vote(POLL_ID.OPEN, kira, ['raid-a'], ['raid-c'], 1),
+        vote(POLL_ID.OPEN, felix, ['raid-b'], ['raid-a'], 1),
+        vote(POLL_ID.DECIDED, lena, ['summer-1'], [], 93),
+        vote(POLL_ID.DECIDED, tom, [], ['summer-1'], 92)
+    ]);
+}
+
 function buildSeedData(now = new Date()) {
     const clock = createClock(now);
     return {
@@ -455,8 +539,10 @@ function buildSeedData(now = new Date()) {
         registrations: buildRegistrations(clock),
         comments: buildComments(clock),
         auditLogs: buildAuditLogs(clock),
+        polls: buildPolls(clock),
+        pollVotes: buildPollVotes(clock),
         ...buildSettings(clock)
     };
 }
 
-module.exports = { buildSeedData, EVENT_ID, SERIES_EVENT_IDS, CHECKIN_CODE };
+module.exports = { buildSeedData, EVENT_ID, SERIES_EVENT_IDS, CHECKIN_CODE, RAID_SLOT_ID, POLL_ID };

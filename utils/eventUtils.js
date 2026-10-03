@@ -1,60 +1,169 @@
-const { db, collection, doc, getDocs, addDoc, updateDoc, query, where, orderBy } = require('../firebaseAdmin');
-const { sendDM, assignRole } = require('../bot');
+const { db, collection, doc, getDoc, getDocs, addDoc, updateDoc, query, where } = require('../firebaseAdmin');
+const { sendDM, assignRole, addParticipantToEventChannels } = require('../bot');
+const { pickCapacityPromotions } = require('./capacity');
+const {
+    getSlots, hasSlots, findSlot, formatSlotLabel, pickWaitlistPromotions, buildRoster, normalizeSlots, validateSlotChange
+} = require('./slotService');
+const { withEventLock } = require('./eventLock');
+const { notifyRegistrationsChanged } = require('./announcementRefresh');
 
 /**
- * Promote the oldest waitlisted user when a spot opens
+ * Move waitlisted registrations up while places are free.
+ *
+ * Takes the event lock itself -> code that already holds the lock must use
+ * promoteFromWaitlistLocked() and announcePromotions() instead.
+ *
+ * @param {string} eventId -> The event document ID.
+ * @param {Object} event -> The event document data.
+ * @returns {Promise<Array<Object>>} -> Promotions, empty on errors.
  */
 async function promoteFromWaitlist(eventId, event) {
     try {
-        // Check if there's room
-        if (event.maxParticipants > 0) {
-            const regQ = query(
-                collection(db, 'registrations'),
-                where('eventId', '==', eventId),
-                where('status', 'in', ['pending', 'accepted'])
-            );
-            const regSnap = await getDocs(regQ);
-            if (regSnap.size >= event.maxParticipants) return; // Still full
-        }
-
-        // Find oldest waitlisted (sort in memory to avoid composite index)
-        const waitQ = query(
-            collection(db, 'registrations'),
-            where('eventId', '==', eventId),
-            where('status', '==', 'waitlisted')
-        );
-        const waitSnap = await getDocs(waitQ);
-        if (waitSnap.empty) return;
-
-        // Sort by createdAt in memory
-        const waitDocs = waitSnap.docs.sort((a, b) => {
-            const dateA = a.data().createdAt || '';
-            const dateB = b.data().createdAt || '';
-            return dateA.localeCompare(dateB);
-        });
-
-        const promotedDoc = waitDocs[0];
-        const promoted = promotedDoc.data();
-        const newStatus = event.approvalMode === 'instant' ? 'accepted' : 'pending';
-
-        await updateDoc(doc(db, 'registrations', promotedDoc.id), { status: newStatus });
-
-        if (newStatus === 'accepted') {
-            await sendDM(promoted.userId,
-                `🎉 Ein Platz wurde frei! Du wurdest von der Warteliste für **${event.title}** in die Teilnehmerliste aufgenommen!`
-            );
-            if (event.assignRoleId) {
-                await assignRole(promoted.userId, event.assignRoleId, process.env.DISCORD_GUILD_ID);
-            }
-        } else {
-            await sendDM(promoted.userId,
-                `📋 Ein Platz wurde frei bei **${event.title}**! Deine Anfrage wird jetzt geprüft.`
-            );
-        }
-        console.log(`Promoted user ${promoted.userId} from waitlist for event ${eventId}`);
+        const promotions = await withEventLock(eventId, () => promoteFromWaitlistLocked(eventId, event));
+        await announcePromotions(eventId, event, promotions);
+        return promotions;
     } catch (err) {
         console.error('Waitlist promotion error:', err.message);
+        return [];
     }
+}
+
+/**
+ * Write the waitlist promotions of an event. The caller holds the event lock.
+ *
+ * Slot events fill free slots with the oldest matching entries; normal
+ * events move up everyone whose places (including guests) still fit.
+ *
+ * @param {string} eventId -> The event document ID.
+ * @param {Object} event -> The event document data.
+ * @returns {Promise<Array<Object>>} -> `[{ registrationId, userId, status, slotId }]`.
+ */
+async function promoteFromWaitlistLocked(eventId, event) {
+    const registrations = await loadEventRegistrations(eventId);
+    const picked = hasSlots(event)
+        ? pickWaitlistPromotions(getSlots(event), registrations)
+        : pickCapacityPromotions(event.maxParticipants || 0, registrations)
+            .map(registrationId => ({ registrationId, slotId: null }));
+
+    const status = event.approvalMode === 'instant' ? 'accepted' : 'pending';
+    const promotions = [];
+    for (const { registrationId, slotId } of picked) {
+        await updateDoc(doc(db, 'registrations', registrationId), slotId ? { status, slotId } : { status });
+        const promoted = registrations.find(entry => entry.id === registrationId);
+        promotions.push({ registrationId, userId: promoted.userId, status, slotId });
+    }
+    return promotions;
+}
+
+/**
+ * Tell promoted members about their new place. Call it outside the lock.
+ *
+ * @param {string} eventId -> The event document ID.
+ * @param {Object} event -> The event document data.
+ * @param {Array<Object>} promotions -> Result of promoteFromWaitlistLocked().
+ * @returns {Promise<void>} -> Resolves once every DM was attempted.
+ */
+async function announcePromotions(eventId, event, promotions) {
+    if (promotions.length === 0) return;
+    const slots = getSlots(event);
+
+    for (const promotion of promotions) {
+        const slot = findSlot(slots, promotion.slotId);
+        const slotLine = slot ? `\n🎯 Dein Slot: **${formatSlotLabel(slot)}**` : '';
+        try {
+            if (promotion.status === 'accepted') {
+                await sendDM(promotion.userId,
+                    `🎉 Ein Platz wurde frei! Du wurdest von der Warteliste für **${event.title}** in die Teilnehmerliste aufgenommen!${slotLine}`
+                );
+                if (event.assignRoleId) {
+                    await assignRole(promotion.userId, event.assignRoleId, process.env.DISCORD_GUILD_ID);
+                }
+                if (event.discordChannelId || event.discordTextChannelId) {
+                    await addParticipantToEventChannels(event, promotion.userId);
+                }
+            } else {
+                await sendDM(promotion.userId,
+                    `📋 Ein Platz wurde frei bei **${event.title}**! Deine Anfrage wird jetzt geprüft.${slotLine}`
+                );
+            }
+        } catch (err) {
+            console.error('Promotion notification failed:', err.message);
+        }
+        console.log(`Promoted user ${promotion.userId} from waitlist for event ${eventId}`);
+    }
+
+    notifyRegistrationsChanged(eventId);
+}
+
+/**
+ * Load every registration of an event.
+ *
+ * @param {string} eventId -> The event document ID.
+ * @returns {Promise<Array<Object>>} -> Registrations with their `id`.
+ */
+async function loadEventRegistrations(eventId) {
+    const snapshot = await getDocs(query(collection(db, 'registrations'), where('eventId', '==', eventId)));
+    return snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
+}
+
+/**
+ * Find the registration of one user for an event.
+ *
+ * @param {string} eventId -> The event document ID.
+ * @param {string} userId -> Discord user ID.
+ * @returns {Promise<Object|null>} -> The registration with its `id`, or null.
+ */
+async function findUserRegistration(eventId, userId) {
+    const registrations = await loadEventRegistrations(eventId);
+    return registrations.find(registration => registration.userId === userId) || null;
+}
+
+/**
+ * Load the line-up of an event.
+ *
+ * @param {string} eventId -> The event document ID.
+ * @param {Object} event -> The event document data.
+ * @param {Object} [options] -> Load options.
+ * @param {boolean} [options.withProfiles] -> Also load user profiles for names and avatars.
+ * @returns {Promise<Object>} -> Roster from buildRoster().
+ */
+async function loadEventRoster(eventId, event, { withProfiles = false } = {}) {
+    const registrations = await loadEventRegistrations(eventId);
+    const usersById = {};
+    if (withProfiles) {
+        const usersSnap = await getDocs(collection(db, 'users'));
+        usersSnap.forEach(userDoc => { usersById[userDoc.id] = userDoc.data(); });
+    }
+    return buildRoster(event, registrations, usersById);
+}
+
+/**
+ * Validate new slots and write an event update under the event lock.
+ *
+ * Holding the lock keeps a parallel registration from landing in a slot that
+ * is being removed at the same moment.
+ *
+ * @param {string} eventId -> The event document ID.
+ * @param {*} rawSlots -> Slots from the admin form.
+ * @param {Function} buildUpdates -> `(slots, oldEvent) => fields` to write.
+ * @returns {Promise<Object>} -> `{ ok: true, oldEvent, updates }` or `{ ok: false, error }`.
+ */
+async function saveEventWithSlots(eventId, rawSlots, buildUpdates) {
+    return withEventLock(eventId, async () => {
+        const eventSnap = await getDoc(doc(db, 'events', eventId));
+        const oldEvent = eventSnap.exists() ? eventSnap.data() : {};
+
+        const slotResult = normalizeSlots(rawSlots, getSlots(oldEvent));
+        if (slotResult.error) return { ok: false, error: slotResult.error };
+
+        const registrations = await loadEventRegistrations(eventId);
+        const slotError = validateSlotChange({ oldSlots: getSlots(oldEvent), newSlots: slotResult.slots, registrations });
+        if (slotError) return { ok: false, error: slotError };
+
+        const updates = buildUpdates(slotResult.slots, oldEvent);
+        await updateDoc(doc(db, 'events', eventId), updates);
+        return { ok: true, oldEvent, updates };
+    });
 }
 
 /**
@@ -74,4 +183,13 @@ async function addAuditLog(action, adminId, details, targetId = null) {
     }
 }
 
-module.exports = { promoteFromWaitlist, addAuditLog };
+module.exports = {
+    promoteFromWaitlist,
+    promoteFromWaitlistLocked,
+    announcePromotions,
+    addAuditLog,
+    loadEventRegistrations,
+    findUserRegistration,
+    loadEventRoster,
+    saveEventWithSlots
+};

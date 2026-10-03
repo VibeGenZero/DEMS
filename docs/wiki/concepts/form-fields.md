@@ -27,7 +27,7 @@ Entity answers are produced by `formatEntityAnswer(type, name, id)` (same functi
 
 ## Discord modal rules
 
-- `MODAL_MAX_FIELDS = 5`; Discord allows 5 top-level components per modal.
+- `MODAL_MAX_FIELDS = 5`; Discord allows 5 top-level components per modal. `getModalFieldLimit(event)` returns 4 for slot events with more than one slot (the fallback-role select takes one place).
 - An intro text display (title, date, capacity) is added only when the form has fewer than 5 fields (it counts as a component).
 - `fitsIntoDiscordModal(event)` decides whether the announcement gets an "Anmelden" button; otherwise only the "Zum Event" link.
 - Required selects use `setMinValues(1)` + `setRequired(true)`; optional selects `setMinValues(0)` (Discord rejects required selects with min 0).

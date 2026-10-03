@@ -25,6 +25,8 @@ const SEED_COLLECTIONS = [
     'users',
     'comments',
     'auditLogs',
+    'polls',
+    'pollVotes',
     'botMessages',
     'botSettings',
     'maintenanceSettings',

@@ -3,6 +3,10 @@ const router = express.Router();
 const { db, collection, doc, getDoc, getDocs, setDoc, deleteDoc, query, where, orderBy, writeBatch } = require('../firebaseAdmin');
 const { requireAuth } = require('../middleware/auth');
 const { debugLog } = require('../utils/debugLog');
+const { deleteUserPollVotes } = require('../utils/pollStore');
+const { promoteFromWaitlist } = require('../utils/eventUtils');
+const { notifyRegistrationsChanged } = require('../utils/announcementRefresh');
+const { OCCUPYING_STATUSES } = require('../utils/capacity');
 
 /**
  * GET /api/user/registrations — Get all registrations for the logged-in user
@@ -372,11 +376,38 @@ router.delete('/account', requireAuth, async (req, res) => {
         // Delete all registrations
         const regQ = query(collection(db, 'registrations'), where('userId', '==', userId));
         const regSnap = await getDocs(regQ);
-        regSnap.forEach(regDoc => batch.delete(regDoc.ref));
+        const touchedEventIds = new Set();
+        const freedEventIds = new Set();
+        regSnap.forEach(regDoc => {
+            const registration = regDoc.data();
+            batch.delete(regDoc.ref);
+            touchedEventIds.add(registration.eventId);
+            if (OCCUPYING_STATUSES.includes(registration.status)) freedEventIds.add(registration.eventId);
+        });
 
         // Delete user document
         batch.delete(doc(db, 'users', userId));
         await batch.commit();
+
+        // Freed places go to the waitlist; announcements show the new numbers
+        for (const eventId of touchedEventIds) {
+            try {
+                if (freedEventIds.has(eventId)) {
+                    const eventSnap = await getDoc(doc(db, 'events', eventId));
+                    if (eventSnap.exists()) await promoteFromWaitlist(eventId, eventSnap.data());
+                }
+                notifyRegistrationsChanged(eventId);
+            } catch (followUpErr) {
+                console.error('Follow-up after account deletion failed:', followUpErr.message);
+            }
+        }
+
+        // Votes of date polls belong to the account as well
+        try {
+            await deleteUserPollVotes(userId);
+        } catch (pollErr) {
+            console.error('Deleting poll votes failed:', pollErr.message);
+        }
 
         // Destroy session
         req.session.destroy(() => {

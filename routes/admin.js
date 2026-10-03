@@ -7,10 +7,21 @@ const {
 } = require('../firebaseAdmin');
 const { requireAuth, requireAdmin } = require('../middleware/auth');
 const { validateEvent, validateRegStatus, validateBotMessages } = require('../middleware/validators');
-const { sendDM, assignRole, parseTemplate, getGuildRoles, sendChannelMessage, buildEventEmbed, buildEventComponents, getGuildScheduledEvents, createEventChannels, deleteEventChannels, createScheduledEvent, getBotStatus, getBotSettings, saveBotSettings, getRunningEvents, getGuildChannels } = require('../bot');
-const { promoteFromWaitlist, addAuditLog } = require('../utils/eventUtils');
+const { sendDM, assignRole, parseTemplate, getGuildRoles, sendChannelMessage, buildEventEmbed, buildEventComponents, getGuildScheduledEvents, createEventChannels, deleteEventChannels, createScheduledEvent, getBotStatus, getBotSettings, saveBotSettings, getRunningEvents, getGuildChannels, buildPollEmbed, buildPollComponents } = require('../bot');
+const { promoteFromWaitlist, addAuditLog, loadEventRoster, loadEventRegistrations, saveEventWithSlots } = require('../utils/eventUtils');
+const { getSlots, findSlot, formatSlotLabel, normalizeSlots, sumCapacity, resolveAcceptanceSlot } = require('../utils/slotService');
+const { normalizePollInput, tallyPoll } = require('../utils/pollService');
+const {
+    loadPoll, loadPollVotes, updatePoll, closePoll, decidePollWithEvent, deletePoll
+} = require('../utils/pollStore');
+const { withEventLock } = require('../utils/eventLock');
+const { moveRegistrationToSlot, buildTemplateVars } = require('../utils/registrationService');
+const { notifyRegistrationsChanged } = require('../utils/announcementRefresh');
 const { debugLog } = require('../utils/debugLog');
 const { buildEventUrl } = require('../utils/eventUrl');
+
+// Announcements per event that are kept up to date live
+const MAX_TRACKED_ANNOUNCEMENTS = 5;
 
 // All admin routes require auth + admin
 router.use(requireAuth, requireAdmin);
@@ -132,10 +143,23 @@ router.post('/events', validateEvent, async (req, res) => {
             accentColor, location
         } = req.body;
 
+        const slotResult = normalizeSlots(req.body.slots);
+        if (slotResult.error) {
+            return res.status(400).json({ error: slotResult.error });
+        }
+        const { slots } = slotResult;
+
+        // An event can be created from a date poll -> checked and decided together with the creation below
+        const fromPoll = req.body.fromPoll && typeof req.body.fromPoll === 'object' ? req.body.fromPoll : null;
+        // Voters get a DM with the event link -> the event must be visible to members
+        if (fromPoll && (status || 'active') !== 'active') {
+            return res.status(400).json({ error: 'Ein Event aus einer Abstimmung muss aktiv sein.' });
+        }
+
         const baseEvent = {
             title,
             description,
-            maxParticipants: parseInt(maxParticipants) || 0,
+            maxParticipants: slots.length > 0 ? sumCapacity(slots) : (parseInt(maxParticipants) || 0),
             accessMode: accessMode || 'open',
             requiredRoles: requiredRoles || [],
             approvalMode: approvalMode || 'manual',
@@ -151,7 +175,9 @@ router.post('/events', validateEvent, async (req, res) => {
             customBotMessages: customBotMessages || {},
             autoCreateChannels: !!autoCreateChannels,
             channelConfig: channelConfig || {},
-            allowGuests: allowGuests !== false,
+            allowGuests: slots.length > 0 ? false : allowGuests !== false,
+            slots,
+            sourcePollId: fromPoll ? String(fromPoll.pollId) : '',
             accentColor: accentColor || '',
             location: location || null,
             eventStartNotificationSent: false,
@@ -162,46 +188,70 @@ router.post('/events', validateEvent, async (req, res) => {
             createdBy: req.session.user.id
         };
 
-        // Generate recurring instances
-        if (recurring && startDate && recurringUntil) {
-            const seriesId = crypto.randomUUID();
-            const createdEvents = [];
-            let currentStart = new Date(startDate);
-            // Compare only the date portion (YYYY-MM-DD) so the full last day is included
-            // regardless of the event's time-of-day
-            const duration = endDate ? (new Date(endDate) - new Date(startDate)) : 0;
+        /**
+         * Write the event (or every instance of a series).
+         *
+         * @returns {Promise<Object>} -> `{ eventId, body }` -> first event ID and the response body.
+         */
+        const writeEvents = async () => {
+            if (recurring && startDate && recurringUntil) {
+                const seriesId = crypto.randomUUID();
+                const createdEvents = [];
+                let currentStart = new Date(startDate);
+                // Compare only the date portion (YYYY-MM-DD) so the full last day is included
+                // regardless of the event's time-of-day
+                const duration = endDate ? (new Date(endDate) - new Date(startDate)) : 0;
 
-            while (currentStart.toISOString().substring(0, 10) <= recurringUntil) {
-                const instance = {
-                    ...baseEvent,
-                    seriesId,
-                    startDate: currentStart.toISOString(),
-                    endDate: duration ? new Date(currentStart.getTime() + duration).toISOString() : '',
-                };
-                const ref = await addDoc(collection(db, 'events'), instance);
-                createdEvents.push({ id: ref.id, ...instance });
+                while (currentStart.toISOString().substring(0, 10) <= recurringUntil) {
+                    const instance = {
+                        ...baseEvent,
+                        seriesId,
+                        startDate: currentStart.toISOString(),
+                        endDate: duration ? new Date(currentStart.getTime() + duration).toISOString() : '',
+                    };
+                    const ref = await addDoc(collection(db, 'events'), instance);
+                    createdEvents.push({ id: ref.id, ...instance });
 
-                // Advance date based on interval
-                if (recurringInterval === 'weekly') {
-                    currentStart = new Date(currentStart.getTime() + 7 * 24 * 60 * 60 * 1000);
-                } else if (recurringInterval === 'biweekly') {
-                    currentStart = new Date(currentStart.getTime() + 14 * 24 * 60 * 60 * 1000);
-                } else {
-                    currentStart.setMonth(currentStart.getMonth() + 1);
+                    // Advance date based on interval
+                    if (recurringInterval === 'weekly') {
+                        currentStart = new Date(currentStart.getTime() + 7 * 24 * 60 * 60 * 1000);
+                    } else if (recurringInterval === 'biweekly') {
+                        currentStart = new Date(currentStart.getTime() + 14 * 24 * 60 * 60 * 1000);
+                    } else {
+                        currentStart.setMonth(currentStart.getMonth() + 1);
+                    }
                 }
+
+                await addAuditLog('CREATE_EVENT', req.session.user.id, `Created ${createdEvents.length} recurring events "${title}"`, createdEvents[0]?.id);
+                return { eventId: createdEvents[0]?.id, body: { count: createdEvents.length, events: createdEvents } };
             }
 
-            await addAuditLog('CREATE_EVENT', req.session.user.id, `Created ${createdEvents.length} recurring events "${title}"`, createdEvents[0]?.id);
-            res.json({ count: createdEvents.length, events: createdEvents });
-        } else {
             const ref = await addDoc(collection(db, 'events'), baseEvent);
             debugLog('admin.createEvent', { title: req.body.title, adminId: req.session?.user?.id });
             await addAuditLog('CREATE_EVENT', req.session.user.id, `Created event "${title}"`, ref.id);
             if (baseEvent.autoCreateChannels && baseEvent.status === 'active') {
                 createEventChannels({ id: ref.id, ...baseEvent }).catch(console.error);
             }
-            res.json({ id: ref.id, ...baseEvent });
+            return { eventId: ref.id, body: { id: ref.id, ...baseEvent } };
+        };
+
+        if (!fromPoll) {
+            const { body } = await writeEvents();
+            return res.json(body);
         }
+
+        // Check, creation and decision run under the poll lock -> one poll never becomes two events
+        const decision = await decidePollWithEvent({
+            pollId: String(fromPoll.pollId),
+            optionId: String(fromPoll.optionId),
+            createEvent: writeEvents
+        });
+        if (!decision.ok) {
+            return res.status(decision.httpStatus).json({ error: decision.error });
+        }
+        await addAuditLog('DECIDE_POLL', req.session.user.id, `Decided poll "${decision.poll.title}" -> event ${decision.created.eventId}`, decision.poll.id);
+        res.json(decision.created.body);
+
     } catch (err) {
         console.error('Create event error:', err);
         res.status(500).json({ error: 'Fehler beim Erstellen des Events' });
@@ -213,9 +263,6 @@ router.post('/events', validateEvent, async (req, res) => {
  */
 router.put('/events/:id', validateEvent, async (req, res) => {
     try {
-        const eventSnap = await getDoc(doc(db, 'events', req.params.id));
-        const oldEvent = eventSnap.exists() ? eventSnap.data() : {};
-
         const {
             title, description, maxParticipants, accessMode, requiredRoles,
             approvalMode, assignRoleId, formFields,
@@ -224,10 +271,12 @@ router.put('/events/:id', validateEvent, async (req, res) => {
             accentColor, location
         } = req.body;
 
-        const updates = {
+        // Slots are validated and written under the event lock -> a parallel
+        // registration cannot land in a slot that is being removed
+        const saved = await saveEventWithSlots(req.params.id, req.body.slots, (slots, oldEvent) => ({
             title,
             description,
-            maxParticipants: parseInt(maxParticipants) || 0,
+            maxParticipants: slots.length > 0 ? sumCapacity(slots) : (parseInt(maxParticipants) || 0),
             accessMode: accessMode || 'open',
             requiredRoles: requiredRoles || [],
             approvalMode: approvalMode || 'manual',
@@ -243,16 +292,20 @@ router.put('/events/:id', validateEvent, async (req, res) => {
             customBotMessages: customBotMessages || {},
             autoCreateChannels: !!autoCreateChannels,
             channelConfig: channelConfig || {},
-            allowGuests: allowGuests !== false,
+            allowGuests: slots.length > 0 ? false : allowGuests !== false,
+            slots,
+            sourcePollId: oldEvent.sourcePollId || '',
             accentColor: accentColor || '',
             location: location || null,
             recurring: !!req.body.recurring,
             recurringInterval: req.body.recurringInterval || '',
             recurringUntil: req.body.recurringUntil || '',
             updatedAt: new Date().toISOString()
-        };
-
-        await updateDoc(doc(db, 'events', req.params.id), updates);
+        }));
+        if (!saved.ok) {
+            return res.status(400).json({ error: saved.error });
+        }
+        const { oldEvent, updates } = saved;
         await addAuditLog('UPDATE_EVENT', req.session.user.id, `Updated event "${title}"`, req.params.id);
 
         const isNowActive = updates.status === 'active';
@@ -264,6 +317,9 @@ router.put('/events/:id', validateEvent, async (req, res) => {
             deleteEventChannels(req.params.id).catch(console.error);
         }
 
+        // More places or new slots can let waitlisted members move up
+        await promoteFromWaitlist(req.params.id, { ...oldEvent, ...updates });
+        notifyRegistrationsChanged(req.params.id);
         res.json({ id: req.params.id, ...updates });
     } catch (err) {
         console.error('Update event error:', err);
@@ -286,6 +342,7 @@ router.put('/events/:id/status', async (req, res) => {
 
         await updateDoc(doc(db, 'events', req.params.id), { status, updatedAt: new Date().toISOString() });
         await addAuditLog('UPDATE_EVENT_STATUS', req.session.user.id, `Changed status to ${status}`, req.params.id);
+        notifyRegistrationsChanged(req.params.id);
 
         if (oldEvent.autoCreateChannels) {
             if (status === 'active' && oldEvent.status !== 'active') {
@@ -336,6 +393,7 @@ router.put('/events/:id/cancel', async (req, res) => {
         }
 
         await addAuditLog('CANCEL_EVENT', req.session.user.id, `Cancelled event "${event.title}" and notified ${notifiedCount} users`, eventId);
+        notifyRegistrationsChanged(eventId);
 
         res.json({ success: true, notifiedCount });
     } catch (err) {
@@ -367,6 +425,7 @@ router.post('/events/:id/start', async (req, res) => {
 
         await updateDoc(doc(col, eventId), updates);
         await addAuditLog('START_EVENT', req.session.user.id, `Manually started event "${data.title}"`, eventId);
+        notifyRegistrationsChanged(eventId);
 
         if (data.autoCreateChannels && data.status !== 'active') {
             createEventChannels({ id: eventId, ...data, ...updates }).catch(console.error);
@@ -398,6 +457,7 @@ router.post('/events/:id/end', async (req, res) => {
 
         await updateDoc(doc(col, eventId), updates);
         await addAuditLog('END_EVENT', req.session.user.id, `Manually ended event "${data.title}"`, eventId);
+        notifyRegistrationsChanged(eventId);
 
         if (data.autoCreateChannels && data.status === 'active') {
             deleteEventChannels(eventId).catch(console.error);
@@ -503,6 +563,7 @@ router.post('/events/:id/duplicate', async (req, res) => {
             createdAt: new Date().toISOString(),
             createdBy: req.session.user.id,
             checkinCode: '',  // Reset check-in code
+            announcements: [],  // Each copy is announced on its own
         };
         // Remove fields that shouldn't be copied
         delete duplicate.updatedAt;
@@ -588,9 +649,13 @@ router.get('/events/:id/registrations', async (req, res) => {
         const startIndex = (page - 1) * limit;
         const paginatedRegs = allRegs.slice(startIndex, startIndex + limit);
 
+        const eventSnap = await getDoc(doc(db, 'events', req.params.id));
+        const slots = eventSnap.exists() ? getSlots(eventSnap.data()) : [];
+
         res.json({
             data: paginatedRegs,
-            meta: { total, page, limit, totalPages }
+            meta: { total, page, limit, totalPages },
+            slots
         });
     } catch (err) {
         console.error('Get registrations error:', err);
@@ -604,7 +669,10 @@ router.get('/events/:id/registrations', async (req, res) => {
 router.get('/events/:id/registrations/export', async (req, res) => {
     try {
         const eventSnap = await getDoc(doc(db, 'events', req.params.id));
-        const eventTitle = eventSnap.exists() ? eventSnap.data().title : 'Event';
+        const event = eventSnap.exists() ? eventSnap.data() : {};
+        const eventTitle = event.title || 'Event';
+        const slots = getSlots(event);
+        const slotLabel = (slotId) => `"${formatSlotLabel(findSlot(slots, slotId)).replace(/"/g, '""')}"`;
 
         const q = query(
             collection(db, 'registrations'),
@@ -626,7 +694,8 @@ router.get('/events/:id/registrations/export', async (req, res) => {
         const formKeysArr = [...allFormKeys];
 
         // Build CSV
-        const headers = ['User', 'UserID', 'Status', 'Quelle', 'Datum', 'Gäste (Anzahl)', 'Gäste IDs', ...formKeysArr];
+        const slotHeaders = slots.length > 0 ? ['Slot', 'Wunschrolle'] : [];
+        const headers = ['User', 'UserID', 'Status', 'Quelle', 'Datum', 'Gäste (Anzahl)', 'Gäste IDs', ...slotHeaders, ...formKeysArr];
         const rows = registrations.map(r => {
             const guestCount = Array.isArray(r.guests) ? r.guests.length : 0;
             const guestIds = Array.isArray(r.guests) ? r.guests.join('; ') : '';
@@ -643,7 +712,8 @@ router.get('/events/:id/registrations/export', async (req, res) => {
                 const val = r.formAnswers ? r.formAnswers[k] : '';
                 return `"${String(val || '').replace(/"/g, '""')}"`;
             });
-            return [...base, ...formVals].join(',');
+            const slotValues = slots.length > 0 ? [slotLabel(r.slotId), slotLabel(r.preferredSlotId)] : [];
+            return [...base, ...slotValues, ...formVals].join(',');
         });
 
         const csv = [headers.join(','), ...rows].join('\n');
@@ -670,58 +740,51 @@ router.put('/registrations/:id/status', validateRegStatus, async (req, res) => {
             return res.status(404).json({ error: 'Anmeldung nicht gefunden' });
         }
 
-        const reg = regSnap.data();
-        await updateDoc(doc(db, 'registrations', req.params.id), { status });
-        debugLog('admin.updateRegStatus', { regId: req.params.id, newStatus: req.body.status });
-
-        // Fetch event for template variables & role
+        const reg = { id: req.params.id, ...regSnap.data() };
         const eventSnap = await getDoc(doc(db, 'events', reg.eventId));
         const event = eventSnap.exists() ? eventSnap.data() : {};
+        const slots = getSlots(event);
 
-        // Get message templates
+        // Status and slot change under the event lock -> no race with new registrations
+        const { slotId, warning } = await withEventLock(reg.eventId, async () => {
+            const update = { status };
+            let overbookedWarning = null;
+            // Waitlisted and rejected registrations give up their place -> a later acceptance picks a slot again
+            if (slots.length > 0 && (status === 'waitlisted' || status === 'rejected')) {
+                update.slotId = null;
+            }
+            if (slots.length > 0 && status === 'accepted' && !findSlot(slots, reg.slotId)) {
+                const registrations = await loadEventRegistrations(reg.eventId);
+                const choice = resolveAcceptanceSlot(slots, registrations, reg);
+                update.slotId = choice.slotId;
+                if (choice.overbooked) {
+                    overbookedWarning = `Slot „${findSlot(slots, choice.slotId).name}“ ist jetzt überbucht.`;
+                }
+            }
+            await updateDoc(doc(db, 'registrations', req.params.id), update);
+            return { slotId: 'slotId' in update ? update.slotId : reg.slotId, warning: overbookedWarning };
+        });
+        debugLog('admin.updateRegStatus', { regId: req.params.id, newStatus: status });
+
         const templateSnap = await getDoc(doc(db, 'botMessages', 'templates'));
         const globalTemplates = templateSnap.exists() ? templateSnap.data() : {};
-
-        // Prepare variables
-        const eventUrl = buildEventUrl(reg.eventId);
-
-        let roleName = '';
-        let roleMention = '';
-
-        if (event.assignRoleId) {
-            // Try to find role name from cache or fetch
-            const roles = await getGuildRoles(process.env.DISCORD_GUILD_ID);
-            const role = roles.find(r => r.id === event.assignRoleId);
-            if (role) {
-                roleName = role.name;
-                roleMention = `<@&${role.id}>`;
-            } else {
-                roleName = 'Unbekannte Rolle';
-                roleMention = 'Unbekannte Rolle';
-            }
-        }
-
-        const vars = {
-            'user.id': reg.userId,
-            'user.name': reg.userName,
-            'user.mention': `<@${reg.userId}>`,
-            'event.title': event.title || 'Unbekanntes Event',
-            'event.url': eventUrl,
-            'role.name': roleName,
-            'role.mention': roleMention
-        };
-
         const customMsgs = event.customBotMessages || {};
+        const slot = findSlot(slots, slotId);
+        const vars = await buildTemplateVars({
+            user: { id: reg.userId, displayName: reg.userName },
+            eventId: reg.eventId,
+            event,
+            slot
+        });
+        const slotLine = slot ? `\n🎯 Dein Slot: **${formatSlotLabel(slot)}**` : '';
 
         if (status === 'accepted') {
             const template = customMsgs.accepted || globalTemplates.accepted;
             const msg = template
                 ? parseTemplate(template, vars)
-                : `✅ Du wurdest für **${event.title}** angenommen! Willkommen dabei!`;
-
+                : `✅ Du wurdest für **${event.title}** angenommen! Willkommen dabei!${slotLine}`;
             await sendDM(reg.userId, msg);
 
-            // Assign role
             if (event.assignRoleId) {
                 await assignRole(reg.userId, event.assignRoleId, process.env.DISCORD_GUILD_ID);
             }
@@ -730,19 +793,38 @@ router.put('/registrations/:id/status', validateRegStatus, async (req, res) => {
             const msg = template
                 ? parseTemplate(template, vars)
                 : `❌ Leider wurde deine Anfrage für **${event.title}** abgelehnt.`;
-
             await sendDM(reg.userId, msg);
 
-            // Auto-promote from waitlist
             await promoteFromWaitlist(reg.eventId, event);
         }
 
+        notifyRegistrationsChanged(reg.eventId);
         await addAuditLog('UPDATE_REGISTRATION_STATUS', req.session.user.id, `Set status to ${status} for user ${reg.userName}`, req.params.id);
 
-        res.json({ id: req.params.id, status });
+        res.json({ id: req.params.id, status, slotId: slotId || null, ...(warning ? { warning } : {}) });
     } catch (err) {
         console.error('Update registration status error:', err);
         res.status(500).json({ error: 'Fehler beim Aktualisieren des Status' });
+    }
+});
+
+/**
+ * PUT /api/admin/registrations/:id/slot — Move a registration into another slot
+ */
+router.put('/registrations/:id/slot', async (req, res) => {
+    try {
+        const result = await moveRegistrationToSlot({
+            registrationId: req.params.id,
+            slotId: typeof req.body.slotId === 'string' ? req.body.slotId : ''
+        });
+        if (!result.ok) {
+            return res.status(result.httpStatus).json({ error: result.error });
+        }
+        await addAuditLog('MOVE_REGISTRATION_SLOT', req.session.user.id, `Moved ${result.userName} to slot "${result.slotName}"`, req.params.id);
+        res.json({ id: req.params.id, slotId: result.slotId, ...(result.warning ? { warning: result.warning } : {}) });
+    } catch (err) {
+        console.error('Move registration slot error:', err);
+        res.status(500).json({ error: 'Fehler beim Verschieben' });
     }
 });
 
@@ -766,15 +848,21 @@ router.post('/events/:id/announce', async (req, res) => {
 
         const registrationLink = buildEventUrl(req.params.id);
 
-        const embed = buildEventEmbed(event, registrationLink);
-        const success = await sendChannelMessage(channelId, embed, {
+        const roster = await loadEventRoster(req.params.id, event);
+        const embed = buildEventEmbed(event, registrationLink, roster);
+        const sent = await sendChannelMessage(channelId, embed, {
             text: text || '',
             roleIds: roleIds || [],
             pingEveryone: !!pingEveryone,
-            components: buildEventComponents(event, req.params.id)
+            components: buildEventComponents(event, req.params.id, roster)
         });
 
-        if (success) {
+        if (sent) {
+            const announcements = [
+                ...(Array.isArray(event.announcements) ? event.announcements : []),
+                { channelId: sent.channelId, messageId: sent.messageId }
+            ].slice(-MAX_TRACKED_ANNOUNCEMENTS);
+            await updateDoc(doc(db, 'events', req.params.id), { announcements });
             await addAuditLog('ANNOUNCE_EVENT', req.session.user.id, `Announced event "${event.title}"`, req.params.id);
             res.json({ success: true, message: 'Event im Discord-Channel angekündigt!' });
         } else {
@@ -817,6 +905,131 @@ router.post('/events/:id/sync-discord', async (req, res) => {
     } catch (err) {
         console.error('Sync discord event error:', err);
         res.status(500).json({ error: 'Fehler beim Synchronisieren' });
+    }
+});
+
+// ═══════════════════════════════════════════════
+// DATE POLLS
+// ═══════════════════════════════════════════════
+
+/**
+ * POST /api/admin/polls — Create a date poll
+ */
+router.post('/polls', async (req, res) => {
+    try {
+        const result = normalizePollInput(req.body);
+        if (result.error) {
+            return res.status(400).json({ error: result.error });
+        }
+        const now = new Date().toISOString();
+        const poll = {
+            ...result.poll,
+            status: 'open',
+            winnerOptionId: '',
+            eventId: '',
+            announcements: [],
+            createdBy: req.session.user.id,
+            createdAt: now,
+            updatedAt: now,
+            closedAt: ''
+        };
+        const ref = await addDoc(collection(db, 'polls'), poll);
+        await addAuditLog('CREATE_POLL', req.session.user.id, `Created poll "${poll.title}"`, ref.id);
+        res.json({ id: ref.id, ...poll });
+    } catch (err) {
+        console.error('Create poll error:', err);
+        res.status(500).json({ error: 'Fehler beim Erstellen der Abstimmung' });
+    }
+});
+
+/**
+ * PUT /api/admin/polls/:id — Edit an open date poll
+ */
+router.put('/polls/:id', async (req, res) => {
+    try {
+        const result = await updatePoll(req.params.id, req.body);
+        if (!result.ok) {
+            return res.status(result.httpStatus).json({ error: result.error });
+        }
+        await addAuditLog('UPDATE_POLL', req.session.user.id, `Updated poll "${result.poll.title}"`, req.params.id);
+        res.json(result.poll);
+    } catch (err) {
+        console.error('Update poll error:', err);
+        res.status(500).json({ error: 'Fehler beim Speichern der Abstimmung' });
+    }
+});
+
+/**
+ * POST /api/admin/polls/:id/close — Close a date poll
+ */
+router.post('/polls/:id/close', async (req, res) => {
+    try {
+        const result = await closePoll(req.params.id);
+        if (!result.ok) {
+            return res.status(result.httpStatus).json({ error: result.error });
+        }
+        await addAuditLog('CLOSE_POLL', req.session.user.id, `Closed poll "${result.poll.title}"`, req.params.id);
+        res.json({ success: true });
+    } catch (err) {
+        console.error('Close poll error:', err);
+        res.status(500).json({ error: 'Fehler beim Beenden der Abstimmung' });
+    }
+});
+
+/**
+ * POST /api/admin/polls/:id/announce — Post a date poll to the announcement channel
+ */
+router.post('/polls/:id/announce', async (req, res) => {
+    try {
+        const channelId = process.env.DISCORD_ANNOUNCE_CHANNEL_ID;
+        if (!channelId) {
+            return res.status(400).json({ error: 'DISCORD_ANNOUNCE_CHANNEL_ID nicht konfiguriert in .env' });
+        }
+        const poll = await loadPoll(req.params.id);
+        if (!poll) {
+            return res.status(404).json({ error: 'Abstimmung nicht gefunden' });
+        }
+
+        const { text, roleIds, pingEveryone } = req.body;
+        const tally = tallyPoll(poll, await loadPollVotes(poll.id));
+        const sent = await sendChannelMessage(channelId, buildPollEmbed(poll, tally), {
+            text: text || '',
+            roleIds: Array.isArray(roleIds) ? roleIds : [],
+            pingEveryone: !!pingEveryone,
+            components: buildPollComponents(poll)
+        });
+        if (!sent) {
+            return res.status(500).json({ error: 'Konnte nicht in den Channel posten.' });
+        }
+
+        const announcements = [
+            ...(Array.isArray(poll.announcements) ? poll.announcements : []),
+            { channelId: sent.channelId, messageId: sent.messageId }
+        ].slice(-MAX_TRACKED_ANNOUNCEMENTS);
+        await updateDoc(doc(db, 'polls', poll.id), { announcements });
+        await addAuditLog('ANNOUNCE_POLL', req.session.user.id, `Announced poll "${poll.title}"`, poll.id);
+        res.json({ success: true, message: 'Abstimmung im Discord-Channel gepostet!' });
+    } catch (err) {
+        console.error('Announce poll error:', err);
+        res.status(500).json({ error: 'Fehler beim Posten der Abstimmung' });
+    }
+});
+
+/**
+ * DELETE /api/admin/polls/:id — Delete a date poll with its votes
+ */
+router.delete('/polls/:id', async (req, res) => {
+    try {
+        const poll = await loadPoll(req.params.id);
+        const result = await deletePoll(req.params.id);
+        if (!result.ok) {
+            return res.status(result.httpStatus).json({ error: result.error });
+        }
+        await addAuditLog('DELETE_POLL', req.session.user.id, `Deleted poll "${poll ? poll.title : req.params.id}"`, req.params.id);
+        res.json({ success: true });
+    } catch (err) {
+        console.error('Delete poll error:', err);
+        res.status(500).json({ error: 'Fehler beim Löschen der Abstimmung' });
     }
 });
 
@@ -914,7 +1127,9 @@ router.delete('/reset', async (req, res) => {
             users: 'users',
             registrations: 'registrations',
             comments: 'comments',
-            auditLogs: 'auditLogs'
+            auditLogs: 'auditLogs',
+            polls: 'polls',
+            pollVotes: 'pollVotes'
         };
 
         for (const target of targets) {

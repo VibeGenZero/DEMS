@@ -17,8 +17,8 @@ see_also: [request-lifecycle, security, configuration]
 1. Load `.env` (`require('dotenv').config({ quiet: true })`) and `dev/mockMode` **before** anything that reads the environment.
 2. Refuse to start without `SESSION_SECRET` (or with the placeholder `your_random_session_secret_here`) → exit 1.
 3. Register the middleware chain → see [request-lifecycle](../overview/request-lifecycle.md).
-4. Mount routers: `/auth` (+ `dev/devAuth` first in mock mode), `/api/events`, `/api/admin`, `/api/user`.
-5. Start: `app.listen(PORT)`, `startBot(DISCORD_BOT_TOKEN)`, `startReminderScheduler()`.
+4. Mount routers: `/auth` (+ `dev/devAuth` first in mock mode), `/api/events`, `/api/polls`, `/api/admin`, `/api/user`.
+5. Start: `app.listen(PORT)`, `startBot(DISCORD_BOT_TOKEN)`, `startReminderScheduler()`, `startPollScheduler()` (date poll deadlines; stopped in `gracefulShutdown`).
 6. Graceful shutdown on `SIGINT`/`SIGTERM` (close server → `stopBot()` → exit; forced exit after 10 s).
 
 ## Endpoints defined in server.js

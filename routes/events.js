@@ -3,9 +3,10 @@ const router = express.Router();
 const { db, collection, doc, getDoc, getDocs, addDoc, deleteDoc, updateDoc, query, where, orderBy } = require('../firebaseAdmin');
 const { requireAuth } = require('../middleware/auth');
 const { checkRegistrationAllowed } = require('../middleware/maintenance');
-const { removeParticipantFromEventChannels, removeRole, getGuildRoles, getPublicGuildChannels } = require('../bot');
-const { promoteFromWaitlist } = require('../utils/eventUtils');
-const { registerUserForEvent, REGISTRATION_SOURCE } = require('../utils/registrationService');
+const { getGuildRoles, getPublicGuildChannels } = require('../bot');
+const { loadEventRoster } = require('../utils/eventUtils');
+const { registerUserForEvent, switchOwnSlot, unregisterUserFromEvent, REGISTRATION_SOURCE } = require('../utils/registrationService');
+const { hasSlots, withSlotSummary } = require('../utils/slotService');
 const { debugLog } = require('../utils/debugLog');
 
 /**
@@ -61,8 +62,10 @@ router.get('/', async (req, res) => {
         // Get participant counts for all events in a single query
         const regSnapshot = await getDocs(collection(db, 'registrations'));
         const participantCounts = {};
+        const registrationsByEvent = {};
         regSnapshot.forEach(regDoc => {
             const data = regDoc.data();
+            (registrationsByEvent[data.eventId] ||= []).push(data);
             if (data.status === 'accepted' || data.status === 'pending') {
                 const guestCount = Array.isArray(data.guests) ? data.guests.length : 0;
                 participantCounts[data.eventId] = (participantCounts[data.eventId] || 0) + 1 + guestCount;
@@ -70,10 +73,10 @@ router.get('/', async (req, res) => {
         });
 
         // Attach participant counts to events
-        events = events.map(e => ({
+        events = events.map(e => withSlotSummary({
             ...e,
             currentParticipants: participantCounts[e.id] || 0
-        }));
+        }, registrationsByEvent[e.id] || []));
 
         // Group series events: replace multiple events with same seriesId by one representative
         const seriesGroups = {};
@@ -164,18 +167,20 @@ router.get('/series/:seriesId', async (req, res) => {
         // Get participant counts
         const regSnapshot = await getDocs(collection(db, 'registrations'));
         const participantCounts = {};
+        const registrationsByEvent = {};
         regSnapshot.forEach(regDoc => {
             const data = regDoc.data();
+            (registrationsByEvent[data.eventId] ||= []).push(data);
             if (data.status === 'accepted' || data.status === 'pending') {
                 const guestCount = Array.isArray(data.guests) ? data.guests.length : 0;
                 participantCounts[data.eventId] = (participantCounts[data.eventId] || 0) + 1 + guestCount;
             }
         });
 
-        const result = seriesEvents.map(e => ({
+        const result = seriesEvents.map(e => withSlotSummary({
             ...e,
             currentParticipants: participantCounts[e.id] || 0
-        }));
+        }, registrationsByEvent[e.id] || []));
 
         res.json(result);
     } catch (err) {
@@ -258,8 +263,10 @@ router.get('/:id', async (req, res) => {
         const regSnap = await getDocs(regQ);
 
         let currentParticipants = 0;
-        regSnap.forEach(doc => {
-            const r = doc.data();
+        const occupyingRegistrations = [];
+        regSnap.forEach(regDoc => {
+            const r = regDoc.data();
+            occupyingRegistrations.push(r);
             currentParticipants += 1 + (Array.isArray(r.guests) ? r.guests.length : 0);
         });
 
@@ -285,14 +292,14 @@ router.get('/:id', async (req, res) => {
         }
 
         const { checkinCode, ...safe } = docSnap.data();
-        res.json({
+        res.json(withSlotSummary({
             id: docSnap.id,
             ...safe,
             checkinEnabled: !!safe.checkinEnabled,
             currentParticipants,
             waitlistCount: waitSnap.size,
             createdByName
-        });
+        }, occupyingRegistrations));
     } catch (err) {
         console.error('Error fetching event:', err);
         res.status(500).json({ error: 'Fehler beim Laden des Events' });
@@ -310,7 +317,9 @@ router.post('/:id/register', requireAuth, checkRegistrationAllowed, async (req, 
             user: { id: user.id, displayName: user.displayName, roles: user.roles },
             formAnswers: req.body.formAnswers || {},
             guests: Array.isArray(req.body.guests) ? req.body.guests : [],
-            source: REGISTRATION_SOURCE.WEB
+            source: REGISTRATION_SOURCE.WEB,
+            slotId: typeof req.body.slotId === 'string' ? req.body.slotId : null,
+            altSlotIds: Array.isArray(req.body.altSlotIds) ? req.body.altSlotIds : []
         });
 
         if (!result.ok) {
@@ -318,10 +327,31 @@ router.post('/:id/register', requireAuth, checkRegistrationAllowed, async (req, 
         }
 
         debugLog('events.register', { eventId: req.params.id, userId: req.session?.user?.id });
-        res.json({ id: result.id, status: result.status, message: result.message });
+        res.json({ id: result.id, status: result.status, message: result.message, slotId: result.slotId, isAlt: result.isAlt });
     } catch (err) {
         console.error('Registration error:', err);
         res.status(500).json({ error: 'Fehler bei der Anmeldung' });
+    }
+});
+
+/**
+ * PUT /api/events/:id/register/slot — Switch the own registration into a free slot
+ */
+router.put('/:id/register/slot', requireAuth, checkRegistrationAllowed, async (req, res) => {
+    try {
+        const result = await switchOwnSlot({
+            eventId: req.params.id,
+            userId: req.session.user.id,
+            slotId: typeof req.body.slotId === 'string' ? req.body.slotId : ''
+        });
+        if (!result.ok) {
+            return res.status(result.httpStatus).json({ error: result.error });
+        }
+        debugLog('events.switchSlot', { eventId: req.params.id, userId: req.session.user.id, slotId: result.slotId });
+        res.json({ status: result.status, slotId: result.slotId, message: result.message });
+    } catch (err) {
+        console.error('Switch slot error:', err);
+        res.status(500).json({ error: 'Fehler beim Wechseln des Slots' });
     }
 });
 
@@ -330,58 +360,15 @@ router.post('/:id/register', requireAuth, checkRegistrationAllowed, async (req, 
  */
 router.delete('/:id/register', requireAuth, async (req, res) => {
     try {
-        const user = req.session.user;
-        const eventId = req.params.id;
-
-        // Find registration
-        const q = query(
-            collection(db, 'registrations'),
-            where('eventId', '==', eventId),
-            where('userId', '==', user.id)
-        );
-        const snapshot = await getDocs(q);
-
-        if (snapshot.empty) {
-            return res.status(404).json({ error: 'Nicht angemeldet.' });
+        const result = await unregisterUserFromEvent({ eventId: req.params.id, userId: req.session.user.id });
+        if (!result.ok) {
+            return res.status(result.httpStatus).json({ error: result.error });
         }
-
-        const regDoc = snapshot.docs[0];
-        const regData = regDoc.data();
-
-        // Delete registration
-        await deleteDoc(doc(db, 'registrations', regDoc.id));
-        debugLog('events.cancelRegistration', { eventId: req.params.id, userId: req.session?.user?.id });
-
+        debugLog('events.cancelRegistration', { eventId: req.params.id, userId: req.session.user.id });
         res.json({ success: true, message: 'Abmeldung erfolgreich.' });
-
-        try {
-            // Post-processing: If user was accepted, remove role
-            const eventSnap = await getDoc(doc(db, 'events', eventId));
-            if (eventSnap.exists()) {
-                const event = eventSnap.data();
-                if (regData.status === 'accepted') {
-                    if (event.assignRoleId) {
-                        await removeRole(user.id, event.assignRoleId, process.env.DISCORD_GUILD_ID);
-                    }
-                    if (event.discordChannelId || event.discordTextChannelId) {
-                        await removeParticipantFromEventChannels(event, user.id);
-                    }
-                }
-
-                // Trigger waitlist promotion if a spot opened up
-                if (regData.status === 'accepted' || regData.status === 'pending') {
-                    await promoteFromWaitlist(eventId, event);
-                }
-            }
-        } catch (postErr) {
-            console.error('Post-processing error after unregister:', postErr);
-        }
-
     } catch (err) {
         console.error('Unregister error:', err);
-        if (!res.headersSent) {
-            res.status(500).json({ error: 'Fehler bei der Abmeldung' });
-        }
+        res.status(500).json({ error: 'Fehler bei der Abmeldung' });
     }
 });
 
@@ -429,6 +416,8 @@ router.get('/:id/my-registration', requireAuth, async (req, res) => {
  */
 router.get('/:id/participants', requireAuth, async (req, res) => {
     try {
+        const eventSnap = await getDoc(doc(db, 'events', req.params.id));
+        const event = eventSnap.exists() ? eventSnap.data() : null;
         const regQ = query(
             collection(db, 'registrations'),
             where('eventId', '==', req.params.id),
@@ -458,7 +447,13 @@ router.get('/:id/participants', requireAuth, async (req, res) => {
             } catch { /* skip missing users */ }
         }
 
-        res.json({ participants, total });
+        const payload = { participants, total };
+        if (event && hasSlots(event)) {
+            const roster = await loadEventRoster(req.params.id, event, { withProfiles: true });
+            payload.slots = roster.slots;
+            payload.waitlist = roster.waitlist;
+        }
+        res.json(payload);
     } catch (err) {
         console.error('Participants error:', err);
         res.status(500).json({ error: 'Fehler beim Laden der Teilnehmer' });

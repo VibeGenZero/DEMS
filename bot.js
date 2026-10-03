@@ -3,19 +3,22 @@ const {
     ModalBuilder, LabelBuilder, TextDisplayBuilder, TextInputBuilder, TextInputStyle,
     StringSelectMenuBuilder, UserSelectMenuBuilder, RoleSelectMenuBuilder,
     ChannelSelectMenuBuilder, MentionableSelectMenuBuilder, MessageFlags,
-    REST, Routes, SlashCommandBuilder, PermissionsBitField, ChannelType, ActivityType, Events
+    REST, Routes, SlashCommandBuilder, PermissionsBitField, ChannelType, ActivityType, Events,
+    escapeMarkdown
 } = require('discord.js');
 // Loaded before firebaseAdmin.js so the mock environment is in place even
 // when bot.js is required without server.js (e.g. in tests)
 const { IS_MOCK_MODE } = require('./dev/mockMode');
 const { db, collection, doc, getDoc, getDocs, addDoc, setDoc, updateDoc, deleteDoc, query, where, orderBy } = require('./firebaseAdmin');
 const { debugLog } = require('./utils/debugLog');
-const { buildEventUrl } = require('./utils/eventUrl');
+const { buildEventUrl, buildPollUrl } = require('./utils/eventUrl');
 const { isRegistrationBlocked } = require('./middleware/maintenance');
 const {
     FORM_FIELD_TYPE, MODAL_MAX_FIELDS, getFormFields, getFieldType,
-    formatEntityAnswer, fitsIntoDiscordModal
+    formatEntityAnswer, fitsIntoDiscordModal, getModalFieldLimit
 } = require('./utils/formFields');
+const { getSlots, hasSlots, findSlot, formatSlotLabel, countSlotOccupancy, hasFreePlace } = require('./utils/slotService');
+const { tallyPoll, getFavoriteOptionId, formatPollOption, isPollOpen, canVote, getPollLabels } = require('./utils/pollService');
 
 const TIMEZONE = process.env.TIMEZONE || 'Europe/Berlin';
 
@@ -43,6 +46,22 @@ const SELECTABLE_CHANNEL_TYPES = [
 const REGISTER_BUTTON_PREFIX = 'event_register';
 const REGISTER_MODAL_PREFIX = 'event_register_modal';
 const MODAL_FIELD_PREFIX = 'field';
+const SLOT_BUTTON_PREFIX = 'event_slot';
+const SLOT_MODAL_PREFIX = 'event_slot_modal';
+const SLOT_SWITCH_PREFIX = 'slot_switch';
+const SLOT_LEAVE_PREFIX = 'slot_leave';
+const ALT_SLOTS_FIELD_ID = 'alt_slots';
+
+// Discord allows five buttons per action row
+const BUTTONS_PER_ROW = 5;
+// Names listed per slot in the announcement embed
+const ROSTER_NAMES_MAX = 5;
+const POLL_VOTE_PREFIX = 'poll_vote';
+const POLL_YES_PREFIX = 'poll_yes';
+const POLL_MAYBE_PREFIX = 'poll_maybe';
+// Names listed per date in the poll embed
+const POLL_NAMES_MAX = 5;
+const POLL_DESCRIPTION_MAX_LENGTH = 1000;
 
 // Registrations that are currently being processed -> guards against double clicks
 const pendingDiscordRegistrations = new Set();
@@ -178,7 +197,16 @@ client.on('interactionCreate', async (interaction) => {
 
     // Handle the registration modal of an event announcement
     if (interaction.isModalSubmit()) {
-        const [modalAction, modalEventId] = interaction.customId.split(':');
+        const [modalAction, modalEventId, modalSlotId] = interaction.customId.split(':');
+        if (modalAction === SLOT_MODAL_PREFIX && modalEventId && modalSlotId) {
+            try {
+                await handleEventSlotModal(interaction, modalEventId, modalSlotId);
+            } catch (err) {
+                console.error('Event slot modal error:', err);
+                await replyWithFailure(interaction);
+            }
+            return;
+        }
         if (modalAction === REGISTER_MODAL_PREFIX && modalEventId) {
             try {
                 await handleEventRegisterModal(interaction, modalEventId);
@@ -198,7 +226,47 @@ client.on('interactionCreate', async (interaction) => {
     }
 
     // Handle guest invitation and event registration button interactions
+    // Vote selects in the ephemeral answer of a poll
+    if (interaction.isStringSelectMenu()) {
+        const [selectAction, selectPollId] = interaction.customId.split(':');
+        if ([POLL_YES_PREFIX, POLL_MAYBE_PREFIX].includes(selectAction) && selectPollId) {
+            try {
+                await handlePollVoteSelect(interaction, selectPollId, selectAction === POLL_YES_PREFIX ? 'yes' : 'maybe');
+            } catch (err) {
+                console.error('Poll vote select error:', err);
+                await replyWithFailure(interaction, '❌ Fehler bei der Abstimmung.');
+            }
+        }
+        return;
+    }
+
     if (interaction.isButton()) {
+        const [buttonAction, buttonEventId, buttonSlotId] = interaction.customId.split(':');
+        if (buttonAction === POLL_VOTE_PREFIX && buttonEventId) {
+            try {
+                await handlePollVoteButton(interaction, buttonEventId);
+            } catch (err) {
+                console.error('Poll vote button error:', err);
+                await replyWithFailure(interaction, '❌ Fehler bei der Abstimmung.');
+            }
+            return;
+        }
+        if ([SLOT_BUTTON_PREFIX, SLOT_SWITCH_PREFIX, SLOT_LEAVE_PREFIX].includes(buttonAction) && buttonEventId) {
+            try {
+                if (buttonAction === SLOT_BUTTON_PREFIX) {
+                    await handleEventSlotButton(interaction, buttonEventId, buttonSlotId);
+                } else if (buttonAction === SLOT_SWITCH_PREFIX) {
+                    await handleSlotSwitchButton(interaction, buttonEventId, buttonSlotId);
+                } else {
+                    await handleSlotLeaveButton(interaction, buttonEventId);
+                }
+            } catch (err) {
+                console.error('Slot button error:', err);
+                await replyWithFailure(interaction);
+            }
+            return;
+        }
+
         const [action, registrationId, guestId] = interaction.customId.split(':');
 
         if (action === REGISTER_BUTTON_PREFIX && registrationId) {
@@ -288,6 +356,8 @@ client.on('interactionCreate', async (interaction) => {
                     // Remove from pendingGuests
                     pendingGuests.splice(guestIndex, 1);
                     await updateDoc(regRef, { pendingGuests });
+                    // The open invitation no longer reserves a place
+                    require('./utils/announcementRefresh').notifyRegistrationsChanged(reg.eventId);
 
                     // Notify registrant
                     await sendDM(reg.userId, `❌ Deine Gäste-Einladung wurde abgelehnt.`);
@@ -300,6 +370,13 @@ client.on('interactionCreate', async (interaction) => {
                         ],
                         components: []
                     });
+
+                    // The declined invitation frees a place -> the waitlist may move up
+                    const declinedEventSnap = await getDoc(doc(db, 'events', reg.eventId));
+                    if (declinedEventSnap.exists()) {
+                        const { promoteFromWaitlist } = require('./utils/eventUtils');
+                        await promoteFromWaitlist(reg.eventId, declinedEventSnap.data());
+                    }
                 }
             } catch (err) {
                 console.error('Guest invitation button error:', err);
@@ -393,45 +470,23 @@ client.on('interactionCreate', async (interaction) => {
     // /unregister command
     if (interaction.commandName === 'unregister') {
         try {
+            // Acknowledge first -> clean-up and waitlist DMs can exceed Discord's 3 second limit
+            await interaction.deferReply({ flags: MessageFlags.Ephemeral });
             const eventId = interaction.options.getString('event');
             const userId = interaction.user.id;
 
             // Get event details
             const eventSnap = await getDoc(doc(db, 'events', eventId));
             if (!eventSnap.exists()) {
-                return interaction.reply({ content: '❌ Event nicht gefunden.', flags: MessageFlags.Ephemeral });
+                return interaction.editReply({ content: '❌ Event nicht gefunden.' });
             }
 
             const event = eventSnap.data();
 
-            // Find user's registration
-            const regQ = query(
-                collection(db, 'registrations'),
-                where('eventId', '==', eventId),
-                where('userId', '==', userId)
-            );
-            const regSnapshot = await getDocs(regQ);
-
-            if (regSnapshot.empty) {
-                return interaction.reply({ content: '⚠️ Du bist für dieses Event nicht angemeldet.', flags: MessageFlags.Ephemeral });
-            }
-
-            const regDoc = regSnapshot.docs[0];
-            const regData = regDoc.data();
-            const wasAccepted = regData.status === 'accepted';
-
-            // Delete registration
-            await deleteDoc(doc(db, 'registrations', regDoc.id));
-
-            // Remove role if user was accepted
-            if (wasAccepted && event.assignRoleId) {
-                await removeRole(userId, event.assignRoleId, process.env.DISCORD_GUILD_ID);
-            }
-
-            // Promote from waitlist if a spot opened up
-            if (wasAccepted || regData.status === 'pending') {
-                const { promoteFromWaitlist } = require('./utils/eventUtils');
-                await promoteFromWaitlist(eventId, event);
+            const { unregisterUserFromEvent } = require('./utils/registrationService');
+            const result = await unregisterUserFromEvent({ eventId, userId });
+            if (!result.ok) {
+                return interaction.editReply({ content: `⚠️ ${result.error}` });
             }
 
             const embed = new EmbedBuilder()
@@ -440,10 +495,16 @@ client.on('interactionCreate', async (interaction) => {
                 .setDescription(`Du wurdest erfolgreich von **${event.title}** abgemeldet.`)
                 .setTimestamp();
 
-            await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
+            await interaction.editReply({ embeds: [embed] });
         } catch (err) {
             console.error('Slash /unregister error:', err);
-            await interaction.reply({ content: '❌ Fehler bei der Abmeldung.', flags: MessageFlags.Ephemeral });
+            try {
+                if (interaction.deferred) {
+                    await interaction.editReply({ content: '❌ Fehler bei der Abmeldung.' });
+                } else {
+                    await interaction.reply({ content: '❌ Fehler bei der Abmeldung.', flags: MessageFlags.Ephemeral });
+                }
+            } catch { /* interaction already expired */ }
         }
     }
 });
@@ -478,6 +539,7 @@ async function sendDM(userId, message) {
  * @param {string[]} [options.roleIds] - Role IDs to mention
  * @param {boolean} [options.pingEveryone] - Whether to mention @everyone
  * @param {ActionRowBuilder[]} [options.components] - Button rows below the embed
+ * @returns {Promise<Object|false>} -> { channelId, messageId } of the sent message, false on failure.
  */
 async function sendChannelMessage(channelId, embed, options = {}) {
     if (!isReady) {
@@ -512,7 +574,7 @@ async function sendChannelMessage(channelId, embed, options = {}) {
 
         const content = contentParts.length > 0 ? contentParts.join('\n') : undefined;
 
-        await channel.send({
+        const message = await channel.send({
             content,
             embeds: [embed],
             components: options.components || [],
@@ -522,7 +584,7 @@ async function sendChannelMessage(channelId, embed, options = {}) {
             }
         });
         console.log(`📢 Announcement sent to channel ${channelId}`);
-        return true;
+        return { channelId: channel.id, messageId: message.id };
     } catch (err) {
         console.error(`Failed to send channel message:`, err.message);
         return false;
@@ -530,22 +592,37 @@ async function sendChannelMessage(channelId, embed, options = {}) {
 }
 
 /**
- * Build an event announcement embed
- * @param {Object} event - Event data
- * @param {string} [registrationLink] - Optional link to the registration page
+ * Build an event announcement embed.
+ *
+ * With a roster the embed shows live numbers: the participant count and,
+ * for slot events, one field per slot with the first names.
+ *
+ * @param {Object} event -> Event data.
+ * @param {string} [registrationLink] -> Link to the event page.
+ * @param {Object} [roster] -> Line-up from loadEventRoster().
+ * @returns {EmbedBuilder} -> The embed.
  */
-function buildEventEmbed(event, registrationLink) {
+function buildEventEmbed(event, registrationLink, roster) {
     const embed = new EmbedBuilder()
         .setColor(0x8b5cf6)
         .setTitle(`🎉 ${event.title}`)
         .setDescription(event.description || 'Keine Beschreibung.')
         .addFields(
             { name: '🗓️ Datum', value: event.startDate ? new Date(event.startDate).toLocaleString('de-DE', { timeZone: TIMEZONE }) : 'TBA', inline: true },
-            { name: '👥 Teilnehmer', value: event.maxParticipants > 0 ? `Max. ${event.maxParticipants}` : 'Unbegrenzt', inline: true },
+            { name: '👥 Teilnehmer', value: formatParticipantCount(event, roster), inline: true },
             { name: '🔓 Zugang', value: event.accessMode === 'open' ? 'Offen für alle' : 'Rollen-Requirement', inline: true }
         )
         .setFooter({ text: 'DEMS — Event Management' })
         .setTimestamp();
+
+    if (roster && roster.slots.length > 0) {
+        roster.slots.forEach(slot => {
+            embed.addFields({ name: formatRosterSlotTitle(slot), value: formatRosterMembers(slot), inline: true });
+        });
+        if (roster.waitlistCount > 0) {
+            embed.addFields({ name: '⏳ Warteliste', value: String(roster.waitlistCount), inline: true });
+        }
+    }
 
     if (event.bannerUrl) {
         embed.setImage(event.bannerUrl);
@@ -555,12 +632,49 @@ function buildEventEmbed(event, registrationLink) {
         embed.addFields({ name: '🏷️ Kategorie', value: event.category, inline: true });
     }
 
-    // Add registration link
     if (registrationLink) {
         embed.addFields({ name: '📋 Anmeldung', value: `[Hier anmelden](${registrationLink})`, inline: false });
     }
 
     return embed;
+}
+
+/**
+ * Participant field of the embed.
+ *
+ * @param {Object} event -> Event data.
+ * @param {Object} [roster] -> Line-up with live numbers.
+ * @returns {string} -> "3/10", "3 (unbegrenzt)" or the static capacity.
+ */
+function formatParticipantCount(event, roster) {
+    if (!roster) return event.maxParticipants > 0 ? `Max. ${event.maxParticipants}` : 'Unbegrenzt';
+    return roster.capacity > 0 ? `${roster.taken}/${roster.capacity}` : `${roster.taken} (unbegrenzt)`;
+}
+
+/**
+ * Field title of one slot, e.g. "🛡️ Tank 2/2 ✅".
+ *
+ * @param {Object} slot -> Roster slot.
+ * @returns {string} -> Title with ✅ when full and ⚠️ when overbooked.
+ */
+function formatRosterSlotTitle(slot) {
+    let marker = '';
+    if (slot.taken > slot.capacity) marker = ' ⚠️';
+    else if (slot.taken === slot.capacity) marker = ' ✅';
+    return `${formatSlotLabel(slot)} ${slot.taken}/${slot.capacity}${marker}`;
+}
+
+/**
+ * Field value of one slot: the first names, then "+N".
+ *
+ * @param {Object} slot -> Roster slot.
+ * @returns {string} -> Names, escaped for Discord markdown.
+ */
+function formatRosterMembers(slot) {
+    if (slot.members.length === 0) return '— frei —';
+    const names = slot.members.slice(0, ROSTER_NAMES_MAX).map(member => escapeMarkdown(member.displayName));
+    const hidden = slot.members.length - ROSTER_NAMES_MAX;
+    return hidden > 0 ? `${names.join(', ')}, +${hidden}` : names.join(', ');
 }
 
 /**
@@ -582,41 +696,315 @@ function canRegisterViaDiscord(event) {
 }
 
 /**
- * Build the button row that is attached to an event announcement.
+ * Build the button rows that are attached to an event announcement.
  *
- * The link button is always present. The registration button is only added
- * when the event can be joined straight from Discord -> otherwise the user is
- * sent to the web interface through the link button.
+ * Slot events get one button per slot, normal events the "Anmelden" button,
+ * both only while the event can be joined from Discord. The link button is
+ * always the last button.
  *
  * @param {Object} event -> The event document data.
  * @param {string} eventId -> The event document ID.
+ * @param {Object} [roster] -> Line-up, marks full slots.
  * @returns {ActionRowBuilder[]} -> Components array ready for channel.send().
  * @example
- * await channel.send({ embeds: [embed], components: buildEventComponents(event, eventId) });
+ * await channel.send({ embeds: [embed], components: buildEventComponents(event, eventId, roster) });
  */
-function buildEventComponents(event, eventId) {
-    const eventUrl = buildEventUrl(eventId);
-    const row = new ActionRowBuilder();
+function buildEventComponents(event, eventId, roster) {
+    const buttons = [];
 
     if (canRegisterViaDiscord(event)) {
-        row.addComponents(
-            new ButtonBuilder()
-                .setCustomId(`${REGISTER_BUTTON_PREFIX}:${eventId}`)
-                .setLabel('Anmelden')
-                .setStyle(ButtonStyle.Success)
-                .setEmoji('✅')
-        );
+        if (hasSlots(event)) {
+            getSlots(event).forEach(slot => buttons.push(buildSlotButton(eventId, slot, roster)));
+        } else {
+            buttons.push(
+                new ButtonBuilder()
+                    .setCustomId(`${REGISTER_BUTTON_PREFIX}:${eventId}`)
+                    .setLabel('Anmelden')
+                    .setStyle(ButtonStyle.Success)
+                    .setEmoji('✅')
+            );
+        }
     }
 
-    row.addComponents(
+    buttons.push(
         new ButtonBuilder()
             .setLabel('Zum Event')
             .setStyle(ButtonStyle.Link)
-            .setURL(eventUrl)
+            .setURL(buildEventUrl(eventId))
             .setEmoji('🔗')
     );
 
+    const rows = [];
+    for (let index = 0; index < buttons.length; index += BUTTONS_PER_ROW) {
+        rows.push(new ActionRowBuilder().addComponents(...buttons.slice(index, index + BUTTONS_PER_ROW)));
+    }
+    return rows;
+}
+
+/**
+ * Build the button of one slot.
+ *
+ * Full slots stay clickable -> the click can still lead to a fallback role
+ * or the waitlist.
+ *
+ * @param {string} eventId -> The event document ID.
+ * @param {Object} slot -> The slot.
+ * @param {Object} [roster] -> Line-up with the taken places.
+ * @returns {ButtonBuilder} -> The slot button.
+ */
+function buildSlotButton(eventId, slot, roster) {
+    const rosterSlot = roster ? roster.slots.find(entry => entry.id === slot.id) : null;
+    const isFull = !!rosterSlot && rosterSlot.taken >= slot.capacity;
+    const button = new ButtonBuilder()
+        .setCustomId(`${SLOT_BUTTON_PREFIX}:${eventId}:${slot.id}`)
+        .setLabel(isFull ? `${slot.name} (voll)` : slot.name)
+        .setStyle(isFull ? ButtonStyle.Secondary : ButtonStyle.Primary);
+    if (slot.emoji) button.setEmoji(slot.emoji);
+    return button;
+}
+
+// Discord error codes for "Unknown Channel" and "Unknown Message"
+const DISCORD_GONE_ERROR_CODES = [10003, 10008];
+
+/**
+ * Whether a Discord API error means the channel or message no longer exists.
+ *
+ * @param {*} err -> Error thrown by discord.js.
+ * @returns {boolean} -> True for deleted channels or messages.
+ */
+function isGoneDiscordError(err) {
+    return !!err && DISCORD_GONE_ERROR_CODES.includes(err.code);
+}
+
+/**
+ * Edit every stored Discord message with the same payload.
+ *
+ * @param {Array<Object>} announcements -> `[{ channelId, messageId }]`.
+ * @param {Object} payload -> Message edit payload.
+ * @returns {Promise<Array<Object>>} -> The announcements that still exist.
+ */
+async function editStoredMessages(announcements, payload) {
+    const kept = [];
+    for (const announcement of announcements) {
+        try {
+            const channel = await client.channels.fetch(announcement.channelId);
+            const message = await channel.messages.fetch(announcement.messageId);
+            await message.edit(payload);
+            kept.push(announcement);
+        } catch (err) {
+            if (isGoneDiscordError(err)) continue;
+            console.error('Failed to edit a stored message:', err.message);
+            kept.push(announcement);
+        }
+    }
+    return kept;
+}
+
+/**
+ * Re-render every stored announcement of an event with the live line-up.
+ *
+ * Deleted messages are dropped from `event.announcements`; other errors are
+ * logged and the message is kept for the next attempt.
+ *
+ * @param {string} eventId -> The event document ID.
+ * @returns {Promise<boolean>} -> True when announcements were processed.
+ */
+async function refreshEventAnnouncements(eventId) {
+    if (!isReady) return false;
+    try {
+        const eventSnap = await getDoc(doc(db, 'events', eventId));
+        if (!eventSnap.exists()) return false;
+
+        const event = eventSnap.data();
+        const announcements = Array.isArray(event.announcements) ? event.announcements : [];
+        if (announcements.length === 0) return false;
+
+        const { loadEventRoster } = require('./utils/eventUtils');
+        const roster = await loadEventRoster(eventId, event);
+        const embed = buildEventEmbed(event, buildEventUrl(eventId), roster);
+        const components = buildEventComponents(event, eventId, roster);
+
+        const kept = await editStoredMessages(announcements, { embeds: [embed], components });
+
+        if (kept.length !== announcements.length) {
+            await updateDoc(doc(db, 'events', eventId), { announcements: kept });
+        }
+        return true;
+    } catch (err) {
+        console.error('refreshEventAnnouncements failed:', err.message);
+        return false;
+    }
+}
+
+/**
+ * Build the embed of a date poll.
+ *
+ * @param {Object} poll -> The poll with its `id`.
+ * @param {Object} tally -> Result of tallyPoll().
+ * @returns {EmbedBuilder} -> The embed.
+ */
+function buildPollEmbed(poll, tally) {
+    const decided = poll.status === 'decided';
+    const closed = !decided && !isPollOpen(poll);
+    let title = `📅 ${poll.title}`;
+    if (decided) title = `✅ Termin steht: ${poll.title}`;
+    else if (closed) title = `🔒 Abstimmung beendet: ${poll.title}`;
+
+    const embed = new EmbedBuilder()
+        .setColor(decided ? 0x22c55e : 0x8b5cf6)
+        .setTitle(title.substring(0, 256));
+
+    const winner = decided ? poll.options.find(option => option.id === poll.winnerOptionId) : null;
+    const description = winner
+        ? `**${formatPollOption(winner)}**`
+        : (poll.description || '').substring(0, POLL_DESCRIPTION_MAX_LENGTH);
+    if (description) embed.setDescription(description);
+
+    const highlightId = decided ? poll.winnerOptionId : getFavoriteOptionId(tally);
+    const labels = getPollLabels(poll);
+    tally.options.forEach(entry => {
+        const option = poll.options.find(candidate => candidate.id === entry.optionId);
+        let marker = '';
+        if (entry.optionId === highlightId) marker = decided ? '✅ ' : '🏆 ';
+        embed.addFields({ name: `${marker}${formatPollOption(option)}`, value: `✅ ${entry.yes} · 🤔 ${entry.maybe}\n${formatPollVoters(entry, labels)}`, inline: false });
+    });
+
+    const votes = `${tally.voterCount} ${tally.voterCount === 1 ? 'Stimme' : 'Stimmen'}`;
+    let footer = `Abstimmung beendet · ${votes}`;
+    if (!decided && !closed) {
+        footer = poll.deadline
+            ? `⏰ Abstimmung bis ${formatPollOption({ startDate: poll.deadline })} · ${votes}`
+            : `Abstimmung offen · ${votes}`;
+    }
+    embed.setFooter({ text: footer });
+    return embed;
+}
+
+/**
+ * Second line of a poll field: the first "passt" names.
+ *
+ * @param {Object} entry -> Tally option.
+ * @param {Object} [labels] -> Answers of the poll (getPollLabels).
+ * @returns {string} -> Names, escaped for Discord markdown.
+ */
+function formatPollVoters(entry, labels = getPollLabels(null)) {
+    if (entry.yes + entry.maybe === 0) return '— noch keine Stimmen —';
+    if (entry.yes === 0) return `🤔 nur „${escapeMarkdown(labels.maybe)}“`;
+    const names = entry.yesVoters.slice(0, POLL_NAMES_MAX).map(voter => escapeMarkdown(voter.displayName));
+    const hidden = entry.yesVoters.length - POLL_NAMES_MAX;
+    return hidden > 0 ? `${names.join(', ')}, +${hidden}` : names.join(', ');
+}
+
+/**
+ * Buttons below a poll message.
+ *
+ * @param {Object} poll -> The poll with its `id`.
+ * @returns {ActionRowBuilder[]} -> One row.
+ */
+function buildPollComponents(poll) {
+    const row = new ActionRowBuilder();
+    if (poll.status === 'decided' && poll.eventId) {
+        row.addComponents(
+            new ButtonBuilder().setLabel('Zum Event').setStyle(ButtonStyle.Link).setURL(buildEventUrl(poll.eventId)).setEmoji('🔗')
+        );
+        return [row];
+    }
+    if (isPollOpen(poll)) {
+        row.addComponents(
+            new ButtonBuilder().setCustomId(`${POLL_VOTE_PREFIX}:${poll.id}`).setLabel('Abstimmen').setStyle(ButtonStyle.Primary).setEmoji('🗳️')
+        );
+    }
+    row.addComponents(
+        new ButtonBuilder().setLabel('Im Web ansehen').setStyle(ButtonStyle.Link).setURL(buildPollUrl(poll.id)).setEmoji('🔗')
+    );
     return [row];
+}
+
+/**
+ * Ephemeral voting answer with two prefilled selects.
+ *
+ * @param {Object} poll -> The poll with its `id`.
+ * @param {{ yes: string[], maybe: string[] }} vote -> The member's current vote.
+ * @param {string} [statusLine] -> Extra line, e.g. the saved confirmation.
+ * @returns {Object} -> `{ content, components }` for reply/editReply.
+ */
+function buildPollVoteReply(poll, vote, statusLine = '') {
+    const select = (prefix, placeholder, selected) => new ActionRowBuilder().addComponents(
+        new StringSelectMenuBuilder()
+            .setCustomId(`${prefix}:${poll.id}`)
+            .setPlaceholder(placeholder)
+            .setMinValues(0)
+            .setMaxValues(poll.options.length)
+            .addOptions(poll.options.map(option => ({
+                label: formatPollOption(option).substring(0, SELECT_OPTION_LABEL_MAX_LENGTH),
+                value: option.id,
+                default: selected.includes(option.id)
+            })))
+    );
+    const labels = getPollLabels(poll);
+    const capitalize = (text) => text.charAt(0).toUpperCase() + text.slice(1);
+    const lines = [`🗳️ **${poll.title}**`, 'Wähle deine Termine – Änderungen werden sofort gespeichert.'];
+    if (statusLine) lines.push(statusLine);
+    return {
+        content: lines.join('\n'),
+        components: [
+            select(POLL_YES_PREFIX, `✅ ${capitalize(labels.yes)} …`, vote.yes || []),
+            select(POLL_MAYBE_PREFIX, `🤔 ${capitalize(labels.maybe)} …`, vote.maybe || [])
+        ]
+    };
+}
+
+/**
+ * Re-render every posted message of a poll.
+ *
+ * @param {string} pollId -> The poll document ID.
+ * @returns {Promise<boolean>} -> True when messages were processed.
+ */
+async function refreshPollMessages(pollId) {
+    if (!isReady) return false;
+    try {
+        const { loadPoll, loadPollVotes } = require('./utils/pollStore');
+        const poll = await loadPoll(pollId);
+        if (!poll) return false;
+        const announcements = Array.isArray(poll.announcements) ? poll.announcements : [];
+        if (announcements.length === 0) return false;
+
+        const tally = tallyPoll(poll, await loadPollVotes(pollId));
+        const kept = await editStoredMessages(announcements, {
+            embeds: [buildPollEmbed(poll, tally)],
+            components: buildPollComponents(poll)
+        });
+        if (kept.length !== announcements.length) {
+            await updateDoc(doc(db, 'polls', pollId), { announcements: kept });
+        }
+        return true;
+    } catch (err) {
+        console.error('refreshPollMessages failed:', err.message);
+        return false;
+    }
+}
+
+/**
+ * Turn the posted messages of a deleted poll into a short notice.
+ *
+ * @param {Object} poll -> The poll that is being deleted.
+ * @returns {Promise<boolean>} -> True when messages were processed.
+ */
+async function markPollMessagesDeleted(poll) {
+    if (!isReady) return false;
+    try {
+        const announcements = Array.isArray(poll.announcements) ? poll.announcements : [];
+        if (announcements.length === 0) return false;
+        const embed = new EmbedBuilder()
+            .setColor(0x6b7280)
+            .setTitle(`🗑️ Abstimmung gelöscht: ${poll.title}`.substring(0, 256))
+            .setDescription('Diese Abstimmung wurde von einem Admin gelöscht.');
+        await editStoredMessages(announcements, { embeds: [embed], components: [] });
+        return true;
+    } catch (err) {
+        console.error('markPollMessagesDeleted failed:', err.message);
+        return false;
+    }
 }
 
 /**
@@ -775,6 +1163,23 @@ function applyFieldComponent(label, field, index) {
 }
 
 /**
+ * Add one label per form field to a modal.
+ *
+ * @param {ModalBuilder} modal -> The modal to extend.
+ * @param {Array<Object>} fields -> Form fields that fit into the modal.
+ * @returns {void}
+ */
+function addFormFieldLabels(modal, fields) {
+    fields.forEach((field, index) => {
+        const label = new LabelBuilder()
+            .setLabel(String(field.label).substring(0, MODAL_LABEL_MAX_LENGTH))
+            .setDescription(buildFieldDescription(field));
+
+        modal.addLabelComponents(applyFieldComponent(label, field, index));
+    });
+}
+
+/**
  * Build the registration modal for an event form.
  *
  * The modal shows one label per form field, each carrying the component that
@@ -793,7 +1198,7 @@ function buildRegistrationModal(event, eventId) {
         .setCustomId(`${REGISTER_MODAL_PREFIX}:${eventId}`)
         .setTitle(`Anmeldung: ${event.title}`.substring(0, MODAL_TITLE_MAX_LENGTH));
 
-    const fields = getFormFields(event).slice(0, MODAL_MAX_FIELDS);
+    const fields = getFormFields(event).slice(0, getModalFieldLimit(event));
 
     // The intro shares the five top level component slots with the fields ->
     // it is only added while a slot is left over, otherwise Discord rejects
@@ -802,15 +1207,119 @@ function buildRegistrationModal(event, eventId) {
         modal.addTextDisplayComponents(buildModalIntro(event));
     }
 
-    fields.forEach((field, index) => {
-        const label = new LabelBuilder()
-            .setLabel(String(field.label).substring(0, MODAL_LABEL_MAX_LENGTH))
-            .setDescription(buildFieldDescription(field));
-
-        modal.addLabelComponents(applyFieldComponent(label, field, index));
-    });
+    addFormFieldLabels(modal, fields);
 
     return modal;
+}
+
+/**
+ * Build the registration modal behind a slot button.
+ *
+ * It starts with a select for the fallback roles (all other slots) when the
+ * event has more than one slot, followed by the form fields. The intro text
+ * is only added while one of the five component places is left.
+ *
+ * @param {Object} event -> The event document data.
+ * @param {string} eventId -> The event document ID.
+ * @param {Object} slot -> The slot the user clicked.
+ * @returns {ModalBuilder} -> Modal ready for interaction.showModal().
+ */
+function buildSlotModal(event, eventId, slot) {
+    const modal = new ModalBuilder()
+        .setCustomId(`${SLOT_MODAL_PREFIX}:${eventId}:${slot.id}`)
+        .setTitle(`${slot.name}: ${event.title}`.substring(0, MODAL_TITLE_MAX_LENGTH));
+
+    const otherSlots = getSlots(event).filter(entry => entry.id !== slot.id);
+    const fields = getFormFields(event).slice(0, getModalFieldLimit(event));
+    const usedComponents = fields.length + (otherSlots.length > 0 ? 1 : 0);
+
+    if (usedComponents < MODAL_MAX_FIELDS) {
+        modal.addTextDisplayComponents(buildModalIntro(event));
+    }
+
+    if (otherSlots.length > 0) {
+        const select = new StringSelectMenuBuilder()
+            .setCustomId(ALT_SLOTS_FIELD_ID)
+            .setPlaceholder('Keine Ausweichrolle')
+            .setRequired(false)
+            .setMinValues(0)
+            .setMaxValues(otherSlots.length)
+            .addOptions(otherSlots.map(entry => ({
+                label: entry.name,
+                value: entry.id,
+                ...(entry.emoji ? { emoji: { name: entry.emoji } } : {})
+            })));
+        modal.addLabelComponents(
+            new LabelBuilder()
+                .setLabel('Ausweichrollen (optional)')
+                .setDescription(`Falls ${slot.name} voll ist, wirst du hier eingeplant.`.substring(0, MODAL_DESCRIPTION_MAX_LENGTH))
+                .setStringSelectMenuComponent(select)
+        );
+    }
+
+    addFormFieldLabels(modal, fields);
+    return modal;
+}
+
+/**
+ * Read the fallback roles chosen in a slot modal.
+ *
+ * @param {import('discord.js').ModalSubmitInteraction} interaction -> The submitted modal.
+ * @returns {string[]} -> Selected slot IDs, empty when the select is missing.
+ */
+function readAltSlotIds(interaction) {
+    try {
+        return interaction.fields.getStringSelectValues(ALT_SLOTS_FIELD_ID) || [];
+    } catch {
+        return [];
+    }
+}
+
+/**
+ * Answer for a member who clicks a slot button while already registered.
+ *
+ * @param {Object} event -> The event document data.
+ * @param {string} eventId -> The event document ID.
+ * @param {Object} registration -> The member's registration.
+ * @param {Object} clickedSlot -> The slot behind the clicked button.
+ * @param {Array<Object>} registrations -> All registrations of the event.
+ * @returns {Object} -> Ephemeral reply payload.
+ */
+function buildRegisteredSlotReply(event, eventId, registration, clickedSlot, registrations) {
+    const slots = getSlots(event);
+
+    if (registration.status === 'rejected') {
+        return {
+            content: `❌ Deine Anmeldung für **${event.title}** wurde abgelehnt.`,
+            components: [],
+            flags: MessageFlags.Ephemeral
+        };
+    }
+
+    const current = findSlot(slots, registration.slotId);
+    const content = registration.status === 'waitlisted' || !current
+        ? `⏳ Du stehst für **${event.title}** auf der Warteliste.`
+        : `Du bist für **${event.title}** als **${formatSlotLabel(current)}** eingeplant${registration.status === 'pending' ? ' (Anfrage ausstehend)' : ''}.`;
+
+    const row = new ActionRowBuilder();
+    const canSwitch = clickedSlot.id !== registration.slotId
+        && hasFreePlace(clickedSlot, countSlotOccupancy(slots, registrations));
+    if (canSwitch) {
+        const switchButton = new ButtonBuilder()
+            .setCustomId(`${SLOT_SWITCH_PREFIX}:${eventId}:${clickedSlot.id}`)
+            .setLabel(`Zu ${clickedSlot.name} wechseln`)
+            .setStyle(ButtonStyle.Primary);
+        if (clickedSlot.emoji) switchButton.setEmoji(clickedSlot.emoji);
+        row.addComponents(switchButton);
+    }
+    row.addComponents(
+        new ButtonBuilder()
+            .setCustomId(`${SLOT_LEAVE_PREFIX}:${eventId}`)
+            .setLabel('Abmelden')
+            .setStyle(ButtonStyle.Danger)
+    );
+
+    return { content, components: [row], flags: MessageFlags.Ephemeral };
 }
 
 /**
@@ -920,7 +1429,7 @@ function parseModalAnswers(interaction, event) {
     const answers = {};
     const errors = [];
 
-    getFormFields(event).slice(0, MODAL_MAX_FIELDS).forEach((field, index) => {
+    getFormFields(event).slice(0, getModalFieldLimit(event)).forEach((field, index) => {
         const type = getFieldType(field);
         try {
             const { value, error } = readModalField(interaction, field, index);
@@ -1048,7 +1557,7 @@ async function checkRegistrationConditions({ event, eventId, userId, roleIds }) 
  * @param {Object} params.formAnswers -> Answers keyed by form field label.
  * @returns {Promise<void>} -> Resolves once the interaction was answered.
  */
-async function completeDiscordRegistration(interaction, { eventId, event, roleIds, formAnswers }) {
+async function completeDiscordRegistration(interaction, { eventId, event, roleIds, formAnswers, slotId = null, altSlotIds = [] }) {
     const { registerUserForEvent, REGISTRATION_SOURCE } = require('./utils/registrationService');
     const displayName = interaction.member?.displayName
         || interaction.user.globalName
@@ -1068,7 +1577,9 @@ async function completeDiscordRegistration(interaction, { eventId, event, roleId
             user: { id: interaction.user.id, displayName, roles: roleIds },
             formAnswers,
             guests: [],
-            source: REGISTRATION_SOURCE.DISCORD
+            source: REGISTRATION_SOURCE.DISCORD,
+            slotId,
+            altSlotIds
         });
     } finally {
         pendingDiscordRegistrations.delete(pendingKey);
@@ -1082,10 +1593,17 @@ async function completeDiscordRegistration(interaction, { eventId, event, roleId
     // Store the profile so the participant shows up with name and avatar in the web interface
     await ensureUserProfile(interaction.user, displayName);
 
+    const slots = getSlots(event);
+    const slot = findSlot(slots, result.slotId);
+    const wantedSlot = findSlot(slots, slotId);
+    const placement = slot ? ` als **${formatSlotLabel(slot)}**` : '';
+    const altNote = result.isAlt && wantedSlot ? ` (${formatSlotLabel(wantedSlot)} war voll)` : '';
     const statusDescriptions = {
-        accepted: `Du bist für **${event.title}** angemeldet. Deine Anmeldung ist ab sofort auch im Event-System sichtbar.`,
-        pending: `Deine Anfrage für **${event.title}** ist eingegangen und wartet auf Bestätigung. Du siehst den Status im Event-System.`,
-        waitlisted: `**${event.title}** ist aktuell voll — du stehst auf der Warteliste und rückst automatisch nach.`
+        accepted: `Du bist für **${event.title}**${placement} angemeldet${altNote}. Deine Anmeldung ist ab sofort auch im Event-System sichtbar.`,
+        pending: `Deine Anfrage für **${event.title}**${placement}${altNote} ist eingegangen und wartet auf Bestätigung. Du siehst den Status im Event-System.`,
+        waitlisted: slots.length > 0
+            ? `Für **${event.title}** sind gerade alle gewünschten Slots belegt — du stehst auf der Warteliste und rückst automatisch nach.`
+            : `**${event.title}** ist aktuell voll — du stehst auf der Warteliste und rückst automatisch nach.`
     };
     const statusColors = { accepted: 0x22c55e, pending: 0xf59e0b, waitlisted: 0x8b5cf6 };
     const statusTitles = {
@@ -1190,6 +1708,234 @@ async function handleEventRegisterModal(interaction, eventId) {
     }
 
     await completeDiscordRegistration(interaction, { eventId, event, roleIds, formAnswers: answers });
+}
+
+/**
+ * Answer a failed interaction without throwing.
+ *
+ * @param {import('discord.js').Interaction} interaction -> The interaction.
+ * @param {string} [content] -> Error text.
+ * @returns {Promise<void>}
+ */
+async function replyWithFailure(interaction, content = '❌ Fehler bei der Anmeldung.') {
+    try {
+        if (interaction.deferred || interaction.replied) {
+            await interaction.editReply({ content });
+        } else {
+            await interaction.reply({ content, flags: MessageFlags.Ephemeral });
+        }
+    } catch { /* interaction already expired */ }
+}
+
+/**
+ * Handle a click on a slot button of an event announcement.
+ *
+ * Registered members get their status with switch/leave buttons; everybody
+ * else is checked and gets the slot modal (or is registered directly when
+ * there is nothing to ask).
+ *
+ * @param {import('discord.js').ButtonInteraction} interaction -> The button interaction.
+ * @param {string} eventId -> The event document ID.
+ * @param {string} slotId -> The clicked slot.
+ * @returns {Promise<void>}
+ */
+async function handleEventSlotButton(interaction, eventId, slotId) {
+    debugLog('bot.slotButton', { eventId, slotId, userId: interaction.user.id });
+
+    const eventSnap = await getDoc(doc(db, 'events', eventId));
+    if (!eventSnap.exists()) {
+        return interaction.reply({ content: '❌ Event nicht gefunden.', flags: MessageFlags.Ephemeral });
+    }
+    const event = eventSnap.data();
+    const slot = findSlot(getSlots(event), slotId);
+    if (!slot) {
+        return interaction.reply({
+            content: `❌ Diesen Slot gibt es nicht mehr. Bitte melde dich hier an: ${buildEventUrl(eventId)}`,
+            flags: MessageFlags.Ephemeral
+        });
+    }
+
+    const { loadEventRegistrations } = require('./utils/eventUtils');
+    const registrations = await loadEventRegistrations(eventId);
+    const registration = registrations.find(entry => entry.userId === interaction.user.id);
+    if (registration) {
+        return interaction.reply(buildRegisteredSlotReply(event, eventId, registration, slot, registrations));
+    }
+
+    const roleIds = await resolveInteractionRoles(interaction);
+    const conditionError = await checkRegistrationConditions({ event, eventId, userId: interaction.user.id, roleIds });
+    if (conditionError) {
+        return interaction.reply({ content: `❌ ${conditionError}`, flags: MessageFlags.Ephemeral });
+    }
+
+    const needsModal = getFormFields(event).length > 0 || getSlots(event).length > 1;
+    if (needsModal) {
+        if (!fitsIntoDiscordModal(event)) {
+            return interaction.reply({
+                content: `📝 Für dieses Event ist das Formular zu umfangreich für Discord (max. ${getModalFieldLimit(event)} Felder). Bitte melde dich hier an: ${buildEventUrl(eventId)}`,
+                flags: MessageFlags.Ephemeral
+            });
+        }
+        return interaction.showModal(buildSlotModal(event, eventId, slot));
+    }
+
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    await completeDiscordRegistration(interaction, { eventId, event, roleIds, formAnswers: {}, slotId, altSlotIds: [] });
+}
+
+/**
+ * Handle the submitted slot modal.
+ *
+ * @param {import('discord.js').ModalSubmitInteraction} interaction -> The submitted modal.
+ * @param {string} eventId -> The event document ID.
+ * @param {string} slotId -> The slot of the clicked button.
+ * @returns {Promise<void>}
+ */
+async function handleEventSlotModal(interaction, eventId, slotId) {
+    debugLog('bot.slotModal', { eventId, slotId, userId: interaction.user.id });
+
+    const eventSnap = await getDoc(doc(db, 'events', eventId));
+    if (!eventSnap.exists()) {
+        return interaction.reply({ content: '❌ Event nicht gefunden.', flags: MessageFlags.Ephemeral });
+    }
+    const event = eventSnap.data();
+
+    // Slots or the form may have changed while the modal was open
+    if (!canRegisterViaDiscord(event) || !findSlot(getSlots(event), slotId)) {
+        return interaction.reply({
+            content: `📝 Das Event hat sich geändert. Bitte melde dich hier an: ${buildEventUrl(eventId)}`,
+            flags: MessageFlags.Ephemeral
+        });
+    }
+
+    const { answers, errors } = parseModalAnswers(interaction, event);
+    if (errors.length > 0) {
+        return interaction.reply({
+            content: `❌ Bitte korrigiere deine Angaben:\n${errors.map(e => `• ${e}`).join('\n')}`,
+            flags: MessageFlags.Ephemeral
+        });
+    }
+
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+    const roleIds = await resolveInteractionRoles(interaction);
+    const conditionError = await checkRegistrationConditions({ event, eventId, userId: interaction.user.id, roleIds });
+    if (conditionError) {
+        return interaction.editReply({ content: `❌ ${conditionError}` });
+    }
+
+    await completeDiscordRegistration(interaction, {
+        eventId, event, roleIds, formAnswers: answers, slotId, altSlotIds: readAltSlotIds(interaction)
+    });
+}
+
+/**
+ * Handle "Zu <Slot> wechseln" in the ephemeral status answer.
+ *
+ * @param {import('discord.js').ButtonInteraction} interaction -> The button interaction.
+ * @param {string} eventId -> The event document ID.
+ * @param {string} slotId -> Target slot.
+ * @returns {Promise<void>}
+ */
+async function handleSlotSwitchButton(interaction, eventId, slotId) {
+    // Acknowledge first -> DMs and role changes can exceed Discord's 3 second limit
+    await interaction.deferUpdate();
+    if (await isRegistrationBlocked()) {
+        return interaction.editReply({ content: '❌ Event-Registrierungen sind wegen Wartungsarbeiten vorübergehend deaktiviert.', components: [] });
+    }
+    const { switchOwnSlot } = require('./utils/registrationService');
+    const result = await switchOwnSlot({ eventId, userId: interaction.user.id, slotId });
+    await interaction.editReply({ content: result.ok ? `✅ ${result.message}` : `❌ ${result.error}`, components: [] });
+}
+
+/**
+ * Handle "Abmelden" in the ephemeral status answer.
+ *
+ * @param {import('discord.js').ButtonInteraction} interaction -> The button interaction.
+ * @param {string} eventId -> The event document ID.
+ * @returns {Promise<void>}
+ */
+async function handleSlotLeaveButton(interaction, eventId) {
+    // Acknowledge first -> removing roles and promoting the waitlist can take a while
+    await interaction.deferUpdate();
+    const { unregisterUserFromEvent } = require('./utils/registrationService');
+    const result = await unregisterUserFromEvent({ eventId, userId: interaction.user.id });
+    const title = result.event && result.event.title ? result.event.title : 'dem Event';
+    await interaction.editReply({
+        content: result.ok ? `✅ Du wurdest von **${title}** abgemeldet.` : `❌ ${result.error}`,
+        components: []
+    });
+}
+
+/**
+ * Handle "Abstimmen" below a poll message.
+ *
+ * @param {import('discord.js').ButtonInteraction} interaction -> The button interaction.
+ * @param {string} pollId -> The poll document ID.
+ * @returns {Promise<void>}
+ */
+async function handlePollVoteButton(interaction, pollId) {
+    // Acknowledge first -> loading the poll and the roles can take a moment
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    const { loadPoll, loadUserVote } = require('./utils/pollStore');
+    const poll = await loadPoll(pollId);
+    if (!poll) {
+        return interaction.editReply({ content: '❌ Diese Abstimmung gibt es nicht mehr.' });
+    }
+    if (!isPollOpen(poll)) {
+        return interaction.editReply({ content: '🔒 Die Abstimmung ist beendet.' });
+    }
+    if (await isRegistrationBlocked()) {
+        return interaction.editReply({ content: '❌ Abstimmungen sind wegen Wartungsarbeiten vorübergehend deaktiviert.' });
+    }
+    const roleIds = await resolveInteractionRoles(interaction);
+    if (!canVote(poll, roleIds)) {
+        return interaction.editReply({ content: '❌ Du hast nicht die erforderliche Rolle für diese Abstimmung.' });
+    }
+    const vote = await loadUserVote(pollId, interaction.user.id);
+    await interaction.editReply(buildPollVoteReply(poll, vote));
+}
+
+/**
+ * Handle a change in one of the two vote selects.
+ *
+ * The changed list wins: a date picked as "wenn nötig" leaves "passt" and
+ * the other way round.
+ *
+ * @param {import('discord.js').StringSelectMenuInteraction} interaction -> The select interaction.
+ * @param {string} pollId -> The poll document ID.
+ * @param {'yes'|'maybe'} kind -> Which list was changed.
+ * @returns {Promise<void>}
+ */
+async function handlePollVoteSelect(interaction, pollId, kind) {
+    await interaction.deferUpdate();
+    if (await isRegistrationBlocked()) {
+        return interaction.editReply({ content: '❌ Abstimmungen sind wegen Wartungsarbeiten vorübergehend deaktiviert.', components: [] });
+    }
+    const { loadPoll, savePollVote } = require('./utils/pollStore');
+    const picked = Array.isArray(interaction.values) ? interaction.values : [];
+    // The changed list wins; merged under the poll lock -> a parallel web click is not lost
+    const merge = (stored) => (kind === 'yes'
+        ? { yes: picked, maybe: stored.maybe.filter(id => !picked.includes(id)) }
+        : { yes: stored.yes.filter(id => !picked.includes(id)), maybe: picked });
+
+    const roleIds = await resolveInteractionRoles(interaction);
+    const displayName = interaction.member?.displayName || interaction.user.globalName || interaction.user.username;
+    const result = await savePollVote({
+        pollId,
+        user: { id: interaction.user.id, displayName, roles: roleIds },
+        update: merge
+    });
+    if (!result.ok) {
+        return interaction.editReply({ content: `❌ ${result.error}`, components: [] });
+    }
+
+    // Discord voters show up with name and avatar on the website
+    await ensureUserProfile(interaction.user, displayName);
+    const poll = await loadPoll(pollId);
+    const labels = getPollLabels(poll);
+    const status = `💾 Gespeichert: ${result.vote.yes.length}× ${escapeMarkdown(labels.yes)}, ${result.vote.maybe.length}× ${escapeMarkdown(labels.maybe)}.`;
+    await interaction.editReply(buildPollVoteReply(poll, result.vote, status));
 }
 
 /**
@@ -2154,6 +2900,15 @@ module.exports = {
     stopBot,
     sendDM,
     sendChannelMessage,
+    refreshEventAnnouncements,
+    isGoneDiscordError,
+    buildPollEmbed,
+    buildPollComponents,
+    buildPollVoteReply,
+    refreshPollMessages,
+    markPollMessagesDeleted,
+    buildSlotModal,
+    buildRegisteredSlotReply,
     buildEventEmbed,
     assignRole,
     removeRole,

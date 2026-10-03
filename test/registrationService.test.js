@@ -1,0 +1,172 @@
+const { test, after } = require('node:test');
+const assert = require('node:assert/strict');
+const path = require('path');
+const { createTempDir } = require('./helpers');
+
+// Mock mode with an own database; the empty cwd keeps a local .env out
+const tmpDir = createTempDir('registration-service');
+process.chdir(tmpDir);
+delete process.env.NODE_ENV;
+process.env.DEV_MOCK = 'true';
+process.env.DEV_SQLITE_PATH = path.join(tmpDir, 'registrations.sqlite');
+
+const bot = require('../bot');
+const { db, doc, setDoc } = require('../firebaseAdmin');
+const {
+    registerUserForEvent, switchOwnSlot, moveRegistrationToSlot, unregisterUserFromEvent, buildTemplateVars
+} = require('../utils/registrationService');
+const { loadEventRegistrations } = require('../utils/eventUtils');
+
+after(async () => {
+    await bot.client.destroy();
+});
+
+const SLOTS = [
+    { id: 'tank', name: 'Tank', emoji: '🛡️', capacity: 1 },
+    { id: 'heal', name: 'Heiler', emoji: '💚', capacity: 1 },
+    { id: 'dps', name: 'Schaden', emoji: '⚔️', capacity: 2 }
+];
+
+let counter = 0;
+
+async function createEvent(fields = {}) {
+    const id = `svc-event-${++counter}`;
+    await setDoc(doc(db, 'events', id), {
+        title: `Test ${counter}`, status: 'active', accessMode: 'open', approvalMode: 'instant',
+        maxParticipants: 0, formFields: [], allowGuests: true, ...fields
+    });
+    return id;
+}
+
+const user = (name) => ({ id: `svc-user-${name}`, displayName: name, roles: [] });
+const register = (eventId, name, fields = {}) => registerUserForEvent({ eventId, user: user(name), ...fields });
+
+async function registrationOf(eventId, name) {
+    return (await loadEventRegistrations(eventId)).find(entry => entry.userId === user(name).id);
+}
+
+test('a full main role falls back to the first free alternative, then to the waitlist', async () => {
+    const eventId = await createEvent({ slots: SLOTS, maxParticipants: 4 });
+
+    const ana = await register(eventId, 'Ana', { slotId: 'tank' });
+    assert.equal(ana.status, 'accepted');
+    assert.equal(ana.slotId, 'tank');
+    assert.equal(ana.isAlt, false);
+    assert.equal(ana.message, 'Erfolgreich angemeldet! Dein Slot: 🛡️ Tank.');
+
+    const ben = await register(eventId, 'Ben', { slotId: 'tank', altSlotIds: ['dps', 'heal'] });
+    assert.equal(ben.slotId, 'heal');
+    assert.equal(ben.isAlt, true);
+    assert.equal(ben.message, 'Erfolgreich angemeldet! Dein Slot: 💚 Heiler (🛡️ Tank war voll).');
+    const stored = await registrationOf(eventId, 'Ben');
+    assert.equal(stored.preferredSlotId, 'tank');
+    assert.deepEqual(stored.altSlotIds, ['heal', 'dps']);
+
+    const cem = await register(eventId, 'Cem', { slotId: 'heal' });
+    assert.equal(cem.status, 'waitlisted');
+    assert.equal(cem.slotId, null);
+});
+
+test('slot events need a valid slot and allow no guests', async () => {
+    const eventId = await createEvent({ slots: SLOTS, maxParticipants: 4 });
+
+    for (const slotId of [undefined, 'nope']) {
+        const result = await register(eventId, 'Dana', { slotId });
+        assert.equal(result.ok, false);
+        assert.equal(result.code, 'invalid_slot');
+        assert.equal(result.httpStatus, 400);
+        assert.equal(result.error, 'Bitte wähle einen gültigen Slot.');
+    }
+
+    const withGuest = await register(eventId, 'Dana', { slotId: 'dps', guests: [{ id: 'svc-guest' }] });
+    assert.equal(withGuest.code, 'guests_not_allowed');
+});
+
+test('two simultaneous registrations for the last place get one place', async () => {
+    const slotEventId = await createEvent({ slots: [SLOTS[0]], maxParticipants: 1 });
+    const slotResults = await Promise.all([
+        register(slotEventId, 'Eva', { slotId: 'tank' }),
+        register(slotEventId, 'Finn', { slotId: 'tank' })
+    ]);
+    assert.deepEqual(slotResults.map(result => result.status).sort(), ['accepted', 'waitlisted']);
+
+    const normalEventId = await createEvent({ maxParticipants: 1 });
+    const normalResults = await Promise.all([register(normalEventId, 'Eva'), register(normalEventId, 'Finn')]);
+    assert.deepEqual(normalResults.map(result => result.status).sort(), ['accepted', 'waitlisted']);
+});
+
+test('members switch into free slots only and free their old place', async () => {
+    const eventId = await createEvent({ slots: SLOTS, maxParticipants: 4 });
+    await register(eventId, 'Ana', { slotId: 'tank' });
+    await register(eventId, 'Ben', { slotId: 'heal' });
+    await register(eventId, 'Cem', { slotId: 'heal' });
+
+    const full = await switchOwnSlot({ eventId, userId: user('Ben').id, slotId: 'tank' });
+    assert.deepEqual([full.ok, full.code, full.httpStatus, full.error], [false, 'slot_full', 409, 'Dieser Slot ist bereits voll.']);
+
+    const moved = await switchOwnSlot({ eventId, userId: user('Ben').id, slotId: 'dps' });
+    assert.equal(moved.ok, true);
+    assert.equal(moved.slotId, 'dps');
+    assert.equal(moved.message, 'Du bist jetzt als ⚔️ Schaden eingeplant.');
+    assert.equal((await registrationOf(eventId, 'Ben')).preferredSlotId, 'dps');
+
+    const cem = await registrationOf(eventId, 'Cem');
+    assert.equal(cem.status, 'accepted');
+    assert.equal(cem.slotId, 'heal');
+});
+
+test('a waitlisted member can take a free slot directly', async () => {
+    const eventId = await createEvent({ slots: SLOTS, maxParticipants: 4 });
+    await register(eventId, 'Ana', { slotId: 'tank' });
+    await register(eventId, 'Ben', { slotId: 'tank' });
+
+    const result = await switchOwnSlot({ eventId, userId: user('Ben').id, slotId: 'heal' });
+    assert.equal(result.status, 'accepted');
+    assert.equal(result.slotId, 'heal');
+
+    const notRegistered = await switchOwnSlot({ eventId, userId: user('Zoe').id, slotId: 'dps' });
+    assert.equal(notRegistered.code, 'not_registered');
+});
+
+test('admins move registrations, even into full slots', async () => {
+    const eventId = await createEvent({ slots: SLOTS, maxParticipants: 4 });
+    await register(eventId, 'Ana', { slotId: 'tank' });
+    await register(eventId, 'Ben', { slotId: 'heal' });
+    await register(eventId, 'Cem', { slotId: 'heal' });
+    const ben = await registrationOf(eventId, 'Ben');
+
+    const result = await moveRegistrationToSlot({ registrationId: ben.id, slotId: 'tank' });
+    assert.equal(result.ok, true);
+    assert.equal(result.warning, 'Slot „Tank“ ist jetzt überbucht.');
+    assert.equal(result.slotName, 'Tank');
+    assert.equal((await registrationOf(eventId, 'Ben')).slotId, 'tank');
+    assert.equal((await registrationOf(eventId, 'Cem')).slotId, 'heal');
+
+    await register(eventId, 'Dana', { slotId: 'tank' });
+    const dana = await registrationOf(eventId, 'Dana');
+    const waiting = await moveRegistrationToSlot({ registrationId: dana.id, slotId: 'dps' });
+    assert.equal(waiting.code, 'not_movable');
+});
+
+test('unregistering frees the place for the waitlist', async () => {
+    const eventId = await createEvent({ slots: SLOTS, maxParticipants: 4 });
+    await register(eventId, 'Ana', { slotId: 'tank' });
+    await register(eventId, 'Ben', { slotId: 'tank' });
+
+    const result = await unregisterUserFromEvent({ eventId, userId: user('Ana').id });
+    assert.equal(result.ok, true);
+    assert.ok(result.event.title.startsWith('Test'));
+    assert.equal(await registrationOf(eventId, 'Ana'), undefined);
+    assert.equal((await registrationOf(eventId, 'Ben')).status, 'accepted');
+
+    const again = await unregisterUserFromEvent({ eventId, userId: user('Ana').id });
+    assert.deepEqual([again.code, again.httpStatus], ['not_registered', 404]);
+});
+
+test('message templates can use the slot', async () => {
+    const vars = await buildTemplateVars({ user: user('Ana'), eventId: 'x', event: { title: 'Raid' }, slot: SLOTS[0] });
+    assert.equal(vars['slot.name'], 'Tank');
+    assert.equal(vars['slot.emoji'], '🛡️');
+    const plain = await buildTemplateVars({ user: user('Ana'), eventId: 'x', event: { title: 'Raid' } });
+    assert.equal(plain['slot.name'], '');
+});

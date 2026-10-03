@@ -17,17 +17,17 @@ see_also: [frontend-app, security]
 |---|---|
 | `<head>` | Google Fonts (Inter, UnifrakturCook), FontAwesome 6 (for EasyMDE), Bootstrap 5.3.2 CSS + Bootstrap Icons 1.11.2 (CDN), EasyMDE + Flatpickr (`/vendor`), marked + DOMPurify 3.2.4 (CDN), `/css/style.css?v=2` |
 | Loading screen | `#loading-screen`, `.loading-letter`, `.loading-status`, `#particles` |
-| Navbar | `#main-navbar`, `#nav-profile`, `#nav-admin`, `#nav-bot-control`, `#nav-debug`, `#login-btn-container`, `#user-info`, `#user-avatar`, `#user-name` |
+| Navbar | `#main-navbar`, `#nav-polls` (with `#nav-polls-badge`), `#nav-profile`, `#nav-admin`, `#nav-bot-control`, `#nav-debug`, `#login-btn-container`, `#user-info`, `#user-avatar`, `#user-name` |
 | Banners | error banner, maintenance banner, planned-maintenance banner, panic lockdown overlay |
-| Sections (`.app-section`) | `#login-section`, `#events-section`, `#event-detail-section`, `#profile-section`, `#debug-section`, `#admin-section`, `#bot-control-section`, `#info-section` |
-| Modals | `#importDiscordEventsModal`, `#eventModal` (5-step wizard: Grundlagen, Datum & Zeit, Teilnehmer & Zugang, Anmeldeformular, Erweitert), `#resetModal`, `#maintenanceModal`, `#registrationsModal`, `#botMessagesModal`, `#announceModal`, `#dataPrivacyModal`, `#userDataModal`, `#updatesModal`, `#firstLoginModal` |
+| Sections (`.app-section`) | `#login-section`, `#events-section`, `#event-detail-section`, `#polls-section`, `#poll-detail-section`, `#profile-section`, `#debug-section`, `#admin-section`, `#bot-control-section`, `#info-section` |
+| Modals | `#importDiscordEventsModal`, `#eventModal` (5-step wizard: Grundlagen, Datum & Zeit, Teilnehmer & Zugang, Anmeldeformular, Erweitert), `#resetModal`, `#maintenanceModal`, `#registrationsModal`, `#botMessagesModal`, `#announceModal`, `#dataPrivacyModal`, `#userDataModal`, `#updatesModal`, `#firstLoginModal`, `#pollEditorModal` (incl. answer fields `#poll-label-yes|maybe|no`), `#pollAnnounceModal`, `#pollDecideModal`, `#confirmModal` (generic, `showConfirmDialog`) |
 | Scripts (end of body) | Bootstrap bundle 5.3.2, GSAP 3.12.5 (CDN), `/js/app.js` |
 
 All login buttons are plain links to `/auth/discord`.
 
 ## style.css blocks (grep the header text)
 
-`:root` variables → LOADING SCREEN → NAVBAR → BUTTONS → GLASS CARDS → SECTIONS → EVENT CARDS (+ Event Series, Rendered Markdown) → COUNTDOWN → CATEGORY PILLS → BADGES → STATS CARDS → PROFILE SECTION → DATE & TIME → WAITLIST → FORMS → TABLE → FORM BUILDER → ENTITY PICKER → LOGIN CARD → TOAST → ADMIN EVENT CARD → SCROLLBAR → CONFETTI → SKELETON LOADING → INFO PARTICLES → PROFILE SECTION (second block) → RESPONSIVE → UTILITY → INFO SECTION → EASYMDE CUSTOMIZATION → Participant Warning Badges → Calendar View → Event Comments → BOT CONTROL CENTER → EVENT WIZARD STEPPER → MAINTENANCE MODE → EVENT DETAIL (banner, sidebar, capacity bar, participants) → EVENT CARD (gradient placeholder, updated layout) → LOCATION AUTOCOMPLETE → DEBUG / STYLING GUIDE.
+`:root` variables → LOADING SCREEN → NAVBAR → BUTTONS → GLASS CARDS → SECTIONS → EVENT CARDS (+ Event Series, Rendered Markdown) → COUNTDOWN → CATEGORY PILLS → BADGES → STATS CARDS → PROFILE SECTION → DATE & TIME → WAITLIST → FORMS → TABLE → FORM BUILDER → ENTITY PICKER → LOGIN CARD → TOAST → ADMIN EVENT CARD → SCROLLBAR → CONFETTI → SKELETON LOADING → INFO PARTICLES → PROFILE SECTION (second block) → RESPONSIVE → UTILITY → INFO SECTION → EASYMDE CUSTOMIZATION → Participant Warning Badges → Calendar View → Event Comments → BOT CONTROL CENTER → EVENT WIZARD STEPPER → MAINTENANCE MODE → EVENT DETAIL (banner, sidebar, capacity bar, participants) → EVENT CARD (gradient placeholder, updated layout) → LOCATION AUTOCOMPLETE → DEBUG / STYLING GUIDE → ROLE SLOTS → DATE POLLS.
 
 ## Theme variables (`:root`)
 
