@@ -28,6 +28,9 @@ const SERIES_EVENT_IDS = ['dev-event-series-1', 'dev-event-series-2', 'dev-event
 /** Role slots of the raid event. */
 const RAID_SLOT_ID = { TANK: 'tank', HEAL: 'heal', DPS: 'dps' };
 
+/** Date polls of the seed. */
+const POLL_ID = { OPEN: 'dev-poll-raid', DECIDED: 'dev-poll-summer' };
+
 /** Check-in code of the running event. */
 const CHECKIN_CODE = 'DEMO42';
 
@@ -207,6 +210,7 @@ function buildEvents(clock) {
             startDate: clock.slot(-60, 16),
             endDate: clock.slot(-60, 23),
             category: 'Community',
+            sourcePollId: POLL_ID.DECIDED,
             eventStartNotificationSent: true,
             createdAt: clock.offset(-90 * DAY)
         }),
@@ -463,6 +467,68 @@ function buildSettings(clock) {
  * @param {Date} [now] -> Reference time; all dates are relative to it.
  * @returns {Object} -> `{ [collection]: { [documentId]: data } }`.
  */
+function buildPolls(clock) {
+    const base = {
+        description: '',
+        accessMode: 'open',
+        requiredRoles: [],
+        winnerOptionId: '',
+        eventId: '',
+        announcements: [],
+        createdBy: people.mori.userId
+    };
+    return {
+        // Open -> the raider persona (Lena) has not voted yet and can try it
+        [POLL_ID.OPEN]: {
+            ...base,
+            title: 'Termin für den Herbst-Raid',
+            description: 'Wann habt ihr Zeit für **Schattenfestung (heroisch)**?',
+            status: 'open',
+            accessMode: 'role-required',
+            requiredRoles: [ROLE_ID.RAID_TEAM],
+            options: [
+                { id: 'raid-a', startDate: clock.slot(7, 20), endDate: clock.slot(7, 23) },
+                { id: 'raid-b', startDate: clock.slot(9, 19), endDate: '' },
+                { id: 'raid-c', startDate: clock.slot(12, 20), endDate: '' }
+            ],
+            deadline: clock.offset(3 * DAY),
+            createdAt: clock.offset(-2 * DAY),
+            updatedAt: clock.offset(-2 * DAY),
+            closedAt: ''
+        },
+        // Decided -> led to the archived summer party
+        [POLL_ID.DECIDED]: {
+            ...base,
+            title: 'Sommerfest-Termin',
+            status: 'decided',
+            options: [
+                { id: 'summer-1', startDate: clock.slot(-60, 16), endDate: clock.slot(-60, 23) },
+                { id: 'summer-2', startDate: clock.slot(-59, 16), endDate: '' }
+            ],
+            deadline: '',
+            winnerOptionId: 'summer-1',
+            eventId: EVENT_ID.ARCHIVED,
+            createdAt: clock.offset(-95 * DAY),
+            updatedAt: clock.offset(-90 * DAY),
+            closedAt: clock.offset(-90 * DAY)
+        }
+    };
+}
+
+function buildPollVotes(clock) {
+    const { ben, kira, felix, lena, tom } = people;
+    const vote = (pollId, person, yes, maybe, daysAgo) => [`${pollId}_${person.userId}`, {
+        pollId, userId: person.userId, userName: person.displayName, yes, maybe, updatedAt: clock.offset(-daysAgo * DAY)
+    }];
+    return Object.fromEntries([
+        vote(POLL_ID.OPEN, ben, ['raid-a', 'raid-b'], [], 2),
+        vote(POLL_ID.OPEN, kira, ['raid-a'], ['raid-c'], 1),
+        vote(POLL_ID.OPEN, felix, ['raid-b'], ['raid-a'], 1),
+        vote(POLL_ID.DECIDED, lena, ['summer-1'], [], 93),
+        vote(POLL_ID.DECIDED, tom, [], ['summer-1'], 92)
+    ]);
+}
+
 function buildSeedData(now = new Date()) {
     const clock = createClock(now);
     return {
@@ -471,8 +537,10 @@ function buildSeedData(now = new Date()) {
         registrations: buildRegistrations(clock),
         comments: buildComments(clock),
         auditLogs: buildAuditLogs(clock),
+        polls: buildPolls(clock),
+        pollVotes: buildPollVotes(clock),
         ...buildSettings(clock)
     };
 }
 
-module.exports = { buildSeedData, EVENT_ID, SERIES_EVENT_IDS, CHECKIN_CODE, RAID_SLOT_ID };
+module.exports = { buildSeedData, EVENT_ID, SERIES_EVENT_IDS, CHECKIN_CODE, RAID_SLOT_ID, POLL_ID };
