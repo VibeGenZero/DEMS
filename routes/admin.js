@@ -12,7 +12,7 @@ const { promoteFromWaitlist, addAuditLog, loadEventRoster, loadEventRegistration
 const { getSlots, findSlot, formatSlotLabel, normalizeSlots, sumCapacity, resolveAcceptanceSlot } = require('../utils/slotService');
 const { normalizePollInput, tallyPoll } = require('../utils/pollService');
 const {
-    loadPoll, loadPollVotes, updatePoll, closePoll, validateDecision, decidePoll, deletePoll
+    loadPoll, loadPollVotes, updatePoll, closePoll, decidePollWithEvent, deletePoll
 } = require('../utils/pollStore');
 const { withEventLock } = require('../utils/eventLock');
 const { moveRegistrationToSlot, buildTemplateVars } = require('../utils/registrationService');
@@ -22,26 +22,6 @@ const { buildEventUrl } = require('../utils/eventUrl');
 
 // Announcements per event that are kept up to date live
 const MAX_TRACKED_ANNOUNCEMENTS = 5;
-
-/**
- * Mark the source poll as decided after an event was created from it.
- *
- * The event already exists at this point -> a failure is only logged.
- *
- * @param {Object|null} fromPoll -> `{ pollId, optionId }` from the request.
- * @param {string} eventId -> The created event (first instance of a series).
- * @param {string} adminId -> Admin who created the event.
- * @returns {Promise<void>}
- */
-async function finishPollDecision(fromPoll, eventId, adminId) {
-    if (!fromPoll || !eventId) return;
-    const result = await decidePoll({ pollId: fromPoll.pollId, optionId: fromPoll.optionId, eventId });
-    if (result.ok) {
-        await addAuditLog('DECIDE_POLL', adminId, `Decided poll "${result.poll.title}" -> event ${eventId}`, fromPoll.pollId);
-    } else {
-        console.error('Poll decision after event creation failed:', result.error);
-    }
-}
 
 // All admin routes require auth + admin
 router.use(requireAuth, requireAdmin);
@@ -169,14 +149,8 @@ router.post('/events', validateEvent, async (req, res) => {
         }
         const { slots } = slotResult;
 
-        // An event can be created from a date poll -> check the poll before anything is written
+        // An event can be created from a date poll -> checked and decided together with the creation below
         const fromPoll = req.body.fromPoll && typeof req.body.fromPoll === 'object' ? req.body.fromPoll : null;
-        if (fromPoll) {
-            const check = await validateDecision({ pollId: fromPoll.pollId, optionId: fromPoll.optionId });
-            if (!check.ok) {
-                return res.status(check.httpStatus).json({ error: check.error });
-            }
-        }
 
         const baseEvent = {
             title,
@@ -210,48 +184,70 @@ router.post('/events', validateEvent, async (req, res) => {
             createdBy: req.session.user.id
         };
 
-        // Generate recurring instances
-        if (recurring && startDate && recurringUntil) {
-            const seriesId = crypto.randomUUID();
-            const createdEvents = [];
-            let currentStart = new Date(startDate);
-            // Compare only the date portion (YYYY-MM-DD) so the full last day is included
-            // regardless of the event's time-of-day
-            const duration = endDate ? (new Date(endDate) - new Date(startDate)) : 0;
+        /**
+         * Write the event (or every instance of a series).
+         *
+         * @returns {Promise<Object>} -> `{ eventId, body }` -> first event ID and the response body.
+         */
+        const writeEvents = async () => {
+            if (recurring && startDate && recurringUntil) {
+                const seriesId = crypto.randomUUID();
+                const createdEvents = [];
+                let currentStart = new Date(startDate);
+                // Compare only the date portion (YYYY-MM-DD) so the full last day is included
+                // regardless of the event's time-of-day
+                const duration = endDate ? (new Date(endDate) - new Date(startDate)) : 0;
 
-            while (currentStart.toISOString().substring(0, 10) <= recurringUntil) {
-                const instance = {
-                    ...baseEvent,
-                    seriesId,
-                    startDate: currentStart.toISOString(),
-                    endDate: duration ? new Date(currentStart.getTime() + duration).toISOString() : '',
-                };
-                const ref = await addDoc(collection(db, 'events'), instance);
-                createdEvents.push({ id: ref.id, ...instance });
+                while (currentStart.toISOString().substring(0, 10) <= recurringUntil) {
+                    const instance = {
+                        ...baseEvent,
+                        seriesId,
+                        startDate: currentStart.toISOString(),
+                        endDate: duration ? new Date(currentStart.getTime() + duration).toISOString() : '',
+                    };
+                    const ref = await addDoc(collection(db, 'events'), instance);
+                    createdEvents.push({ id: ref.id, ...instance });
 
-                // Advance date based on interval
-                if (recurringInterval === 'weekly') {
-                    currentStart = new Date(currentStart.getTime() + 7 * 24 * 60 * 60 * 1000);
-                } else if (recurringInterval === 'biweekly') {
-                    currentStart = new Date(currentStart.getTime() + 14 * 24 * 60 * 60 * 1000);
-                } else {
-                    currentStart.setMonth(currentStart.getMonth() + 1);
+                    // Advance date based on interval
+                    if (recurringInterval === 'weekly') {
+                        currentStart = new Date(currentStart.getTime() + 7 * 24 * 60 * 60 * 1000);
+                    } else if (recurringInterval === 'biweekly') {
+                        currentStart = new Date(currentStart.getTime() + 14 * 24 * 60 * 60 * 1000);
+                    } else {
+                        currentStart.setMonth(currentStart.getMonth() + 1);
+                    }
                 }
+
+                await addAuditLog('CREATE_EVENT', req.session.user.id, `Created ${createdEvents.length} recurring events "${title}"`, createdEvents[0]?.id);
+                return { eventId: createdEvents[0]?.id, body: { count: createdEvents.length, events: createdEvents } };
             }
 
-            await addAuditLog('CREATE_EVENT', req.session.user.id, `Created ${createdEvents.length} recurring events "${title}"`, createdEvents[0]?.id);
-            await finishPollDecision(fromPoll, createdEvents[0]?.id, req.session.user.id);
-            res.json({ count: createdEvents.length, events: createdEvents });
-        } else {
             const ref = await addDoc(collection(db, 'events'), baseEvent);
             debugLog('admin.createEvent', { title: req.body.title, adminId: req.session?.user?.id });
             await addAuditLog('CREATE_EVENT', req.session.user.id, `Created event "${title}"`, ref.id);
             if (baseEvent.autoCreateChannels && baseEvent.status === 'active') {
                 createEventChannels({ id: ref.id, ...baseEvent }).catch(console.error);
             }
-            await finishPollDecision(fromPoll, ref.id, req.session.user.id);
-            res.json({ id: ref.id, ...baseEvent });
+            return { eventId: ref.id, body: { id: ref.id, ...baseEvent } };
+        };
+
+        if (!fromPoll) {
+            const { body } = await writeEvents();
+            return res.json(body);
         }
+
+        // Check, creation and decision run under the poll lock -> one poll never becomes two events
+        const decision = await decidePollWithEvent({
+            pollId: String(fromPoll.pollId),
+            optionId: String(fromPoll.optionId),
+            createEvent: writeEvents
+        });
+        if (!decision.ok) {
+            return res.status(decision.httpStatus).json({ error: decision.error });
+        }
+        await addAuditLog('DECIDE_POLL', req.session.user.id, `Decided poll "${decision.poll.title}" -> event ${decision.created.eventId}`, decision.poll.id);
+        res.json(decision.created.body);
+
     } catch (err) {
         console.error('Create event error:', err);
         res.status(500).json({ error: 'Fehler beim Erstellen des Events' });

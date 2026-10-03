@@ -219,7 +219,44 @@ async function validateDecision({ pollId, optionId }) {
 }
 
 /**
- * Mark a poll as decided and tell every voter.
+ * Decide a poll while creating its event -> one step under the poll lock.
+ *
+ * The check, the event creation and the decision run while the lock is
+ * held, so two simultaneous requests (double click, two admins) cannot turn
+ * one poll into two events. When `createEvent` throws, the poll stays as it
+ * was.
+ *
+ * @param {Object} params -> Decision input.
+ * @param {string} params.pollId -> The poll document ID.
+ * @param {string} params.optionId -> The chosen date.
+ * @param {Function} params.createEvent -> `async () => ({ eventId, ...extra })`, runs only for a valid decision.
+ * @param {Date} [params.now] -> Reference time.
+ * @returns {Promise<Object>} -> `{ ok: true, poll, created, notified }` or a failure.
+ */
+async function decidePollWithEvent({ pollId, optionId, createEvent, now = new Date() }) {
+    const outcome = await withEventLock(lockKey(pollId), async () => {
+        const check = await validateDecision({ pollId, optionId });
+        if (!check.ok) return check;
+        const created = await createEvent();
+        const update = {
+            status: POLL_STATUS.DECIDED,
+            winnerOptionId: optionId,
+            eventId: created.eventId,
+            closedAt: check.poll.closedAt || now.toISOString(),
+            updatedAt: now.toISOString()
+        };
+        await updateDoc(doc(db, 'polls', pollId), update);
+        return { ok: true, poll: { ...check.poll, ...update }, option: check.option, created };
+    });
+    if (!outcome.ok) return outcome;
+
+    const notified = await notifyVotersAboutDecision(outcome.poll, outcome.option);
+    notifyPollChanged(pollId);
+    return { ok: true, poll: outcome.poll, created: outcome.created, notified };
+}
+
+/**
+ * Mark a poll as decided for an existing event and tell every voter.
  *
  * @param {Object} params -> Decision input.
  * @param {string} params.pollId -> The poll document ID.
@@ -229,36 +266,33 @@ async function validateDecision({ pollId, optionId }) {
  * @returns {Promise<Object>} -> `{ ok: true, poll, notified }` or a failure.
  */
 async function decidePoll({ pollId, optionId, eventId, now = new Date() }) {
-    const outcome = await withEventLock(lockKey(pollId), async () => {
-        const check = await validateDecision({ pollId, optionId });
-        if (!check.ok) return check;
-        const update = {
-            status: POLL_STATUS.DECIDED,
-            winnerOptionId: optionId,
-            eventId,
-            closedAt: check.poll.closedAt || now.toISOString(),
-            updatedAt: now.toISOString()
-        };
-        await updateDoc(doc(db, 'polls', pollId), update);
-        return { ok: true, poll: { ...check.poll, ...update }, option: check.option };
-    });
-    if (!outcome.ok) return outcome;
+    const result = await decidePollWithEvent({ pollId, optionId, createEvent: async () => ({ eventId }), now });
+    if (!result.ok) return result;
+    return { ok: true, poll: result.poll, notified: result.notified };
+}
 
-    const votes = await loadPollVotes(pollId);
-    const date = formatPollOption(outcome.option);
-    const link = buildEventUrl(eventId);
+/**
+ * DM every voter which date was chosen, worded by their own vote.
+ *
+ * @param {Object} poll -> The decided poll (with `id` and `eventId`).
+ * @param {Object} option -> The chosen date.
+ * @returns {Promise<number>} -> Number of voters that were messaged.
+ */
+async function notifyVotersAboutDecision(poll, option) {
+    const votes = await loadPollVotes(poll.id);
+    const date = formatPollOption(option);
+    const link = buildEventUrl(poll.eventId);
     for (const vote of votes) {
         let detail = `Er passt dir leider nicht – vielleicht klappt es trotzdem? ${link}`;
-        if ((vote.yes || []).includes(optionId)) detail = `Du hattest ✅ *passt* angegeben – jetzt anmelden: ${link}`;
-        else if ((vote.maybe || []).includes(optionId)) detail = `Du hattest 🤔 *wenn nötig* angegeben – jetzt anmelden: ${link}`;
+        if ((vote.yes || []).includes(option.id)) detail = `Du hattest ✅ *passt* angegeben – jetzt anmelden: ${link}`;
+        else if ((vote.maybe || []).includes(option.id)) detail = `Du hattest 🤔 *wenn nötig* angegeben – jetzt anmelden: ${link}`;
         try {
-            await sendDM(vote.userId, `📅 Der Termin für **${outcome.poll.title}** steht: **${date}**. ${detail}`);
+            await sendDM(vote.userId, `📅 Der Termin für **${poll.title}** steht: **${date}**. ${detail}`);
         } catch (err) {
             console.error('Poll decision DM failed:', err.message);
         }
     }
-    notifyPollChanged(pollId);
-    return { ok: true, poll: outcome.poll, notified: votes.length };
+    return votes.length;
 }
 
 /**
@@ -356,6 +390,7 @@ module.exports = {
     closePoll,
     validateDecision,
     decidePoll,
+    decidePollWithEvent,
     closeExpiredPolls,
     deletePoll,
     deleteUserPollVotes,

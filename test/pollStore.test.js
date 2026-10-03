@@ -13,7 +13,7 @@ process.env.DEV_SQLITE_PATH = path.join(tmpDir, 'poll-store.sqlite');
 const bot = require('../bot');
 const { db, doc, getDoc, setDoc } = require('../firebaseAdmin');
 const {
-    loadPoll, loadPollVotes, loadUserVote, savePollVote, closePoll, validateDecision, decidePoll,
+    loadPoll, loadPollVotes, loadUserVote, savePollVote, closePoll, validateDecision, decidePoll, decidePollWithEvent,
     updatePoll, closeExpiredPolls, deletePoll, deleteUserPollVotes
 } = require('../utils/pollStore');
 
@@ -151,4 +151,36 @@ test('deleting a poll removes its votes, deleting an account removes the own vot
     await savePollVote({ pollId: other, user: user('Ida'), yes: [A.id] });
     assert.equal(await deleteUserPollVotes(user('Ida').id), 1);
     assert.equal((await getDoc(doc(db, 'pollVotes', `${other}_${user('Ida').id}`))).exists(), false);
+});
+
+
+test('two decisions at the same time create only one event', async () => {
+    const pollId = await createPoll({ title: 'Doppelklick' });
+    let created = 0;
+    const createEvent = async () => {
+        created += 1;
+        const eventId = `double-event-${created}`;
+        await new Promise(resolve => setTimeout(resolve, 30));
+        return { eventId };
+    };
+
+    const results = await Promise.all([
+        decidePollWithEvent({ pollId, optionId: A.id, createEvent }),
+        decidePollWithEvent({ pollId, optionId: A.id, createEvent })
+    ]);
+
+    assert.equal(created, 1);
+    assert.deepEqual(results.map(result => result.ok).sort(), [false, true]);
+    assert.equal(results.find(result => !result.ok).error, 'Diese Abstimmung ist bereits entschieden.');
+    assert.equal(results.find(result => result.ok).created.eventId, 'double-event-1');
+    assert.equal((await loadPoll(pollId)).eventId, 'double-event-1');
+});
+
+test('a failing event creation leaves the poll undecided', async () => {
+    const pollId = await createPoll();
+    await assert.rejects(
+        decidePollWithEvent({ pollId, optionId: A.id, createEvent: async () => { throw new Error('Event kaputt'); } }),
+        /Event kaputt/
+    );
+    assert.equal((await loadPoll(pollId)).status, 'open');
 });
