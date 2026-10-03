@@ -49,6 +49,14 @@ see_also: [request-lifecycle, add-api-endpoint]
 | GET / POST | `/api/events/:id/comments` | U |
 | DELETE | `/api/events/:id/comments/:commentId` | U (owner or admin) |
 
+## /api/polls — [routes-polls](../modules/routes-polls.md)
+
+| Method | Path | Guard |
+|---|---|---|
+| GET | `/api/polls` | U |
+| GET | `/api/polls/:id` | U |
+| PUT | `/api/polls/:id/vote` | U (+ maintenance gate) |
+
 ## /api/user — [routes-user](../modules/routes-user.md)
 
 | Method | Path | Guard |
@@ -70,6 +78,9 @@ see_also: [request-lifecycle, add-api-endpoint]
 | DELETE | `/api/admin/events/:id`, `/events/series/:seriesId` |
 | GET | `/api/admin/events/:id/checkin-stats`, `/events/:id/registrations`, `/events/:id/registrations/export` |
 | PUT | `/api/admin/registrations/:id/status`, `/registrations/:id/slot` |
+| POST | `/api/admin/polls`, `/polls/:id/close`, `/polls/:id/announce` |
+| PUT | `/api/admin/polls/:id` |
+| DELETE | `/api/admin/polls/:id` |
 | GET / PUT | `/api/admin/bot-messages` |
 | GET | `/api/admin/audit-log` |
 | DELETE | `/api/admin/reset` |

@@ -17,6 +17,7 @@ see_also: [form-fields, registration-flow, reminders-presence, configuration]
 |---|---|---|
 | Announcement | admin "Ankündigen" → `POST /api/admin/events/:id/announce` | `sendChannelMessage(DISCORD_ANNOUNCE_CHANNEL_ID, buildEventEmbed(event, link, roster), { text, roleIds, pingEveryone, components: buildEventComponents(event, id, roster) })`; stores `{ channelId, messageId }` in `event.announcements` (max 5) |
 | Live announcement | every registration change → `notifyRegistrationsChanged` (2 s debounce) | `refreshEventAnnouncements` edits the stored messages (line-up, counts, buttons); deleted messages (Discord 10003/10008) are dropped |
+| Date polls | admin "In Discord posten" → `POST /api/admin/polls/:id/announce` | poll embed (tally, 🏆 favorite) + `poll_vote:<pollId>` → private answer with `poll_yes`/`poll_maybe` selects; live refresh via `notifyPollChanged` → `refreshPollMessages`; deleted polls become a notice — see [date-polls](date-polls.md) |
 | Slot buttons | slot events | one button per slot `event_slot:<eventId>:<slotId>` → modal with `alt_slots` + form; registered members get `slot_switch:*` / `slot_leave:*` — see [role-slots](role-slots.md) |
 | Register button + modal | "Anmelden" on an announcement | `handleEventRegisterButton` / `handleEventRegisterModal` → [registration-flow](registration-flow.md), fields → [form-fields](form-fields.md) |
 | Slash commands | `/events`, `/register`, `/unregister` | `registerSlashCommands` (guild commands, on ready); handled in the `interactionCreate` dispatcher |

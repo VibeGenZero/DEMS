@@ -21,7 +21,7 @@ see_also: [api-index, data-model]
 | GET | `/search?q=` | ≥2 chars; users matching `displayName`/`username`, excluding self and users with `acceptInvitations === false`; max 10 |
 | GET | `/settings` | `{ acceptInvitations }` (default true) |
 | PUT | `/settings` | body `{ acceptInvitations }` |
-| DELETE | `/account` | batch-deletes own registrations + `users/{id}`, destroys session |
+| DELETE | `/account` | batch-deletes own registrations + `users/{id}`, promotes waitlists, deletes own date poll votes (`deleteUserPollVotes`), destroys session |
 
 ## Badges (computed on every `/profile` call, never stored)
 

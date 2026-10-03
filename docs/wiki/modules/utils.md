@@ -3,7 +3,7 @@ id: utils
 title: utils/ — domain helpers
 type: module
 tags: [utils, registration, form-fields, waitlist, audit-log, profile, debug]
-sources: [utils/registrationService.js, utils/formFields.js, utils/eventUtils.js, utils/eventUrl.js, utils/userProfile.js, utils/debugLog.js, utils/capacity.js, utils/slotService.js, utils/eventLock.js, utils/announcementRefresh.js]
+sources: [utils/registrationService.js, utils/formFields.js, utils/eventUtils.js, utils/eventUrl.js, utils/userProfile.js, utils/debugLog.js, utils/capacity.js, utils/slotService.js, utils/eventLock.js, utils/announcementRefresh.js, utils/pollService.js, utils/pollStore.js]
 part_of: [architecture]
 depends_on: [data-layer, bot]
 see_also: [registration-flow, form-fields, role-slots]
@@ -51,11 +51,15 @@ Exports `FORM_FIELD_TYPE` (`text, textarea, dropdown, checkbox, user, role, chan
 
 ## utils/announcementRefresh.js
 
-`notifyRegistrationsChanged(eventId)` bundles calls per event (2 s trailing debounce, timers `unref`'d) and then calls `bot.refreshEventAnnouncements(eventId)`; errors are only logged. `flushAnnouncementRefreshes()` runs pending refreshes at once; `createAnnouncementRefresher({ refresh, delayMs })` for tests.
+`notifyRegistrationsChanged(eventId)` bundles calls per event (2 s trailing debounce, timers `unref`'d) and then calls `bot.refreshEventAnnouncements(eventId)`; errors are only logged. `flushAnnouncementRefreshes()` runs pending refreshes at once; `createAnnouncementRefresher({ refresh, delayMs })` for tests. A second instance, `notifyPollChanged(pollId)` / `flushPollRefreshes()`, refreshes posted date polls via `bot.refreshPollMessages`.
+
+## utils/pollService.js, utils/pollStore.js
+
+`pollService.js` (pure): `normalizePollInput`, `normalizeVote`, `isPollOpen`, `effectivePollStatus`, `canVote`, `tallyPoll`, `rankOptions`, `getFavoriteOptionId`, `formatPollOption`. `pollStore.js`: `loadPoll`, `loadPollVotes`, `loadUserVote`, `savePollVote`, `updatePoll`, `closePoll`, `validateDecision`, `decidePoll`, `closeExpiredPolls`, `deletePoll`, `deleteUserPollVotes`, `startPollScheduler`/`stopPollScheduler`; writes run under `withEventLock('poll:<id>')`. Rules: [date-polls](../concepts/date-polls.md).
 
 ## utils/eventUrl.js
 
-`buildEventUrl(eventId)` → `<BASE_URL>/#event/<id>` (fallback `http://localhost:3000`). Every event link that leaves the server is built with it: announcement embed and "Zum Event" button, `/events` command, event channel embed, DMs, guest invitation, `{event.url}`. `test/eventUrl.test.js` fails when server code builds `#events/<id>` links again.
+`buildEventUrl(eventId)` → `<BASE_URL>/#event/<id>` (fallback `http://localhost:3000`). Every event link that leaves the server is built with it: announcement embed and "Zum Event" button, `/events` command, event channel embed, DMs, guest invitation, `{event.url}`. `test/eventUrl.test.js` fails when server code builds `#events/<id>` links again. `buildPollUrl(pollId)` → `<BASE_URL>/#poll/<id>` for poll messages and DMs.
 
 ## utils/userProfile.js
 
