@@ -90,6 +90,12 @@
                 <i class="bi bi-calendar-event me-1"></i>Events
               </a>
             </li>
+            <li class="nav-item" id="nav-polls" style="display:none;">
+              <a class="nav-link" href="#polls" data-section="polls-section">
+                <i class="bi bi-ui-checks-grid me-1"></i>Abstimmungen
+                <span class="badge rounded-pill text-bg-danger ms-1" id="nav-polls-badge" style="display:none;"></span>
+              </a>
+            </li>
             <li class="nav-item" id="nav-profile" style="display:none;">
               <a class="nav-link" href="#profile" data-section="profile-section">
                 <i class="bi bi-person me-1"></i>Mein Profil
@@ -409,6 +415,33 @@
     </section>
 
     <!-- ── PROFILE SECTION ── -->
+    <!-- Date polls -->
+    <section id="polls-section" class="app-section" style="display:none;">
+      <div class="container section-container">
+        <div class="section-header d-flex justify-content-between align-items-center flex-wrap gap-3" id="polls-header">
+          <div>
+            <h2><i class="bi bi-ui-checks-grid me-2"></i>Abstimmungen</h2>
+            <p class="text-secondary mb-0">Stimme ab, wann die nächsten Events stattfinden.</p>
+          </div>
+          <button class="btn btn-accent" id="polls-create-btn" style="display:none;" onclick="showPollEditor()">
+            <i class="bi bi-plus-circle me-1"></i>Neue Abstimmung
+          </button>
+        </div>
+        <div id="polls-open" class="row g-4"></div>
+        <details class="mt-4" id="polls-closed-wrapper">
+          <summary class="text-secondary">Abgeschlossen</summary>
+          <div id="polls-closed" class="row g-4 mt-1"></div>
+        </details>
+      </div>
+    </section>
+
+    <section id="poll-detail-section" class="app-section" style="display:none;">
+      <div class="container section-container">
+        <a href="#polls" class="text-secondary small"><i class="bi bi-arrow-left me-1"></i>Zurück zu den Abstimmungen</a>
+        <div id="poll-detail" class="mt-3"></div>
+      </div>
+    </section>
+
     <section id="profile-section" class="app-section" style="display:none;">
       <div class="container section-container">
         <div class="section-header">
@@ -647,6 +680,9 @@
             <button class="btn btn-accent" onclick="showCreateEventModal()">
               <i class="bi bi-plus-circle me-1"></i>Neues Event
             </button>
+            <a class="btn btn-outline-light" href="#polls">
+              <i class="bi bi-ui-checks-grid me-1"></i>Abstimmungen
+            </a>
             <button class="btn btn-outline-light" onclick="showBotMessagesModal()">
               <i class="bi bi-chat-dots me-1"></i>Bot-Nachrichten
             </button>
@@ -1246,6 +1282,10 @@
               <label class="form-check-label" for="reset-auditLogs">Alle Audit-Logs löschen</label>
             </div>
             <div class="form-check">
+              <input class="form-check-input" type="checkbox" value="polls" id="reset-polls">
+              <label class="form-check-label" for="reset-polls">Alle Abstimmungen löschen</label>
+            </div>
+            <div class="form-check">
               <input class="form-check-input" type="checkbox" value="users" id="reset-users">
               <label class="form-check-label text-danger fw-bold" for="reset-users">Alle Benutzer löschen (⚠️)</label>
             </div>
@@ -1608,6 +1648,137 @@
   </div>
 
   <!-- ── INFO SECTION ── -->
+  <!-- Date poll editor -->
+  <div class="modal fade" id="pollEditorModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+      <div class="modal-content glass-modal">
+        <div class="modal-header border-0">
+          <h5 class="modal-title" id="poll-editor-title">Neue Abstimmung</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <input type="hidden" id="poll-edit-id">
+          <div class="mb-3">
+            <label class="form-label" for="poll-title">Titel</label>
+            <input type="text" class="form-control" id="poll-title" maxlength="200" placeholder="z. B. Termin für den Herbst-Raid">
+          </div>
+          <div class="mb-3">
+            <label class="form-label" for="poll-description">Beschreibung</label>
+            <textarea class="form-control" id="poll-description" rows="3" maxlength="5000" placeholder="Worum geht es? (Markdown möglich)"></textarea>
+          </div>
+          <label class="form-label">Termine</label>
+          <div id="poll-option-rows" class="poll-option-rows"></div>
+          <button type="button" class="btn btn-sm btn-outline-light mt-2" onclick="addPollOptionRow()"><i class="bi bi-plus-lg me-1"></i>Termin</button>
+          <small class="text-muted d-block mt-1">2–10 Termine. Termine mit Stimmen können nicht mehr entfernt oder verschoben werden.</small>
+          <div class="row g-3 mt-2">
+            <div class="col-md-6">
+              <label class="form-label" for="poll-deadline">Deadline (optional)</label>
+              <input type="text" class="form-control" id="poll-deadline" placeholder="Ohne Deadline">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label" for="poll-access">Wer darf abstimmen?</label>
+              <select class="form-select" id="poll-access" onchange="togglePollRoles()">
+                <option value="open">Alle Mitglieder</option>
+                <option value="role-required">Nur bestimmte Rollen</option>
+              </select>
+            </div>
+          </div>
+          <div id="poll-role-area" class="mt-3" style="display:none;">
+            <div id="poll-role-checkboxes" class="d-flex flex-wrap gap-2"></div>
+          </div>
+          <label class="form-label mt-3">Antworten</label>
+          <div class="row g-2">
+            <div class="col-md-4">
+              <div class="input-group">
+                <span class="input-group-text bg-transparent border-secondary"><i class="bi bi-check-circle poll-icon-yes"></i></span>
+                <input type="text" class="form-control" id="poll-label-yes" maxlength="30" placeholder="passt" aria-label="Antwort für Zusagen">
+              </div>
+            </div>
+            <div class="col-md-4">
+              <div class="input-group">
+                <span class="input-group-text bg-transparent border-secondary"><i class="bi bi-question-circle poll-icon-maybe"></i></span>
+                <input type="text" class="form-control" id="poll-label-maybe" maxlength="30" placeholder="wenn nötig" aria-label="Antwort für Vielleicht">
+              </div>
+            </div>
+            <div class="col-md-4">
+              <div class="input-group">
+                <span class="input-group-text bg-transparent border-secondary"><i class="bi bi-x-circle poll-icon-no"></i></span>
+                <input type="text" class="form-control" id="poll-label-no" maxlength="30" placeholder="passt nicht" aria-label="Antwort für Absagen">
+              </div>
+            </div>
+          </div>
+          <small class="text-muted d-block mt-1">Leer lassen für den Standardtext. Die Antworten erscheinen auf der Website, in Discord und in den Benachrichtigungen.</small>
+        </div>
+        <div class="modal-footer border-0">
+          <button type="button" class="btn btn-outline-light" data-bs-dismiss="modal">Abbrechen</button>
+          <button type="button" class="btn btn-accent" onclick="savePoll()">Speichern</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Post a date poll to Discord -->
+  <div class="modal fade" id="pollAnnounceModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content glass-modal">
+        <div class="modal-header border-0">
+          <h5 class="modal-title"><i class="bi bi-discord me-2"></i>In Discord posten</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <input type="hidden" id="poll-announce-id">
+          <label class="form-label" for="poll-announce-text">Text über der Abstimmung (optional)</label>
+          <textarea class="form-control mb-3" id="poll-announce-text" rows="2" maxlength="1500" placeholder="z. B. Stimmt bis Freitag ab!"></textarea>
+          <label class="form-label">Rollen erwähnen</label>
+          <div id="poll-announce-roles" class="d-flex flex-wrap gap-2 mb-3"></div>
+          <div class="form-check form-switch">
+            <input class="form-check-input" type="checkbox" id="poll-announce-everyone">
+            <label class="form-check-label" for="poll-announce-everyone">@everyone erwähnen</label>
+          </div>
+        </div>
+        <div class="modal-footer border-0">
+          <button type="button" class="btn btn-outline-light" data-bs-dismiss="modal">Abbrechen</button>
+          <button type="button" class="btn btn-accent" onclick="sendPollAnnouncement()">Posten</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Choose the date for the event -->
+  <div class="modal fade" id="pollDecideModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content glass-modal">
+        <div class="modal-header border-0">
+          <h5 class="modal-title"><i class="bi bi-calendar-plus me-2"></i>Termin für das Event wählen</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div id="poll-decide-options" class="d-flex flex-column gap-2"></div>
+          <small class="text-muted d-block mt-2">Danach öffnet sich der Event-Wizard mit diesem Termin. Alle Abstimmenden bekommen nach dem Speichern eine DM.</small>
+        </div>
+        <div class="modal-footer border-0">
+          <button type="button" class="btn btn-outline-light" data-bs-dismiss="modal">Abbrechen</button>
+          <button type="button" class="btn btn-accent" onclick="startEventFromPoll()">Weiter zum Event</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Generic confirmation -->
+  <div class="modal fade" id="confirmModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content glass-modal">
+        <div class="modal-body pt-4">
+          <p id="confirm-modal-text" class="mb-0"></p>
+        </div>
+        <div class="modal-footer border-0">
+          <button type="button" class="btn btn-outline-light" data-bs-dismiss="modal">Abbrechen</button>
+          <button type="button" class="btn btn-danger" id="confirm-modal-ok">Bestätigen</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <section id="info-section" class="app-section" style="display:none;">
     <div class="container section-container">
       <!-- Animated Background -->

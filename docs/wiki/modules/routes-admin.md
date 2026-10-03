@@ -21,7 +21,7 @@ see_also: [event-lifecycle, maintenance-mode, discord-integration, api-index]
 | GET | `/stats` | counts of events by status and registrations by status (guests counted) | — |
 | GET | `/all-events` | all events incl. draft/archived, `orderBy('createdAt','desc')` | — |
 | GET | `/import/discord-events` | Discord scheduled events (`getGuildScheduledEvents`) | — |
-| POST | `/events` | `validateEvent`; creates one event or, with `recurring` + `recurringUntil`, a series (`seriesId`, weekly/biweekly/monthly); may `createEventChannels`; `slots` via `normalizeSlots` (slot events: `maxParticipants = Σ capacity`, `allowGuests = false`) | `CREATE_EVENT` |
+| POST | `/events` | `validateEvent`; creates one event or, with `recurring` + `recurringUntil`, a series (`seriesId`, weekly/biweekly/monthly); may `createEventChannels`; `slots` via `normalizeSlots` (slot events: `maxParticipants = Σ capacity`, `allowGuests = false`); optional `fromPoll: { pollId, optionId }` (only with status `active`) → `decidePollWithEvent` checks, creates (first instance of a series decides) and decides under the poll lock, event gets `sourcePollId` | `CREATE_EVENT`, `DECIDE_POLL` |
 | PUT | `/events/:id` | `validateEvent`; full update; creates/deletes channels when `autoCreateChannels`/status changes; slots validated and written by `saveEventWithSlots` under the event lock; afterwards promotes the waitlist and refreshes announcements | `UPDATE_EVENT` |
 | PUT | `/events/:id/status` | body `{ status: draft\|active\|archived\|cancelled }` | `UPDATE_EVENT_STATUS` |
 | PUT | `/events/:id/cancel` | status `cancelled` + DM to accepted/pending | `CANCEL_EVENT` |
@@ -40,7 +40,12 @@ see_also: [event-lifecycle, maintenance-mode, discord-integration, api-index]
 | POST | `/events/:id/sync-discord` | creates a Discord scheduled event once, stores `discordScheduledEventId` | `SYNC_DISCORD_EVENT` |
 | GET / PUT | `/bot-messages` | templates `registration`, `accepted`, `rejected` (`validateBotMessages`, ≤2000 chars) | `UPDATE_TEMPLATES` |
 | GET | `/audit-log` | paginated, newest first | — |
-| DELETE | `/reset` | body `{ password, targets[] }`; `ADMIN_RESET_PASSWORD` required; wipes `events`, `users`, `registrations`, `comments`, `auditLogs` | (console only) |
+| DELETE | `/reset` | body `{ password, targets[] }`; `ADMIN_RESET_PASSWORD` required; wipes `events`, `users`, `registrations`, `comments`, `auditLogs`, `polls`, `pollVotes` | (console only) |
+| POST | `/polls` | `normalizePollInput` → new open poll | `CREATE_POLL` |
+| PUT | `/polls/:id` | `updatePoll` (open polls only; dates with votes stay) | `UPDATE_POLL` |
+| POST | `/polls/:id/close` | `closePoll` | `CLOSE_POLL` |
+| POST | `/polls/:id/announce` | posts the poll embed + buttons, stores `{ channelId, messageId }` (max 5) | `ANNOUNCE_POLL` |
+| DELETE | `/polls/:id` | `deletePoll` (votes too; posted messages become a notice) | `DELETE_POLL` |
 | GET | `/bot/status` | `getBotStatus()` | — |
 | GET / PUT | `/bot/settings` | presence + feature toggles (`saveBotSettings` → `applyBotSettings`) | `UPDATE_BOT_SETTINGS` |
 | GET | `/bot/running-events` | active events with registration stats | — |

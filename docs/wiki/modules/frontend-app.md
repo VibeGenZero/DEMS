@@ -24,6 +24,8 @@ see_also: [frontend-markup, api-index]
 |---|---|---|
 | `#events` (default) | `showEventsSection()` | login required |
 | `#event/<id>` | `showEventDetail(id)` | login required |
+| `#polls` | `showPollsSection()` | login required |
+| `#poll/<id>` | `showPollDetail(id)` (also remembered as pending route before the login) | login required |
 | `#events/<id>` (old Discord links) | rewritten to `#event/<id>` with `history.replaceState` | login required |
 | `#profile` | `showProfileSection()` | login required |
 | `#admin` | `showAdminSection()` | `currentUser.isAdmin` |
@@ -57,6 +59,8 @@ Logged-out users see `#login-section` for every route except `info`. An event ro
 | Announcements | `announceEvent`, `renderAnnounceButtonsPreview`, `sendAnnouncement` |
 | Registrations review | `showRegistrations`, `updateRegStatus`, `renderRegistrationSlotCell`, `moveRegistrationSlot` |
 | Role slots | wizard: `renderSlotEditor`, `toggleSlotEditor`, `addSlotRow`, `removeSlotRow`, `applySlotPreset`, `getSlotsFromEditor`, `updateSlotTotals`; cards: `renderSlotChips`; event page: `eventHasSlots`, `renderSlotPicker`, `selectPrimarySlot`, `renderAltSlotChips`, `toggleAltSlot`, `renderRoster`, `renderRosterAvatar`, `renderOwnSlot`, `switchMySlot`; shared: `formatSlotLabel` |
+| Date polls | `formatPollDate`, `formatPollOptionLabel`, `getPollLabels` / `DEFAULT_POLL_LABELS`, `renderPollAnswerIcon` (`POLL_ANSWER_ICONS`: Bootstrap Icons instead of emojis), `renderPollCounts`, `refreshPollBadge`, `showPollsSection`, `renderPollCard`, `showPollDetail`, `renderPollDetail`, `renderPollOptionRow`, `setPollVote` |
+| Date polls (admin) | `showConfirmDialog`, `renderPollRoleCheckboxes`, `togglePollRoles`, `showPollEditor` (answer fields stay empty for default answers), `addPollOptionRow`, `collectPollEditor` (sends `labels`), `savePoll`, `renderPollAdminBar`, `showPollAnnounceDialog`, `sendPollAnnouncement`, `closePollFromUi`, `deletePollFromUi`, `showPollDecideDialog`, `startEventFromPoll` (prefills the event wizard; `saveEvent` sends `fromPoll`) |
 | Discord import | `showImportDiscordEventsModal`, `fetchDiscordEvents`, `selectDiscordEvent` |
 | Bot templates | `showBotMessagesModal`, `saveBotMessages` |
 | Maintenance | `checkMaintenanceStatus`, `showMaintenanceModal`, `saveMaintenanceSettings`, `activatePanicMode`, `deactivatePanicMode` |
@@ -67,7 +71,7 @@ Logged-out users see `#login-section` for every route except `info`. An event ro
 
 ## Globals
 
-`currentUser`, `csrfToken`, `serverName`, `cachedRoles`, `cachedEvents`, `countdownTimers`, `activeCategory`, `currentView`, `descriptionEditor` (EasyMDE), `startDatePicker`/`endDatePicker` (Flatpickr), `window.DEBUG_MODE`, `window.VERBOSE_LOG`, `window._demsGuildId`, slots: `selectedSlotId`, `selectedAltSlotIds`, `slotPickerSlots`, `MAX_SLOTS_PER_EVENT`, `SLOT_PRESETS`.
+`currentUser`, `csrfToken`, `serverName`, `cachedRoles`, `cachedEvents`, `countdownTimers`, `activeCategory`, `currentView`, `descriptionEditor` (EasyMDE), `startDatePicker`/`endDatePicker` (Flatpickr), `window.DEBUG_MODE`, `window.VERBOSE_LOG`, `window._demsGuildId`, slots: `selectedSlotId`, `selectedAltSlotIds`, `slotPickerSlots`, `MAX_SLOTS_PER_EVENT`, `SLOT_PRESETS`, polls: `currentPoll`, `pendingPollDecision`, `pollDeadlinePicker`.
 
 ## Rules for changes
 

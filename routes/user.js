@@ -3,6 +3,7 @@ const router = express.Router();
 const { db, collection, doc, getDoc, getDocs, setDoc, deleteDoc, query, where, orderBy, writeBatch } = require('../firebaseAdmin');
 const { requireAuth } = require('../middleware/auth');
 const { debugLog } = require('../utils/debugLog');
+const { deleteUserPollVotes } = require('../utils/pollStore');
 const { promoteFromWaitlist } = require('../utils/eventUtils');
 const { notifyRegistrationsChanged } = require('../utils/announcementRefresh');
 const { OCCUPYING_STATUSES } = require('../utils/capacity');
@@ -399,6 +400,13 @@ router.delete('/account', requireAuth, async (req, res) => {
             } catch (followUpErr) {
                 console.error('Follow-up after account deletion failed:', followUpErr.message);
             }
+        }
+
+        // Votes of date polls belong to the account as well
+        try {
+            await deleteUserPollVotes(userId);
+        } catch (pollErr) {
+            console.error('Deleting poll votes failed:', pollErr.message);
         }
 
         // Destroy session

@@ -9,7 +9,7 @@ see_also: [registration-flow, event-lifecycle, maintenance-mode, glossary]
 ---
 # Data model — collections and document shapes
 
-> TL;DR: Nine schemaless collections. `events`, `registrations`, `comments`, `auditLogs` use auto ids; `users` uses the Discord user id; `botMessages/templates`, `botSettings/config`, `maintenanceSettings/config` are singleton documents; `devMeta/seed` exists only in dev mock mode. All dates are ISO-8601 strings. Shapes are defined by the code that writes them (no schema file) — the producers are listed per collection.
+> TL;DR: Eleven schemaless collections. `events`, `registrations`, `comments`, `auditLogs`, `polls` use auto ids; `pollVotes` uses `<pollId>_<userId>`; `users` uses the Discord user id; `botMessages/templates`, `botSettings/config`, `maintenanceSettings/config` are singleton documents; `devMeta/seed` exists only in dev mock mode. All dates are ISO-8601 strings. Shapes are defined by the code that writes them (no schema file) — the producers are listed per collection.
 
 ```mermaid
 erDiagram
@@ -19,6 +19,8 @@ erDiagram
   users ||--o{ comments : "userId"
   registrations }o--o{ users : "guests[] / pendingGuests[].userId"
   auditLogs }o--|| users : "adminId"
+  polls ||--o{ pollVotes : "pollId"
+  events |o--o| polls : "sourcePollId"
 ```
 
 ## events (auto id) — written by `POST/PUT /api/admin/events*`
@@ -43,6 +45,7 @@ erDiagram
 | `discordChannelId`, `discordTextChannelId`, `discordScheduledEventId` | id or null | set by the bot |
 | `recurring`, `recurringInterval`, `recurringUntil`, `seriesId` | bool, `weekly`\|`biweekly`\|other=monthly, `YYYY-MM-DD`, uuid | series instances share `seriesId` |
 | `eventStartNotificationSent` | bool | start DM sent once |
+| `sourcePollId` | poll id or `''` | date poll the event was created from (informative) |
 | `slots` | `[{ id, name, emoji, capacity }]` or absent | role slots, see [role-slots](role-slots.md); with slots `maxParticipants = Σ capacity` and `allowGuests = false` |
 | `announcements` | `[{ channelId, messageId }]` (max 5) | Discord announcements that are kept up to date live |
 | `createdAt`, `createdBy`, `updatedAt` | ISO, user id, ISO | |
@@ -63,7 +66,15 @@ Slot fields exist only on slot events: `slotId` = the slot actually taken (`null
 
 ## auditLogs (auto id) — `utils/eventUtils.js#addAuditLog`
 
-`{ action, adminId, details, targetId, timestamp }`. Actions: `CREATE_EVENT`, `UPDATE_EVENT`, `UPDATE_EVENT_STATUS`, `CANCEL_EVENT`, `START_EVENT`, `END_EVENT`, `DELETE_EVENT`, `DELETE_SERIES`, `DUPLICATE_EVENT`, `GENERATE_CHECKIN`, `EXPORT_REGISTRATIONS`, `UPDATE_REGISTRATION_STATUS`, `MOVE_REGISTRATION_SLOT`, `ANNOUNCE_EVENT`, `SYNC_DISCORD_EVENT`, `UPDATE_TEMPLATES`, `UPDATE_BOT_SETTINGS`, `UPDATE_MAINTENANCE`, `PANIC_MODE_ACTIVATED`, `PANIC_MODE_DEACTIVATED`.
+`{ action, adminId, details, targetId, timestamp }`. Actions: `CREATE_EVENT`, `UPDATE_EVENT`, `UPDATE_EVENT_STATUS`, `CANCEL_EVENT`, `START_EVENT`, `END_EVENT`, `DELETE_EVENT`, `DELETE_SERIES`, `DUPLICATE_EVENT`, `GENERATE_CHECKIN`, `EXPORT_REGISTRATIONS`, `UPDATE_REGISTRATION_STATUS`, `MOVE_REGISTRATION_SLOT`, `CREATE_POLL`, `UPDATE_POLL`, `CLOSE_POLL`, `ANNOUNCE_POLL`, `DELETE_POLL`, `DECIDE_POLL`, `ANNOUNCE_EVENT`, `SYNC_DISCORD_EVENT`, `UPDATE_TEMPLATES`, `UPDATE_BOT_SETTINGS`, `UPDATE_MAINTENANCE`, `PANIC_MODE_ACTIVATED`, `PANIC_MODE_DEACTIVATED`.
+
+## polls (auto id) — written by `routes/admin.js` and `utils/pollStore.js`
+
+`{ title, description, options: [{ id, startDate, endDate }], deadline, status: open|closed|decided, accessMode, requiredRoles, labels: { yes, maybe, no }, winnerOptionId, eventId, announcements, createdBy, createdAt, updatedAt, closedAt }` — see [date-polls](date-polls.md).
+
+## pollVotes (id = `<pollId>_<userId>`) — written by `utils/pollStore.js#savePollVote`
+
+`{ pollId, userId, userName, yes: optionId[], maybe: optionId[], updatedAt }`; an empty vote is deleted.
 
 ## Singletons
 

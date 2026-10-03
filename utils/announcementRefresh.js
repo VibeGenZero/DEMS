@@ -53,9 +53,16 @@ const defaultRefresher = createAnnouncementRefresher({
     refresh: (eventId) => require('../bot').refreshEventAnnouncements(eventId)
 });
 
+// Posted poll messages are kept up to date the same way
+const pollRefresher = createAnnouncementRefresher({
+    refresh: (pollId) => require('../bot').refreshPollMessages(pollId)
+});
+
 module.exports = {
     ANNOUNCEMENT_REFRESH_DELAY_MS,
     createAnnouncementRefresher,
     notifyRegistrationsChanged: defaultRefresher.notify,
-    flushAnnouncementRefreshes: defaultRefresher.flush
+    flushAnnouncementRefreshes: defaultRefresher.flush,
+    notifyPollChanged: pollRefresher.notify,
+    flushPollRefreshes: pollRefresher.flush
 };

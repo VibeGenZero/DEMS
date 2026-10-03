@@ -21,8 +21,8 @@ sources: [scripts/wiki-graph.js, docs/wiki/graph.json, CLAUDE.md]
 | Type | Nodes |
 |---|---|
 | overview | [architecture](overview/architecture.md) · [directory-map](overview/directory-map.md) · [request-lifecycle](overview/request-lifecycle.md) |
-| module | [server](modules/server.md) · [routes-auth](modules/routes-auth.md) · [routes-events](modules/routes-events.md) · [routes-admin](modules/routes-admin.md) · [routes-user](modules/routes-user.md) · [bot](modules/bot.md) · [data-layer](modules/data-layer.md) · [middleware](modules/middleware.md) · [utils](modules/utils.md) · [frontend-app](modules/frontend-app.md) · [frontend-markup](modules/frontend-markup.md) · [dev-mock-mode](modules/dev-mock-mode.md) · [landing-page](modules/landing-page.md) |
-| concept | [data-model](concepts/data-model.md) · [registration-flow](concepts/registration-flow.md) · [form-fields](concepts/form-fields.md) · [auth-session](concepts/auth-session.md) · [maintenance-mode](concepts/maintenance-mode.md) · [discord-integration](concepts/discord-integration.md) · [reminders-presence](concepts/reminders-presence.md) · [event-lifecycle](concepts/event-lifecycle.md) · [security](concepts/security.md) · [role-slots](concepts/role-slots.md) |
+| module | [server](modules/server.md) · [routes-auth](modules/routes-auth.md) · [routes-events](modules/routes-events.md) · [routes-admin](modules/routes-admin.md) · [routes-user](modules/routes-user.md) · [routes-polls](modules/routes-polls.md) · [bot](modules/bot.md) · [data-layer](modules/data-layer.md) · [middleware](modules/middleware.md) · [utils](modules/utils.md) · [frontend-app](modules/frontend-app.md) · [frontend-markup](modules/frontend-markup.md) · [dev-mock-mode](modules/dev-mock-mode.md) · [landing-page](modules/landing-page.md) |
+| concept | [data-model](concepts/data-model.md) · [registration-flow](concepts/registration-flow.md) · [form-fields](concepts/form-fields.md) · [auth-session](concepts/auth-session.md) · [maintenance-mode](concepts/maintenance-mode.md) · [discord-integration](concepts/discord-integration.md) · [reminders-presence](concepts/reminders-presence.md) · [event-lifecycle](concepts/event-lifecycle.md) · [security](concepts/security.md) · [role-slots](concepts/role-slots.md) · [date-polls](concepts/date-polls.md) |
 | ops | [configuration](ops/configuration.md) · [docker](ops/docker.md) · [deployment](ops/deployment.md) · [testing](ops/testing.md) |
 | howto | [add-api-endpoint](howto/add-api-endpoint.md) · [add-event-field](howto/add-event-field.md) · [add-form-field-type](howto/add-form-field-type.md) · [add-bot-feature](howto/add-bot-feature.md) · [add-collection](howto/add-collection.md) · [run-and-debug](howto/run-and-debug.md) |
 | reference | [api-index](reference/api-index.md) · [glossary](reference/glossary.md) · [known-issues](reference/known-issues.md) · [conventions](reference/conventions.md) · [decisions](reference/decisions.md) |
@@ -35,6 +35,7 @@ sources: [scripts/wiki-graph.js, docs/wiki/graph.json, CLAUDE.md]
 | add or change an endpoint | add-api-endpoint, api-index, the router node |
 | change how registrations work | registration-flow, data-model, utils |
 | role slots, line-ups, live announcements | role-slots, registration-flow, discord-integration |
+| date polls, voting on dates | date-polls, routes-polls, discord-integration |
 | add an event field | add-event-field, data-model |
 | touch registration forms | form-fields, add-form-field-type |
 | change Discord behaviour | bot, discord-integration, add-bot-feature |
@@ -60,9 +61,11 @@ sources: [scripts/wiki-graph.js, docs/wiki/graph.json, CLAUDE.md]
 | `routes/events.js` | routes-events, registration-flow, event-lifecycle |
 | `routes/admin.js` | routes-admin, event-lifecycle, maintenance-mode |
 | `routes/user.js` | routes-user |
+| `routes/polls.js` | routes-polls, date-polls |
 | `middleware/*.js` | middleware, maintenance-mode, auth-session |
 | `utils/registrationService.js` | registration-flow, role-slots, utils |
 | `utils/slotService.js`, `utils/capacity.js`, `utils/eventLock.js`, `utils/announcementRefresh.js` | role-slots, utils |
+| `utils/pollService.js`, `utils/pollStore.js` | date-polls, utils |
 | `utils/formFields.js` | form-fields, utils |
 | `utils/eventUrl.js` | utils, discord-integration |
 | `utils/eventUtils.js`, `utils/userProfile.js`, `utils/debugLog.js` | utils |

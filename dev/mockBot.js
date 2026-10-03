@@ -184,6 +184,31 @@ async function refreshEventAnnouncements(eventId) {
     return true;
 }
 
+async function refreshPollMessages(pollId) {
+    const { loadPoll, loadPollVotes } = require('../utils/pollStore');
+    const poll = await loadPoll(pollId);
+    if (!poll) return false;
+    const announcements = Array.isArray(poll.announcements) ? poll.announcements : [];
+    if (announcements.length === 0) return false;
+
+    // Required lazily -> bot.js merges this module into its own exports
+    const { buildPollEmbed, buildPollComponents } = require('../bot');
+    const { tallyPoll } = require('../utils/pollService');
+    const tally = tallyPoll(poll, await loadPollVotes(pollId));
+    mockLog(`Abstimmung "${poll.title}" aktualisiert (${announcements.length}×)`, {
+        embed: toPayload(buildPollEmbed(poll, tally)),
+        components: buildPollComponents(poll).map(toPayload)
+    });
+    return true;
+}
+
+async function markPollMessagesDeleted(poll) {
+    const announcements = Array.isArray(poll.announcements) ? poll.announcements : [];
+    if (announcements.length === 0) return false;
+    mockLog(`Abstimmung "${poll.title}" als gelöscht markiert (${announcements.length}×)`);
+    return true;
+}
+
 async function sendGuestInvitation(guestUserId, registrant, event, registrationId) {
     dmsSent++;
     mockLog(`Gäste-Einladung an ${describeUser(guestUserId)}`, {
@@ -263,6 +288,8 @@ module.exports = {
     sendDM,
     sendChannelMessage,
     refreshEventAnnouncements,
+    refreshPollMessages,
+    markPollMessagesDeleted,
     sendGuestInvitation,
     assignRole,
     removeRole,

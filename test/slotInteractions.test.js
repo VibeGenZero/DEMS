@@ -1,7 +1,7 @@
 const { test, after } = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('path');
-const { createTempDir } = require('./helpers');
+const { createTempDir, createFakeInteraction, dispatchInteraction } = require('./helpers');
 
 // Mock mode with an own database; the empty cwd keeps a local .env out
 const tmpDir = createTempDir('slot-interactions');
@@ -23,39 +23,6 @@ const SLOTS = [
     { id: 'heal', name: 'Heiler', emoji: '💚', capacity: 1 }
 ];
 
-/**
- * Interaction double that records every answer in call order.
- * `answered` resolves with the first answer that is not a defer.
- */
-function fakeInteraction({ customId, userId, commandName, eventOption, kind }) {
-    const calls = [];
-    let resolveAnswered;
-    const answered = new Promise(resolve => { resolveAnswered = resolve; });
-    const interaction = {
-        customId, commandName, calls, answered,
-        user: { id: userId, username: userId },
-        member: null,
-        deferred: false,
-        replied: false,
-        options: { getString: () => eventOption },
-        isAutocomplete: () => false,
-        isModalSubmit: () => false,
-        isButton: () => kind === 'button',
-        isChatInputCommand: () => kind === 'command',
-        async deferUpdate() { calls.push(['deferUpdate']); interaction.deferred = true; },
-        async deferReply(payload) { calls.push(['deferReply', payload]); interaction.deferred = true; },
-        async update(payload) { calls.push(['update', payload]); interaction.replied = true; resolveAnswered(); },
-        async reply(payload) { calls.push(['reply', payload]); interaction.replied = true; resolveAnswered(); },
-        async editReply(payload) { calls.push(['editReply', payload]); resolveAnswered(); }
-    };
-    return interaction;
-}
-
-async function dispatch(interaction) {
-    bot.client.emit('interactionCreate', interaction);
-    await Promise.race([interaction.answered, sleep(3000).then(() => { throw new Error('no answer'); })]);
-}
-
 async function seedSlotEvent(id) {
     await setDoc(doc(db, 'events', id), { title: `Raid ${id}`, status: 'active', approvalMode: 'instant', slots: SLOTS, maxParticipants: 2 });
 }
@@ -71,8 +38,8 @@ test('the leave button acknowledges the click before the slow clean-up', async (
     await seedSlotEvent('int-leave');
     await seedRegistration('int-leave-reg', 'int-leave', 'int-user-1', { status: 'accepted', slotId: 'tank', preferredSlotId: 'tank', altSlotIds: [] });
 
-    const interaction = fakeInteraction({ kind: 'button', customId: 'slot_leave:int-leave', userId: 'int-user-1' });
-    await dispatch(interaction);
+    const interaction = createFakeInteraction({ kind: 'button', customId: 'slot_leave:int-leave', userId: 'int-user-1' });
+    await dispatchInteraction(bot.client, interaction);
 
     assert.deepEqual(interaction.calls.map(([name]) => name), ['deferUpdate', 'editReply']);
     assert.match(interaction.calls[1][1].content, /abgemeldet/);
@@ -83,8 +50,8 @@ test('the switch button acknowledges the click before switching', async () => {
     await seedSlotEvent('int-switch');
     await seedRegistration('int-switch-reg', 'int-switch', 'int-user-2', { status: 'accepted', slotId: 'tank', preferredSlotId: 'tank', altSlotIds: [] });
 
-    const interaction = fakeInteraction({ kind: 'button', customId: 'slot_switch:int-switch:heal', userId: 'int-user-2' });
-    await dispatch(interaction);
+    const interaction = createFakeInteraction({ kind: 'button', customId: 'slot_switch:int-switch:heal', userId: 'int-user-2' });
+    await dispatchInteraction(bot.client, interaction);
 
     assert.deepEqual(interaction.calls.map(([name]) => name), ['deferUpdate', 'editReply']);
     assert.equal(interaction.calls[1][1].content, '✅ Du bist jetzt als 💚 Heiler eingeplant.');
@@ -94,8 +61,8 @@ test('/unregister acknowledges the command before the clean-up', async () => {
     await seedSlotEvent('int-slash');
     await seedRegistration('int-slash-reg', 'int-slash', 'int-user-3', { status: 'accepted', slotId: 'tank', preferredSlotId: 'tank', altSlotIds: [] });
 
-    const interaction = fakeInteraction({ kind: 'command', commandName: 'unregister', eventOption: 'int-slash', userId: 'int-user-3' });
-    await dispatch(interaction);
+    const interaction = createFakeInteraction({ kind: 'command', commandName: 'unregister', eventOption: 'int-slash', userId: 'int-user-3' });
+    await dispatchInteraction(bot.client, interaction);
 
     assert.deepEqual(interaction.calls.map(([name]) => name), ['deferReply', 'editReply']);
     assert.equal(interaction.calls[1][1].embeds[0].toJSON().title, '✅ Abmeldung erfolgreich');
@@ -110,8 +77,8 @@ test('a declined guest invitation lets the waitlist move up', async () => {
     });
     await seedRegistration('int-guest-waiting', 'int-guest', 'int-waiting', { status: 'waitlisted', createdAt: '2026-10-01T09:00:00.000Z' });
 
-    const interaction = fakeInteraction({ kind: 'button', customId: 'guest_decline:int-guest-host:int-guest-user', userId: 'int-guest-user' });
-    await dispatch(interaction);
+    const interaction = createFakeInteraction({ kind: 'button', customId: 'guest_decline:int-guest-host:int-guest-user', userId: 'int-guest-user' });
+    await dispatchInteraction(bot.client, interaction);
 
     let status;
     for (let attempt = 0; attempt < 40; attempt++) {

@@ -410,6 +410,232 @@ test('re-accepting a rejected registration does not silently overbook its old sl
     assert.equal(body.warning, 'Slot „Tank“ ist jetzt überbucht.');
 });
 
+// ── Date polls ──────────────────────────────────────────────────────────
+
+/** ISO date `days` from now at `hour` UTC. */
+function futureDate(days, hour = 18) {
+    const date = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
+    date.setUTCHours(hour, 0, 0, 0);
+    return date.toISOString();
+}
+
+/** Create a date poll with two dates; returns the API response. */
+async function createPollViaApi(admin, title, fields = {}) {
+    const res = await admin.send('POST', '/api/admin/polls', {
+        title, description: 'Wann passt es euch?',
+        options: [{ startDate: futureDate(8) }, { startDate: futureDate(9) }],
+        ...fields
+    });
+    const body = await res.json();
+    assert.equal(res.status, 200, JSON.stringify(body));
+    return body;
+}
+
+test('admins create date polls', async () => {
+    const admin = await loginAs('admin');
+    const poll = await createPollViaApi(admin, 'Neue Abstimmung');
+    assert.equal(poll.status, 'open');
+    assert.equal(poll.options.length, 2);
+    assert.ok(poll.options.every(option => /^[0-9a-f]{8}$/.test(option.id)));
+    assert.equal(poll.createdBy, personaById('admin').userId);
+});
+
+test('admins choose their own answers for a poll', async () => {
+    const admin = await loginAs('admin');
+    const labels = { yes: 'Bin dabei', maybe: 'Vielleicht', no: 'Kann nicht' };
+    const poll = await createPollViaApi(admin, 'Antwort-Abstimmung', { labels });
+    assert.deepEqual(poll.labels, labels);
+
+    const raider = await loginAs('raider');
+    assert.deepEqual((await (await raider.request(`/api/polls/${poll.id}`)).json()).labels, labels);
+    const entry = (await (await raider.request('/api/polls')).json()).find(item => item.id === poll.id);
+    assert.deepEqual(entry.labels, labels);
+
+    const renamed = await admin.send('PUT', `/api/admin/polls/${poll.id}`, {
+        title: poll.title, options: poll.options, labels: { ...labels, no: 'Bin raus' }
+    });
+    assert.equal(renamed.status, 200);
+    assert.equal((await renamed.json()).labels.no, 'Bin raus');
+});
+
+test('invalid date polls are refused with a German message', async () => {
+    const admin = await loginAs('admin');
+    const res = await admin.send('POST', '/api/admin/polls', { title: 'Zu wenig', options: [{ startDate: futureDate(8) }] });
+    assert.equal(res.status, 400);
+    assert.equal((await res.json()).error, 'Eine Abstimmung braucht 2–10 Termine.');
+});
+
+test('posting a poll to Discord is logged', async () => {
+    const admin = await loginAs('admin');
+    const poll = await createPollViaApi(admin, 'Poster-Abstimmung');
+    const res = await admin.send('POST', `/api/admin/polls/${poll.id}/announce`, { text: 'Stimmt ab, Leute!' });
+    assert.equal(res.status, 200);
+    await server.waitForOutput('Stimmt ab, Leute!');
+});
+
+test('a poll can only be turned into an event once', async () => {
+    const admin = await loginAs('admin');
+    const poll = await createPollViaApi(admin, 'Event-Abstimmung');
+    const [first] = poll.options;
+    const body = { title: 'Aus der Abstimmung', status: 'active', startDate: first.startDate, fromPoll: { pollId: poll.id, optionId: first.id } };
+
+    const created = await admin.send('POST', '/api/admin/events', body);
+    assert.equal(created.status, 200);
+    assert.equal((await created.json()).sourcePollId, poll.id);
+
+    const again = await admin.send('POST', '/api/admin/events', body);
+    assert.equal(again.status, 400);
+    assert.equal((await again.json()).error, 'Diese Abstimmung ist bereits entschieden.');
+
+    const other = await createPollViaApi(admin, 'Falscher Termin');
+    const wrong = await admin.send('POST', '/api/admin/events', { ...body, fromPoll: { pollId: other.id, optionId: 'nope' } });
+    assert.equal(wrong.status, 400);
+    assert.equal((await wrong.json()).error, 'Termin nicht gefunden');
+});
+
+test('a poll can only become an active event', async () => {
+    const admin = await loginAs('admin');
+    const poll = await createPollViaApi(admin, 'Entwurf-Abstimmung');
+    const [first] = poll.options;
+
+    const res = await admin.send('POST', '/api/admin/events', {
+        title: 'Entwurf aus Abstimmung', status: 'draft', startDate: first.startDate,
+        fromPoll: { pollId: poll.id, optionId: first.id }
+    });
+    assert.equal(res.status, 400);
+    assert.equal((await res.json()).error, 'Ein Event aus einer Abstimmung muss aktiv sein.');
+    assert.equal((await (await admin.request(`/api/polls/${poll.id}`)).json()).status, 'open');
+    const events = await (await admin.request('/api/admin/all-events')).json();
+    assert.equal(events.some(event => event.title === 'Entwurf aus Abstimmung'), false);
+});
+
+test('admins close and delete polls', async () => {
+
+    const admin = await loginAs('admin');
+    const poll = await createPollViaApi(admin, 'Weg damit');
+    assert.equal((await admin.send('POST', `/api/admin/polls/${poll.id}/close`)).status, 200);
+    assert.equal((await admin.send('DELETE', `/api/admin/polls/${poll.id}`)).status, 200);
+    assert.equal((await admin.send('DELETE', `/api/admin/polls/${poll.id}`)).status, 404);
+});
+
+test('members vote on the web and see the tally', async () => {
+    const admin = await loginAs('admin');
+    const poll = await createPollViaApi(admin, 'Web-Abstimmung');
+    const [first, second] = poll.options;
+    const raider = await loginAs('raider');
+    const member = await loginAs('member');
+
+    const res = await raider.send('PUT', `/api/polls/${poll.id}/vote`, { yes: [first.id], maybe: [second.id] });
+    assert.equal(res.status, 200);
+    const voted = await res.json();
+    assert.deepEqual(voted.myVote, { yes: [first.id], maybe: [second.id] });
+    assert.deepEqual(voted.tally.options.map(o => [o.yes, o.maybe]), [[1, 0], [0, 1]]);
+    assert.equal(voted.tally.options[0].yesVoters[0].displayName, personaById('raider').displayName);
+    assert.equal(voted.favoriteOptionId, first.id);
+    assert.equal(voted.announcements, undefined);
+
+    const memberList = await (await member.request('/api/polls')).json();
+    const entry = memberList.find(item => item.id === poll.id);
+    assert.deepEqual([entry.myVoteStatus, entry.canVote, entry.voterCount, entry.status], ['open', true, 1, 'open']);
+    const raiderList = await (await raider.request('/api/polls')).json();
+    assert.equal(raiderList.find(item => item.id === poll.id).myVoteStatus, 'voted');
+});
+
+test('fast per-date clicks on the web keep every change', async () => {
+    const admin = await loginAs('admin');
+    const poll = await createPollViaApi(admin, 'Klick-Abstimmung');
+    const [first, second] = poll.options;
+    const raider = await loginAs('raider');
+    const url = `/api/polls/${poll.id}/vote`;
+
+    const responses = await Promise.all([
+        raider.send('PUT', url, { optionId: first.id, state: 'yes' }),
+        raider.send('PUT', url, { optionId: second.id, state: 'maybe' })
+    ]);
+    assert.deepEqual(responses.map(res => res.status), [200, 200]);
+    const stored = await (await raider.request(`/api/polls/${poll.id}`)).json();
+    assert.deepEqual(stored.myVote, { yes: [first.id], maybe: [second.id] });
+
+    const invalid = await raider.send('PUT', url, { optionId: first.id, state: 'egal' });
+    assert.equal(invalid.status, 400);
+    assert.equal((await invalid.json()).error, 'Ungültige Auswahl');
+});
+
+test('role-restricted polls refuse other members', async () => {
+
+    const admin = await loginAs('admin');
+    const poll = await createPollViaApi(admin, 'Raid-Abstimmung', { accessMode: 'role-required', requiredRoles: [ROLE_ID.RAID_TEAM] });
+    const member = await loginAs('member');
+    const refused = await member.send('PUT', `/api/polls/${poll.id}/vote`, { yes: [poll.options[0].id] });
+    assert.equal(refused.status, 403);
+    assert.equal((await refused.json()).error, 'Du hast nicht die erforderliche Rolle für diese Abstimmung.');
+    assert.equal((await (await member.request(`/api/polls/${poll.id}`)).json()).canVote, false);
+
+    const raider = await loginAs('raider');
+    assert.equal((await raider.send('PUT', `/api/polls/${poll.id}/vote`, { yes: [poll.options[0].id] })).status, 200);
+});
+
+test('closed polls refuse votes', async () => {
+    const admin = await loginAs('admin');
+    const poll = await createPollViaApi(admin, 'Geschlossene Abstimmung');
+    await admin.send('POST', `/api/admin/polls/${poll.id}/close`);
+    const raider = await loginAs('raider');
+    const res = await raider.send('PUT', `/api/polls/${poll.id}/vote`, { yes: [poll.options[0].id] });
+    assert.equal(res.status, 400);
+    assert.equal((await res.json()).error, 'Die Abstimmung ist beendet.');
+    assert.equal((await raider.request('/api/polls/does-not-exist')).status, 404);
+});
+
+test('a date with votes cannot be removed', async () => {
+    const admin = await loginAs('admin');
+    const poll = await createPollViaApi(admin, 'Bearbeiten-Abstimmung');
+    const raider = await loginAs('raider');
+    await raider.send('PUT', `/api/polls/${poll.id}/vote`, { yes: [poll.options[0].id] });
+
+    const res = await admin.send('PUT', `/api/admin/polls/${poll.id}`, {
+        title: poll.title, options: [poll.options[1], { startDate: futureDate(10) }]
+    });
+    assert.equal(res.status, 400);
+    assert.match((await res.json()).error, /hat bereits Stimmen/);
+});
+
+test('a vote refreshes the posted poll message', async () => {
+    const admin = await loginAs('admin');
+    const poll = await createPollViaApi(admin, 'Live-Abstimmung');
+    await admin.send('POST', `/api/admin/polls/${poll.id}/announce`, {});
+    const raider = await loginAs('raider');
+    await raider.send('PUT', `/api/polls/${poll.id}/vote`, { yes: [poll.options[0].id] });
+    await server.waitForOutput('Abstimmung "Live-Abstimmung" aktualisiert', 6000);
+});
+
+test('deciding a poll tells the voters by DM', async () => {
+    const admin = await loginAs('admin');
+    const poll = await createPollViaApi(admin, 'DM-Abstimmung');
+    const raider = await loginAs('raider');
+    await raider.send('PUT', `/api/polls/${poll.id}/vote`, { yes: [poll.options[0].id] });
+
+    const res = await admin.send('POST', '/api/admin/events', {
+        title: 'DM-Event', status: 'active', startDate: poll.options[0].startDate,
+        fromPoll: { pollId: poll.id, optionId: poll.options[0].id }
+    });
+    const event = await res.json();
+    await server.waitForOutput('Der Termin für **DM-Abstimmung** steht');
+
+    const decided = await (await raider.request(`/api/polls/${poll.id}`)).json();
+    assert.deepEqual([decided.status, decided.eventId, decided.winnerOptionId], ['decided', event.id, poll.options[0].id]);
+});
+
+test('deleting an account removes the own poll votes', async () => {
+    const admin = await loginAs('admin');
+    const poll = await createPollViaApi(admin, 'Konto-Abstimmung');
+    const newbie = await loginAs('newbie');
+    await newbie.send('PUT', `/api/polls/${poll.id}/vote`, { yes: [poll.options[0].id] });
+    assert.equal((await (await admin.request(`/api/polls/${poll.id}`)).json()).tally.voterCount, 1);
+
+    assert.equal((await newbie.send('DELETE', '/api/user/account')).status, 200);
+    assert.equal((await (await admin.request(`/api/polls/${poll.id}`)).json()).tally.voterCount, 0);
+});
+
 // Keep this test last -> it deletes the newbie persona's account
 test('deleting an account lets the waitlist move up', async () => {
     const admin = await loginAs('admin');

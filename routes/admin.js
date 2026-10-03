@@ -7,9 +7,13 @@ const {
 } = require('../firebaseAdmin');
 const { requireAuth, requireAdmin } = require('../middleware/auth');
 const { validateEvent, validateRegStatus, validateBotMessages } = require('../middleware/validators');
-const { sendDM, assignRole, parseTemplate, getGuildRoles, sendChannelMessage, buildEventEmbed, buildEventComponents, getGuildScheduledEvents, createEventChannels, deleteEventChannels, createScheduledEvent, getBotStatus, getBotSettings, saveBotSettings, getRunningEvents, getGuildChannels } = require('../bot');
+const { sendDM, assignRole, parseTemplate, getGuildRoles, sendChannelMessage, buildEventEmbed, buildEventComponents, getGuildScheduledEvents, createEventChannels, deleteEventChannels, createScheduledEvent, getBotStatus, getBotSettings, saveBotSettings, getRunningEvents, getGuildChannels, buildPollEmbed, buildPollComponents } = require('../bot');
 const { promoteFromWaitlist, addAuditLog, loadEventRoster, loadEventRegistrations, saveEventWithSlots } = require('../utils/eventUtils');
 const { getSlots, findSlot, formatSlotLabel, normalizeSlots, sumCapacity, resolveAcceptanceSlot } = require('../utils/slotService');
+const { normalizePollInput, tallyPoll } = require('../utils/pollService');
+const {
+    loadPoll, loadPollVotes, updatePoll, closePoll, decidePollWithEvent, deletePoll
+} = require('../utils/pollStore');
 const { withEventLock } = require('../utils/eventLock');
 const { moveRegistrationToSlot, buildTemplateVars } = require('../utils/registrationService');
 const { notifyRegistrationsChanged } = require('../utils/announcementRefresh');
@@ -145,6 +149,13 @@ router.post('/events', validateEvent, async (req, res) => {
         }
         const { slots } = slotResult;
 
+        // An event can be created from a date poll -> checked and decided together with the creation below
+        const fromPoll = req.body.fromPoll && typeof req.body.fromPoll === 'object' ? req.body.fromPoll : null;
+        // Voters get a DM with the event link -> the event must be visible to members
+        if (fromPoll && (status || 'active') !== 'active') {
+            return res.status(400).json({ error: 'Ein Event aus einer Abstimmung muss aktiv sein.' });
+        }
+
         const baseEvent = {
             title,
             description,
@@ -166,6 +177,7 @@ router.post('/events', validateEvent, async (req, res) => {
             channelConfig: channelConfig || {},
             allowGuests: slots.length > 0 ? false : allowGuests !== false,
             slots,
+            sourcePollId: fromPoll ? String(fromPoll.pollId) : '',
             accentColor: accentColor || '',
             location: location || null,
             eventStartNotificationSent: false,
@@ -176,46 +188,70 @@ router.post('/events', validateEvent, async (req, res) => {
             createdBy: req.session.user.id
         };
 
-        // Generate recurring instances
-        if (recurring && startDate && recurringUntil) {
-            const seriesId = crypto.randomUUID();
-            const createdEvents = [];
-            let currentStart = new Date(startDate);
-            // Compare only the date portion (YYYY-MM-DD) so the full last day is included
-            // regardless of the event's time-of-day
-            const duration = endDate ? (new Date(endDate) - new Date(startDate)) : 0;
+        /**
+         * Write the event (or every instance of a series).
+         *
+         * @returns {Promise<Object>} -> `{ eventId, body }` -> first event ID and the response body.
+         */
+        const writeEvents = async () => {
+            if (recurring && startDate && recurringUntil) {
+                const seriesId = crypto.randomUUID();
+                const createdEvents = [];
+                let currentStart = new Date(startDate);
+                // Compare only the date portion (YYYY-MM-DD) so the full last day is included
+                // regardless of the event's time-of-day
+                const duration = endDate ? (new Date(endDate) - new Date(startDate)) : 0;
 
-            while (currentStart.toISOString().substring(0, 10) <= recurringUntil) {
-                const instance = {
-                    ...baseEvent,
-                    seriesId,
-                    startDate: currentStart.toISOString(),
-                    endDate: duration ? new Date(currentStart.getTime() + duration).toISOString() : '',
-                };
-                const ref = await addDoc(collection(db, 'events'), instance);
-                createdEvents.push({ id: ref.id, ...instance });
+                while (currentStart.toISOString().substring(0, 10) <= recurringUntil) {
+                    const instance = {
+                        ...baseEvent,
+                        seriesId,
+                        startDate: currentStart.toISOString(),
+                        endDate: duration ? new Date(currentStart.getTime() + duration).toISOString() : '',
+                    };
+                    const ref = await addDoc(collection(db, 'events'), instance);
+                    createdEvents.push({ id: ref.id, ...instance });
 
-                // Advance date based on interval
-                if (recurringInterval === 'weekly') {
-                    currentStart = new Date(currentStart.getTime() + 7 * 24 * 60 * 60 * 1000);
-                } else if (recurringInterval === 'biweekly') {
-                    currentStart = new Date(currentStart.getTime() + 14 * 24 * 60 * 60 * 1000);
-                } else {
-                    currentStart.setMonth(currentStart.getMonth() + 1);
+                    // Advance date based on interval
+                    if (recurringInterval === 'weekly') {
+                        currentStart = new Date(currentStart.getTime() + 7 * 24 * 60 * 60 * 1000);
+                    } else if (recurringInterval === 'biweekly') {
+                        currentStart = new Date(currentStart.getTime() + 14 * 24 * 60 * 60 * 1000);
+                    } else {
+                        currentStart.setMonth(currentStart.getMonth() + 1);
+                    }
                 }
+
+                await addAuditLog('CREATE_EVENT', req.session.user.id, `Created ${createdEvents.length} recurring events "${title}"`, createdEvents[0]?.id);
+                return { eventId: createdEvents[0]?.id, body: { count: createdEvents.length, events: createdEvents } };
             }
 
-            await addAuditLog('CREATE_EVENT', req.session.user.id, `Created ${createdEvents.length} recurring events "${title}"`, createdEvents[0]?.id);
-            res.json({ count: createdEvents.length, events: createdEvents });
-        } else {
             const ref = await addDoc(collection(db, 'events'), baseEvent);
             debugLog('admin.createEvent', { title: req.body.title, adminId: req.session?.user?.id });
             await addAuditLog('CREATE_EVENT', req.session.user.id, `Created event "${title}"`, ref.id);
             if (baseEvent.autoCreateChannels && baseEvent.status === 'active') {
                 createEventChannels({ id: ref.id, ...baseEvent }).catch(console.error);
             }
-            res.json({ id: ref.id, ...baseEvent });
+            return { eventId: ref.id, body: { id: ref.id, ...baseEvent } };
+        };
+
+        if (!fromPoll) {
+            const { body } = await writeEvents();
+            return res.json(body);
         }
+
+        // Check, creation and decision run under the poll lock -> one poll never becomes two events
+        const decision = await decidePollWithEvent({
+            pollId: String(fromPoll.pollId),
+            optionId: String(fromPoll.optionId),
+            createEvent: writeEvents
+        });
+        if (!decision.ok) {
+            return res.status(decision.httpStatus).json({ error: decision.error });
+        }
+        await addAuditLog('DECIDE_POLL', req.session.user.id, `Decided poll "${decision.poll.title}" -> event ${decision.created.eventId}`, decision.poll.id);
+        res.json(decision.created.body);
+
     } catch (err) {
         console.error('Create event error:', err);
         res.status(500).json({ error: 'Fehler beim Erstellen des Events' });
@@ -237,7 +273,7 @@ router.put('/events/:id', validateEvent, async (req, res) => {
 
         // Slots are validated and written under the event lock -> a parallel
         // registration cannot land in a slot that is being removed
-        const saved = await saveEventWithSlots(req.params.id, req.body.slots, (slots) => ({
+        const saved = await saveEventWithSlots(req.params.id, req.body.slots, (slots, oldEvent) => ({
             title,
             description,
             maxParticipants: slots.length > 0 ? sumCapacity(slots) : (parseInt(maxParticipants) || 0),
@@ -258,6 +294,7 @@ router.put('/events/:id', validateEvent, async (req, res) => {
             channelConfig: channelConfig || {},
             allowGuests: slots.length > 0 ? false : allowGuests !== false,
             slots,
+            sourcePollId: oldEvent.sourcePollId || '',
             accentColor: accentColor || '',
             location: location || null,
             recurring: !!req.body.recurring,
@@ -871,6 +908,131 @@ router.post('/events/:id/sync-discord', async (req, res) => {
     }
 });
 
+// ═══════════════════════════════════════════════
+// DATE POLLS
+// ═══════════════════════════════════════════════
+
+/**
+ * POST /api/admin/polls — Create a date poll
+ */
+router.post('/polls', async (req, res) => {
+    try {
+        const result = normalizePollInput(req.body);
+        if (result.error) {
+            return res.status(400).json({ error: result.error });
+        }
+        const now = new Date().toISOString();
+        const poll = {
+            ...result.poll,
+            status: 'open',
+            winnerOptionId: '',
+            eventId: '',
+            announcements: [],
+            createdBy: req.session.user.id,
+            createdAt: now,
+            updatedAt: now,
+            closedAt: ''
+        };
+        const ref = await addDoc(collection(db, 'polls'), poll);
+        await addAuditLog('CREATE_POLL', req.session.user.id, `Created poll "${poll.title}"`, ref.id);
+        res.json({ id: ref.id, ...poll });
+    } catch (err) {
+        console.error('Create poll error:', err);
+        res.status(500).json({ error: 'Fehler beim Erstellen der Abstimmung' });
+    }
+});
+
+/**
+ * PUT /api/admin/polls/:id — Edit an open date poll
+ */
+router.put('/polls/:id', async (req, res) => {
+    try {
+        const result = await updatePoll(req.params.id, req.body);
+        if (!result.ok) {
+            return res.status(result.httpStatus).json({ error: result.error });
+        }
+        await addAuditLog('UPDATE_POLL', req.session.user.id, `Updated poll "${result.poll.title}"`, req.params.id);
+        res.json(result.poll);
+    } catch (err) {
+        console.error('Update poll error:', err);
+        res.status(500).json({ error: 'Fehler beim Speichern der Abstimmung' });
+    }
+});
+
+/**
+ * POST /api/admin/polls/:id/close — Close a date poll
+ */
+router.post('/polls/:id/close', async (req, res) => {
+    try {
+        const result = await closePoll(req.params.id);
+        if (!result.ok) {
+            return res.status(result.httpStatus).json({ error: result.error });
+        }
+        await addAuditLog('CLOSE_POLL', req.session.user.id, `Closed poll "${result.poll.title}"`, req.params.id);
+        res.json({ success: true });
+    } catch (err) {
+        console.error('Close poll error:', err);
+        res.status(500).json({ error: 'Fehler beim Beenden der Abstimmung' });
+    }
+});
+
+/**
+ * POST /api/admin/polls/:id/announce — Post a date poll to the announcement channel
+ */
+router.post('/polls/:id/announce', async (req, res) => {
+    try {
+        const channelId = process.env.DISCORD_ANNOUNCE_CHANNEL_ID;
+        if (!channelId) {
+            return res.status(400).json({ error: 'DISCORD_ANNOUNCE_CHANNEL_ID nicht konfiguriert in .env' });
+        }
+        const poll = await loadPoll(req.params.id);
+        if (!poll) {
+            return res.status(404).json({ error: 'Abstimmung nicht gefunden' });
+        }
+
+        const { text, roleIds, pingEveryone } = req.body;
+        const tally = tallyPoll(poll, await loadPollVotes(poll.id));
+        const sent = await sendChannelMessage(channelId, buildPollEmbed(poll, tally), {
+            text: text || '',
+            roleIds: Array.isArray(roleIds) ? roleIds : [],
+            pingEveryone: !!pingEveryone,
+            components: buildPollComponents(poll)
+        });
+        if (!sent) {
+            return res.status(500).json({ error: 'Konnte nicht in den Channel posten.' });
+        }
+
+        const announcements = [
+            ...(Array.isArray(poll.announcements) ? poll.announcements : []),
+            { channelId: sent.channelId, messageId: sent.messageId }
+        ].slice(-MAX_TRACKED_ANNOUNCEMENTS);
+        await updateDoc(doc(db, 'polls', poll.id), { announcements });
+        await addAuditLog('ANNOUNCE_POLL', req.session.user.id, `Announced poll "${poll.title}"`, poll.id);
+        res.json({ success: true, message: 'Abstimmung im Discord-Channel gepostet!' });
+    } catch (err) {
+        console.error('Announce poll error:', err);
+        res.status(500).json({ error: 'Fehler beim Posten der Abstimmung' });
+    }
+});
+
+/**
+ * DELETE /api/admin/polls/:id — Delete a date poll with its votes
+ */
+router.delete('/polls/:id', async (req, res) => {
+    try {
+        const poll = await loadPoll(req.params.id);
+        const result = await deletePoll(req.params.id);
+        if (!result.ok) {
+            return res.status(result.httpStatus).json({ error: result.error });
+        }
+        await addAuditLog('DELETE_POLL', req.session.user.id, `Deleted poll "${poll ? poll.title : req.params.id}"`, req.params.id);
+        res.json({ success: true });
+    } catch (err) {
+        console.error('Delete poll error:', err);
+        res.status(500).json({ error: 'Fehler beim Löschen der Abstimmung' });
+    }
+});
+
 /**
  * GET /api/admin/bot-messages — Get message templates
  */
@@ -965,7 +1127,9 @@ router.delete('/reset', async (req, res) => {
             users: 'users',
             registrations: 'registrations',
             comments: 'comments',
-            auditLogs: 'auditLogs'
+            auditLogs: 'auditLogs',
+            polls: 'polls',
+            pollVotes: 'pollVotes'
         };
 
         for (const target of targets) {
