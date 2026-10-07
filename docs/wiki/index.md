@@ -23,7 +23,7 @@ sources: [scripts/wiki-graph.js, docs/wiki/graph.json, CLAUDE.md]
 | overview | [architecture](overview/architecture.md) · [directory-map](overview/directory-map.md) · [request-lifecycle](overview/request-lifecycle.md) |
 | module | [server](modules/server.md) · [routes-auth](modules/routes-auth.md) · [routes-events](modules/routes-events.md) · [routes-admin](modules/routes-admin.md) · [routes-user](modules/routes-user.md) · [routes-polls](modules/routes-polls.md) · [bot](modules/bot.md) · [data-layer](modules/data-layer.md) · [middleware](modules/middleware.md) · [utils](modules/utils.md) · [frontend-app](modules/frontend-app.md) · [frontend-markup](modules/frontend-markup.md) · [dev-mock-mode](modules/dev-mock-mode.md) · [landing-page](modules/landing-page.md) |
 | concept | [data-model](concepts/data-model.md) · [registration-flow](concepts/registration-flow.md) · [form-fields](concepts/form-fields.md) · [auth-session](concepts/auth-session.md) · [maintenance-mode](concepts/maintenance-mode.md) · [discord-integration](concepts/discord-integration.md) · [reminders-presence](concepts/reminders-presence.md) · [event-lifecycle](concepts/event-lifecycle.md) · [security](concepts/security.md) · [role-slots](concepts/role-slots.md) · [date-polls](concepts/date-polls.md) |
-| ops | [configuration](ops/configuration.md) · [docker](ops/docker.md) · [deployment](ops/deployment.md) · [testing](ops/testing.md) |
+| ops | [configuration](ops/configuration.md) · [docker](ops/docker.md) · [deployment](ops/deployment.md) · [testing](ops/testing.md) · [ci](ops/ci.md) |
 | howto | [add-api-endpoint](howto/add-api-endpoint.md) · [add-event-field](howto/add-event-field.md) · [add-form-field-type](howto/add-form-field-type.md) · [add-bot-feature](howto/add-bot-feature.md) · [add-collection](howto/add-collection.md) · [run-and-debug](howto/run-and-debug.md) |
 | reference | [api-index](reference/api-index.md) · [glossary](reference/glossary.md) · [known-issues](reference/known-issues.md) · [conventions](reference/conventions.md) · [decisions](reference/decisions.md) |
 
@@ -47,6 +47,7 @@ sources: [scripts/wiki-graph.js, docs/wiki/graph.json, CLAUDE.md]
 | run locally / debug | run-and-debug, dev-mock-mode |
 | write tests | testing |
 | configure / deploy | configuration, docker, deployment |
+| CI pipeline, GitLab runner | ci, testing, docker |
 | security-sensitive change | security, known-issues |
 | translate a German term from a ticket | glossary |
 
@@ -74,6 +75,7 @@ sources: [scripts/wiki-graph.js, docs/wiki/graph.json, CLAUDE.md]
 | `dev/*` | dev-mock-mode |
 | `test/*` | testing |
 | `Dockerfile`, `compose*.yaml` | docker, deployment |
+| `.gitlab-ci.yml`, `ci/runner/*` | ci |
 | `.env.example` | configuration |
 | `landing/*` | landing-page |
 

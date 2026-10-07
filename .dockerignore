@@ -23,6 +23,8 @@ docs/
 scripts/
 test/
 landing/
+ci/
+.gitlab-ci.yml
 *.md
 logs/
 *.log

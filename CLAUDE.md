@@ -16,6 +16,7 @@ The project knowledge graph is in **`docs/wiki/`**. Entry point: **`docs/wiki/in
 | frontend | `docs/wiki/modules/frontend-app.md`, `docs/wiki/modules/frontend-markup.md` |
 | run, debug, test | `docs/wiki/howto/run-and-debug.md`, `docs/wiki/ops/testing.md` |
 | config, Docker, deploy | `docs/wiki/ops/configuration.md`, `docs/wiki/ops/docker.md`, `docs/wiki/ops/deployment.md` |
+| CI pipeline, GitLab runner | `docs/wiki/ops/ci.md` |
 | known bugs and traps | `docs/wiki/reference/known-issues.md`, `docs/wiki/concepts/security.md` |
 | German term in a ticket | `docs/wiki/reference/glossary.md` |
 

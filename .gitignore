@@ -4,6 +4,9 @@ node_modules/
 # Environment files
 .env
 
+# GitLab Runner config with runner tokens (see ci/runner/config.toml.example)
+ci/runner/config/
+
 # Local SQLite database (fallback storage)
 data/
 *.sqlite

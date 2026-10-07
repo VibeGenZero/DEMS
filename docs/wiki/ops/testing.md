@@ -48,3 +48,5 @@ npm test                                    # all suites
 node --test test/devServer.test.js          # one file
 npm run wiki:check                          # wiki only
 ```
+
+GitLab CI runs the same `npm test` in every pipeline (job `test`); see [ci](ci.md).

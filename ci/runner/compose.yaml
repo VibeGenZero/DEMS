@@ -1,0 +1,19 @@
+# GitLab Runner for the DEMS pipelines (.gitlab-ci.yml).
+# Runs on the GitLab host, next to GitLab itself. Setup: docs/wiki/ops/ci.md
+#
+#   config/config.toml   created from config.toml.example with the two runner tokens
+#   docker compose up -d
+#
+# The runner manager needs the host Docker socket to start job containers. Jobs
+# themselves never get the socket: tests run unprivileged, the docker-build job
+# uses its own Docker-in-Docker daemon on the privileged "dems-docker" runner.
+
+services:
+  gitlab-runner:
+    # Keep the runner on the same minor version as GitLab.
+    image: gitlab/gitlab-runner:v19.4.1
+    container_name: gitlab-runner
+    restart: unless-stopped
+    volumes:
+      - ./config:/etc/gitlab-runner
+      - /var/run/docker.sock:/var/run/docker.sock
