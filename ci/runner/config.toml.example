@@ -1,0 +1,35 @@
+# Copy to config/config.toml next to compose.yaml and fill in the two runner
+# authentication tokens (glrt-...). Never commit the real file.
+# Tags and "run untagged" are set on the runner in GitLab, not here:
+#   dems-ci      no tags, runs untagged jobs
+#   dems-docker  tag "docker", does not run untagged jobs
+
+# One job at a time so GitLab and the live DEMS on the same host stay responsive.
+concurrent = 1
+check_interval = 0
+shutdown_timeout = 0
+
+[session_server]
+  session_timeout = 1800
+
+# Tests and everything else: no privileges, no Docker access.
+[[runners]]
+  name = "dems-ci"
+  url = "https://gitlab-umfc.srv1657105.hstgr.cloud"
+  token = "glrt-REPLACE_WITH_DEMS_CI_TOKEN"
+  executor = "docker"
+  [runners.docker]
+    image = "node:24-bookworm"
+    privileged = false
+    volumes = ["/cache"]
+
+# Docker image builds only (job tag "docker"), via Docker-in-Docker.
+[[runners]]
+  name = "dems-docker"
+  url = "https://gitlab-umfc.srv1657105.hstgr.cloud"
+  token = "glrt-REPLACE_WITH_DEMS_DOCKER_TOKEN"
+  executor = "docker"
+  [runners.docker]
+    image = "docker:29"
+    privileged = true
+    volumes = ["/certs/client", "/cache"]

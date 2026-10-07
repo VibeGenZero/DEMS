@@ -41,9 +41,11 @@ docker build -t <user>/dems:latest . && docker push <user>/dems:latest
 
 Published image: private Docker Hub repository `moritakahashi/dems` (tags `latest` + commit sha); see [deployment](deployment.md).
 
+GitLab CI builds both targets and waits for the runtime HEALTHCHECK in the `docker-build` job, without pushing; see [ci](ci.md).
+
 ## .dockerignore
 
-Excludes `node_modules/`, `.env*` (except `.env.example`), `data/`, `*.sqlite*`, `.git/`, IDE folders, `docs/`, `scripts/`, `test/`, `landing/`, `*.md`, Docker files. The image therefore contains no secrets, docs or tests.
+Excludes `node_modules/`, `.env*` (except `.env.example`), `data/`, `*.sqlite*`, `.git/`, IDE folders, `docs/`, `scripts/`, `test/`, `landing/`, `ci/`, `.gitlab-ci.yml`, `*.md`, Docker files. The image therefore contains no secrets, docs, tests or CI files.
 
 ## Gotchas
 

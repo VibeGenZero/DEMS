@@ -46,6 +46,7 @@ Line counts as of 2026-10-02 (approximate; they drift).
 |---|---|---|
 | `Dockerfile`, `compose.yaml`, `compose.dev.yaml`, `.dockerignore` | container build and run | [docker](../ops/docker.md) |
 | `.env.example` | every supported environment variable | [configuration](../ops/configuration.md) |
+| `.gitlab-ci.yml`, `ci/runner/` | GitLab CI pipeline and the self-hosted runner setup | [ci](../ops/ci.md) |
 | `updates.json` | "what's new" notes served at `/api/updates`, shown by `checkUpdates()` | [server](../modules/server.md) |
 | `landing/` | standalone marketing page (not served by the app) | [landing-page](../modules/landing-page.md) |
 | `docs/superpowers/specs`, `docs/superpowers/plans` | design specs and implementation plans | [decisions](../reference/decisions.md) |

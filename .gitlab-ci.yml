@@ -1,0 +1,75 @@
+# CI for DEMS: tests on every pipeline, a Docker image check where it matters.
+# Runner setup and job details: docs/wiki/ops/ci.md
+
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_TAG
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    # A branch with an open MR already gets the MR pipeline; skip the duplicate.
+    - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS
+      when: never
+    - if: $CI_COMMIT_BRANCH
+  auto_cancel:
+    on_new_commit: interruptible
+
+default:
+  interruptible: true
+
+stages:
+  - test
+  - build
+
+test:
+  stage: test
+  # Same Node major as the Dockerfile. The full (non-slim) image ships python3, make
+  # and g++, which npm's implicit node-gyp step for better-sqlite3 needs.
+  image: node:24-bookworm
+  variables:
+    npm_config_cache: $CI_PROJECT_DIR/.npm
+  cache:
+    key:
+      files:
+        - package-lock.json
+    paths:
+      - .npm/
+  script:
+    - node --version
+    - npm --version
+    - npm ci --no-audit --no-fund
+    - npm test
+
+docker-build:
+  stage: build
+  image: docker:29
+  services:
+    - docker:29-dind
+  # Only the privileged "dems-docker" runner takes jobs with this tag.
+  tags:
+    - docker
+  variables:
+    DOCKER_TLS_CERTDIR: /certs
+  rules:
+    - if: $CI_COMMIT_TAG
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - changes:
+        - Dockerfile
+        - .dockerignore
+        - package.json
+        - package-lock.json
+        - compose*.yaml
+  script:
+    - docker build --target runtime --tag dems:ci .
+    - docker build --target dev --tag dems:ci-dev .
+    # Start the production image once and wait for its HEALTHCHECK (GET /healthz).
+    - docker run --detach --name dems-ci --env SESSION_SECRET=ci-only-secret dems:ci
+    - |
+      for i in $(seq 1 40); do
+        status=$(docker inspect --format '{{.State.Health.Status}}' dems-ci)
+        echo "health: $status"
+        if [ "$status" = healthy ]; then exit 0; fi
+        if [ "$status" = unhealthy ]; then break; fi
+        sleep 3
+      done
+      docker logs dems-ci
+      exit 1
