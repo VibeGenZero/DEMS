@@ -278,7 +278,7 @@ function buildRegistration(clock, eventId, person, fields = {}) {
 }
 
 function buildRegistrations(clock) {
-    const { lena, tom, kira, jonas, aylin, ben, chiara, dennis, elif, felix, greta } = people;
+    const { lena, tom, neo, kira, jonas, aylin, ben, chiara, dennis, elif, felix, greta } = people;
     const entry = (key, eventId, person, fields) => [`dev-reg-${key}`, buildRegistration(clock, eventId, person, fields)];
     const checkedIn = (checkedInAt) => ({ checkedIn: true, checkedInAt });
     const tournamentAnswers = (name, role, teamRole = '', channel = '') => ({
@@ -332,9 +332,10 @@ function buildRegistrations(clock) {
             status: 'waitlisted', slotId: null, preferredSlotId: RAID_SLOT_ID.TANK, altSlotIds: [], createdAt: clock.offset(-2 * DAY)
         }),
 
-        // Workshop -> web-only form
+        // Workshop -> web-only form; Neo (newbie persona) is Chiara's guest and must not see her answers
         entry('bigform-chiara', EVENT_ID.BIG_FORM, chiara, {
             status: 'pending',
+            guests: [neo.userId],
             formAnswers: {
                 'Name': 'Chiara',
                 'Streaming-Erfahrung': 'Etwas',

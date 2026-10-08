@@ -22,12 +22,6 @@ see_also: [security, frontend-app, bot, reminders-presence]
 | 7 | bot settings `dmNotifications`, `eventStartNotifications`, `autoChannelCreation`, `announceChannel`, `welcomeMessage` are stored but never read | `bot.js`, `routes/admin.js` | toggles in the bot control center have no effect |
 | 8 | `parseTemplate` passes values to `String.replace` as replacement strings | `bot.js` | `$&`, `$1` in names/titles are interpreted |
 
-## Data exposure (see [security](../concepts/security.md))
-
-| # | Issue | Location |
-|---|---|---|
-| 11 | guest `my-registration` returns the registrant's full document | `GET /api/events/:id/my-registration` |
-
 ## Pitfalls (by design, easy to trip over)
 
 | # | Pitfall | Where to read |

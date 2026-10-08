@@ -31,7 +31,7 @@ see_also: [run-and-debug, testing, docker]
 | `admin` | Mori (Admin) | admin area, bot control, maintenance |
 | `raider` | Lena | member with role Raid-Team (raid with slots: tank is full → try a fallback role) |
 | `member` | Tom | plain member, not registered for the open event, can check in with `DEMO42` |
-| `newbie` | Neo (Neuling) | first login (`isNewUser`), no profile until first login |
+| `newbie` | Neo (Neuling) | first login (`isNewUser`), no profile until first login; accepted guest of Chiara at the workshop (guest view) |
 
 ## Behaviour differences to production
 

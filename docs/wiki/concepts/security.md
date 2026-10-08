@@ -34,7 +34,7 @@ see_also: [auth-session, known-issues, deployment]
 | C-03 | session cookie not `secure` | open (`secure: false`) |
 | C-04 | vulnerable dependencies | fixed (dependency update 2026-09, `npm audit` 0) |
 | H-01 / H-02 / H-03 | OAuth `state`, session regeneration, 24 h admin cache | open |
-| H-04 | guest `my-registration` leaks registrant data | open |
+| H-04 | guest `my-registration` leaks registrant data | fixed: guests get only `{ registered, asGuest, id, status }` (F-04) |
 | H-05 | CSP `unsafe-inline` + `unsafe-eval` | **partial**: `unsafe-eval` removed (F-07); `unsafe-inline` stays while inline `onclick` handlers exist |
 | H-06 | check-in code via `Math.random`, not specifically rate-limited | open (only the global `/api` limit) |
 | M-01 | Firebase client SDK used server-side | open (depends on Firestore rules) |
