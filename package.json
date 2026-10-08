@@ -1,7 +1,7 @@
 {
   "name": "dems",
   "version": "2.6.0",
-  "description": "Discord Event Management System",
+  "description": "Dein Event-Management-System",
   "main": "server.js",
   "engines": {
     "node": ">=22"

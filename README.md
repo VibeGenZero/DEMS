@@ -1,4 +1,4 @@
-# Discord Event Management System (DEMS)
+# DEMS – Dein Event-Management-System
 
 Ein professionelles und benutzerfreundliches System zur Planung und Verwaltung von Community-Events mit nahtloser Discord-Integration.
 
@@ -81,8 +81,8 @@ Stelle sicher, dass du folgende Tools installiert hast:
 Klonen das Repository und installiere die Abhängigkeiten:
 
 ```bash
-git clone https://github.com/DEIN-USERNAME/Discord-Event-Management-System.git
-cd Discord-Event-Management-System
+git clone https://github.com/DEIN-USERNAME/DEMS.git
+cd DEMS
 npm install
 ```
 

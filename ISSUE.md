@@ -1,6 +1,6 @@
 # Security Audit Findings
 
-**Target System:** DEMS (Discord Event Management System)
+**Target System:** DEMS (Dein Event-Management-System)
 **Date:** 2026-02-15
 **Auditor:** Antigravity
 
