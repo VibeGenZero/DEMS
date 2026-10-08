@@ -24,7 +24,7 @@ see_also: [registration-flow, event-lifecycle, api-index]
 | POST | `/:id/register` | user + `checkRegistrationAllowed` | body `{ formAnswers, guests, slotId, altSlotIds }` → `registerUserForEvent` → `{ id, status, message, slotId, isAlt }` or `{ error }` with mapped HTTP status |
 | PUT | `/:id/register/slot` | user + `checkRegistrationAllowed` | body `{ slotId }` → `switchOwnSlot` (free slots only, 409 when full) → `{ status, slotId, message }` |
 | DELETE | `/:id/register` | user | `unregisterUserFromEvent`: deletes the own registration, removes role/channel access if it was accepted, promotes the waitlist, refreshes announcements |
-| GET | `/:id/my-registration` | user | own registration, or `{ asGuest: true, ... }` when the user is an accepted guest of someone else, or `{ registered: false }` |
+| GET | `/:id/my-registration` | user | own registration, or only `{ registered: true, asGuest: true, id, status }` of the inviting registration when the user is an accepted guest (never its `formAnswers` or guest list), or `{ registered: false }` |
 | GET | `/:id/participants` | user | first 20 accepted participants `{ displayName, avatar }` + `total`; slot events also get `slots` (line-up with members) and `waitlist` |
 | POST | `/:id/checkin` | user | body `{ code }`; requires `checkinEnabled` + matching `checkinCode` + own accepted registration; sets `checkedIn`, `checkedInAt` |
 | GET | `/:id/comments` | user | comments of the event, sorted by `createdAt` ascending |
@@ -40,6 +40,5 @@ grep `router.(get|post|put|delete)\('` in `routes/events.js`; handler order matt
 - **Route order:** `/series/:seriesId`, `/categories` and `/form-options` are declared BEFORE `/:id`; new static paths must also go above `/:id`, otherwise `/:id` swallows them.
 - Every handler builds event answers with `toPublicEvent` (`utils/eventUtils.js`), which drops `checkinCode`.
 - `router.param('id')` loads the event once more before each `/:id` handler; unknown ids pass through, so handlers keep their own "not found" answers. `cancelled` events stay readable by id. The frontend's `?status=all` query is ignored by `GET /:id`.
-- `my-registration` for guests spreads the registrant's whole document (incl. `formAnswers`) into the response (audit H-04, open).
 - Comment avatars: `POST /:id/comments` treats `session.user.avatar` as an avatar *hash*, but the session stores a full URL → broken image URL. See [known-issues](../reference/known-issues.md).
 - Participant counts include accepted guests (`1 + guests.length`) — keep that rule when adding counters.

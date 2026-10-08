@@ -421,9 +421,10 @@ router.get('/:id/my-registration', requireAuth, async (req, res) => {
         );
         const guestSnap = await getDocs(guestQ);
 
+        // The document belongs to the inviting member (form answers, guest list) -> only status and id
         if (!guestSnap.empty) {
             const regDoc = guestSnap.docs[0];
-            return res.json({ registered: true, id: regDoc.id, status: 'accepted', asGuest: true, ...regDoc.data() });
+            return res.json({ registered: true, asGuest: true, id: regDoc.id, status: regDoc.data().status });
         }
 
         res.json({ registered: false });

@@ -192,6 +192,13 @@ test('no event answer outside the admin area contains a check-in code', async ()
     }
 });
 
+test('a guest sees only status and id of the registration that invited them', async () => {
+    const newbie = await loginAs('newbie');
+    const res = await newbie.request(`/api/events/${EVENT_ID.BIG_FORM}/my-registration`);
+    assert.equal(res.status, 200);
+    assert.deepEqual(await res.json(), { registered: true, asGuest: true, id: 'dev-reg-bigform-chiara', status: 'pending' });
+});
+
 test('the event API answers only logged-in users', async () => {
     const admin = await loginAs('admin');
     const { seriesId } = await (await admin.request(`/api/events/${SERIES_EVENT_IDS[0]}`)).json();
