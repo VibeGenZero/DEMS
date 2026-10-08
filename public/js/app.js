@@ -175,7 +175,7 @@ function updateServerNameInUI() {
     // Update meta description
     const metaDesc = document.querySelector('meta[name="description"]');
     if (metaDesc) {
-        metaDesc.setAttribute('content', `Discord Event Management System für den ${serverName} Server`);
+        metaDesc.setAttribute('content', `Dein Event-Management-System für den ${serverName} Server`);
     }
 
     // Update login card heading (if visible)

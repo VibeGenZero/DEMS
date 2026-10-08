@@ -21,6 +21,7 @@ see_also: [security, dev-mock-mode, docker]
 | 2026-09-29 | Docker (multi-stage, non-root, healthcheck) + dependency update (Express 5, Firebase 12, better-sqlite3 13, dotenv 18, discord.js 14.27, Node ≥22, node-fetch removed) | container deployment, current libraries | PR #31, [docker](../ops/docker.md) |
 | 2026-09-29 | dev mock mode (persona login, mock bot, seed data, `node:test` suite); shared login helpers `getLoginBlockReason` / `saveUserProfile` | develop without Discord/Firebase; persona login cannot drift from OAuth | [spec](../../superpowers/specs/2026-09-29-dev-mock-mode-design.md), [plan](../../superpowers/plans/2026-09-29-dev-mock-mode.md) |
 | 2026-10-02 | LLM wiki (this graph) + `CLAUDE.md` | cheaper, more accurate navigation for coding agents | [index](../index.md) |
+| 2026-10-08 | product name: DEMS now stands for "Dein Event-Management-System"; technical identifiers (`dems` image, `dems-data` volume, `DEMS_PORT`, `dems.sqlite`, localStorage keys, domain) stay unchanged | "Discord" in a product name invites trademark trouble with Discord; keeping the acronym avoids migrating running deployments | `test/branding.test.js` |
 
 ## Standing decisions (apply to new work)
 
@@ -29,3 +30,4 @@ see_also: [security, dev-mock-mode, docker]
 - German user-facing language.
 - Every route works without a Discord bot (helpers degrade to no-ops).
 - Dev mock mode must never be activatable in production (`NODE_ENV=production` guard).
+- "Discord" never appears in the product name, only to describe the integration (Discord login, Discord bot); `test/branding.test.js` guards the old long form.

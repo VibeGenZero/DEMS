@@ -4,7 +4,7 @@ DEMS — Proof-of-Concept Exploit Suite
 =====================================
 
 Automated demonstration of two unauthenticated information-disclosure
-vulnerabilities in the Discord Event Management System:
+vulnerabilities in DEMS:
 
     C-01   Check-in code leak via GET /api/events/:id
     C-02   Draft / archived / cancelled event disclosure via

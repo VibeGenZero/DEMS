@@ -1,4 +1,4 @@
-# CLAUDE.md — DEMS (Discord Event Management System)
+# CLAUDE.md — DEMS (Dein Event-Management-System)
 
 DEMS lets a Discord community plan events: members log in with Discord, register on the website or directly in Discord (button + modal), admins manage events, registrations, announcements, bot settings and maintenance mode. One Node.js process runs an Express 5 REST API + static SPA and a discord.js bot; data lives in Firestore or a local SQLite file behind the same Firestore-style API.
 

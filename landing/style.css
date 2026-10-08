@@ -1402,6 +1402,10 @@ body {
     color: var(--text-muted);
 }
 
+.footer-bottom .footer-disclaimer {
+    margin-top: 8px;
+}
+
 /* ============================================
    Responsive
    ============================================ */
