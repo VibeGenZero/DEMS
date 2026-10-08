@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const path = require('path');
 const { createTempDir, startServer, createClient } = require('./helpers');
 const { PERSONAS, ROLE_ID } = require('../dev/mockGuild');
-const { EVENT_ID, CHECKIN_CODE } = require('../dev/seedData');
+const { EVENT_ID, SERIES_EVENT_IDS, CHECKIN_CODE } = require('../dev/seedData');
 
 let server;
 
@@ -167,6 +167,28 @@ test('the member persona can check in to the running event', async () => {
     const right = await member.send('POST', `/api/events/${EVENT_ID.RUNNING}/checkin`, { code: CHECKIN_CODE });
     assert.equal(right.status, 200);
     assert.equal((await right.json()).success, true);
+});
+
+test('no event answer outside the admin area contains a check-in code', async () => {
+    const admin = await loginAs('admin');
+    assert.equal((await admin.send('POST', `/api/admin/events/${SERIES_EVENT_IDS[0]}/generate-checkin`)).status, 200);
+    const member = await loginAs('member');
+    const { seriesId } = await (await member.request(`/api/events/${SERIES_EVENT_IDS[0]}`)).json();
+
+    const answers = {
+        list: '/api/events',
+        series: `/api/events/series/${seriesId}`,
+        single: `/api/events/${EVENT_ID.RUNNING}`,
+        registrations: '/api/user/registrations',
+        profile: '/api/user/profile'
+    };
+    for (const [name, url] of Object.entries(answers)) {
+        const res = await member.request(url);
+        assert.equal(res.status, 200, name);
+        const body = await res.text();
+        assert.match(body, new RegExp(`"id":"(${EVENT_ID.RUNNING}|${SERIES_EVENT_IDS[0]})"`), `${name} lists an event with a code`);
+        assert.doesNotMatch(body, /checkinCode/, name);
+    }
 });
 
 test('the rate limiters do not get in the way during development', async () => {

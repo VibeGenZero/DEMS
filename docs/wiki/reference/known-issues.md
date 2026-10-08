@@ -26,7 +26,6 @@ see_also: [security, frontend-app, bot, reminders-presence]
 
 | # | Issue | Location |
 |---|---|---|
-| 9 | `checkinCode` included in `GET /api/events`, `/series/:id` and events embedded in `/api/user/registrations` and `/profile` | routes/events.js, routes/user.js |
 | 10 | non-active events readable by id | `GET /api/events/:id` |
 | 11 | guest `my-registration` returns the registrant's full document | `GET /api/events/:id/my-registration` |
 
