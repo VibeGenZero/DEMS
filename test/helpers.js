@@ -6,6 +6,7 @@ const fs = require('fs');
 const net = require('net');
 const os = require('os');
 const path = require('path');
+const vm = require('vm');
 
 const REPO_ROOT = path.join(__dirname, '..');
 
@@ -242,6 +243,103 @@ async function dispatchInteraction(client, interaction, timeoutMs = 3000) {
     ]);
 }
 
+/**
+ * Register a fake element for every `id="…"` in an HTML string.
+ *
+ * @param {Map<string, Object>} registry -> Elements reachable through getElementById.
+ * @param {string} html -> HTML source.
+ */
+function registerHtmlIds(registry, html) {
+    for (const [tag, id] of html.matchAll(/<[^>]*\bid="([^"]+)"[^>]*>/g)) {
+        registry.set(id, createFakeElement(registry, id, /display:\s*none/.test(tag) ? 'none' : ''));
+    }
+}
+
+/**
+ * Element double with the few properties app.js touches. Assigning
+ * innerHTML registers the ids it contains, like a real DOM would.
+ *
+ * @param {Map<string, Object>} registry -> Elements reachable through getElementById.
+ * @param {string} [id] -> Element id.
+ * @param {string} [display] -> Initial style.display.
+ * @returns {Object} -> The fake element.
+ */
+function createFakeElement(registry, id = '', display = '') {
+    const classes = new Set();
+    const register = (child) => { if (child.id) registry.set(child.id, child); return child; };
+    let html = '';
+    return {
+        id, textContent: '', className: '', value: '', disabled: false,
+        style: { display }, dataset: {},
+        get innerHTML() { return html; },
+        set innerHTML(value) { html = String(value); registerHtmlIds(registry, html); },
+        classList: {
+            add: (...names) => names.forEach(name => classes.add(name)),
+            remove: (...names) => names.forEach(name => classes.delete(name)),
+            toggle: (name, force = !classes.has(name)) => (force ? classes.add(name) : classes.delete(name), force),
+            contains: (name) => classes.has(name)
+        },
+        addEventListener() {},
+        setAttribute() {},
+        getAttribute: () => null,
+        appendChild: register,
+        insertAdjacentElement: (_position, child) => register(child),
+        querySelector: () => null,
+        querySelectorAll: () => []
+    };
+}
+
+/**
+ * Load public/js/app.js into a node:vm context with a fake DOM built from
+ * the ids in public/index.html. `fetch` answers from `routes`: a value is
+ * sent as JSON body, a function may return a value or a promise of one,
+ * unknown URLs answer 404. Toasts are recorded instead of shown, so a test
+ * can assert that no error was swallowed by a catch block.
+ *
+ * @param {Object<string, *>} routes -> URL → JSON body or () => body.
+ * @returns {Object} -> `{ app, element, toasts }`: app exposes showEventDetail and setCurrentUser, element(id) returns the fake element or null, toasts lists the shown messages.
+ */
+function loadFrontendApp(routes) {
+    const registry = new Map();
+    registerHtmlIds(registry, fs.readFileSync(path.join(REPO_ROOT, 'public', 'index.html'), 'utf8'));
+    const toasts = [];
+    const container = createFakeElement(registry);
+    const document = {
+        getElementById: (id) => registry.get(id) || null,
+        createElement: () => createFakeElement(registry),
+        querySelector: () => container,
+        querySelectorAll: () => [],
+        addEventListener() {}
+    };
+    const fetch = async (url) => {
+        if (!(url in routes)) return { ok: false, status: 404, json: async () => ({ error: 'Nicht gefunden' }) };
+        const route = routes[url];
+        const body = typeof route === 'function' ? await route() : route;
+        return { ok: true, status: 200, json: async () => body };
+    };
+    const noop = () => {};
+    const context = vm.createContext({
+        document, fetch, console,
+        location: { hash: '' },
+        history: { replaceState: noop, pushState: noop },
+        setTimeout: noop, clearTimeout: noop, setInterval: () => 0, clearInterval: noop,
+        gsap: { from: noop, to: noop, fromTo: noop, set: noop },
+        marked: { parse: (text) => text },
+        DOMPurify: { sanitize: (text) => text },
+        bootstrap: {
+            Toast: class {
+                constructor(toastEl) { this.toastEl = toastEl; }
+                show() { toasts.push(registry.get('toast-message').textContent); }
+            }
+        }
+    });
+    context.window = context;
+    const source = fs.readFileSync(path.join(REPO_ROOT, 'public', 'js', 'app.js'), 'utf8');
+    vm.runInContext(`${source}
+;globalThis.__app = { showEventDetail, setCurrentUser: (user) => { currentUser = user; } };`, context, { filename: 'app.js' });
+    return { app: context.__app, element: (id) => registry.get(id) || null, toasts };
+}
+
 module.exports = {
     REPO_ROOT,
     createTempDir,
@@ -252,5 +350,6 @@ module.exports = {
     startServer,
     createClient,
     createFakeInteraction,
-    dispatchInteraction
+    dispatchInteraction,
+    loadFrontendApp
 };

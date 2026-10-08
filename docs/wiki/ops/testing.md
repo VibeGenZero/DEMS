@@ -3,12 +3,12 @@ id: testing
 title: Testing — node:test suites and helpers
 type: ops
 tags: [testing, node-test, integration-tests, helpers, tdd]
-sources: [test/helpers.js, test/devServer.test.js, test/noMock.test.js, test/mockMode.test.js, test/mockBot.test.js, test/seed.test.js, test/sqliteAdapter.test.js, test/eventUrl.test.js, test/wiki.test.js, test/branding.test.js, test/vendorAssets.test.js]
+sources: [test/helpers.js, test/devServer.test.js, test/noMock.test.js, test/mockMode.test.js, test/mockBot.test.js, test/seed.test.js, test/sqliteAdapter.test.js, test/eventUrl.test.js, test/wiki.test.js, test/branding.test.js, test/vendorAssets.test.js, test/eventDetailReset.test.js]
 see_also: [dev-mock-mode, conventions]
 ---
 # Testing — node:test suites and helpers
 
-> TL;DR: `npm test` runs `node --test "test/**/*.test.js"` (built-in runner, no dependencies). Server behaviour is tested end-to-end by spawning `server.js` / `dev/start.js` in a child process with a temp SQLite file and driving it with a cookie-aware fetch client that handles CSRF. There are no frontend (browser) tests.
+> TL;DR: `npm test` runs `node --test "test/**/*.test.js"` (built-in runner, no dependencies). Server behaviour is tested end-to-end by spawning `server.js` / `dev/start.js` in a child process with a temp SQLite file and driving it with a cookie-aware fetch client that handles CSRF. There are no browser tests; single frontend functions run in `node:vm` against a fake DOM (`loadFrontendApp`).
 
 ## Suites
 
@@ -24,6 +24,7 @@ see_also: [dev-mock-mode, conventions]
 | `wiki.test.js` | wiki frontmatter/link/graph validation and that `docs/wiki/graph.json` is current |
 | `branding.test.js` | the old product name ("Discord" + "Event Management") appears in no git-tracked file outside `public/vendor` (untracked files such as CI's npm logs are ignored) |
 | `vendorAssets.test.js` | `index.html` loads no script/stylesheet from another host, every local reference and every `url()` in `public/vendor/**/*.css` exists, `fonts.css` bundles Inter + UnifrakturCook |
+| `eventDetailReset.test.js` | the event page drops participants, comments and the check-in box of the previously opened event (role-locked event, late answers, slow event fetch) |
 
 ## Helpers (`test/helpers.js`)
 
@@ -35,11 +36,13 @@ see_also: [dev-mock-mode, conventions]
 | `repoPath(rel)` | absolute path as JS string literal for `runNode` snippets |
 | `startServer(entry, env)` | spawn `server.js` / `dev/start.js` on a free port, wait for `/healthz`; returns `{ baseUrl, output(), waitForOutput(text), stop() }` |
 | `createClient(baseUrl)` | cookie jar; `request(path, opts)` (redirect: manual) and `send(method, path, body)` with CSRF token |
+| `loadFrontendApp(routes)` | runs `public/js/app.js` in `node:vm`; fake elements for every `id` in `index.html` and in assigned `innerHTML`; `fetch` answers from `routes` (URL → body or `() => body`/promise, else 404); returns `{ app, element(id), toasts }` — `app` exposes `showEventDetail` and `setCurrentUser`; extend the export line at the end of the helper for more functions |
 
 ## Writing a test
 
 - Endpoint behaviour → extend `devServer.test.js` (mock mode, seeded data: ids in `dev/seedData.js` `EVENT_ID`) and log in with `loginAs('<persona>')`.
 - In-process module tests: set `process.env` (e.g. `DEV_MOCK`, `DEV_SQLITE_PATH`) and `process.chdir(createTempDir(...))` BEFORE requiring app modules — `firebaseAdmin.js` and the adapter read the environment at require time.
+- Frontend function → `loadFrontendApp` (see `eventDetailReset.test.js`); assert `toasts` is empty, because most `app.js` handlers swallow errors in a `catch` that only shows a toast.
 - Each test file runs in its own process (node:test default), so module state does not leak between files.
 - Test order inside a file is sequential; some `devServer` tests depend on earlier ones (e.g. draft visibility before "start event").
 

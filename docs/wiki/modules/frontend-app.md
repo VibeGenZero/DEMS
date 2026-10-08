@@ -45,7 +45,7 @@ Logged-out users see `#login-section` for every route except `info`. An event ro
 | Countdown | `formatCountdown`, `renderCountdownHTML`, `startCountdown` |
 | Event list | `showEventsSection`, `loadCategories`, `filterByCategory`, `debouncedSearch`, `switchView`, `renderCalendar`, `toggleSeriesDates`, `getParticipantWarningBadge` |
 | Location autocomplete | `loadChannelsForAutocomplete`, `handleLocationInput`, `selectLocationChannel` |
-| Event detail | `showEventDetail`, `getEventGradient`, `renderDetailBanner`, `setSidebarRow`, `renderSidebarDetails`, `renderSidebarAction`, `renderSidebarCapacity`, `loadDetailParticipants`, `toggleDetailSeriesDates` |
+| Event detail | `showEventDetail` (first calls `resetEventDetailAreas`, then sets `detailEventId`), `resetEventDetailAreas` (hides/empties register/registered/no-access/waitlist areas, participants, `#comments-section`, `#checkin-section`), `getEventGradient`, `renderDetailBanner`, `setSidebarRow`, `renderSidebarDetails`, `renderSidebarAction`, `renderSidebarCapacity`, `loadDetailParticipants`, `toggleDetailSeriesDates` |
 | Registration | `submitRegistration`, `unregisterFromEvent` |
 | Registration form widgets | `normalizeFieldType`, `formatEntityAnswer`, `loadFormOptions`, `renderEntityPicker`, `initFormFieldWidgets`, `fillEntitySelects`, `initEntityPicker`, `searchEntities`, `renderFormFields`, `collectFormAnswers` |
 | Guests | `debounceGuestSearch`, `searchGuests`, `addGuestToList`, `removeGuestFromList`, `renderSelectedGuests`, `resetGuestSelection` |
@@ -71,7 +71,7 @@ Logged-out users see `#login-section` for every route except `info`. An event ro
 
 ## Globals
 
-`currentUser`, `csrfToken`, `serverName`, `cachedRoles`, `cachedEvents`, `countdownTimers`, `activeCategory`, `currentView`, `descriptionEditor` (EasyMDE), `startDatePicker`/`endDatePicker` (Flatpickr), `window.DEBUG_MODE`, `window.VERBOSE_LOG`, `window._demsGuildId`, slots: `selectedSlotId`, `selectedAltSlotIds`, `slotPickerSlots`, `MAX_SLOTS_PER_EVENT`, `SLOT_PRESETS`, polls: `currentPoll`, `pendingPollDecision`, `pollDeadlinePicker`.
+`currentUser`, `csrfToken`, `serverName`, `cachedRoles`, `cachedEvents`, `countdownTimers`, `activeCategory`, `currentView`, `descriptionEditor` (EasyMDE), `startDatePicker`/`endDatePicker` (Flatpickr), `window.DEBUG_MODE`, `window.VERBOSE_LOG`, `window._demsGuildId`, `detailEventId` (event the detail page shows; `showEventDetail`, `loadDetailParticipants`, `loadComments` and the admin path of `renderCheckinSection` drop answers that arrive for another id), slots: `selectedSlotId`, `selectedAltSlotIds`, `slotPickerSlots`, `MAX_SLOTS_PER_EVENT`, `SLOT_PRESETS`, polls: `currentPoll`, `pendingPollDecision`, `pollDeadlinePicker`.
 
 ## Rules for changes
 
@@ -79,6 +79,7 @@ Logged-out users see `#login-section` for every route except `info`. An event ro
 - Mutating calls: `fetch(url, { method, headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrfToken }, body })`.
 - Show results with `showToast(msg, type)` where `type` is a Bootstrap context (`success`, `danger`, `warning`, `info` → class `text-bg-<type>`; there is no `error`); texts in German. Login/OAuth errors use `showError(msg)` (banner).
 - Inline `onclick="fn(...)"` handlers are used throughout (CSP allows `unsafe-inline`) — new handlers must be global functions.
+- New per-event areas on the event page: clear them in `resetEventDetailAreas`, show them again where they are filled, and drop late answers with `if (detailEventId !== eventId) return;` after each `await`.
 
 ## Gotchas
 
