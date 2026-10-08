@@ -37,6 +37,7 @@ Exports `FORM_FIELD_TYPE` (`text, textarea, dropdown, checkbox, user, role, chan
 |---|---|
 | `promoteFromWaitlist(eventId, event)` | takes the event lock; slot events: oldest waitlist entries whose main/fallback slot is free move up (`pickWaitlistPromotions`); other events: every waitlisted registration whose places (guests counted) still fit (`pickCapacityPromotions`); status `accepted` (instant) or `pending`; DMs, role, channel access, announcement refresh; never throws |
 | `promoteFromWaitlistLocked(eventId, event)` / `announcePromotions(eventId, event, promotions)` | the two halves for callers that already hold the lock |
+| `isEventVisibleTo(user, event)` | false for `draft`/`archived` (`ADMIN_ONLY_STATUSES`) unless `user.isAdmin`; used by `routes/events.js` |
 | `toPublicEvent(eventId, event)` | `{ id, ...event }` without `PRIVATE_EVENT_FIELDS` (`checkinCode`); use for every event answer outside the admin area |
 | `loadEventRegistrations(eventId)`, `findUserRegistration(eventId, userId)`, `loadEventRoster(eventId, event, { withProfiles })` | registrations with `id`; line-up via `buildRoster` |
 | `saveEventWithSlots(eventId, rawSlots, buildUpdates)` | under the event lock: `normalizeSlots` + `validateSlotChange`, then writes `buildUpdates(slots, oldEvent)` → `{ ok, oldEvent, updates }` or `{ ok: false, error }` |

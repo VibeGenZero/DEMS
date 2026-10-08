@@ -2773,6 +2773,12 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // ─── Profile Section ─────────────────────────────
+// Mirrors isEventVisibleTo in utils/eventUtils.js: the API answers 404 to
+// non-admins for draft and archived events, so their page cannot be opened
+function canOpenEvent(event) {
+    return !!event && (!!currentUser?.isAdmin || !['draft', 'archived'].includes(event.status));
+}
+
 async function showProfileSection() {
     const section = document.getElementById('profile-section');
     section.style.display = 'block';
@@ -2885,7 +2891,7 @@ async function showProfileSection() {
             function renderRegCards() {
                 const slice = registrations.slice(0, visibleCount);
                 regContainer.innerHTML = slice.map(reg => `
-        <div class="profile-reg-card" onclick="${reg.event ? `navigateTo('event/${reg.event.id}')` : ''}">
+        <div class="profile-reg-card${canOpenEvent(reg.event) ? '' : ' profile-reg-card-static'}" onclick="${canOpenEvent(reg.event) ? `navigateTo('event/${reg.event.id}')` : ''}">
           <div class="profile-reg-info">
             <h6>${reg.event ? escapeHtml(reg.event.title) : '<span class="text-muted">Gelöschtes Event</span>'}</h6>
             <small>

@@ -1686,6 +1686,18 @@ body {
   transform: translateX(4px);
 }
 
+/* Event page not reachable (draft/archived for members, deleted) -> no link look */
+.profile-reg-card.profile-reg-card-static {
+  cursor: default;
+}
+
+.profile-reg-card.profile-reg-card-static:hover {
+  border-color: var(--border-subtle);
+  background: var(--bg-glass);
+  box-shadow: none;
+  transform: none;
+}
+
 .profile-reg-info h6 {
   margin: 0 0 0.25rem 0;
   font-weight: 600;

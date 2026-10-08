@@ -51,7 +51,7 @@ Logged-out users see `#login-section` for every route except `info`. An event ro
 | Guests | `debounceGuestSearch`, `searchGuests`, `addGuestToList`, `removeGuestFromList`, `renderSelectedGuests`, `resetGuestSelection` |
 | Check-in | `renderCheckinSection`, `generateCheckinCode`, `submitCheckin` |
 | Comments | `loadComments`, `renderComment`, `postComment`, `replyToComment`, `deleteComment` |
-| Profile & account | `showProfileSection`, `loadAccountSettings`, `saveAccountSettings`, `deleteUserAccount`, `showFirstLoginModal`, `confirmInvitationPreference`, `toggleVerboseLog` |
+| Profile & account | `showProfileSection` (registration cards link only if `canOpenEvent(event)`, else class `profile-reg-card-static`), `canOpenEvent` (mirrors `isEventVisibleTo`), `loadAccountSettings`, `saveAccountSettings`, `deleteUserAccount`, `showFirstLoginModal`, `confirmInvitationPreference`, `toggleVerboseLog` |
 | Admin dashboard | `showAdminSection`, `loadAdminStats`, `loadAdminEvents`, `loadAuditLog`, `showResetModal`, `performSystemReset` |
 | Event wizard (create/edit) | `showCreateEventModal`, `editEvent`, `saveEvent`, `wizardGoTo`, `wizardNext`, `wizardBack`, `updateBannerPreview`, `loadRoles`, `populateRoles`, `getSelectedRoles` |
 | Form builder | `addFormField`, `toggleOptionsInput`, `getFormFieldsFromBuilder` |
