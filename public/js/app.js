@@ -989,6 +989,7 @@ async function loadDetailParticipants(eventId) {
         const res = await fetch(`/api/events/${eventId}/participants`);
         if (!res.ok) return;
         const data = await res.json();
+        if (detailEventId !== eventId) return;
         const section = document.getElementById('detail-participants-section');
         const avatarsEl = document.getElementById('detail-participants-avatars');
         const countEl = document.getElementById('detail-participants-count');
@@ -1207,11 +1208,31 @@ async function switchMySlot(eventId) {
 }
 
 // ─── Event Detail ────────────────────────────────
+// Event the detail page currently shows; answers for any other id arrived late and are dropped
+let detailEventId = null;
+
+// Clears what the previously opened event left on the page; the early returns
+// below (no access, not logged in) never reach the code that refills it
+function resetEventDetailAreas() {
+    ['detail-register-area', 'detail-registered', 'detail-no-access', 'detail-waitlist',
+        'detail-participants-section', 'comments-section', 'checkin-section'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.style.display = 'none';
+    });
+    ['detail-participants-avatars', 'detail-roster', 'detail-participants-count', 'detail-reg-slot',
+        'comments-section', 'checkin-section'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.innerHTML = '';
+    });
+}
+
 async function showEventDetail(eventId) {
     if (!eventId) return navigateTo('events');
 
     // Reset guest selection for fresh start
     resetGuestSelection();
+    resetEventDetailAreas();
+    detailEventId = eventId;
 
     const section = document.getElementById('event-detail-section');
     section.style.display = 'block';
@@ -1220,6 +1241,7 @@ async function showEventDetail(eventId) {
         const res = await fetch(`/api/events/${eventId}`);
         if (!res.ok) throw new Error('Not found');
         const event = await res.json();
+        if (detailEventId !== eventId) return;
 
         // Banner
         renderDetailBanner(event);
@@ -1260,6 +1282,7 @@ async function showEventDetail(eventId) {
             try {
                 const seriesRes = await fetch(`/api/events/series/${event.seriesId}`);
                 const seriesEvents = await seriesRes.json();
+                if (detailEventId !== eventId) return;
                 if (Array.isArray(seriesEvents) && seriesEvents.length > 1) {
                     const maxVisible = 5;
                     const visibleSeries = seriesEvents.slice(0, maxVisible);
@@ -1307,10 +1330,6 @@ async function showEventDetail(eventId) {
         const registeredArea = document.getElementById('detail-registered');
         const noAccessArea = document.getElementById('detail-no-access');
         const waitlistArea = document.getElementById('detail-waitlist');
-        registerArea.style.display = 'none';
-        registeredArea.style.display = 'none';
-        noAccessArea.style.display = 'none';
-        waitlistArea.style.display = 'none';
 
         if (!currentUser) {
             renderSidebarAction('none');
@@ -1321,6 +1340,7 @@ async function showEventDetail(eventId) {
         // Check existing registration
         const regRes = await fetch(`/api/events/${eventId}/my-registration`);
         const regData = await regRes.json();
+        if (detailEventId !== eventId) return;
 
         if (regData.registered) {
             registeredArea.style.display = 'block';
@@ -1414,6 +1434,7 @@ async function showEventDetail(eventId) {
         loadComments(eventId);
 
     } catch {
+        if (detailEventId !== eventId) return;
         showToast('Event nicht gefunden.', 'danger');
         navigateTo('events');
     }
@@ -1925,6 +1946,7 @@ async function renderCheckinSection(eventId, event, registration) {
         container.style.background = 'rgba(139,92,246,0.05)';
         document.getElementById('detail-register-area')?.insertAdjacentElement('afterend', container);
     }
+    container.style.display = '';
 
     // Admin view: show code generation + stats
     if (currentUser?.isAdmin) {
@@ -1933,6 +1955,7 @@ async function renderCheckinSection(eventId, event, registration) {
                 headers: { 'X-CSRF-TOKEN': csrfToken }
             });
             const stats = await statsRes.json();
+            if (detailEventId !== eventId) return;
 
             container.innerHTML = `
                 <h5><i class="bi bi-qr-code me-2"></i>Check-in (Admin)</h5>
@@ -2088,6 +2111,7 @@ async function loadComments(eventId) {
     if (!commentSection) return;
 
     // Clear previous comments and show loading state
+    commentSection.style.display = '';
     commentSection.innerHTML = '<div class="text-center py-4"><div class="spinner-border text-accent" role="status"><span class="visually-hidden">Laden...</span></div></div>';
 
     const isLoggedIn = !!currentUser;
@@ -2095,6 +2119,7 @@ async function loadComments(eventId) {
     try {
         const res = await fetch(`/api/events/${eventId}/comments`);
         const comments = await res.json();
+        if (detailEventId !== eventId) return;
 
         let html = `<h5><i class="bi bi-chat-dots me-2"></i>Kommentare & Fragen (${comments.length})</h5>`;
 
