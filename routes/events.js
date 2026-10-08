@@ -4,10 +4,31 @@ const { db, collection, doc, getDoc, getDocs, addDoc, deleteDoc, updateDoc, quer
 const { requireAuth } = require('../middleware/auth');
 const { checkRegistrationAllowed } = require('../middleware/maintenance');
 const { getGuildRoles, getPublicGuildChannels } = require('../bot');
-const { loadEventRoster, toPublicEvent } = require('../utils/eventUtils');
+const { loadEventRoster, toPublicEvent, isEventVisibleTo } = require('../utils/eventUtils');
 const { registerUserForEvent, switchOwnSlot, unregisterUserFromEvent, REGISTRATION_SOURCE } = require('../utils/registrationService');
 const { hasSlots, withSlotSummary } = require('../utils/slotService');
 const { debugLog } = require('../utils/debugLog');
+
+// No public preview: every event endpoint needs a login. Runs before router.param
+// below, so anonymous requests get 401 and learn nothing about an event id
+router.use(requireAuth);
+
+/**
+ * Every route with :id — draft and archived events answer 404 for non-admins,
+ * as if they did not exist. Unknown ids are left to the route handler.
+ */
+router.param('id', async (req, res, next, id) => {
+    try {
+        const eventSnap = await getDoc(doc(db, 'events', id));
+        if (eventSnap.exists() && !isEventVisibleTo(req.session.user, eventSnap.data())) {
+            return res.status(404).json({ error: 'Event nicht gefunden' });
+        }
+        next();
+    } catch (err) {
+        console.error('Error checking event visibility:', err);
+        res.status(500).json({ error: 'Fehler beim Laden des Events' });
+    }
+});
 
 /**
  * GET /api/events — List all events (paginated)
@@ -152,8 +173,9 @@ router.get('/series/:seriesId', async (req, res) => {
         const snapshot = await getDocs(collection(db, 'events'));
         const seriesEvents = [];
         snapshot.forEach(docSnap => {
-            if (docSnap.data().seriesId === seriesId) {
-                seriesEvents.push(toPublicEvent(docSnap.id, docSnap.data()));
+            const event = docSnap.data();
+            if (event.seriesId === seriesId && isEventVisibleTo(req.session.user, event)) {
+                seriesEvents.push(toPublicEvent(docSnap.id, event));
             }
         });
 

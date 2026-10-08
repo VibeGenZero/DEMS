@@ -111,6 +111,20 @@ function toPublicEvent(eventId, event) {
     return publicEvent;
 }
 
+// Event statuses only admins may see; for everyone else such an event does not exist
+const ADMIN_ONLY_STATUSES = ['draft', 'archived'];
+
+/**
+ * Whether a user may see an event at all.
+ *
+ * @param {Object|undefined} user -> Session user.
+ * @param {Object} event -> The event document data.
+ * @returns {boolean} -> False for draft and archived events unless the user is an admin.
+ */
+function isEventVisibleTo(user, event) {
+    return !!user?.isAdmin || !ADMIN_ONLY_STATUSES.includes(event.status);
+}
+
 /**
  * Load every registration of an event.
  *
@@ -205,6 +219,7 @@ module.exports = {
     announcePromotions,
     addAuditLog,
     toPublicEvent,
+    isEventVisibleTo,
     loadEventRegistrations,
     findUserRegistration,
     loadEventRoster,

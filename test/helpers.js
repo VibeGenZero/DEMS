@@ -297,7 +297,7 @@ function createFakeElement(registry, id = '', display = '') {
  * can assert that no error was swallowed by a catch block.
  *
  * @param {Object<string, *>} routes -> URL → JSON body or () => body.
- * @returns {Object} -> `{ app, element, toasts }`: app exposes showEventDetail and setCurrentUser, element(id) returns the fake element or null, toasts lists the shown messages.
+ * @returns {Object} -> `{ app, element, toasts }`: app exposes showEventDetail, showProfileSection and setCurrentUser, element(id) returns the fake element or null, toasts lists the shown messages.
  */
 function loadFrontendApp(routes) {
     const registry = new Map();
@@ -336,7 +336,7 @@ function loadFrontendApp(routes) {
     context.window = context;
     const source = fs.readFileSync(path.join(REPO_ROOT, 'public', 'js', 'app.js'), 'utf8');
     vm.runInContext(`${source}
-;globalThis.__app = { showEventDetail, setCurrentUser: (user) => { currentUser = user; } };`, context, { filename: 'app.js' });
+;globalThis.__app = { showEventDetail, showProfileSection, setCurrentUser: (user) => { currentUser = user; } };`, context, { filename: 'app.js' });
     return { app: context.__app, element: (id) => registry.get(id) || null, toasts };
 }
 

@@ -19,7 +19,7 @@ see_also: [auth-session, known-issues, deployment]
 | CORS | `cors({ origin: BASE_URL, credentials: true })` |
 | Rate limits | `/api/` 200 / 15 min, `/auth/` 30 / 15 min (off in dev mock mode) |
 | CSRF | double-submit token, see [auth-session](auth-session.md) |
-| AuthZ | `requireAuth`, `requireAdmin`; comment delete = owner or admin |
+| AuthZ | `requireAuth`, `requireAdmin`; the whole event API needs a login (no public preview); `draft`/`archived` events answer 404 to non-admins; comment delete = owner or admin |
 | XSS | frontend `escapeHtml()` for interpolated values, `renderMarkdownSafe()` = marked + DOMPurify for descriptions |
 | Secrets | `.env` never in the image (`.dockerignore`); `checkinCode` removed from every event answer outside `/api/admin` (`toPublicEvent` in `utils/eventUtils.js`) |
 | Dev mode | `DEV_MOCK=true` + `NODE_ENV=production` → refuses to start |
@@ -30,7 +30,7 @@ see_also: [auth-session, known-issues, deployment]
 | ID | Finding | Status |
 |---|---|---|
 | C-01 | check-in code leak | fixed: every event answer outside `/api/admin` goes through `toPublicEvent` (F-02) |
-| C-02 | draft/archived/cancelled readable | **partial**: `GET /api/events?status=` now answers 403 for non-admins, but `GET /api/events/:id` still returns non-active events to anyone who knows the id |
+| C-02 | draft/archived/cancelled readable | fixed: the event API needs a login, `draft`/`archived` answer 404 to non-admins on every `/:id` route and are left out of series answers, `?status=` other than `active` answers 403 (F-03); `cancelled` stays readable by id for members on purpose |
 | C-03 | session cookie not `secure` | open (`secure: false`) |
 | C-04 | vulnerable dependencies | fixed (dependency update 2026-09, `npm audit` 0) |
 | H-01 / H-02 / H-03 | OAuth `state`, session regeneration, 24 h admin cache | open |
@@ -54,5 +54,6 @@ Helmet adds `upgrade-insecure-requests` to the CSP by default. Browsers then rew
 ## Rules for changes
 
 - New endpoints: decide the guard explicitly (`requireAuth`/`requireAdmin`), never trust frontend hiding.
+- `routes/events.js` guards itself: `router.use(requireAuth)` for every route and `router.param('id')` hides `draft`/`archived` events from non-admins; new `/:id` routes inherit both.
 - Build event answers outside the admin area with `toPublicEvent(id, data)` (`utils/eventUtils.js`), never by spreading the document; a new secret event field goes into its `PRIVATE_EVENT_FIELDS`.
 - Do not add CDN hosts to the CSP: vendor scripts, styles and fonts into `public/vendor/` instead (see [frontend-markup](../modules/frontend-markup.md)). External images are already covered by `img-src https:`.

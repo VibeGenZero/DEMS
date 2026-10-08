@@ -108,7 +108,8 @@ test('the content security policy allows only own scripts, styles and fonts and 
 });
 
 test('seeded events are served', async () => {
-    const res = await createClient(server.baseUrl).request('/api/events');
+    const member = await loginAs('member');
+    const res = await member.request('/api/events');
     assert.equal(res.status, 200);
     const { data } = await res.json();
     assert.ok(data.some(event => event.id === EVENT_ID.OPEN));
@@ -188,6 +189,40 @@ test('no event answer outside the admin area contains a check-in code', async ()
         const body = await res.text();
         assert.match(body, new RegExp(`"id":"(${EVENT_ID.RUNNING}|${SERIES_EVENT_IDS[0]})"`), `${name} lists an event with a code`);
         assert.doesNotMatch(body, /checkinCode/, name);
+    }
+});
+
+test('the event API answers only logged-in users', async () => {
+    const admin = await loginAs('admin');
+    const { seriesId } = await (await admin.request(`/api/events/${SERIES_EVENT_IDS[0]}`)).json();
+    const anonymous = createClient(server.baseUrl);
+
+    for (const url of ['/api/events', '/api/events/categories', `/api/events/series/${seriesId}`, `/api/events/${EVENT_ID.OPEN}`]) {
+        const res = await anonymous.request(url);
+        assert.equal(res.status, 401, url);
+    }
+});
+
+test('draft and archived events exist only for admins', async () => {
+    const admin = await loginAs('admin');
+    const member = await loginAs('member');
+    const draftId = SERIES_EVENT_IDS[2];
+    assert.equal((await admin.send('PUT', `/api/admin/events/${draftId}/status`, { status: 'draft' })).status, 200);
+    try {
+        for (const id of [draftId, EVENT_ID.ARCHIVED]) {
+            const res = await member.request(`/api/events/${id}`);
+            assert.equal(res.status, 404, id);
+            assert.equal((await res.json()).error, 'Event nicht gefunden');
+            assert.equal((await member.request(`/api/events/${id}/comments`)).status, 404, `${id}/comments`);
+            assert.equal((await admin.request(`/api/events/${id}`)).status, 200, `${id} as admin`);
+        }
+
+        const { seriesId } = await (await admin.request(`/api/events/${draftId}`)).json();
+        const seriesEventIds = async (client) => (await (await client.request(`/api/events/series/${seriesId}`)).json()).map(event => event.id);
+        assert.ok(!(await seriesEventIds(member)).includes(draftId));
+        assert.ok((await seriesEventIds(admin)).includes(draftId));
+    } finally {
+        await admin.send('PUT', `/api/admin/events/${draftId}/status`, { status: 'active' });
     }
 });
 

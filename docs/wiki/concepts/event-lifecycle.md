@@ -45,5 +45,5 @@ Dates are stored as ISO strings; the wizard uses Flatpickr (German locale). Bot 
 
 ## Gotchas
 
-- Non-active events are still readable by id (`GET /api/events/:id`) — see [security](security.md).
+- `draft` and `archived` events do not exist for non-admins: every `/api/events/:id…` route answers 404, series answers leave them out (`isEventVisibleTo`); `cancelled` events stay readable by id — see [security](security.md).
 - Deleting an event does not delete its auto-created Discord channels (order bug in `DELETE /events/:id`).

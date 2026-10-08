@@ -9,7 +9,7 @@ see_also: [api-index, testing, security]
 ---
 # How to add an API endpoint
 
-> TL;DR: Put the handler into the router that matches the audience (`routes/events.js` public/member, `routes/user.js` own account, `routes/admin.js` admin — auto-guarded), declare static paths before `/:id`, use the `firebaseAdmin.js` API, answer errors as `{ error: '<German text>' }`, write an audit log for admin mutations, call it from the SPA with the CSRF header, add a test in `test/devServer.test.js`, then update the wiki (`api-index` + router node) and run `npm run wiki`.
+> TL;DR: Put the handler into the router that matches the audience (`routes/events.js` events for logged-in members, `routes/user.js` own account, `routes/admin.js` admin — auto-guarded), declare static paths before `/:id`, use the `firebaseAdmin.js` API, answer errors as `{ error: '<German text>' }`, write an audit log for admin mutations, call it from the SPA with the CSRF header, add a test in `test/devServer.test.js`, then update the wiki (`api-index` + router node) and run `npm run wiki`.
 
 ## Steps
 
@@ -17,8 +17,9 @@ see_also: [api-index, testing, security]
 
    | Audience | File | Guard |
    |---|---|---|
-   | anyone | `routes/events.js` | none |
-   | logged-in member | `routes/events.js` / `routes/user.js` | add `requireAuth` |
+   | anyone | `server.js` (next to `/api/server-info`) | none — keep it to non-event data |
+   | logged-in member | `routes/events.js` | inherited from `router.use(requireAuth)`; `/:id` routes also get the draft/archived 404 from `router.param('id')` |
+   | own account | `routes/user.js` | add `requireAuth` |
    | admin | `routes/admin.js` | inherited from `router.use(requireAuth, requireAdmin)` |
    | new resource | new `routes/<name>.js` + `app.use('/api/<name>', require('./routes/<name>'))` in `server.js` next to the others (before the SPA fallback) |
 

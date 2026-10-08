@@ -28,7 +28,7 @@ erDiagram
 | Field | Type | Meaning |
 |---|---|---|
 | `title`, `description` | string | description is Markdown (EasyMDE), ≤5000 chars |
-| `status` | `draft` \| `active` \| `archived` \| `cancelled` | only `active` is public and accepts registrations |
+| `status` | `draft` \| `active` \| `archived` \| `cancelled` | only `active` is listed and accepts registrations; `draft`/`archived` answer 404 to non-admins (`isEventVisibleTo`) |
 | `startDate`, `endDate` | ISO string or `''` | |
 | `maxParticipants` | int | `0` = unlimited; guests count against it |
 | `accessMode` / `requiredRoles` | `open` \| `role-required` / role id[] | role gate for registration |

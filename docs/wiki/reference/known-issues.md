@@ -26,7 +26,6 @@ see_also: [security, frontend-app, bot, reminders-presence]
 
 | # | Issue | Location |
 |---|---|---|
-| 10 | non-active events readable by id | `GET /api/events/:id` |
 | 11 | guest `my-registration` returns the registrant's full document | `GET /api/events/:id/my-registration` |
 
 ## Pitfalls (by design, easy to trip over)

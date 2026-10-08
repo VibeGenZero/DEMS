@@ -36,11 +36,11 @@ see_also: [request-lifecycle, add-api-endpoint]
 
 | Method | Path | Guard |
 |---|---|---|
-| GET | `/api/events` | — (non-active `?status=` → A) |
-| GET | `/api/events/series/:seriesId` | — |
-| GET | `/api/events/categories` | — |
+| GET | `/api/events` | U (non-active `?status=` → A) |
+| GET | `/api/events/series/:seriesId` | U (draft/archived only for A) |
+| GET | `/api/events/categories` | U |
 | GET | `/api/events/form-options` | U |
-| GET | `/api/events/:id` | — |
+| GET | `/api/events/:id` | U (draft/archived → 404 unless A; same for every `/:id` route) |
 | POST / DELETE | `/api/events/:id/register` | U (POST also maintenance gate) |
 | PUT | `/api/events/:id/register/slot` | U (+ maintenance gate) |
 | GET | `/api/events/:id/my-registration` | U |
