@@ -3,7 +3,7 @@ id: security
 title: Security model and open audit findings
 type: concept
 tags: [security, csp, helmet, csrf, xss, rate-limit, audit, https]
-sources: [server.js, docs/security/SECURITY_AUDIT_2026-04-22.md, ISSUE.md, routes/events.js, public/js/app.js]
+sources: [server.js, docs/security/SECURITY_AUDIT_2026-04-22.md, ISSUE.md, routes/events.js, routes/user.js, utils/eventUtils.js, public/js/app.js]
 depends_on: [server]
 see_also: [auth-session, known-issues, deployment]
 ---
@@ -21,7 +21,7 @@ see_also: [auth-session, known-issues, deployment]
 | CSRF | double-submit token, see [auth-session](auth-session.md) |
 | AuthZ | `requireAuth`, `requireAdmin`; comment delete = owner or admin |
 | XSS | frontend `escapeHtml()` for interpolated values, `renderMarkdownSafe()` = marked + DOMPurify for descriptions |
-| Secrets | `.env` never in the image (`.dockerignore`); `checkinCode` removed from `GET /api/events/:id` |
+| Secrets | `.env` never in the image (`.dockerignore`); `checkinCode` removed from every event answer outside `/api/admin` (`toPublicEvent` in `utils/eventUtils.js`) |
 | Dev mode | `DEV_MOCK=true` + `NODE_ENV=production` → refuses to start |
 | Container | runs as user `node`; production compose pins `NODE_ENV=production` |
 
@@ -29,7 +29,7 @@ see_also: [auth-session, known-issues, deployment]
 
 | ID | Finding | Status |
 |---|---|---|
-| C-01 | check-in code leak | **partial**: stripped in `GET /api/events/:id`, but still included in `GET /api/events`, `GET /api/events/series/:id` and embedded events of `/api/user/registrations` / `/profile` |
+| C-01 | check-in code leak | fixed: every event answer outside `/api/admin` goes through `toPublicEvent` (F-02) |
 | C-02 | draft/archived/cancelled readable | **partial**: `GET /api/events?status=` now answers 403 for non-admins, but `GET /api/events/:id` still returns non-active events to anyone who knows the id |
 | C-03 | session cookie not `secure` | open (`secure: false`) |
 | C-04 | vulnerable dependencies | fixed (dependency update 2026-09, `npm audit` 0) |
@@ -54,5 +54,5 @@ Helmet adds `upgrade-insecure-requests` to the CSP by default. Browsers then rew
 ## Rules for changes
 
 - New endpoints: decide the guard explicitly (`requireAuth`/`requireAdmin`), never trust frontend hiding.
-- Never spread whole event documents into public responses without removing `checkinCode`.
+- Build event answers outside the admin area with `toPublicEvent(id, data)` (`utils/eventUtils.js`), never by spreading the document; a new secret event field goes into its `PRIVATE_EVENT_FIELDS`.
 - Do not add CDN hosts to the CSP: vendor scripts, styles and fonts into `public/vendor/` instead (see [frontend-markup](../modules/frontend-markup.md)). External images are already covered by `img-src https:`.

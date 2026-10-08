@@ -95,6 +95,22 @@ async function announcePromotions(eventId, event, promotions) {
     notifyRegistrationsChanged(eventId);
 }
 
+// Event fields only admins may see; members would otherwise check in without being there
+const PRIVATE_EVENT_FIELDS = ['checkinCode'];
+
+/**
+ * Event data for answers outside the admin area.
+ *
+ * @param {string} eventId -> The event document ID.
+ * @param {Object} event -> The event document data.
+ * @returns {Object} -> `{ id, ...event }` without PRIVATE_EVENT_FIELDS.
+ */
+function toPublicEvent(eventId, event) {
+    const publicEvent = { id: eventId, ...event };
+    for (const field of PRIVATE_EVENT_FIELDS) delete publicEvent[field];
+    return publicEvent;
+}
+
 /**
  * Load every registration of an event.
  *
@@ -188,6 +204,7 @@ module.exports = {
     promoteFromWaitlistLocked,
     announcePromotions,
     addAuditLog,
+    toPublicEvent,
     loadEventRegistrations,
     findUserRegistration,
     loadEventRoster,

@@ -40,7 +40,7 @@ erDiagram
 | `location` | `{ text, channelId, channelType }` or `null` | |
 | `reminderHours` | `[{ hours, sent }]` (legacy: number) | see [reminders-presence](reminders-presence.md) |
 | `customBotMessages` | `{ registration?, accepted?, rejected? }` | per-event DM templates |
-| `checkinMessage` / `checkinEnabled` / `checkinCode` | string / bool / 6-digit string | code never sent by `GET /api/events/:id` |
+| `checkinMessage` / `checkinEnabled` / `checkinCode` | string / bool / 6-digit string | code never leaves the admin area (`toPublicEvent`); admins read it via `checkin-stats` |
 | `autoCreateChannels`, `channelConfig` | bool, `{ type: voice\|text\|both, voiceName?, textName? }` | private event channels |
 | `discordChannelId`, `discordTextChannelId`, `discordScheduledEventId` | id or null | set by the bot |
 | `recurring`, `recurringInterval`, `recurringUntil`, `seriesId` | bool, `weekly`\|`biweekly`\|other=monthly, `YYYY-MM-DD`, uuid | series instances share `seriesId` |

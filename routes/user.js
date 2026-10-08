@@ -4,7 +4,7 @@ const { db, collection, doc, getDoc, getDocs, setDoc, deleteDoc, query, where, o
 const { requireAuth } = require('../middleware/auth');
 const { debugLog } = require('../utils/debugLog');
 const { deleteUserPollVotes } = require('../utils/pollStore');
-const { promoteFromWaitlist } = require('../utils/eventUtils');
+const { promoteFromWaitlist, toPublicEvent } = require('../utils/eventUtils');
 const { notifyRegistrationsChanged } = require('../utils/announcementRefresh');
 const { OCCUPYING_STATUSES } = require('../utils/capacity');
 
@@ -36,7 +36,7 @@ router.get('/registrations', requireAuth, async (req, res) => {
                 try {
                     const eventSnap = await getDoc(doc(db, 'events', eid));
                     if (eventSnap.exists()) {
-                        eventMap.set(eid, { id: eventSnap.id, ...eventSnap.data() });
+                        eventMap.set(eid, toPublicEvent(eventSnap.id, eventSnap.data()));
                     }
                 } catch { /* event may have been deleted */ }
             }
@@ -87,7 +87,7 @@ router.get('/profile', requireAuth, async (req, res) => {
             try {
                 const eventSnap = await getDoc(doc(db, 'events', eid));
                 if (eventSnap.exists()) {
-                    eventMap.set(eid, { id: eventSnap.id, ...eventSnap.data() });
+                    eventMap.set(eid, toPublicEvent(eventSnap.id, eventSnap.data()));
                 }
             } catch { /* event may have been deleted */ }
         }

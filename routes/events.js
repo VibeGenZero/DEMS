@@ -4,7 +4,7 @@ const { db, collection, doc, getDoc, getDocs, addDoc, deleteDoc, updateDoc, quer
 const { requireAuth } = require('../middleware/auth');
 const { checkRegistrationAllowed } = require('../middleware/maintenance');
 const { getGuildRoles, getPublicGuildChannels } = require('../bot');
-const { loadEventRoster } = require('../utils/eventUtils');
+const { loadEventRoster, toPublicEvent } = require('../utils/eventUtils');
 const { registerUserForEvent, switchOwnSlot, unregisterUserFromEvent, REGISTRATION_SOURCE } = require('../utils/registrationService');
 const { hasSlots, withSlotSummary } = require('../utils/slotService');
 const { debugLog } = require('../utils/debugLog');
@@ -22,7 +22,7 @@ router.get('/', async (req, res) => {
         const snapshot = await getDocs(q);
         let events = [];
         snapshot.forEach(docSnap => {
-            events.push({ id: docSnap.id, ...docSnap.data() });
+            events.push(toPublicEvent(docSnap.id, docSnap.data()));
         });
         // Sort by startDate ascending (upcoming first), fallback to createdAt
         events.sort((a, b) => {
@@ -153,7 +153,7 @@ router.get('/series/:seriesId', async (req, res) => {
         const seriesEvents = [];
         snapshot.forEach(docSnap => {
             if (docSnap.data().seriesId === seriesId) {
-                seriesEvents.push({ id: docSnap.id, ...docSnap.data() });
+                seriesEvents.push(toPublicEvent(docSnap.id, docSnap.data()));
             }
         });
 
@@ -291,11 +291,10 @@ router.get('/:id', async (req, res) => {
             } catch { /* non-fatal */ }
         }
 
-        const { checkinCode, ...safe } = docSnap.data();
+        const event = toPublicEvent(docSnap.id, docSnap.data());
         res.json(withSlotSummary({
-            id: docSnap.id,
-            ...safe,
-            checkinEnabled: !!safe.checkinEnabled,
+            ...event,
+            checkinEnabled: !!event.checkinEnabled,
             currentParticipants,
             waitlistCount: waitSnap.size,
             createdByName

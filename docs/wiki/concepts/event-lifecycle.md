@@ -45,5 +45,5 @@ Dates are stored as ISO strings; the wizard uses Flatpickr (German locale). Bot 
 
 ## Gotchas
 
-- Non-active events are still readable by id (`GET /api/events/:id`), and the event list/series/profile responses still contain `checkinCode` — see [security](security.md).
+- Non-active events are still readable by id (`GET /api/events/:id`) — see [security](security.md).
 - Deleting an event does not delete its auto-created Discord channels (order bug in `DELETE /events/:id`).

@@ -16,7 +16,7 @@ see_also: [api-index, data-model]
 
 | Method | Path | Behaviour |
 |---|---|---|
-| GET | `/registrations` | own registrations with embedded `event`, newest first |
+| GET | `/registrations` | own registrations with embedded `event` (via `toPublicEvent`, no `checkinCode`), newest first |
 | GET | `/profile` | `{ user, registrations, stats, badges, unlockedBadges, totalBadges }` |
 | GET | `/search?q=` | ≥2 chars; users matching `displayName`/`username`, excluding self and users with `acceptInvitations === false`; max 10 |
 | GET | `/settings` | `{ acceptInvitations }` (default true) |
