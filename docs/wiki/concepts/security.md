@@ -9,7 +9,7 @@ see_also: [auth-session, known-issues, deployment]
 ---
 # Security model and open audit findings
 
-> TL;DR: Defenses: helmet CSP (allows `unsafe-inline`/`unsafe-eval`), CORS to `BASE_URL`, rate limits, double-submit CSRF on `/api`, httpOnly session cookie, server-side admin guards, `escapeHtml` + DOMPurify in the SPA. The 2026-04-22 audit lists 28 findings; most are still open — check the table before touching auth, events or exports. Serve DEMS over HTTPS: helmet's default `upgrade-insecure-requests` breaks plain-HTTP access from anything but localhost.
+> TL;DR: Defenses: helmet CSP (scripts, styles and fonts only from `'self'`, still allows `unsafe-inline`), CORS to `BASE_URL`, rate limits, double-submit CSRF on `/api`, httpOnly session cookie, server-side admin guards, `escapeHtml` + DOMPurify in the SPA. The 2026-04-22 audit lists 28 findings; most are still open — check the table before touching auth, events or exports. Serve DEMS over HTTPS: helmet's default `upgrade-insecure-requests` breaks plain-HTTP access from anything but localhost.
 
 ## Defenses in place
 
@@ -35,10 +35,10 @@ see_also: [auth-session, known-issues, deployment]
 | C-04 | vulnerable dependencies | fixed (dependency update 2026-09, `npm audit` 0) |
 | H-01 / H-02 / H-03 | OAuth `state`, session regeneration, 24 h admin cache | open |
 | H-04 | guest `my-registration` leaks registrant data | open |
-| H-05 | CSP `unsafe-inline` + `unsafe-eval` | open (inline `onclick` handlers depend on it) |
+| H-05 | CSP `unsafe-inline` + `unsafe-eval` | **partial**: `unsafe-eval` removed (F-07); `unsafe-inline` stays while inline `onclick` handlers exist |
 | H-06 | check-in code via `Math.random`, not specifically rate-limited | open (only the global `/api` limit) |
 | M-01 | Firebase client SDK used server-side | open (depends on Firestore rules) |
-| M-02 | CDN assets without SRI | open |
+| M-02 | CDN assets without SRI | fixed: no CDN assets, libraries and fonts are vendored in `public/vendor/` (F-07) |
 | M-03 / M-04 | non-constant-time password compare, panic without 2nd factor | open |
 | M-05 | public comments | fixed (comments require login) |
 | M-06 / M-07 | unbounded queries, user search enumeration | open |
@@ -55,4 +55,4 @@ Helmet adds `upgrade-insecure-requests` to the CSP by default. Browsers then rew
 
 - New endpoints: decide the guard explicitly (`requireAuth`/`requireAdmin`), never trust frontend hiding.
 - Never spread whole event documents into public responses without removing `checkinCode`.
-- New external script/style/font/image hosts must be added to the CSP.
+- Do not add CDN hosts to the CSP: vendor scripts, styles and fonts into `public/vendor/` instead (see [frontend-markup](../modules/frontend-markup.md)). External images are already covered by `img-src https:`.

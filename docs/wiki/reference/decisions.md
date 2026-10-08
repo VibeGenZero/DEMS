@@ -22,11 +22,12 @@ see_also: [security, dev-mock-mode, docker]
 | 2026-09-29 | dev mock mode (persona login, mock bot, seed data, `node:test` suite); shared login helpers `getLoginBlockReason` / `saveUserProfile` | develop without Discord/Firebase; persona login cannot drift from OAuth | [spec](../../superpowers/specs/2026-09-29-dev-mock-mode-design.md), [plan](../../superpowers/plans/2026-09-29-dev-mock-mode.md) |
 | 2026-10-02 | LLM wiki (this graph) + `CLAUDE.md` | cheaper, more accurate navigation for coding agents | [index](../index.md) |
 | 2026-10-08 | product name: DEMS now stands for "Dein Event-Management-System"; technical identifiers (`dems` image, `dems-data` volume, `DEMS_PORT`, `dems.sqlite`, localStorage keys, domain) stay unchanged | "Discord" in a product name invites trademark trouble with Discord; keeping the acronym avoids migrating running deployments | `test/branding.test.js` |
+| 2026-10-08 | all frontend libraries and fonts vendored in `public/vendor/` with pinned versions (F-07); CSP without CDN hosts and without `unsafe-eval` | the SPA stayed empty when the CDN was unreachable (`gsap is not defined`), `marked` had no version pin; smaller CSP (audit M-02, part of H-05) | `test/vendorAssets.test.js`, [frontend-markup](../modules/frontend-markup.md) |
 
 ## Standing decisions (apply to new work)
 
 - Data access only via the Firestore-compatible API (keeps Firebase and SQLite interchangeable).
-- No frontend build pipeline; vanilla JS + CDN/vendored libraries.
+- No frontend build pipeline; vanilla JS + pinned libraries and fonts in `public/vendor/` (no CDN).
 - German user-facing language.
 - Every route works without a Discord bot (helpers degrade to no-ops).
 - Dev mock mode must never be activatable in production (`NODE_ENV=production` guard).

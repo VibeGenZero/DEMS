@@ -37,7 +37,7 @@ Line counts as of 2026-10-02 (approximate; they drift).
 | `public/js/app.js` | ~4550 | the whole SPA: boot, router, sections, admin, forms | **grep** function from the map in [frontend-app](../modules/frontend-app.md) | [frontend-app](../modules/frontend-app.md) |
 | `public/index.html` | ~1760 | all sections and modals as static markup | **grep** element id | [frontend-markup](../modules/frontend-markup.md) |
 | `public/css/style.css` | ~3270 | dark theme, CSS variables, per-feature blocks | **grep** section header | [frontend-markup](../modules/frontend-markup.md) |
-| `public/vendor/` | — | vendored EasyMDE + Flatpickr (do not edit) | never read | [frontend-markup](../modules/frontend-markup.md) |
+| `public/vendor/` | — | pinned third-party libraries and fonts: Bootstrap, Bootstrap Icons, Font Awesome, GSAP, marked, DOMPurify, EasyMDE, Flatpickr, Inter, UnifrakturCook (do not edit) | never read | [frontend-markup](../modules/frontend-markup.md) |
 | `public/logo.svg` | — | favicon/logo | — | — |
 
 ## Ops, docs and other

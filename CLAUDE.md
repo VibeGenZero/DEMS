@@ -50,7 +50,7 @@ Node ≥ 22. No build step, no TypeScript, no linter config.
 - **CSRF:** mutating `/api/*` requests need header `X-CSRF-TOKEN` (frontend global `csrfToken`).
 - **Frontend:** global functions in `public/js/app.js` used by inline `onclick`; escape interpolated values with `escapeHtml`, Markdown only via `renderMarkdownSafe`; `showToast(msg, 'success'|'danger'|'warning'|'info')`.
 - **Discord:** new Discord calls go into exported `bot.js` helpers guarded by `if (!isReady) return <neutral>` + `try/catch`, and get a logging twin in `dev/mockBot.js`. Use `flags: MessageFlags.Ephemeral` and `Events.ClientReady`. Links to an event only via `buildEventUrl(id)` from `utils/eventUrl.js`.
-- **Security:** never return `checkinCode` or other secrets in event responses; choose `requireAuth`/`requireAdmin` explicitly; new CDN hosts must be added to the CSP in `server.js`.
+- **Security:** never return `checkinCode` or other secrets in event responses; choose `requireAuth`/`requireAdmin` explicitly; no CDNs: libraries and fonts go as pinned files into `public/vendor/` (the CSP allows scripts, styles and fonts only from `'self'`).
 - **Config:** document new env variables in `.env.example` (German comments) and `docs/wiki/ops/configuration.md`.
 - **Dev mock mode** (`DEV_MOCK=true`) must stay impossible with `NODE_ENV=production`.
 - **Tests:** `node:test` + `node:assert/strict`, test first (TDD), helpers in `test/helpers.js`; server behaviour via `test/devServer.test.js` with personas (`admin`, `raider`, `member`, `newbie`).
