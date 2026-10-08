@@ -29,7 +29,7 @@ see_also: [request-lifecycle, add-api-endpoint]
 | GET | `/auth/discord` | — |
 | GET | `/auth/discord/callback` | — |
 | GET | `/auth/me` | — |
-| GET | `/auth/logout` | — |
+| POST | `/auth/logout` | — (CSRF token) |
 | GET | `/auth/dev-login`, `/auth/dev-login/:personaId` | — (only with `DEV_MOCK=true`) |
 
 ## /api/events — [routes-events](../modules/routes-events.md)

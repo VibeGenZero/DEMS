@@ -222,6 +222,7 @@ function getErrorMessage(code) {
         'not_member': `Du bist kein Mitglied des ${serverName} Discord-Servers.`,
         'no_code': 'Authentifizierung fehlgeschlagen. Kein Code erhalten.',
         'token_failed': 'Token-Austausch fehlgeschlagen. Bitte versuche es erneut.',
+        'invalid_state': 'Die Anmeldung ist abgelaufen oder wurde nicht in diesem Browser gestartet. Bitte melde dich erneut an.',
         'server_error': 'Ein Serverfehler ist aufgetreten. Bitte versuche es später erneut.',
         'maintenance_login_disabled': 'Der Login ist wegen Wartungsarbeiten vorübergehend deaktiviert. Nur Admins können sich anmelden.',
         'panic_mode': 'Das System befindet sich im Notfall-Lockdown. Der Login ist gesperrt.'
@@ -230,6 +231,18 @@ function getErrorMessage(code) {
 }
 
 // ─── Auth ────────────────────────────────────────
+// POST with CSRF token: the server no longer logs out on a plain GET
+async function logout() {
+    try {
+        const res = await fetch('/auth/logout', { method: 'POST', headers: { 'X-CSRF-TOKEN': csrfToken } });
+        if (res.ok) {
+            window.location.href = '/';
+            return;
+        }
+    } catch { /* falls through to the toast */ }
+    showToast('Abmelden fehlgeschlagen. Bitte lade die Seite neu und versuche es erneut.', 'danger');
+}
+
 async function checkAuth() {
     try {
         const res = await fetch('/auth/me');
@@ -5465,7 +5478,8 @@ async function deleteUserAccount() {
         });
         if (res.ok) {
             showToast('Account erfolgreich gelöscht.', 'success');
-            setTimeout(() => { window.location.href = '/auth/logout'; }, 1500);
+            // DELETE /api/user/account already ended the session
+            setTimeout(() => { window.location.href = '/'; }, 1500);
         } else {
             showToast('Fehler beim Löschen des Accounts.', 'danger');
         }

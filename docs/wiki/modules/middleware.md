@@ -10,7 +10,7 @@ see_also: [maintenance-mode, auth-session]
 ---
 # middleware/ — auth guards, maintenance gates, validators
 
-> TL;DR: Three small modules. `auth.js` exports `requireAuth` / `requireAdmin` (session-based, 401/403 JSON). `maintenance.js` exports `isRegistrationBlocked`, `getLoginBlockReason` and the `checkRegistrationAllowed` middleware (503). `validators.js` exports `validateEvent`, `validateRegStatus`, `validateBotMessages` (400 with German messages).
+> TL;DR: Three small modules. `auth.js` exports `requireAuth` / `requireAdmin` (session-based, 401/403 JSON) plus the login helpers `createCsrfToken` and `startUserSession`. `maintenance.js` exports `isRegistrationBlocked`, `getLoginBlockReason` and the `checkRegistrationAllowed` middleware (503). `validators.js` exports `validateEvent`, `validateRegStatus`, `validateBotMessages` (400 with German messages).
 
 ## middleware/auth.js
 
@@ -18,6 +18,8 @@ see_also: [maintenance-mode, auth-session]
 |---|---|
 | `requireAuth` | 401 `{ error: 'Nicht eingeloggt. ...' }` without `req.session.user` |
 | `requireAdmin` | 401 without user, 403 unless `req.session.user.isAdmin` |
+| `createCsrfToken()` | 32 random bytes hex; used by the CSRF middleware in `server.js` and by `startUserSession` |
+| `startUserSession(req, user)` | `req.session.regenerate` (new id), then `user` + a fresh CSRF token, saved; used by `routes/auth.js` and `dev/devAuth.js` |
 
 `isAdmin` comes from the login (Discord admin role, see [auth-session](../concepts/auth-session.md)). `routes/admin.js` applies both via `router.use(requireAuth, requireAdmin)`.
 

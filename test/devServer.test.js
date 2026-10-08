@@ -88,6 +88,28 @@ test('a second login in the same browser replaces the persona', async () => {
     assert.equal((await client.request('/api/admin/stats')).status, 403);
 });
 
+test('the persona login starts a new session like the Discord login', async () => {
+    const client = createClient(server.baseUrl);
+    await client.request('/api/csrf-token');
+    const sessionBeforeLogin = client.cookie('connect.sid');
+    assert.ok(sessionBeforeLogin);
+
+    await loginAs('member', client);
+    assert.notEqual(client.cookie('connect.sid'), sessionBeforeLogin);
+    assert.equal((await currentUser(client)).username, 'tom');
+});
+
+test('parallel first changes after a login all pass the CSRF check', async () => {
+    // Each send() fetches the token, then writes. Without a token minted by the login,
+    // parallel requests each mint their own and all but the last stored one get 403.
+    // Timing-dependent, hence several logins.
+    for (let round = 0; round < 5; round++) {
+        const raider = await loginAs('raider');
+        const responses = await Promise.all([1, 2, 3].map(() => raider.send('PUT', '/api/user/settings', { acceptInvitations: true })));
+        assert.deepEqual(responses.map(res => res.status), [200, 200, 200], `round ${round}`);
+    }
+});
+
 test('an unknown persona is rejected', async () => {
     const client = createClient(server.baseUrl);
     assert.equal((await client.request('/auth/dev-login/nobody')).status, 404);

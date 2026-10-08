@@ -7,6 +7,7 @@
  */
 const express = require('express');
 const { getLoginBlockReason } = require('../middleware/maintenance');
+const { startUserSession } = require('../middleware/auth');
 const { saveUserProfile } = require('../utils/userProfile');
 const { PERSONAS, defaultAvatar } = require('./mockGuild');
 
@@ -120,7 +121,7 @@ router.get('/dev-login/:personaId', async (req, res) => {
             console.error('Failed to save user profile:', err.message);
         }
 
-        req.session.user = {
+        await startUserSession(req, {
             id: persona.userId,
             username: persona.username,
             displayName: persona.displayName,
@@ -128,7 +129,7 @@ router.get('/dev-login/:personaId', async (req, res) => {
             roles: [...persona.roles],
             isAdmin,
             isNewUser
-        };
+        });
 
         console.log(`🧪 Dev-Login als ${persona.displayName}`);
         res.redirect('/#events');

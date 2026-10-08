@@ -1,3 +1,5 @@
+const crypto = require('crypto');
+
 /**
  * Middleware: Require authenticated user
  */
@@ -28,4 +30,36 @@ function requireAdmin(req, res, next) {
     next();
 }
 
-module.exports = { requireAuth, requireAdmin };
+/**
+ * New CSRF token for a session (double-submit check in server.js).
+ *
+ * @returns {string} -> 64 hex characters.
+ */
+function createCsrfToken() {
+    return crypto.randomBytes(32).toString('hex');
+}
+
+/**
+ * Replace the session with a fresh one (new id) and log the user in, so a
+ * session id planted before the login is worthless afterwards. Used by the
+ * Discord login and the persona login of the dev mock mode.
+ *
+ * The CSRF token is minted here, not by the next request: the SPA fires
+ * several requests at once after the login, and each would mint its own.
+ *
+ * @param {Object} req -> Express request.
+ * @param {Object} user -> Session user.
+ * @returns {Promise<void>} -> Resolves once the new session is stored.
+ */
+function startUserSession(req, user) {
+    return new Promise((resolve, reject) => {
+        req.session.regenerate(err => {
+            if (err) return reject(err);
+            req.session.user = user;
+            req.session.csrfToken = createCsrfToken();
+            req.session.save(saveErr => (saveErr ? reject(saveErr) : resolve()));
+        });
+    });
+}
+
+module.exports = { requireAuth, requireAdmin, createCsrfToken, startUserSession };

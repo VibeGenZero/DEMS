@@ -27,7 +27,7 @@ see_also: [security, frontend-app, bot, reminders-presence]
 | # | Pitfall | Where to read |
 |---|---|---|
 | 12 | plain-HTTP access from a non-localhost host hangs the SPA (CSP `upgrade-insecure-requests`) | [security](../concepts/security.md) |
-| 13 | sessions in MemoryStore: logout on every restart, cookie `secure: false` | [auth-session](../concepts/auth-session.md) |
+| 13 | sessions in MemoryStore: logout on every restart | [auth-session](../concepts/auth-session.md) |
 | 14 | panic mode does not end existing sessions (frontend overlay only) | [maintenance-mode](../concepts/maintenance-mode.md) |
 | 15 | `formAnswers` keyed by field label | [form-fields](../concepts/form-fields.md) |
 | 16 | Express route order: static paths must come before `/:id` | [routes-events](../modules/routes-events.md) |
