@@ -8,8 +8,9 @@ const REPO_ROOT = path.join(__dirname, '..');
 // Generated, vendored or local-only content
 const SKIPPED_DIRS = new Set(['.git', 'node_modules', 'data', path.join('public', 'vendor')]);
 
-// The old long form of the product name; "Discord" may only describe the integration
-const OLD_PRODUCT_NAME = /discord[\s_-]*event[\s_-]*management/i;
+// The old long form of the product name, also split by HTML tags ("Event<br>Management");
+// "Discord" may only describe the integration
+const OLD_PRODUCT_NAME = /discord(?:[\s_-]|<[^>]*>)*event(?:[\s_-]|<[^>]*>)*management/i;
 
 /**
  * Collect all files below `dir`, skipping SKIPPED_DIRS.

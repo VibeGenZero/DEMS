@@ -4,6 +4,8 @@ Ein professionelles und benutzerfreundliches System zur Planung und Verwaltung v
 
 Dieses Projekt wurde entwickelt, um Communities die Organisation von Veranstaltungen zu erleichtern – von der Erstellung über die Anmeldung bis hin zur automatisierten Kommunikation via Discord-Bot.
 
+> DEMS ist ein unabhängiges Projekt und steht in keiner Verbindung zu Discord Inc. „Discord“ ist eine Marke von Discord Inc.
+
 ## 🚀 Funktionen
 
 *   **Discord Integration**: Einfacher Login via Discord OAuth2 und automatische Synchronisation.
