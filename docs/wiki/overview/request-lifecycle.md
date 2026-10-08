@@ -22,8 +22,8 @@ see_also: [auth-session, security]
 | 5 | `authLimiter` 30 req / 15 min | `/auth/` | counts `/auth/me` too; skipped in mock mode |
 | 6 | `express.json()`, `express.urlencoded({ extended: true })` | all | default 100 KB limit |
 | 7 | `req.body ??= {}` shim | all | Express 5 leaves `req.body` undefined without body |
-| 8 | `express-session` (MemoryStore) | all | cookie `httpOnly`, `sameSite: lax`, `secure: false`, 24 h |
-| 9 | CSRF (double submit) | all | creates `req.session.csrfToken`, sets cookie `XSRF-TOKEN`, rejects POST/PUT/DELETE/PATCH on `/api/*` without matching `X-CSRF-TOKEN` / `X-XSRF-TOKEN` header → 403 |
+| 8 | `express-session` (MemoryStore) | all | cookie `httpOnly`, `sameSite: lax`, `secure` only with `NODE_ENV=production`, 24 h |
+| 9 | CSRF (double submit) | all | creates `req.session.csrfToken`, sets cookie `XSRF-TOKEN`, rejects POST/PUT/DELETE/PATCH on `/api/*` and `/auth/*` without matching `X-CSRF-TOKEN` / `X-XSRF-TOKEN` header → 403 |
 | 10 | `express.static('public')` | files | served before routers |
 | 11 | debug request logger | all | only with `DEBUG_MODE=true`; registered after static, so static files are not logged |
 | 12 | `dev/devAuth` router | `/auth` | only when `DEV_MOCK=true` |

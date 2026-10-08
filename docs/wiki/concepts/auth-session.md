@@ -9,7 +9,7 @@ see_also: [security, maintenance-mode, request-lifecycle]
 ---
 # Authentication, session and CSRF
 
-> TL;DR: Login is Discord OAuth2 only (or the persona login in dev mock mode). The result is a server-side `express-session` (MemoryStore, 24 h cookie) holding `req.session.user = { id, username, displayName, avatar, roles, isAdmin, isNewUser }`. Admin = member has `DISCORD_ADMIN_ROLE_ID` at login time. Mutating `/api/*` requests need the per-session CSRF token in the `X-CSRF-TOKEN` header.
+> TL;DR: Login is Discord OAuth2 only (or the persona login in dev mock mode). The result is a server-side `express-session` (MemoryStore, 24 h cookie) holding `req.session.user = { id, username, displayName, avatar, roles, isAdmin, isNewUser }`. Admin = member has `DISCORD_ADMIN_ROLE_ID` at login time. The login checks a one-time OAuth `state` and starts a fresh session (`startUserSession`). Mutating `/api/*` and `/auth/*` requests (logout) need the per-session CSRF token in the `X-CSRF-TOKEN` header.
 
 ## Login sequence
 
@@ -19,12 +19,12 @@ sequenceDiagram
   participant S as DEMS
   participant D as Discord
   B->>S: GET /auth/discord
-  S-->>B: 302 discord.com/api/oauth2/authorize
+  S-->>B: 302 discord.com/api/oauth2/authorize (state kept in session)
   B->>D: login + consent
-  D-->>B: 302 BASE_URL/auth/discord/callback?code=
+  D-->>B: 302 BASE_URL/auth/discord/callback?code=&state=
   B->>S: GET /auth/discord/callback
   S->>D: token exchange, /users/@me, /users/@me/guilds/{guild}/member
-  S->>S: isAdmin, maintenance gate, saveUserProfile, session.user
+  S->>S: state check, isAdmin, maintenance gate, saveUserProfile, startUserSession
   S-->>B: 302 /#events (or /?error=code)
   B->>S: GET /auth/me
   S-->>B: session user (isNewUser once)
@@ -33,10 +33,11 @@ sequenceDiagram
 ## Session
 
 - Store: default MemoryStore → lost on restart; not shared across processes.
-- Cookie: `connect.sid`, `httpOnly`, `sameSite: 'lax'`, `secure: false`, `maxAge` 24 h.
+- Cookie: `connect.sid`, `httpOnly`, `sameSite: 'lax'`, `maxAge` 24 h; `secure` only with `NODE_ENV=production` (also for `XSRF-TOKEN`). Production must sit behind a TLS proxy that sends `X-Forwarded-Proto: https` (`trust proxy` 1), otherwise express-session sends no cookie and the login does not stick.
+- Login: `startUserSession(req, user)` (`middleware/auth.js`) regenerates the session (new id → a session id planted before the login is worthless) and mints its CSRF token at once; parallel first requests after the login would otherwise each mint their own token and all but one get 403.
 - `isAdmin` and `roles` are snapshots from login; Discord role changes need a re-login.
 - `isNewUser` is `true` only on the first `/auth/me` after the very first login → frontend shows `#firstLoginModal` (asks for `acceptInvitations`).
-- Logout: `GET /auth/logout` destroys the session.
+- Logout: `POST /auth/logout` with CSRF token destroys the session; the frontend `logout()` then loads `/`. A plain GET does not log out.
 
 ## Guards
 
@@ -45,8 +46,8 @@ sequenceDiagram
 ## CSRF (double submit)
 
 - Every request gets `req.session.csrfToken` (32 random bytes hex) and the readable cookie `XSRF-TOKEN`.
-- POST/PUT/DELETE/PATCH on `/api/*` must send `X-CSRF-TOKEN` (or `X-XSRF-TOKEN`) equal to the session token → else 403 "Ungültiges CSRF-Token".
-- `/auth/*` routes are GET-only and not CSRF-protected.
+- POST/PUT/DELETE/PATCH on `/api/*` and `/auth/*` must send `X-CSRF-TOKEN` (or `X-XSRF-TOKEN`) equal to the session token → else 403 "Ungültiges CSRF-Token".
+- `/auth/*`: only `POST /auth/logout` mutates; it is protected like `/api/*`.
 - Frontend: `fetchCSRFToken()` at boot, header added manually in each `fetch`.
 
 ## Dev mock mode
@@ -55,4 +56,4 @@ sequenceDiagram
 
 ## Known weaknesses (audit 2026-04-22, still open)
 
-No OAuth `state` (H-01), no session regeneration after login (H-02), 24 h admin cache (H-03), `secure: false` cookie (C-03), logout via GET (L-07). Details: [security](security.md).
+24 h admin cache (H-03) and the MemoryStore (L-02). OAuth `state` (H-01), session regeneration (H-02), `secure` cookie (C-03) and logout via POST (L-07) are fixed (F-05). Details: [security](security.md).

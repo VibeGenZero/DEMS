@@ -1,0 +1,115 @@
+const { test, before, after } = require('node:test');
+const assert = require('node:assert/strict');
+const path = require('path');
+const { createTempDir, startServer, createClient } = require('./helpers');
+
+// server.js with the real OAuth2 routes against a fake Discord API (user "oauth-tester")
+const FIXTURE = 'test/fixtures/fakeDiscordServer.js';
+const serverEnv = (name, env = {}) => ({
+    SESSION_SECRET: 'login-test-secret',
+    SQLITE_PATH: path.join(createTempDir(name), 'db.sqlite'),
+    DISCORD_CLIENT_ID: '123',
+    DISCORD_GUILD_ID: '999',
+    BASE_URL: 'http://127.0.0.1',
+    ...env
+});
+
+let server;
+
+before(async () => {
+    server = await startServer(FIXTURE, serverEnv('login'));
+});
+
+after(() => server.stop());
+
+/**
+ * Start the Discord login like the login button does.
+ *
+ * @param {Object} client -> createClient() result.
+ * @returns {Promise<string|null>} -> The `state` the server put into the Discord URL.
+ */
+async function startLogin(client) {
+    const res = await client.request('/auth/discord');
+    assert.equal(res.status, 302);
+    return new URL(res.headers.get('location')).searchParams.get('state');
+}
+
+/**
+ * A client logged in through the full OAuth2 round trip.
+ *
+ * @returns {Promise<Object>} -> createClient() result.
+ */
+async function loggedInClient() {
+    const client = createClient(server.baseUrl);
+    const state = await startLogin(client);
+    const res = await client.request(`/auth/discord/callback?code=abc&state=${state}`);
+    assert.equal(res.headers.get('location'), '/#events');
+    return client;
+}
+
+const currentUser = async (client) => (await client.request('/auth/me')).json();
+
+const sessionCookieOf = (res) => res.headers.getSetCookie().find(cookie => cookie.startsWith('connect.sid='));
+
+test('every Discord login attempt carries its own state', async () => {
+    const first = await startLogin(createClient(server.baseUrl));
+    const second = await startLogin(createClient(server.baseUrl));
+    assert.match(first ?? '', /^[0-9a-f]{32,}$/);
+    assert.notEqual(first, second);
+});
+
+test('a callback without the state of this browser is refused', async () => {
+    const client = createClient(server.baseUrl);
+    await startLogin(client);
+
+    for (const query of ['code=abc&state=forged', 'code=abc']) {
+        const res = await client.request(`/auth/discord/callback?${query}`);
+        assert.equal(res.headers.get('location'), '/?error=invalid_state', query);
+    }
+    assert.equal(await currentUser(client), null);
+});
+
+test('a successful login starts a new session and uses the state up', async () => {
+    const client = createClient(server.baseUrl);
+    const state = await startLogin(client);
+    const sessionBeforeLogin = client.cookie('connect.sid');
+    assert.ok(sessionBeforeLogin);
+
+    const res = await client.request(`/auth/discord/callback?code=abc&state=${state}`);
+    assert.equal(res.headers.get('location'), '/#events');
+    assert.notEqual(client.cookie('connect.sid'), sessionBeforeLogin);
+    assert.equal((await currentUser(client)).username, 'oauth-tester');
+
+    const replay = await client.request(`/auth/discord/callback?code=abc&state=${state}`);
+    assert.equal(replay.headers.get('location'), '/?error=invalid_state');
+});
+
+test('logging out needs a POST with the CSRF token', async () => {
+    const client = await loggedInClient();
+
+    await client.request('/auth/logout');
+    assert.notEqual(await currentUser(client), null, 'GET must not log out');
+
+    const withoutToken = await client.request('/auth/logout', { method: 'POST' });
+    assert.equal(withoutToken.status, 403);
+    assert.notEqual(await currentUser(client), null, 'POST without CSRF token must not log out');
+
+    const res = await client.send('POST', '/auth/logout');
+    assert.equal(res.status, 200);
+    assert.equal(await currentUser(client), null);
+});
+
+test('session and CSRF cookies are Secure in production only', async () => {
+    const development = await fetch(`${server.baseUrl}/auth/discord`, { redirect: 'manual' });
+    assert.doesNotMatch(sessionCookieOf(development), /;\s*Secure/i);
+
+    const production = await startServer(FIXTURE, serverEnv('login-production', { NODE_ENV: 'production' }));
+    try {
+        // Production runs behind a TLS proxy (trust proxy 1) that sets X-Forwarded-Proto
+        const res = await fetch(`${production.baseUrl}/auth/discord`, { redirect: 'manual', headers: { 'X-Forwarded-Proto': 'https' } });
+        assert.match(sessionCookieOf(res) ?? '', /;\s*Secure/i);
+        assert.match(res.headers.getSetCookie().find(cookie => cookie.startsWith('XSRF-TOKEN=')) ?? '', /;\s*Secure/i);
+    } finally {
+        await production.stop();
+    }
+});

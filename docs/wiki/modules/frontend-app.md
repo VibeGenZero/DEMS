@@ -40,7 +40,7 @@ Logged-out users see `#login-section` for every route except `info`. An event ro
 | Section | Functions |
 |---|---|
 | Boot | `createParticles`, `runBootAnimation`, `fetchCSRFToken`, `loadServerInfo`, `updateServerNameInUI`, `finishLoading`, `getErrorMessage` |
-| Auth | `checkAuth`, `showLoggedIn`, `showLoggedOut`, `showUserData` (declared twice!) |
+| Auth | `logout` (`POST /auth/logout` with CSRF token, then `/`; toast on failure), `checkAuth`, `showLoggedIn`, `showLoggedOut`, `showUserData` (declared twice!) |
 | Router | `handleRoute`, `navigateTo`, `rememberPendingRoute`, `restorePendingRoute` |
 | Countdown | `formatCountdown`, `renderCountdownHTML`, `startCountdown` |
 | Event list | `showEventsSection`, `loadCategories`, `filterByCategory`, `debouncedSearch`, `switchView`, `renderCalendar`, `toggleSeriesDates`, `getParticipantWarningBadge` |

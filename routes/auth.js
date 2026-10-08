@@ -1,6 +1,8 @@
+const crypto = require('crypto');
 const express = require('express');
 const router = express.Router();
 const { getLoginBlockReason } = require('../middleware/maintenance');
+const { startUserSession } = require('../middleware/auth');
 const { saveUserProfile } = require('../utils/userProfile');
 const { debugLog } = require('../utils/debugLog');
 
@@ -42,7 +44,10 @@ router.get('/discord', (req, res) => {
     const redirectUri = encodeURIComponent(`${process.env.BASE_URL}/auth/discord/callback`);
     const scopes = encodeURIComponent('identify guilds guilds.members.read');
 
-    const url = `https://discord.com/api/oauth2/authorize?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=code&scope=${scopes}`;
+    // The callback only accepts this state -> nobody can log a browser into a foreign account
+    req.session.oauthState = crypto.randomBytes(32).toString('hex');
+
+    const url = `https://discord.com/api/oauth2/authorize?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=code&scope=${scopes}&state=${req.session.oauthState}`;
     res.redirect(url);
 });
 
@@ -50,7 +55,12 @@ router.get('/discord', (req, res) => {
  * GET /auth/discord/callback — Handle OAuth2 callback
  */
 router.get('/discord/callback', async (req, res) => {
-    const { code } = req.query;
+    const { code, state } = req.query;
+    const expectedState = req.session.oauthState;
+    delete req.session.oauthState; // single use, also when the check fails
+    if (!expectedState || state !== expectedState) {
+        return res.redirect('/?error=invalid_state');
+    }
     if (!code) {
         return res.redirect('/?error=no_code');
     }
@@ -124,8 +134,7 @@ router.get('/discord/callback', async (req, res) => {
             console.error('Failed to save user to Firestore:', err.message);
         }
 
-        // Store user in session
-        req.session.user = {
+        await startUserSession(req, {
             id: userData.id,
             username: userData.username,
             displayName: userData.global_name || userData.username,
@@ -133,7 +142,7 @@ router.get('/discord/callback', async (req, res) => {
             roles: memberData.roles || [],
             isAdmin,
             isNewUser
-        };
+        });
 
         debugLog('auth.login', { userId: req.session?.user?.id, username: req.session?.user?.username });
         res.redirect('/#events');
@@ -159,12 +168,17 @@ router.get('/me', (req, res) => {
 });
 
 /**
- * GET /auth/logout — Destroy session
+ * POST /auth/logout — Destroy session. POST with CSRF token (server.js), so a
+ * foreign page or an <img src> cannot log a user out.
  */
-router.get('/logout', (req, res) => {
+router.post('/logout', (req, res) => {
     debugLog('auth.logout', { userId: req.session?.user?.id });
-    req.session.destroy(() => {
-        res.redirect('/');
+    req.session.destroy(err => {
+        if (err) {
+            console.error('Logout error:', err);
+            return res.status(500).json({ error: 'Abmelden fehlgeschlagen.' });
+        }
+        res.json({ success: true });
     });
 });
 

@@ -8,13 +8,16 @@ const { debugLog, IS_DEBUG } = require('./utils/debugLog');
 
 const express = require('express');
 const session = require('express-session');
-const crypto = require('crypto');
 const path = require('path');
 const helmet = require('helmet');
 const cors = require('cors');
 const rateLimit = require('express-rate-limit');
 const { startBot, startReminderScheduler, stopBot, getGuildName } = require('./bot');
 const { startPollScheduler, stopPollScheduler } = require('./utils/pollStore');
+const { createCsrfToken } = require('./middleware/auth');
+
+// Production runs behind a TLS proxy (trust proxy below) -> cookies only over HTTPS
+const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -95,7 +98,7 @@ app.use(session({
     resave: false,
     saveUninitialized: false,
     cookie: {
-        secure: false, // Set to true in production with HTTPS
+        secure: IS_PRODUCTION,
         httpOnly: true,
         sameSite: 'lax',
         maxAge: 24 * 60 * 60 * 1000 // 24 hours
@@ -107,19 +110,21 @@ app.use(session({
 app.use((req, res, next) => {
     // Initialize CSRF token in session
     if (req.session && !req.session.csrfToken) {
-        req.session.csrfToken = crypto.randomBytes(32).toString('hex');
+        req.session.csrfToken = createCsrfToken();
     }
 
     // Expose token via a dedicated endpoint and in a cookie
     if (req.session && req.session.csrfToken) {
         res.cookie('XSRF-TOKEN', req.session.csrfToken, {
             httpOnly: false, // JS needs to read it
-            sameSite: 'strict'
+            sameSite: 'strict',
+            secure: IS_PRODUCTION
         });
     }
 
-    // Validate on mutating requests to /api/
-    if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(req.method) && req.path.startsWith('/api/')) {
+    // Validate on mutating requests to /api/ and /auth/ (logout)
+    const isProtectedPath = req.path.startsWith('/api/') || req.path.startsWith('/auth/');
+    if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(req.method) && isProtectedPath) {
         const token = req.headers['x-csrf-token'] || req.headers['x-xsrf-token'];
         if (!token || token !== req.session.csrfToken) {
             return res.status(403).json({ error: 'Ungültiges CSRF-Token. Bitte Seite neu laden.' });

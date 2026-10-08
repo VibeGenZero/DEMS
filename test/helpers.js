@@ -163,7 +163,7 @@ async function startServer(entry, env = {}) {
  * Minimal HTTP client with a cookie jar -> behaves like one browser.
  *
  * @param {string} baseUrl -> Base URL of the server.
- * @returns {Object} -> `{ request(path, options), send(method, path, body) }`.
+ * @returns {Object} -> `{ request(path, options), send(method, path, body), cookie(name) }`.
  */
 function createClient(baseUrl) {
     const cookies = new Map();
@@ -192,7 +192,7 @@ function createClient(baseUrl) {
         });
     }
 
-    return { request, send };
+    return { request, send, cookie: (name) => cookies.get(name) };
 }
 
 /**
@@ -293,16 +293,18 @@ function createFakeElement(registry, id = '', display = '') {
  * Load public/js/app.js into a node:vm context with a fake DOM built from
  * the ids in public/index.html. `fetch` answers from `routes`: a value is
  * sent as JSON body, a function may return a value or a promise of one,
- * unknown URLs answer 404. Toasts are recorded instead of shown, so a test
- * can assert that no error was swallowed by a catch block.
+ * unknown URLs answer 404; every call is recorded in `requests`. Toasts are
+ * recorded instead of shown, so a test can assert that no error was swallowed
+ * by a catch block.
  *
  * @param {Object<string, *>} routes -> URL → JSON body or () => body.
- * @returns {Object} -> `{ app, element, toasts }`: app exposes showEventDetail, showProfileSection and setCurrentUser, element(id) returns the fake element or null, toasts lists the shown messages.
+ * @returns {Object} -> `{ app, element, toasts, requests, location }`: app exposes showEventDetail, showProfileSection, logout, getErrorMessage, setCurrentUser and setCsrfToken, element(id) returns the fake element or null, toasts lists the shown messages, requests the fetch calls `{ url, method, headers }`, location is window.location.
  */
 function loadFrontendApp(routes) {
     const registry = new Map();
     registerHtmlIds(registry, fs.readFileSync(path.join(REPO_ROOT, 'public', 'index.html'), 'utf8'));
     const toasts = [];
+    const requests = [];
     const container = createFakeElement(registry);
     const document = {
         getElementById: (id) => registry.get(id) || null,
@@ -311,7 +313,8 @@ function loadFrontendApp(routes) {
         querySelectorAll: () => [],
         addEventListener() {}
     };
-    const fetch = async (url) => {
+    const fetch = async (url, options = {}) => {
+        requests.push({ url, method: options.method || 'GET', headers: options.headers || {} });
         if (!(url in routes)) return { ok: false, status: 404, json: async () => ({ error: 'Nicht gefunden' }) };
         const route = routes[url];
         const body = typeof route === 'function' ? await route() : route;
@@ -336,8 +339,8 @@ function loadFrontendApp(routes) {
     context.window = context;
     const source = fs.readFileSync(path.join(REPO_ROOT, 'public', 'js', 'app.js'), 'utf8');
     vm.runInContext(`${source}
-;globalThis.__app = { showEventDetail, showProfileSection, setCurrentUser: (user) => { currentUser = user; } };`, context, { filename: 'app.js' });
-    return { app: context.__app, element: (id) => registry.get(id) || null, toasts };
+;globalThis.__app = { showEventDetail, showProfileSection, logout, getErrorMessage, setCurrentUser: (user) => { currentUser = user; }, setCsrfToken: (token) => { csrfToken = token; } };`, context, { filename: 'app.js' });
+    return { app: context.__app, element: (id) => registry.get(id) || null, toasts, requests, location: context.location };
 }
 
 module.exports = {
