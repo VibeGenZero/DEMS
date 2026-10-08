@@ -41,6 +41,5 @@ see_also: [security, frontend-app, bot, reminders-presence]
 | 16 | Express route order: static paths must come before `/:id` | [routes-events](../modules/routes-events.md) |
 | 17 | `GET /api/events/:id` ignores `?status=` (frontend sends `?status=all`) | routes/events.js |
 | 18 | "PROFILE SECTION" defined twice in `style.css` | [frontend-markup](../modules/frontend-markup.md) |
-| 19 | `marked` loaded from CDN without a version pin | `public/index.html` |
 | 20 | README is partly outdated: mentions `DISCORD_REDIRECT_URI` (unused) and "EJS Templating" (there is no EJS) | `README.md` |
 | 21 | dev mock mode: reminder DMs not simulated; sample dates go stale → `npm run dev:reset` | [dev-mock-mode](../modules/dev-mock-mode.md) |

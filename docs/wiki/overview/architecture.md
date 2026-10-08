@@ -43,7 +43,7 @@ flowchart LR
 - **Filter and sort in memory.** Queries avoid Firestore composite indexes: routes fetch with simple `where` clauses and sort/paginate in JS. Data volumes per Discord server are small.
 - **Routes call into the bot.** Routes import helpers from `bot.js` (`sendDM`, `assignRole`, `getGuildRoles`, ...). Every bot helper is a no-op returning `false` / `[]` / `null` while the bot is not ready, so the web app works without a bot token.
 - **Bot calls back lazily.** `bot.js` requires `utils/registrationService` and `utils/eventUtils` inside functions to avoid a circular `require`.
-- **No frontend build.** `public/` is served as-is; libraries come from CDNs (Bootstrap, GSAP, marked, DOMPurify) or `public/vendor/` (EasyMDE, Flatpickr).
+- **No frontend build.** `public/` is served as-is; all libraries and fonts are pinned copies in `public/vendor/` (no CDN).
 - **Languages.** UI texts, API error messages and Discord messages are German; code, comments and this wiki are English.
 
 ## Process lifecycle
