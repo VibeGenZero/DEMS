@@ -46,3 +46,4 @@ Auto DevOps is switched off in the project settings. With it on, a branch withou
 - Without an online runner every job stays *pending* forever. That was the original "pipelines just stop" problem: no runner was registered on the instance at all.
 - Keep `test` untagged and `dems-docker` on "tagged jobs only", otherwise tests could land on the privileged runner.
 - `changes:` in a branch pipeline (no MR) compares with the previous push; on the first push of a new branch it is always true, so `docker-build` runs.
+- The npm cache lives inside the checkout (`.npm/`, including npm's debug logs with the build path `/builds/<group>/<project>/`) and is restored from the CI cache. Tests that scan files must use `git ls-files`, not a directory walk, or they see that cache.
