@@ -22,7 +22,7 @@ see_also: [dev-mock-mode, conventions]
 | `devServer.test.js` | CSP (scripts/styles/fonts only `'self'`, no `unsafe-eval`), persona login, admin/member access, mock data in routes, announce, start event, check-in, rate limits, maintenance + panic lockout |
 | `noMock.test.js` | without `DEV_MOCK` the OAuth redirect stays and the persona login does not exist |
 | `wiki.test.js` | wiki frontmatter/link/graph validation and that `docs/wiki/graph.json` is current |
-| `branding.test.js` | the old product name ("Discord" + "Event Management") appears in no file outside `node_modules`, `data`, `public/vendor` |
+| `branding.test.js` | the old product name ("Discord" + "Event Management") appears in no git-tracked file outside `public/vendor` (untracked files such as CI's npm logs are ignored) |
 | `vendorAssets.test.js` | `index.html` loads no script/stylesheet from another host, every local reference and every `url()` in `public/vendor/**/*.css` exists, `fonts.css` bundles Inter + UnifrakturCook |
 
 ## Helpers (`test/helpers.js`)
