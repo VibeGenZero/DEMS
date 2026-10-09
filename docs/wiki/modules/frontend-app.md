@@ -68,7 +68,7 @@ Logged-out users see `#login-section` for every route except `info`. An event ro
 | Bot control center | `showBotControlSection`, `formatUptime`, `loadBotStatus`, `loadBotRunningEvents`, `loadBotSettings`, `saveBotSettingsForm` |
 | Updates | `checkUpdates`, `closeUpdatesModal` |
 | Info & debug | `showInfoSection`, `spawnInfoParticles`, `showDebugSection`, `sgRunAnimation` |
-| Utilities | `showError`, `showToast(message, type)`, `renderSkeletonEvents`, `escapeHtml`, `renderMarkdownSafe` (marked + DOMPurify), `isValidBannerUrl` |
+| Utilities | `showError`, `showToast(message, type)`, `renderSkeletonEvents`, `escapeHtml`, `renderMarkdownSafe` (marked + DOMPurify), `markdownPreview(text, maxLength = 120)` (one line of plain text for card previews: Markdown characters removed, cut on a word with "…"), `isValidBannerUrl` |
 
 ## Globals
 
@@ -76,7 +76,7 @@ Logged-out users see `#login-section` for every route except `info`. An event ro
 
 ## Rules for changes
 
-- Rendering is string-built HTML: wrap every user value in `escapeHtml(...)`; render Markdown only via `renderMarkdownSafe(...)`.
+- Rendering is string-built HTML: wrap every user value in `escapeHtml(...)`; render Markdown only via `renderMarkdownSafe(...)`; short previews of Markdown (cards, lists) via `escapeHtml(markdownPreview(text))` — cut first, escape after, so no `&amp;` is cut in half.
 - Mutating calls: `fetch(url, { method, headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrfToken }, body })`.
 - Show results with `showToast(msg, type)` where `type` is a Bootstrap context (`success`, `danger`, `warning`, `info` → class `text-bg-<type>`; there is no `error`); texts in German. Login/OAuth errors use `showError(msg)` (banner).
 - Inline `onclick="fn(...)"` handlers are used throughout (CSP allows `unsafe-inline`) — new handlers must be global functions.

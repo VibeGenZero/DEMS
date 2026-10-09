@@ -601,7 +601,7 @@ async function showEventsSection() {
                       <span class="series-badge"><i class="bi bi-arrow-repeat me-1"></i>Serie</span>
                     </div>
                   </div>
-                  <p>${escapeHtml(event.description || '').substring(0, 120)}${(event.description || '').length > 120 ? '...' : ''}</p>
+                  <p>${escapeHtml(markdownPreview(event.description))}</p>
                   ${countdownDate ? `<div class="countdown" id="${countdownId}" data-date="${countdownDate}"></div>` : ''}
                   <div class="series-dates-list">
                     <div class="series-dates-header"><i class="bi bi-list-ul me-1"></i>Termine der Serie</div>
@@ -680,7 +680,7 @@ async function showEventsSection() {
                 <span></span>
               </div>
               <h5 class="mb-1 fw-bold">${escapeHtml(event.title)}</h5>
-              <p class="mb-2">${escapeHtml(event.description || '').substring(0, 120)}${(event.description || '').length > 120 ? '...' : ''}</p>
+              <p class="mb-2">${escapeHtml(markdownPreview(event.description))}</p>
               ${cardDateStr ? `<div class="event-card-date-row"><i class="bi bi-calendar3"></i>${escapeHtml(cardDateStr)}</div>` : ''}
               ${safeDate ? `<div class="countdown" id="${countdownId}" data-date="${safeDate}"></div>` : ''}
               ${miniCapacityHtml}
@@ -2644,7 +2644,7 @@ async function fetchDiscordEvents() {
                 <div class="d-flex gap-2 w-100 justify-content-between">
                     <div>
                         <h6 class="mb-0 text-white">${escapeHtml(ev.name)}</h6>
-                        <p class="mb-0 opacity-75 small text-white-50">${ev.description ? escapeHtml(ev.description).substring(0, 100) + '...' : 'Keine Beschreibung'}</p>
+                        <p class="mb-0 opacity-75 small text-white-50">${ev.description ? escapeHtml(markdownPreview(ev.description, 100)) : 'Keine Beschreibung'}</p>
                     </div>
                     <small class="opacity-50 text-nowrap text-white-50">${new Date(ev.scheduledStartTimestamp).toLocaleDateString()}</small>
                 </div>
@@ -3256,7 +3256,7 @@ async function loadAdminEvents() {
                       <span class="series-badge"><i class="bi bi-arrow-repeat me-1"></i>Serie (${seriesEvents.length})</span>
                     </div>
                   </div>
-                  <p class="text-secondary small mb-2">${escapeHtml(event.description || '').substring(0, 120)}${(event.description || '').length > 120 ? '...' : ''}</p>
+                  <p class="text-secondary small mb-2">${escapeHtml(markdownPreview(event.description))}</p>
                   ${event.category ? `<span class="event-category-tag mb-2 d-inline-block">${escapeHtml(event.category)}</span>` : ''}
                   <div class="series-dates-list mt-2 mb-3">
                     <div class="series-dates-header"><i class="bi bi-list-ul me-1"></i>Termine</div>
@@ -3281,7 +3281,7 @@ async function loadAdminEvents() {
                 <h5 class="mb-0">${escapeHtml(event.title)}</h5>
                 <span class="event-status-badge event-status-${status}">${statusMap[status] || status}</span>
               </div>
-              <p class="text-secondary small mb-2">${escapeHtml(event.description || '').substring(0, 120)}${(event.description || '').length > 120 ? '...' : ''}</p>
+              <p class="text-secondary small mb-2">${escapeHtml(markdownPreview(event.description))}</p>
               ${event.category ? `<span class="event-category-tag mb-2 d-inline-block">${escapeHtml(event.category)}</span>` : ''}
               ${event.startDate ? `<div class="event-date-info mb-2"><i class="bi bi-calendar3"></i>${new Date(event.startDate).toLocaleDateString('de-DE', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</div>` : ''}
               <div class="d-flex flex-wrap gap-2 mb-3">
@@ -5104,6 +5104,29 @@ function renderMarkdownSafe(mdString) {
         console.warn('Markdown parse error:', e);
         return escapeHtml(mdString).replace(/\n/g, '<br>');
     }
+}
+
+/**
+ * One line of plain text from Markdown for card previews, cut on a word.
+ * Returns raw text: escape it (escapeHtml) after cutting, never before,
+ * so an entity like &amp; is never cut in half.
+ */
+function markdownPreview(mdString, maxLength = 120) {
+    const text = String(mdString ?? '')
+        .replace(/```[\s\S]*?```/g, ' ')                          // code blocks
+        .replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1')                 // images -> alt text
+        .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')                  // links -> link text
+        .replace(/^ {0,3}(?:#{1,6}|>|[-*+]|\d+[.)]) +/gm, '')     // headings, quotes, list markers
+        .replace(/^ {0,3}(?:[-*_] *){3,}$/gm, ' ')                // horizontal rules
+        .replace(/(\*\*|__|~~)(?=\S)([\s\S]*?\S)\1/g, '$2')       // bold, strikethrough
+        .replace(/(?<![\w*])([*_])(?=\S)([\s\S]*?\S)\1(?![\w*])/g, '$2') // italics, not snake_case or 5 * 3
+        .replace(/`([^`]*)`/g, '$1')                              // inline code
+        .replace(/\s+/g, ' ')
+        .trim();
+    if (text.length <= maxLength) return text;
+    const cut = text.slice(0, maxLength);
+    const lastSpace = cut.lastIndexOf(' ');
+    return `${(lastSpace > maxLength / 2 ? cut.slice(0, lastSpace) : cut).trimEnd()}…`;
 }
 
 /**

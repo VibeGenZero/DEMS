@@ -3,7 +3,7 @@ id: testing
 title: Testing — node:test suites and helpers
 type: ops
 tags: [testing, node-test, integration-tests, helpers, tdd]
-sources: [test/helpers.js, test/devServer.test.js, test/noMock.test.js, test/mockMode.test.js, test/mockBot.test.js, test/seed.test.js, test/sqliteAdapter.test.js, test/eventUrl.test.js, test/wiki.test.js, test/branding.test.js, test/vendorAssets.test.js, test/eventDetailReset.test.js, test/profileRegistrations.test.js, test/login.test.js, test/authFrontend.test.js, test/fixtures/fakeDiscordServer.js, test/sessionStore.test.js, test/sessionRestart.test.js, test/reminders.test.js, test/reminderScheduler.test.js, test/eventForm.test.js, test/startup.test.js, test/avatar.test.js]
+sources: [test/helpers.js, test/devServer.test.js, test/noMock.test.js, test/mockMode.test.js, test/mockBot.test.js, test/seed.test.js, test/sqliteAdapter.test.js, test/eventUrl.test.js, test/wiki.test.js, test/branding.test.js, test/vendorAssets.test.js, test/eventDetailReset.test.js, test/profileRegistrations.test.js, test/login.test.js, test/authFrontend.test.js, test/fixtures/fakeDiscordServer.js, test/sessionStore.test.js, test/sessionRestart.test.js, test/reminders.test.js, test/reminderScheduler.test.js, test/eventForm.test.js, test/startup.test.js, test/avatar.test.js, test/eventCards.test.js]
 see_also: [dev-mock-mode, conventions]
 ---
 # Testing — node:test suites and helpers
@@ -33,6 +33,7 @@ see_also: [dev-mock-mode, conventions]
 | `eventForm.test.js` | event wizard: `editEvent` fills `#event-reminder` with every stored reminder ("24, 1", legacy number, none), the field is not a number input, `loadAdminEvents` shows the "24h · 1h" badge |
 | `startup.test.js` | `fire('DOMContentLoaded')`: the startup asks `/auth/me` once; a late `/auth/me` answer does not log the user out; `showUserData` exists once |
 | `avatar.test.js` | `utils/avatar.js`: session avatar used as is, wrapped comment avatars unwrapped, intact values unchanged |
+| `eventCards.test.js` | `markdownPreview` (plain one-liner, keeps `snake_case` and `5 * 3`, cut on a word); overview, admin and Discord import cards show no raw Markdown; a cut preview never splits `&amp;` |
 | `authFrontend.test.js` | frontend `logout()` posts the CSRF token, failure toast, no `/auth/logout` navigation left, `invalid_state` message |
 | `profileRegistrations.test.js` | profile cards link to events the user can open; archived events stay listed without a link for members |
 
@@ -46,7 +47,7 @@ see_also: [dev-mock-mode, conventions]
 | `repoPath(rel)` | absolute path as JS string literal for `runNode` snippets |
 | `startServer(entry, env)` | spawn `server.js` / `dev/start.js` on a free port, wait for `/healthz`; returns `{ baseUrl, output(), waitForOutput(text), stop() }` |
 | `createClient(baseUrl)` | cookie jar; `request(path, opts)` (redirect: manual), `send(method, path, body)` with CSRF token, `cookie(name)` reads the jar (e.g. `connect.sid`) |
-| `loadFrontendApp(routes)` | runs `public/js/app.js` in `node:vm`; fake elements for every `id` in `index.html` and in assigned `innerHTML`; `fetch` answers from `routes` (URL → body or `() => body`/promise, else 404); records every `fetch` as `{ url, method, headers }`; returns `{ app, element(id), toasts, requests, location }` — stubs EasyMDE, flatpickr and `bootstrap.Modal` for the event wizard; `localStorage`/`sessionStorage` stubs (`{ storage }` option for initial entries); document listeners are recorded and `fire(type)` runs them; `app` exposes `showEventDetail`, `showProfileSection`, `logout`, `getErrorMessage`, `editEvent`, `loadAdminEvents`, `getCurrentUser`, `setCurrentUser` and `setCsrfToken`; extend the export line at the end of the helper for more functions |
+| `loadFrontendApp(routes)` | runs `public/js/app.js` in `node:vm`; fake elements for every `id` in `index.html` and in assigned `innerHTML`; `fetch` answers from `routes` (URL → body or `() => body`/promise, else 404); records every `fetch` as `{ url, method, headers }`; returns `{ app, element(id), toasts, requests, location }` — stubs EasyMDE, flatpickr and `bootstrap.Modal` for the event wizard; `localStorage`/`sessionStorage` stubs (`{ storage }` option for initial entries); document listeners are recorded and `fire(type)` runs them; `app` exposes `showEventDetail`, `showProfileSection`, `logout`, `getErrorMessage`, `editEvent`, `loadAdminEvents`, `showEventsSection`, `fetchDiscordEvents`, `markdownPreview`, `getCurrentUser`, `setCurrentUser` and `setCsrfToken`; extend the export line at the end of the helper for more functions |
 
 ## Writing a test
 
