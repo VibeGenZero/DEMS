@@ -3,7 +3,7 @@ id: data-model
 title: Data model — collections and document shapes
 type: concept
 tags: [data-model, schema, collections, events, registrations, users, firestore]
-sources: [routes/admin.js, utils/registrationService.js, utils/userProfile.js, routes/events.js, utils/eventUtils.js, bot.js, dev/seedData.js]
+sources: [routes/admin.js, utils/registrationService.js, utils/userProfile.js, utils/sessionStore.js, routes/events.js, utils/eventUtils.js, bot.js, dev/seedData.js]
 depends_on: [data-layer]
 see_also: [registration-flow, event-lifecycle, maintenance-mode, glossary]
 ---
@@ -75,6 +75,10 @@ Slot fields exist only on slot events: `slotId` = the slot actually taken (`null
 ## pollVotes (id = `<pollId>_<userId>`) — written by `utils/pollStore.js#savePollVote`
 
 `{ pollId, userId, userName, yes: optionId[], maybe: optionId[], updatedAt }`; an empty vote is deleted.
+
+## sessions (id = SHA-256 of the session id) — written by `utils/sessionStore.js`
+
+`{ data (JSON text of the express-session data: cookie, user, csrfToken, oauthState), expiresAt (ISO), updatedAt }`. Expired documents are deleted when read and every 6 h (`pruneExpired`). Not seeded, and neither `npm run dev:reset` nor the admin system reset wipes them — logins survive both.
 
 ## Singletons
 

@@ -3,7 +3,7 @@ id: testing
 title: Testing — node:test suites and helpers
 type: ops
 tags: [testing, node-test, integration-tests, helpers, tdd]
-sources: [test/helpers.js, test/devServer.test.js, test/noMock.test.js, test/mockMode.test.js, test/mockBot.test.js, test/seed.test.js, test/sqliteAdapter.test.js, test/eventUrl.test.js, test/wiki.test.js, test/branding.test.js, test/vendorAssets.test.js, test/eventDetailReset.test.js, test/profileRegistrations.test.js, test/login.test.js, test/authFrontend.test.js, test/fixtures/fakeDiscordServer.js]
+sources: [test/helpers.js, test/devServer.test.js, test/noMock.test.js, test/mockMode.test.js, test/mockBot.test.js, test/seed.test.js, test/sqliteAdapter.test.js, test/eventUrl.test.js, test/wiki.test.js, test/branding.test.js, test/vendorAssets.test.js, test/eventDetailReset.test.js, test/profileRegistrations.test.js, test/login.test.js, test/authFrontend.test.js, test/fixtures/fakeDiscordServer.js, test/sessionStore.test.js, test/sessionRestart.test.js]
 see_also: [dev-mock-mode, conventions]
 ---
 # Testing — node:test suites and helpers
@@ -19,13 +19,15 @@ see_also: [dev-mock-mode, conventions]
 | `mockBot.test.js` | mock Discord helpers (roles, channels, DMs, event channels, "Zum Event" button link) via `bot.js` |
 | `eventUrl.test.js` | `buildEventUrl` builds `#event/<id>`; no server file builds `#events/<id>` links |
 | `seed.test.js` | seed counts, idempotence, reset, refusal outside mock mode / with Firebase |
-| `devServer.test.js` | CSP (scripts/styles/fonts only `'self'`, no `unsafe-eval`), persona login (new session, parallel first changes pass CSRF), admin/member access, event API only with login, draft/archived only for admins, guests see only status and id of the inviting registration, no `checkinCode` in member answers, mock data in routes, announce, start event, check-in, rate limits, maintenance + panic lockout |
+| `devServer.test.js` | CSP (scripts/styles/fonts only `'self'`, no `unsafe-eval`), persona login (new session, parallel first changes pass CSRF), no session for cookie-less requests until `/api/csrf-token`, admin/member access, event API only with login, draft/archived only for admins, guests see only status and id of the inviting registration, no `checkinCode` in member answers, mock data in routes, announce, start event, check-in, rate limits, maintenance + panic lockout |
 | `noMock.test.js` | without `DEV_MOCK` the OAuth redirect stays and the persona login does not exist |
 | `wiki.test.js` | wiki frontmatter/link/graph validation and that `docs/wiki/graph.json` is current |
 | `branding.test.js` | the old product name ("Discord" + "Event Management") appears in no git-tracked file outside `public/vendor` (untracked files such as CI's npm logs are ignored) |
 | `vendorAssets.test.js` | `index.html` loads no script/stylesheet from another host, every local reference and every `url()` in `public/vendor/**/*.css` exists, `fonts.css` bundles Inter + UnifrakturCook |
 | `eventDetailReset.test.js` | the event page drops participants, comments and the check-in box of the previously opened event (role-locked event, late answers, slow event fetch) |
 | `login.test.js` | real OAuth2 routes against `test/fixtures/fakeDiscordServer.js` (fake Discord API, user `oauth-tester`): one-time `state`, new session after login, logout only via POST with CSRF token, `Secure` cookies with `NODE_ENV=production` (second server, `X-Forwarded-Proto: https`) |
+| `sessionStore.test.js` | `PersistentSessionStore` on its own SQLite file: survives a new store instance (restart), session id not in the database, expiry, destroy, `pruneExpired`, memory cache |
+| `sessionRestart.test.js` | `dev/start.js` started three times on one database: a login survives a restart, the logout (CSRF token from the stored session) too |
 | `authFrontend.test.js` | frontend `logout()` posts the CSRF token, failure toast, no `/auth/logout` navigation left, `invalid_state` message |
 | `profileRegistrations.test.js` | profile cards link to events the user can open; archived events stay listed without a link for members |
 

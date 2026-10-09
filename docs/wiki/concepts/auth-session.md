@@ -3,13 +3,13 @@ id: auth-session
 title: Authentication, session and CSRF
 type: concept
 tags: [auth, session, csrf, oauth2, admin, cookies, login]
-sources: [routes/auth.js, server.js, middleware/auth.js, public/js/app.js, dev/devAuth.js]
+sources: [routes/auth.js, server.js, middleware/auth.js, utils/sessionStore.js, public/js/app.js, dev/devAuth.js]
 depends_on: [routes-auth, middleware]
 see_also: [security, maintenance-mode, request-lifecycle]
 ---
 # Authentication, session and CSRF
 
-> TL;DR: Login is Discord OAuth2 only (or the persona login in dev mock mode). The result is a server-side `express-session` (MemoryStore, 24 h cookie) holding `req.session.user = { id, username, displayName, avatar, roles, isAdmin, isNewUser }`. Admin = member has `DISCORD_ADMIN_ROLE_ID` at login time. The login checks a one-time OAuth `state` and starts a fresh session (`startUserSession`). Mutating `/api/*` and `/auth/*` requests (logout) need the per-session CSRF token in the `X-CSRF-TOKEN` header.
+> TL;DR: Login is Discord OAuth2 only (or the persona login in dev mock mode). The result is a server-side `express-session` (stored in the database by `PersistentSessionStore`, 24 h cookie) holding `req.session.user = { id, username, displayName, avatar, roles, isAdmin, isNewUser }`. Admin = member has `DISCORD_ADMIN_ROLE_ID` at login time. The login checks a one-time OAuth `state` and starts a fresh session (`startUserSession`). Mutating `/api/*` and `/auth/*` requests (logout) need the per-session CSRF token in the `X-CSRF-TOKEN` header.
 
 ## Login sequence
 
@@ -32,7 +32,7 @@ sequenceDiagram
 
 ## Session
 
-- Store: default MemoryStore → lost on restart; not shared across processes.
+- Store: `PersistentSessionStore` (`utils/sessionStore.js`) in the collection `sessions` → logins survive restarts and deploys. Write-through memory cache: the database is read only for sessions this process does not know yet (after a restart). No `touch` (express-session would call it on every unchanged request = one write each), so a session expires with its cookie, 24 h after its last change. One process only: the cache is the source of truth.
 - Cookie: `connect.sid`, `httpOnly`, `sameSite: 'lax'`, `maxAge` 24 h; `secure` only with `NODE_ENV=production` (also for `XSRF-TOKEN`). Production must sit behind a TLS proxy that sends `X-Forwarded-Proto: https` (`trust proxy` 1), otherwise express-session sends no cookie and the login does not stick.
 - Login: `startUserSession(req, user)` (`middleware/auth.js`) regenerates the session (new id → a session id planted before the login is worthless) and mints its CSRF token at once; parallel first requests after the login would otherwise each mint their own token and all but one get 403.
 - `isAdmin` and `roles` are snapshots from login; Discord role changes need a re-login.
@@ -45,7 +45,7 @@ sequenceDiagram
 
 ## CSRF (double submit)
 
-- Every request gets `req.session.csrfToken` (32 random bytes hex) and the readable cookie `XSRF-TOKEN`.
+- The token (32 random bytes hex) is minted only by `GET /api/csrf-token` (the SPA calls it at boot) and at login (`startUserSession`); every response for a session that has one sets the readable cookie `XSRF-TOKEN`. Requests without a session cookie create no session, so pages, assets and crawlers write nothing to the database.
 - POST/PUT/DELETE/PATCH on `/api/*` and `/auth/*` must send `X-CSRF-TOKEN` (or `X-XSRF-TOKEN`) equal to the session token → else 403 "Ungültiges CSRF-Token".
 - `/auth/*`: only `POST /auth/logout` mutates; it is protected like `/api/*`.
 - Frontend: `fetchCSRFToken()` at boot, header added manually in each `fetch`.
@@ -56,4 +56,4 @@ sequenceDiagram
 
 ## Known weaknesses (audit 2026-04-22, still open)
 
-24 h admin cache (H-03) and the MemoryStore (L-02). OAuth `state` (H-01), session regeneration (H-02), `secure` cookie (C-03) and logout via POST (L-07) are fixed (F-05). Details: [security](security.md).
+24 h admin cache (H-03). OAuth `state` (H-01), session regeneration (H-02), `secure` cookie (C-03), logout via POST (L-07) (all F-05) and the MemoryStore (L-02, F-06) are fixed. Details: [security](security.md).

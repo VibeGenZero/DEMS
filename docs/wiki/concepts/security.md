@@ -44,53 +44,8 @@ see_also: [auth-session, known-issues, deployment]
 | M-05 | public comments | fixed (comments require login) |
 | M-06 / M-07 | unbounded queries, user search enumeration | open |
 | M-08 / M-09 | `bannerUrl` / `accentColor` not validated server-side | open |
-| L-02 / L-03 / L-04 | MemoryStore, `parseTemplate` `---
-id: security
-title: Security model and open audit findings
-type: concept
-tags: [security, csp, helmet, csrf, xss, rate-limit, audit, https]
-sources: [server.js, docs/security/SECURITY_AUDIT_2026-04-22.md, ISSUE.md, routes/events.js, routes/user.js, utils/eventUtils.js, public/js/app.js]
-depends_on: [server]
-see_also: [auth-session, known-issues, deployment]
----
-# Security model and open audit findings
-
-> TL;DR: Defenses: helmet CSP (scripts, styles and fonts only from `'self'`, still allows `unsafe-inline`), CORS to `BASE_URL`, rate limits, double-submit CSRF on `/api` and `/auth`, httpOnly session cookie, server-side admin guards, `escapeHtml` + DOMPurify in the SPA. The 2026-04-22 audit lists 28 findings; most are still open — check the table before touching auth, events or exports. Serve DEMS over HTTPS: helmet's default `upgrade-insecure-requests` breaks plain-HTTP access from anything but localhost.
-
-## Defenses in place
-
-| Layer | Where |
-|---|---|
-| Security headers + CSP | `helmet(...)` in `server.js` (directive list there) |
-| CORS | `cors({ origin: BASE_URL, credentials: true })` |
-| Rate limits | `/api/` 200 / 15 min, `/auth/` 30 / 15 min (off in dev mock mode) |
-| CSRF | double-submit token, see [auth-session](auth-session.md) |
-| AuthZ | `requireAuth`, `requireAdmin`; the whole event API needs a login (no public preview); `draft`/`archived` events answer 404 to non-admins; comment delete = owner or admin |
-| XSS | frontend `escapeHtml()` for interpolated values, `renderMarkdownSafe()` = marked + DOMPurify for descriptions |
-| Secrets | `.env` never in the image (`.dockerignore`); `checkinCode` removed from every event answer outside `/api/admin` (`toPublicEvent` in `utils/eventUtils.js`) |
-| Dev mode | `DEV_MOCK=true` + `NODE_ENV=production` → refuses to start |
-| Container | runs as user `node`; production compose pins `NODE_ENV=production` |
-
-## Audit 2026-04-22 — status as of 2026-10-02 (checked against code)
-
-| ID | Finding | Status |
-|---|---|---|
-| C-01 | check-in code leak | fixed: every event answer outside `/api/admin` goes through `toPublicEvent` (F-02) |
-| C-02 | draft/archived/cancelled readable | fixed: the event API needs a login, `draft`/`archived` answer 404 to non-admins on every `/:id` route and are left out of series answers, `?status=` other than `active` answers 403 (F-03); `cancelled` stays readable by id for members on purpose |
-| C-03 | session cookie not `secure` | fixed: session and `XSRF-TOKEN` cookies are `Secure` with `NODE_ENV=production` (F-05) |
-| C-04 | vulnerable dependencies | fixed (dependency update 2026-09, `npm audit` 0) |
-| H-01 / H-02 | OAuth `state`, session regeneration | fixed: one-time `state` per login, `startUserSession` regenerates the session (F-05) |
-| H-03 | 24 h admin cache | open |
-| H-04 | guest `my-registration` leaks registrant data | fixed: guests get only `{ registered, asGuest, id, status }` (F-04) |
-| H-05 | CSP `unsafe-inline` + `unsafe-eval` | **partial**: `unsafe-eval` removed (F-07); `unsafe-inline` stays while inline `onclick` handlers exist |
-| H-06 | check-in code via `Math.random`, not specifically rate-limited | open (only the global `/api` limit) |
-| M-01 | Firebase client SDK used server-side | open (depends on Firestore rules) |
-| M-02 | CDN assets without SRI | fixed: no CDN assets, libraries and fonts are vendored in `public/vendor/` (F-07) |
-| M-03 / M-04 | non-constant-time password compare, panic without 2nd factor | open |
-| M-05 | public comments | fixed (comments require login) |
-| M-06 / M-07 | unbounded queries, user search enumeration | open |
-| M-08 / M-09 | `bannerUrl` / `accentColor` not validated server-side | open |
- patterns, CSV formula injection | open |
+| L-02 | MemoryStore | fixed: sessions in the database via `PersistentSessionStore`, document id = SHA-256 of the session id (F-06) |
+| L-03 / L-04 | `parseTemplate` `$` patterns, CSV formula injection | open |
 | L-07 | logout via GET | fixed: `POST /auth/logout` with CSRF token (F-05) |
 
 Full report: `docs/security/SECURITY_AUDIT_2026-04-22.md`; older notes: `ISSUE.md`.

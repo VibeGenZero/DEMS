@@ -100,13 +100,14 @@ test('logging out needs a POST with the CSRF token', async () => {
 });
 
 test('session and CSRF cookies are Secure in production only', async () => {
-    const development = await fetch(`${server.baseUrl}/auth/discord`, { redirect: 'manual' });
+    // GET /api/csrf-token creates the session and the CSRF token -> both cookies
+    const development = await fetch(`${server.baseUrl}/api/csrf-token`);
     assert.doesNotMatch(sessionCookieOf(development), /;\s*Secure/i);
 
     const production = await startServer(FIXTURE, serverEnv('login-production', { NODE_ENV: 'production' }));
     try {
         // Production runs behind a TLS proxy (trust proxy 1) that sets X-Forwarded-Proto
-        const res = await fetch(`${production.baseUrl}/auth/discord`, { redirect: 'manual', headers: { 'X-Forwarded-Proto': 'https' } });
+        const res = await fetch(`${production.baseUrl}/api/csrf-token`, { headers: { 'X-Forwarded-Proto': 'https' } });
         assert.match(sessionCookieOf(res) ?? '', /;\s*Secure/i);
         assert.match(res.headers.getSetCookie().find(cookie => cookie.startsWith('XSRF-TOKEN=')) ?? '', /;\s*Secure/i);
     } finally {

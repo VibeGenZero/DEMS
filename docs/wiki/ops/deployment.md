@@ -68,6 +68,6 @@ docker run --rm -v dems_dems-data:/data -v $PWD:/backup alpine tar czf /backup/d
 | restart loop "SESSION_SECRET ist nicht gesetzt" | compose file has no `env_file:` → `.env` values never reach the container | add `env_file: [.env]`, `--force-recreate` |
 | SPA stuck on "Initialisiere System..." | page served via plain HTTP on a non-localhost host | use the HTTPS host |
 | back on the login page right after the Discord login | `NODE_ENV=production` makes the cookies `Secure`, but the request reached DEMS via plain HTTP (no TLS proxy, or no `X-Forwarded-Proto`) | open the HTTPS host; the production image is not meant for plain-HTTP tests (use `compose.dev.yaml`) |
-| everyone logged out after deploy | MemoryStore sessions | expected until a persistent session store exists |
+| everyone logged out after deploy | `SESSION_SECRET` changed (cookies signed with the old secret no longer match) or the `sessions` collection was wiped | keep `SESSION_SECRET` stable across deploys |
 | Traefik 404 | labels not applied / host not resolving | check labels, DNS, `docker ps` networks |
 | wrong client IPs in rate limits | more than one proxy hop | `trust proxy` is set to 1 in `server.js` |

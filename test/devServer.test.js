@@ -99,6 +99,18 @@ test('the persona login starts a new session like the Discord login', async () =
     assert.equal((await currentUser(client)).username, 'tom');
 });
 
+test('requests without a session cookie store no session until the CSRF token is fetched', async () => {
+    // Sessions live in the database -> pages, assets and crawlers must not create one each
+    for (const url of ['/', '/css/style.css', '/irgendein/pfad', '/api/server-info', '/auth/me']) {
+        const res = await fetch(server.baseUrl + url, { redirect: 'manual' });
+        assert.equal(res.headers.getSetCookie().find(cookie => cookie.startsWith('connect.sid=')), undefined, url);
+    }
+
+    const tokenRes = await fetch(`${server.baseUrl}/api/csrf-token`);
+    assert.ok(tokenRes.headers.getSetCookie().some(cookie => cookie.startsWith('connect.sid=')));
+    assert.match((await tokenRes.json()).token, /^[0-9a-f]{64}$/);
+});
+
 test('parallel first changes after a login all pass the CSRF check', async () => {
     // Each send() fetches the token, then writes. Without a token minted by the login,
     // parallel requests each mint their own and all but the last stored one get 403.
