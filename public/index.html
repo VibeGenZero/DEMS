@@ -135,9 +135,9 @@
             <!-- Logged in -->
             <div id="user-info" style="display:none;" class="d-flex align-items-center gap-2">
               <img id="user-avatar" src="" alt="Avatar" class="rounded-circle" width="32" height="32"
-                onerror="this.style.display='none'">
+                data-fallback="hide">
               <span id="user-name" class="text-light fw-medium"></span>
-              <button type="button" class="btn btn-sm btn-outline-light ms-2" id="logout-btn" onclick="logout()" aria-label="Abmelden">
+              <button type="button" class="btn btn-sm btn-outline-light ms-2" id="logout-btn" data-click="logout" aria-label="Abmelden">
                 <i class="bi bi-box-arrow-right"></i>
               </button>
             </div>
@@ -493,7 +493,7 @@
             </div>
             <div class="form-check form-switch">
               <input class="form-check-input" type="checkbox" id="accept-invitations-toggle" role="switch"
-                onchange="saveAccountSettings()">
+                data-change="saveAccountSettings">
             </div>
           </div>
           <hr class="border-secondary">
@@ -502,7 +502,7 @@
               <div class="fw-semibold text-danger">Account löschen</div>
               <small class="text-muted">Löscht deinen Account und alle Registrierungen dauerhaft.</small>
             </div>
-            <button class="btn btn-outline-danger btn-sm" onclick="deleteUserAccount()">
+            <button class="btn btn-outline-danger btn-sm" data-click="deleteUserAccount">
               <i class="bi bi-trash me-1"></i>Account löschen
             </button>
           </div>
@@ -539,7 +539,7 @@
                   </div>
                   <div class="form-check form-switch">
                     <input class="form-check-input" type="checkbox" id="verbose-log-toggle" role="switch"
-                      onchange="toggleVerboseLog(this.checked)">
+                      data-change="toggleVerboseLog">
                   </div>
                 </div>
               </div>
@@ -638,7 +638,7 @@
         <div class="glass-card p-4 mb-4">
           <div class="d-flex flex-wrap gap-3 align-items-center mb-3" id="sg-spinners"></div>
           <div id="sg-alerts" class="mb-3"></div>
-          <button class="btn btn-outline-secondary btn-sm" onclick="showToast('🐛 Test-Toast vom Styling Guide!', 'info')">
+          <button class="btn btn-outline-secondary btn-sm" data-click="showTestToast">
             <i class="bi bi-bell me-1"></i>Toast testen
           </button>
         </div>
@@ -1900,10 +1900,10 @@
           <p class="text-muted small mt-2">Du kannst diese Einstellung jederzeit in deinem Profil ändern.</p>
         </div>
         <div class="modal-footer border-secondary">
-          <button class="btn btn-outline-secondary" onclick="confirmInvitationPreference(false)">
+          <button class="btn btn-outline-secondary" data-click="confirmInvitationPreference" data-accept="false">
             <i class="bi bi-x-circle me-1"></i>Nein, danke
           </button>
-          <button class="btn btn-accent" onclick="confirmInvitationPreference(true)">
+          <button class="btn btn-accent" data-click="confirmInvitationPreference" data-accept="true">
             <i class="bi bi-check-circle me-1"></i>Ja, erlauben
           </button>
         </div>

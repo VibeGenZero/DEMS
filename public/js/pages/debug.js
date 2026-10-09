@@ -1,6 +1,8 @@
 /**
  * Debug styling guide (#debug).
  */
+import { registerActions } from '../core/actions.js';
+import { showToast } from '../core/ui.js';
 
 export function showDebugSection() {
     if (!window.DEBUG_MODE) return;
@@ -133,7 +135,7 @@ export function showDebugSection() {
         { label: 'Pulse',    fn: () => gsap.to('.sg-anim-demo-item', { scale: 1.05, duration: 0.3, repeat: 3, yoyo: true, ease: 'power1.inOut', stagger: 0.1 }) },
     ];
     document.getElementById('sg-anim-buttons').innerHTML = animations.map((a, i) =>
-        `<button class="btn btn-outline-secondary btn-sm" onclick="sgRunAnimation(${i})">${a.label}</button>`
+        `<button class="btn btn-outline-secondary btn-sm" data-click="sgRunAnimation" data-index="${i}">${a.label}</button>`
     ).join('');
     window._sgAnimations = animations;
 
@@ -167,5 +169,7 @@ export function sgRunAnimation(index) {
     }
 }
 
-// Temporary bridge for inline handlers; D-01 replaces them with data-click and removes it
-Object.assign(window, { sgRunAnimation });
+registerActions({
+    showTestToast: () => showToast('🐛 Test-Toast vom Styling Guide!', 'info'),
+    sgRunAnimation: (el) => sgRunAnimation(Number(el.dataset.index))
+});

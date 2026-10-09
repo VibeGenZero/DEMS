@@ -33,7 +33,7 @@ async function renderCard(user, title) {
 
 test('a profile card links to an event the member can open', async () => {
     const { card, toasts } = await renderCard(MEMBER, 'Spieleabend');
-    assert.match(card, /navigateTo\('event\/game-night'\)/);
+    assert.match(card, /data-click="navigateTo" data-route="event\/game-night"/);
     assert.doesNotMatch(card, /profile-reg-card-static/);
     assert.deepEqual(toasts, []);
 });
@@ -47,5 +47,5 @@ test('a profile card of an archived event stays but does not link for members', 
 
 test('admins can still open an archived event from their profile', async () => {
     const { card } = await renderCard(ADMIN, 'Alter Raid');
-    assert.match(card, /navigateTo\('event\/old-raid'\)/);
+    assert.match(card, /data-click="navigateTo" data-route="event\/old-raid"/);
 });

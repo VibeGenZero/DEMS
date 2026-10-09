@@ -2,6 +2,7 @@
  * Login state: /auth/me, logged-in/logged-out views, logout.
  */
 import { state } from './state.js';
+import { registerActions } from './actions.js';
 import { showToast } from './ui.js';
 import { showFirstLoginModal } from '../pages/profile.js';
 import { refreshPollBadge } from '../polls/polls.js';
@@ -90,5 +91,4 @@ export function showLoggedOut() {
     document.getElementById('user-name').textContent = '';
 }
 
-// Temporary bridge for inline handlers; D-01 replaces them with data-click and removes it
-Object.assign(window, { logout });
+registerActions({ logout: () => logout() });

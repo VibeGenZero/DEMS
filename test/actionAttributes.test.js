@@ -300,3 +300,13 @@ test('Discord import entries keep the event as data for the wizard', async () =>
     const [entry] = actionTargets(html, 'selectDiscordEvent');
     assert.equal(JSON.parse(entry.attributes['data-event']).name, TRICKY_TEXT);
 });
+
+test('the welcome dialog sends false and true as booleans', async () => {
+    const { app, requests } = await loadFrontendApp({ '/api/user/settings': { success: true } });
+    for (const button of actionTargets(INDEX_HTML, 'confirmInvitationPreference')) {
+        await app.runAction('confirmInvitationPreference', actionElement(button));
+    }
+    // "Nein" first, then "Ja"; a string "false" would be truthy and accept invitations
+    const sent = requests.filter(r => r.method === 'PUT').map(r => JSON.parse(r.body).acceptInvitations);
+    assert.deepEqual(sent, [false, true]);
+});

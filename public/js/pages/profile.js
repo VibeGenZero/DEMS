@@ -3,6 +3,7 @@
  */
 import { state } from '../core/state.js';
 import { navigateTo } from '../core/router.js';
+import { registerActions } from '../core/actions.js';
 import { escapeHtml, showToast } from '../core/ui.js';
 
 // Mirrors isEventVisibleTo in utils/eventUtils.js: the API answers 404 to
@@ -123,7 +124,7 @@ export async function showProfileSection() {
             function renderRegCards() {
                 const slice = registrations.slice(0, visibleCount);
                 regContainer.innerHTML = slice.map(reg => `
-        <div class="profile-reg-card${canOpenEvent(reg.event) ? '' : ' profile-reg-card-static'}" onclick="${canOpenEvent(reg.event) ? `navigateTo('event/${reg.event.id}')` : ''}">
+        <div class="profile-reg-card${canOpenEvent(reg.event) ? '' : ' profile-reg-card-static'}" ${canOpenEvent(reg.event) ? `data-click="navigateTo" data-route="event/${escapeHtml(reg.event.id)}"` : ''}>
           <div class="profile-reg-info">
             <h6>${reg.event ? escapeHtml(reg.event.title) : '<span class="text-muted">Gelöschtes Event</span>'}</h6>
             <small>
@@ -285,5 +286,9 @@ export async function confirmInvitationPreference(accept) {
     showToast(accept ? 'Du kannst jetzt Gäste-Einladungen erhalten.' : 'Einladungen wurden deaktiviert. Du kannst das in deinem Profil ändern.', 'info');
 }
 
-// Temporary bridge for inline handlers; D-01 replaces them with data-click and removes it
-Object.assign(window, { toggleVerboseLog, saveAccountSettings, deleteUserAccount, confirmInvitationPreference });
+registerActions({
+    saveAccountSettings: () => saveAccountSettings(),
+    deleteUserAccount: () => deleteUserAccount(),
+    toggleVerboseLog: (el) => toggleVerboseLog(el.checked),
+    confirmInvitationPreference: (el) => confirmInvitationPreference(el.dataset.accept === 'true')
+});

@@ -137,6 +137,3 @@ export function navigateTo(route) {
 }
 
 registerActions({ navigateTo: (el) => navigateTo(el.dataset.route) });
-
-// Temporary bridge for inline handlers; D-01 replaces them with data-click and removes it
-Object.assign(window, { navigateTo });
