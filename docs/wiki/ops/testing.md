@@ -8,7 +8,7 @@ see_also: [dev-mock-mode, conventions]
 ---
 # Testing — node:test suites and helpers
 
-> TL;DR: `npm test` runs `node --test "test/**/*.test.js"` (built-in runner, no dependencies). Server behaviour is tested end-to-end by spawning `server.js` / `dev/start.js` in a child process with a temp SQLite file and driving it with a cookie-aware fetch client that handles CSRF. Single frontend functions run in `node:vm` against a fake DOM (`loadFrontendApp`). Browser smoke tests (Playwright, Chromium only) run separately with `npm run test:e2e`.
+> TL;DR: `npm test` runs `node --experimental-vm-modules --disable-warning=ExperimentalWarning --test "test/**/*.test.js"` (built-in runner, no dependencies; the flag lets `loadFrontendModules` load the frontend ES modules with `vm.SourceTextModule`). Server behaviour is tested end-to-end by spawning `server.js` / `dev/start.js` in a child process with a temp SQLite file and driving it with a cookie-aware fetch client that handles CSRF. Single frontend functions run in `node:vm` against a fake DOM (`loadFrontendApp`). Browser smoke tests (Playwright, Chromium only) run separately with `npm run test:e2e`.
 
 ## Suites
 
@@ -75,6 +75,7 @@ see_also: [dev-mock-mode, conventions]
 npm test                                    # all suites
 npm run test:e2e                            # browser smoke tests (Playwright, needs Chromium once)
 node --test test/devServer.test.js          # one file
+node --experimental-vm-modules --test test/eventCards.test.js   # one frontend file (needs the flag)
 npm run wiki:check                          # wiki only
 ```
 

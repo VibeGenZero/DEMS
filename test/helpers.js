@@ -290,6 +290,48 @@ function createFakeElement(registry, id = '', display = '') {
     };
 }
 
+const FRONTEND_DIR = path.join(REPO_ROOT, 'public', 'js');
+
+/**
+ * Source of every frontend module, for text checks across the whole SPA.
+ *
+ * @returns {Array<{ file: string, source: string }>} -> One entry per file below public/js (path with /), sorted.
+ */
+function frontendSources() {
+    return fs.readdirSync(FRONTEND_DIR, { recursive: true })
+        .filter(file => file.endsWith('.js'))
+        .sort()
+        .map(file => ({ file: file.split(path.sep).join('/'), source: fs.readFileSync(path.join(FRONTEND_DIR, file), 'utf8') }));
+}
+
+/**
+ * Link and evaluate the ES modules reachable from `entryFile` inside a vm
+ * context. Every call builds new module instances, so module state never
+ * leaks from one test into the next. Needs node --experimental-vm-modules
+ * (npm test sets it).
+ *
+ * @param {string} entryFile -> Absolute path of the entry module.
+ * @param {Object} context -> vm context with the page globals.
+ * @returns {Promise<Map<string, Object>>} -> Module namespace by path relative to the entry's folder (with /).
+ */
+async function loadFrontendModules(entryFile, context) {
+    if (typeof vm.SourceTextModule !== 'function') {
+        throw new Error('Frontend tests load ES modules and need node --experimental-vm-modules; run them with npm test');
+    }
+    const root = path.dirname(entryFile);
+    const modules = new Map();
+    const load = (file) => {
+        if (!modules.has(file)) {
+            modules.set(file, new vm.SourceTextModule(fs.readFileSync(file, 'utf8'), { identifier: file, context }));
+        }
+        return modules.get(file);
+    };
+    const entry = load(entryFile);
+    await entry.link((specifier, referrer) => load(path.resolve(path.dirname(referrer.identifier), specifier)));
+    await entry.evaluate();
+    return new Map([...modules].map(([file, module]) => [path.relative(root, file).split(path.sep).join('/'), module.namespace]));
+}
+
 /**
  * Load public/js/app.js into a node:vm context with a fake DOM built from
  * the ids in public/index.html. `fetch` answers from `routes`: a value is
@@ -384,5 +426,7 @@ module.exports = {
     createClient,
     createFakeInteraction,
     dispatchInteraction,
-    loadFrontendApp
+    loadFrontendApp,
+    loadFrontendModules,
+    frontendSources
 };
