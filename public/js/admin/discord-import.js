@@ -26,8 +26,8 @@ export async function fetchDiscordEvents() {
         }
 
         list.innerHTML = events.map(ev => `
-            <a href="#" class="list-group-item list-group-item-action d-flex gap-3 py-3" onclick="selectDiscordEvent(this)" data-event='${JSON.stringify(ev).replace(/'/g, "&apos;")}'>
-                ${ev.image ? `<img src="${ev.image}" alt="Event Image" width="48" height="48" class="rounded-circle flex-shrink-0" style="object-fit:cover;">` : '<div class="rounded-circle bg-secondary d-flex align-items-center justify-content-center flex-shrink-0" style="width:48px;height:48px;"><i class="bi bi-discord"></i></div>'}
+            <a href="#" class="list-group-item list-group-item-action d-flex gap-3 py-3" data-click="selectDiscordEvent" data-event="${escapeHtml(JSON.stringify(ev))}">
+                ${ev.image ? `<img src="${escapeHtml(ev.image)}" alt="Event Image" width="48" height="48" class="rounded-circle flex-shrink-0" style="object-fit:cover;">` : '<div class="rounded-circle bg-secondary d-flex align-items-center justify-content-center flex-shrink-0" style="width:48px;height:48px;"><i class="bi bi-discord"></i></div>'}
                 <div class="d-flex gap-2 w-100 justify-content-between">
                     <div>
                         <h6 class="mb-0 text-white">${escapeHtml(ev.name)}</h6>
@@ -80,7 +80,4 @@ export function selectDiscordEvent(el) {
     });
 }
 
-registerActions({ showImportDiscordEventsModal: () => showImportDiscordEventsModal() });
-
-// Temporary bridge for inline handlers; D-01 replaces them with data-click and removes it
-Object.assign(window, { selectDiscordEvent });
+registerActions({ showImportDiscordEventsModal: () => showImportDiscordEventsModal(), selectDiscordEvent: (el) => selectDiscordEvent(el) });

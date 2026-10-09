@@ -59,6 +59,7 @@ for (const persona of PERSONAS) {
             await page.locator('#eventModal [data-bs-dismiss="modal"]').first().click();
             await expect(page.locator('#eventModal')).toBeHidden();
             await navigate(page, 'bot-control');
+            await page.locator('[data-click="loadBotSettings"]').click();
         } else {
             await openMenu(page);
             await expect(page.locator('#nav-admin')).toBeHidden();
@@ -112,5 +113,17 @@ test('the raider votes in the open poll', async ({ page }) => {
     const yes = page.locator('#poll-detail [data-click="setPollVote"][data-state="yes"]').first();
     await yes.click();
     await expect(page.locator('#poll-detail [data-click="setPollVote"][data-state="yes"]').first()).toHaveAttribute('aria-pressed', 'true');
+    expect(errors).toEqual([]);
+});
+
+test('the news dialog closes through its action', async ({ page }) => {
+    const errors = watchErrors(page);
+    // Skip only the boot animation, so the news dialog shows
+    await page.addInitScript(() => localStorage.setItem('dems_boot_ts', String(Date.now())));
+    await page.goto('/auth/dev-login/member');
+    const dialog = page.locator('#updatesModal');
+    await expect(dialog).toBeVisible();
+    await dialog.locator('[data-click="closeUpdatesModal"]').click();
+    await expect(dialog).toBeHidden();
     expect(errors).toEqual([]);
 });

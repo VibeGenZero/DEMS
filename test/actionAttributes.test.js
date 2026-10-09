@@ -288,3 +288,15 @@ test('a vote click sends the answer for that date', async () => {
     assert.ok(vote, 'the vote is sent');
     assert.deepEqual([vote.url, JSON.parse(vote.body)], ['/api/polls/p1/vote', { optionId: 'raid-a', state: 'yes' }]);
 });
+
+test('Discord import entries keep the event as data for the wizard', async () => {
+    const { app, state, element } = await loadFrontendApp({
+        '/api/admin/import/discord-events': [{ id: 'd1', name: TRICKY_TEXT, description: 'x', scheduledStartTimestamp: Date.parse('2026-10-20T18:00:00.000Z'), image: null }]
+    });
+    state.currentUser = { ...MEMBER, isAdmin: true };
+    await app.fetchDiscordEvents();
+    const html = element('discord-events-list').innerHTML;
+    assertNoInlineHandlers(html);
+    const [entry] = actionTargets(html, 'selectDiscordEvent');
+    assert.equal(JSON.parse(entry.attributes['data-event']).name, TRICKY_TEXT);
+});

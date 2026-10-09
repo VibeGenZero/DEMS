@@ -2,6 +2,7 @@
  * Bot control center: status, running events, settings.
  */
 import { state } from '../core/state.js';
+import { registerActions } from '../core/actions.js';
 import { escapeHtml, showToast } from '../core/ui.js';
 
 
@@ -236,5 +237,4 @@ export async function saveBotSettingsForm() {
     }
 }
 
-// Temporary bridge for inline handlers; D-01 replaces them with data-click and removes it
-Object.assign(window, { loadBotSettings });
+registerActions({ loadBotSettings: () => loadBotSettings() });

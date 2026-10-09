@@ -42,7 +42,4 @@ export async function saveBotMessages() {
     }
 }
 
-registerActions({ showBotMessagesModal: () => showBotMessagesModal() });
-
-// Temporary bridge for inline handlers; D-01 replaces them with data-click and removes it
-Object.assign(window, { saveBotMessages });
+registerActions({ showBotMessagesModal: () => showBotMessagesModal(), saveBotMessages: () => saveBotMessages() });

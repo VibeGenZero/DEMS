@@ -878,7 +878,7 @@
             </div>
 
             <div class="d-flex justify-content-end gap-2 mt-4">
-              <button type="button" class="btn btn-outline-light" onclick="loadBotSettings()">
+              <button type="button" class="btn btn-outline-light" data-click="loadBotSettings">
                 <i class="bi bi-arrow-clockwise me-1"></i>Zurücksetzen
               </button>
               <button type="submit" class="btn btn-accent">
@@ -1327,7 +1327,7 @@
                 <label class="form-label small">Admin-Reset-Passwort zum Deaktivieren:</label>
                 <input type="password" class="form-control glass-input" id="panic-deactivate-password" placeholder="Passwort eingeben">
               </div>
-              <button class="btn btn-outline-danger" onclick="deactivatePanicMode()">
+              <button class="btn btn-outline-danger" data-click="deactivatePanicMode">
                 <i class="bi bi-unlock me-1"></i>Panic Mode Deaktivieren
               </button>
             </div>
@@ -1396,7 +1396,7 @@
         </div>
         <div class="modal-footer border-0">
           <button type="button" class="btn btn-outline-light" data-bs-dismiss="modal">Abbrechen</button>
-          <button type="button" class="btn btn-warning text-dark" onclick="saveMaintenanceSettings()">
+          <button type="button" class="btn btn-warning text-dark" data-click="saveMaintenanceSettings">
             <i class="bi bi-save me-1"></i>Speichern
           </button>
         </div>
@@ -1466,7 +1466,7 @@
         </div>
         <div class="modal-footer border-0">
           <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Abbrechen</button>
-          <button type="button" class="btn btn-accent" onclick="saveBotMessages()">
+          <button type="button" class="btn btn-accent" data-click="saveBotMessages">
             <i class="bi bi-save me-1"></i>Speichern
           </button>
         </div>
@@ -1607,7 +1607,7 @@
             </label>
           </div>
           <button type="button" class="btn btn-accent" data-bs-dismiss="modal"
-            onclick="closeUpdatesModal()">Verstanden</button>
+            data-click="closeUpdatesModal">Verstanden</button>
         </div>
       </div>
     </div>

@@ -175,7 +175,9 @@ export async function deactivatePanicMode() {
     }
 }
 
-registerActions({ showMaintenanceModal: () => showMaintenanceModal(), activatePanicMode: () => activatePanicMode() });
-
-// Temporary bridge for inline handlers; D-01 replaces them with data-click and removes it
-Object.assign(window, { saveMaintenanceSettings, deactivatePanicMode });
+registerActions({
+    showMaintenanceModal: () => showMaintenanceModal(),
+    saveMaintenanceSettings: () => saveMaintenanceSettings(),
+    activatePanicMode: () => activatePanicMode(),
+    deactivatePanicMode: () => deactivatePanicMode()
+});

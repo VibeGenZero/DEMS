@@ -1,6 +1,7 @@
 /**
  * "Neuigkeiten & Updates" dialog.
  */
+import { registerActions } from './actions.js';
 import { escapeHtml } from './ui.js';
 
 export async function checkUpdates() {
@@ -54,5 +55,4 @@ export function closeUpdatesModal() {
     checkbox.checked = false;
 }
 
-// Temporary bridge for inline handlers; D-01 replaces them with data-click and removes it
-Object.assign(window, { closeUpdatesModal });
+registerActions({ closeUpdatesModal: () => closeUpdatesModal() });
