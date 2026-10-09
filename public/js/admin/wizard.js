@@ -6,7 +6,7 @@ import { loadAdminEvents, loadAdminStats } from './dashboard.js';
 import { addFormField, getFormFieldsFromBuilder, getSlotsFromEditor, renderSlotEditor } from './wizard-builders.js';
 import { navigateTo } from '../core/router.js';
 import { registerActions } from '../core/actions.js';
-import { escapeHtml, inlineArg, showToast } from '../core/ui.js';
+import { escapeHtml, showToast } from '../core/ui.js';
 import { showPollDetail } from '../polls/polls.js';
 
 export let _cachedChannels = null;
@@ -48,7 +48,7 @@ export async function handleLocationInput() {
 
     suggestionsEl.innerHTML = filtered.map(c => `
         <div class="location-suggestion-item"
-             onclick="selectLocationChannel(${inlineArg(c.id)}, ${inlineArg(c.name)}, ${inlineArg(c.type)})">
+             data-click="selectLocationChannel" data-channel-id="${escapeHtml(c.id)}" data-channel-name="${escapeHtml(c.name)}" data-channel-type="${escapeHtml(c.type)}">
             <i class="bi bi-${c.type === 'voice' ? 'volume-up' : 'hash'} me-2"></i>${escapeHtml(c.name)}
         </div>`).join('');
     suggestionsEl.style.display = 'block';
@@ -463,7 +463,13 @@ export function getSelectedRoles() {
     return Array.from(checkboxes).map(cb => cb.value);
 }
 
-registerActions({ editEvent: (el) => editEvent(el.dataset.eventId), showCreateEventModal: () => showCreateEventModal() });
-
-// Temporary bridge for inline handlers; D-01 replaces them with data-click and removes it
-Object.assign(window, { handleLocationInput, selectLocationChannel, wizardGoTo, wizardNext, wizardBack, saveEvent });
+registerActions({
+    editEvent: (el) => editEvent(el.dataset.eventId),
+    showCreateEventModal: () => showCreateEventModal(),
+    wizardGoTo: (el) => wizardGoTo(Number(el.dataset.step)),
+    wizardNext: () => wizardNext(),
+    wizardBack: () => wizardBack(),
+    saveEvent: () => saveEvent(),
+    handleLocationInput: () => handleLocationInput(),
+    selectLocationChannel: (el) => selectLocationChannel(el.dataset.channelId, el.dataset.channelName, el.dataset.channelType)
+});

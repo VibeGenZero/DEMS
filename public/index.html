@@ -932,27 +932,27 @@
         <!-- Wizard Step Indicator -->
         <div class="px-4 pt-3">
           <div class="wizard-nav">
-            <div class="wizard-step-item active" id="wstep-1" onclick="wizardGoTo(1)">
+            <div class="wizard-step-item active" id="wstep-1" data-click="wizardGoTo" data-step="1">
               <div class="wizard-step-bubble">1</div>
               <div class="wizard-step-label">Grundlagen</div>
             </div>
             <div class="wizard-step-connector"></div>
-            <div class="wizard-step-item" id="wstep-2" onclick="wizardGoTo(2)">
+            <div class="wizard-step-item" id="wstep-2" data-click="wizardGoTo" data-step="2">
               <div class="wizard-step-bubble">2</div>
               <div class="wizard-step-label">Datum & Zeit</div>
             </div>
             <div class="wizard-step-connector"></div>
-            <div class="wizard-step-item" id="wstep-3" onclick="wizardGoTo(3)">
+            <div class="wizard-step-item" id="wstep-3" data-click="wizardGoTo" data-step="3">
               <div class="wizard-step-bubble">3</div>
               <div class="wizard-step-label">Teilnehmer</div>
             </div>
             <div class="wizard-step-connector"></div>
-            <div class="wizard-step-item" id="wstep-4" onclick="wizardGoTo(4)">
+            <div class="wizard-step-item" id="wstep-4" data-click="wizardGoTo" data-step="4">
               <div class="wizard-step-bubble">4</div>
               <div class="wizard-step-label">Formular</div>
             </div>
             <div class="wizard-step-connector"></div>
-            <div class="wizard-step-item" id="wstep-5" onclick="wizardGoTo(5)">
+            <div class="wizard-step-item" id="wstep-5" data-click="wizardGoTo" data-step="5">
               <div class="wizard-step-bubble">5</div>
               <div class="wizard-step-label">Erweitert</div>
             </div>
@@ -997,7 +997,7 @@
                 <label class="form-label small text-muted"><i class="bi bi-geo-alt me-1"></i>Ort (optional)</label>
                 <input type="text" class="form-control form-control-sm" id="event-location-text"
                   placeholder="z.B. #gaming-voice oder Teamspeak Server"
-                  autocomplete="off" oninput="handleLocationInput()">
+                  autocomplete="off" data-input="handleLocationInput">
                 <div id="location-suggestions" class="location-dropdown" style="display:none;"></div>
                 <input type="hidden" id="event-location-channel-id">
                 <input type="hidden" id="event-location-channel-type">
@@ -1045,7 +1045,7 @@
               <div class="mb-3 glass-card p-3" style="background:rgba(139,92,246,0.05);">
                 <div class="form-check mb-2">
                   <input class="form-check-input" type="checkbox" id="event-recurring"
-                    onchange="document.getElementById('recurring-options').style.display=this.checked?'':'none'">
+                    data-change="toggleVisible" data-target="recurring-options">
                   <label class="form-check-label" for="event-recurring">🔁 Wiederkehrendes Event</label>
                 </div>
                 <div id="recurring-options" style="display:none;">
@@ -1085,14 +1085,14 @@
               </div>
               <div class="mb-3">
                 <div class="form-check form-switch">
-                  <input class="form-check-input" type="checkbox" id="event-use-slots" onchange="toggleSlotEditor()">
+                  <input class="form-check-input" type="checkbox" id="event-use-slots" data-change="toggleSlotEditor">
                   <label class="form-check-label" for="event-use-slots"><i class="bi bi-diagram-3 me-1"></i>Rollen-Slots verwenden</label>
                 </div>
                 <div id="slot-editor-area" style="display:none;">
                   <div id="slot-editor-rows" class="slot-editor-rows"></div>
                   <div class="d-flex flex-wrap gap-2 mt-2">
-                    <button type="button" class="btn btn-sm btn-outline-light" onclick="addSlotRow()"><i class="bi bi-plus-lg me-1"></i>Slot</button>
-                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="applySlotPreset('mmo-raid')"><i class="bi bi-magic me-1"></i>Vorlage: MMO-Raid</button>
+                    <button type="button" class="btn btn-sm btn-outline-light" data-click="addSlotRow"><i class="bi bi-plus-lg me-1"></i>Slot</button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" data-click="applySlotPreset" data-preset="mmo-raid"><i class="bi bi-magic me-1"></i>Vorlage: MMO-Raid</button>
                   </div>
                   <small class="text-muted d-block mt-1">Max. 10 Slots. Die Teilnehmerzahl ergibt sich aus der Summe der Plätze.</small>
                 </div>
@@ -1145,7 +1145,7 @@
               <div id="form-fields-builder">
                 <!-- Dynamic field rows -->
               </div>
-              <button type="button" class="btn btn-sm btn-outline-light mt-2" onclick="addFormField()">
+              <button type="button" class="btn btn-sm btn-outline-light mt-2" data-click="addFormField">
                 <i class="bi bi-plus me-1"></i>Feld hinzufügen
               </button>
             </div>
@@ -1156,7 +1156,7 @@
               <div class="mb-3 glass-card p-3" style="background:rgba(139,92,246,0.05);">
                 <div class="form-check mb-2">
                   <input class="form-check-input" type="checkbox" id="event-auto-create-channels"
-                    onchange="document.getElementById('channel-config-options').style.display=this.checked?'':'none'">
+                    data-change="toggleVisible" data-target="channel-config-options">
                   <label class="form-check-label" for="event-auto-create-channels">🎧 Auto-Voice/Text Channels
                     generieren</label>
                 </div>
@@ -1189,7 +1189,7 @@
               <div class="mb-3 glass-card p-3" style="background:rgba(139,92,246,0.05);">
                 <div class="form-check mb-2">
                   <input class="form-check-input" type="checkbox" id="event-custom-msg-toggle"
-                    onchange="document.getElementById('custom-msg-options').style.display=this.checked?'':'none'">
+                    data-change="toggleVisible" data-target="custom-msg-options">
                   <label class="form-check-label" for="event-custom-msg-toggle">🤖 Eigene Bot-Nachrichten</label>
                 </div>
                 <div id="custom-msg-options" style="display:none;">
@@ -1231,14 +1231,14 @@
           <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Abbrechen</button>
           <div class="d-flex gap-2 align-items-center">
             <span class="text-muted small me-2" id="wizard-step-counter">Schritt 1 von 5</span>
-            <button type="button" class="btn btn-outline-secondary" id="wizard-btn-back" onclick="wizardBack()"
+            <button type="button" class="btn btn-outline-secondary" id="wizard-btn-back" data-click="wizardBack"
               style="display:none;">
               <i class="bi bi-arrow-left me-1"></i>Zurück
             </button>
-            <button type="button" class="btn btn-accent" id="wizard-btn-next" onclick="wizardNext()">
+            <button type="button" class="btn btn-accent" id="wizard-btn-next" data-click="wizardNext">
               Weiter<i class="bi bi-arrow-right ms-1"></i>
             </button>
-            <button type="button" class="btn btn-accent" id="wizard-btn-save" onclick="saveEvent()"
+            <button type="button" class="btn btn-accent" id="wizard-btn-save" data-click="saveEvent"
               style="display:none;">
               <i class="bi bi-save me-1"></i>Speichern
             </button>

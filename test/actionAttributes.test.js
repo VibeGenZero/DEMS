@@ -1,6 +1,5 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const vm = require('node:vm');
 const fs = require('fs');
 const path = require('path');
 const { loadFrontendApp, REPO_ROOT } = require('./helpers');
@@ -11,8 +10,8 @@ const settle = () => new Promise(resolve => setImmediate(resolve));
 
 const MEMBER = { id: 'u-member', username: 'member', roles: [], isAdmin: false };
 
-// Display names a member can pick in Discord. Each one leaves a JS string
-// inside an inline handler when the value is only HTML-escaped.
+// Display names a member can pick in Discord. Each one broke out of a JS string
+// while inline handlers carried names; as data attributes they must arrive unchanged.
 const QUOTE_NAME = "x');globalThis.pwned=1;('";
 const AVATAR_NAME = "X'+(globalThis.pwned=1)+'";
 const ENTITY_NAME = '&quot;});globalThis.pwned=1;//';
@@ -22,10 +21,10 @@ const TRICKY_TEXT = 'Bob\'s "Raid" & <mehr> &#039; \\ ende';
 const ENTITIES = { quot: '"', amp: '&', lt: '<', gt: '>' };
 
 /**
- * Decode an attribute value the way the browser does before it runs the handler.
+ * Decode an attribute value the way the browser does when it reads it.
  *
  * @param {string} value -> Raw attribute value from the HTML string.
- * @returns {string} -> Handler source code.
+ * @returns {string} -> Attribute value as the page sees it.
  */
 function decodeAttribute(value) {
     return value.replace(/&(quot|amp|lt|gt|#0*39);/g, (match, name) => ENTITIES[name] || "'");
@@ -74,63 +73,6 @@ function actionElement({ tag, attributes }, extra = {}) {
 
 function assertNoInlineHandlers(html) {
     assert.doesNotMatch(html, /\son[a-z]+\s*=\s*["']/i);
-}
-
-/**
- * All values of one attribute in an HTML string, decoded.
- *
- * @param {string} html -> Rendered HTML.
- * @param {string} attribute -> e.g. "onclick".
- * @returns {string[]} -> Handler sources.
- */
-function attributeValues(html, attribute) {
-    return [...html.matchAll(new RegExp(`\\s${attribute}="([^"]*)"`, 'g'))].map(match => decodeAttribute(match[1]));
-}
-
-/**
- * Find the handler that calls `functionName` in the rendered HTML.
- *
- * @param {string} html -> Rendered HTML.
- * @param {string} functionName -> Called function.
- * @param {string} [attribute] -> Handler attribute.
- * @returns {string} -> Handler source.
- */
-function handlerCalling(html, functionName, attribute = 'onclick') {
-    const handler = attributeValues(html, attribute).find(code => code.includes(`${functionName}(`));
-    assert.ok(handler, `no ${attribute} handler calls ${functionName}(`);
-    return handler;
-}
-
-/**
- * Run handler source like the browser: as a function body with `this` bound to
- * the element. Every name in `stubs` records its calls.
- *
- * @param {string} code -> Handler source.
- * @param {Object} [options] -> `{ stubs: string[], element, globals }`.
- * @returns {Object} -> `{ calls: [name, args][], context }`.
- */
-function runHandler(code, { stubs = [], element = {}, globals = {} } = {}) {
-    const calls = [];
-    const context = vm.createContext({ ...globals });
-    for (const name of stubs) context[name] = (...args) => { calls.push([name, args]); };
-    const handler = vm.compileFunction(code, ['event'], { parsingContext: context });
-    handler.call(element, {});
-    return { calls, context };
-}
-
-/**
- * Assert that the handler calls exactly `functionName(...args)` and nothing else.
- *
- * @param {string} code -> Handler source.
- * @param {string} functionName -> Expected call.
- * @param {Array} args -> Expected arguments.
- * @returns {void}
- */
-function assertCallsOnly(code, functionName, args) {
-    const { calls, context } = runHandler(code, { stubs: [functionName] });
-    assert.equal(context.pwned, undefined, `injected code ran: ${code}`);
-    // Objects built inside the vm context have another Object prototype; compare plain data
-    assert.deepEqual(JSON.parse(JSON.stringify(calls)), [[functionName, args]]);
 }
 
 /**
@@ -298,14 +240,28 @@ test('the calendar arrows move one month in each direction', async () => {
     assert.equal(month(), start);
 });
 
-test('location suggestions select the exact channel', async () => {
+test('a location suggestion fills the exact channel', async () => {
     const channel = { id: '7', name: TRICKY_TEXT, type: 'voice' };
     const { app, element } = await loadFrontendApp({ '/api/admin/channels': [channel] });
     element('event-location-text').value = 'bob';
     await app.handleLocationInput();
+    const html = element('location-suggestions').innerHTML;
+    assertNoInlineHandlers(html);
+    const [suggestion] = actionTargets(html, 'selectLocationChannel');
+    await app.runAction('selectLocationChannel', actionElement(suggestion));
+    assert.deepEqual(
+        [element('event-location-text').value, element('event-location-channel-id').value, element('event-location-channel-type').value],
+        [`#${TRICKY_TEXT}`, '7', 'voice']
+    );
+});
 
-    const handler = handlerCalling(element('location-suggestions').innerHTML, 'selectLocationChannel');
-    assertCallsOnly(handler, 'selectLocationChannel', ['7', TRICKY_TEXT, 'voice']);
+test('a wizard step dot jumps to its step as a number', async () => {
+    const { app, element } = await loadFrontendApp({});
+    const dot = actionTargets(INDEX_HTML, 'wizardGoTo').find(t => t.attributes['data-step'] === '3');
+    await app.runAction('wizardGoTo', actionElement(dot));
+    assert.equal(element('wizard-step-counter').textContent, 'Schritt 3 von 5');
+    assert.equal(element('wstep-3').classList.contains('active'), true);
+    assert.equal(element('wstep-2').classList.contains('completed'), true);
 });
 
 test('the poll admin bar names its actions literally and passes the poll id', async () => {

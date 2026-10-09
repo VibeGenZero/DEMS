@@ -46,6 +46,18 @@ for (const persona of PERSONAS) {
             await expect(page.locator('#audit-log-container')).toBeVisible();
             await page.locator('#audit-log-container [data-click="hide"]').click();
             await expect(page.locator('#audit-log-container')).toBeHidden();
+            // Event wizard: open, next, step dot, back, close
+            await page.locator('[data-click="showCreateEventModal"]').first().click();
+            await expect(page.locator('#eventModal')).toBeVisible();
+            await page.locator('#event-title').fill('E2E-Rundgang');
+            await page.locator('#wizard-btn-next').click();
+            await expect(page.locator('#wizard-step-counter')).toHaveText('Schritt 2 von 5');
+            await page.locator('#eventModal [data-click="wizardGoTo"][data-step="4"]').click();
+            await expect(page.locator('#wizard-step-counter')).toHaveText('Schritt 4 von 5');
+            await page.locator('#wizard-btn-back').click();
+            await expect(page.locator('#wizard-step-counter')).toHaveText('Schritt 3 von 5');
+            await page.locator('#eventModal [data-bs-dismiss="modal"]').first().click();
+            await expect(page.locator('#eventModal')).toBeHidden();
             await navigate(page, 'bot-control');
         } else {
             await openMenu(page);

@@ -1,6 +1,7 @@
 /**
  * Event wizard builders: registration form fields and role slots.
  */
+import { registerActions } from '../core/actions.js';
 import { escapeHtml, showToast } from '../core/ui.js';
 import { FORM_FIELD_TYPE_LABELS } from '../events/registration-form.js';
 
@@ -21,7 +22,7 @@ export function addFormField(existing = null) {
 
     row.innerHTML = `
     <input type="text" class="form-control ff-label" placeholder="Feldname" value="${escapeHtml(label)}" style="flex:2">
-    <select class="form-select ff-type" style="flex:1.4" onchange="toggleOptionsInput(this)">
+    <select class="form-select ff-type" style="flex:1.4" data-change="toggleOptionsInput">
       ${typeOptions}
     </select>
     <input type="text" class="form-control ff-description" placeholder="Hinweis (optional)" value="${escapeHtml(description)}" style="flex:2">
@@ -29,7 +30,7 @@ export function addFormField(existing = null) {
     <label class="d-flex align-items-center gap-1" style="white-space:nowrap;font-size:0.8rem;color:var(--text-muted);">
       <input type="checkbox" class="form-check-input ff-required" ${required ? 'checked' : ''}> Pflicht
     </label>
-    <button type="button" class="btn btn-sm btn-outline-danger" onclick="this.parentElement.remove()">
+    <button type="button" class="btn btn-sm btn-outline-danger" data-click="removeFormField">
       <i class="bi bi-x"></i>
     </button>
   `;
@@ -102,8 +103,8 @@ export function addSlotRow(slot = {}) {
     row.innerHTML = `
         <input type="text" class="form-control slot-emoji-input" maxlength="8" placeholder="🎯" value="${escapeHtml(slot.emoji || '')}" aria-label="Emoji">
         <input type="text" class="form-control slot-name-input" maxlength="30" placeholder="Name, z. B. Tank" value="${escapeHtml(slot.name || '')}" aria-label="Slot-Name">
-        <input type="number" class="form-control slot-capacity-input" min="1" max="100" value="${escapeHtml(String(slot.capacity || 1))}" aria-label="Plätze" oninput="updateSlotTotals()">
-        <button type="button" class="btn btn-sm btn-outline-danger" onclick="removeSlotRow(this)" title="Slot entfernen"><i class="bi bi-trash"></i></button>`;
+        <input type="number" class="form-control slot-capacity-input" min="1" max="100" value="${escapeHtml(String(slot.capacity || 1))}" aria-label="Plätze" data-input="updateSlotTotals">
+        <button type="button" class="btn btn-sm btn-outline-danger" data-click="removeSlotRow" title="Slot entfernen"><i class="bi bi-trash"></i></button>`;
     rows.appendChild(row);
     updateSlotTotals();
 }
@@ -145,5 +146,13 @@ export function updateSlotTotals() {
     }
 }
 
-// Temporary bridge for inline handlers; D-01 replaces them with data-click and removes it
-Object.assign(window, { addFormField, toggleOptionsInput, toggleSlotEditor, addSlotRow, removeSlotRow, applySlotPreset, updateSlotTotals });
+registerActions({
+    addFormField: () => addFormField(),
+    toggleOptionsInput: (el) => toggleOptionsInput(el),
+    removeFormField: (el) => el.parentElement.remove(),
+    toggleSlotEditor: () => toggleSlotEditor(),
+    addSlotRow: () => addSlotRow(),
+    applySlotPreset: (el) => applySlotPreset(el.dataset.preset),
+    removeSlotRow: (el) => removeSlotRow(el),
+    updateSlotTotals: () => updateSlotTotals()
+});
