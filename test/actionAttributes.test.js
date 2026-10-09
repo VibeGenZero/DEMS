@@ -300,3 +300,28 @@ test('location suggestions select the exact channel', async () => {
     const handler = handlerCalling(element('location-suggestions').innerHTML, 'selectLocationChannel');
     assertCallsOnly(handler, 'selectLocationChannel', ['7', TRICKY_TEXT, 'voice']);
 });
+
+test('the poll admin bar names its actions literally and passes the poll id', async () => {
+    const { app, state, element } = await loadFrontendApp({});
+    state.currentUser = { ...MEMBER, isAdmin: true };
+    // The bar lives inside the poll page; rendering that container registers its id
+    element('poll-detail').innerHTML = '<div id="poll-admin-bar"></div>';
+    app.renderPollAdminBar({ id: "p'1", status: 'open' });
+    const html = element('poll-admin-bar').innerHTML;
+    assertNoInlineHandlers(html);
+    const names = elementsWith(html, 'data-click').map(e => [e.attributes['data-click'], e.attributes['data-poll-id']]);
+    assert.deepEqual(names, [
+        ['showPollAnnounceDialog', "p'1"], ['showPollEditor', "p'1"], ['closePollFromUi', "p'1"],
+        ['showPollDecideDialog', "p'1"], ['deletePollFromUi', "p'1"]
+    ]);
+});
+
+test('a vote click sends the answer for that date', async () => {
+    const { app, state, requests } = await loadFrontendApp({ '/api/polls/p1/vote': { error: 'nur geprüft' } });
+    state.currentUser = MEMBER;
+    state.currentPoll = { id: 'p1' };
+    await app.runAction('setPollVote', { tagName: 'BUTTON', dataset: { optionId: 'raid-a', state: 'yes' }, getAttribute: () => null });
+    const vote = requests.find(r => r.method === 'PUT');
+    assert.ok(vote, 'the vote is sent');
+    assert.deepEqual([vote.url, JSON.parse(vote.body)], ['/api/polls/p1/vote', { optionId: 'raid-a', state: 'yes' }]);
+});

@@ -4,6 +4,7 @@
 import { state } from '../core/state.js';
 import { showCreateEventModal, wizardGoTo } from '../admin/wizard.js';
 import { navigateTo } from '../core/router.js';
+import { registerActions } from '../core/actions.js';
 import { escapeHtml, showConfirmDialog, showToast } from '../core/ui.js';
 import { DEFAULT_POLL_LABELS, formatPollOptionLabel, getPollLabels, renderPollCounts, showPollDetail } from './polls.js';
 
@@ -72,7 +73,7 @@ export function addPollOptionRow(option = {}) {
     row.innerHTML = `
         <input type="text" class="form-control poll-option-start" placeholder="Beginn" aria-label="Beginn">
         <input type="text" class="form-control poll-option-end" placeholder="Ende (optional)" aria-label="Ende">
-        <button type="button" class="btn btn-sm btn-outline-danger" onclick="this.closest('.poll-option-row').remove()" title="Termin entfernen"><i class="bi bi-trash"></i></button>`;
+        <button type="button" class="btn btn-sm btn-outline-danger" data-click="removePollOptionRow" title="Termin entfernen"><i class="bi bi-trash"></i></button>`;
     rows.appendChild(row);
     const startPicker = flatpickr(row.querySelector('.poll-option-start'), POLL_PICKER_CONFIG);
     const endPicker = flatpickr(row.querySelector('.poll-option-end'), POLL_PICKER_CONFIG);
@@ -142,17 +143,18 @@ export function renderPollAdminBar(poll) {
         return;
     }
     const id = escapeHtml(poll.id);
-    const button = (cls, handler, icon, label) =>
-        `<button class="btn btn-sm ${cls}" data-poll-id="${id}" onclick="${handler}(this.dataset.pollId)"><i class="bi ${icon} me-1"></i>${label}</button>`;
-    const buttons = [button('btn-outline-light', 'showPollAnnounceDialog', 'bi-discord', 'In Discord posten')];
+    // The action attribute is passed whole, so every action name stays literal in the source
+    const button = (cls, action, icon, label) =>
+        `<button class="btn btn-sm ${cls}" data-poll-id="${id}" ${action}><i class="bi ${icon} me-1"></i>${label}</button>`;
+    const buttons = [button('btn-outline-light', 'data-click="showPollAnnounceDialog"', 'bi-discord', 'In Discord posten')];
     if (poll.status === 'open') {
-        buttons.push(button('btn-outline-light', 'showPollEditor', 'bi-pencil', 'Bearbeiten'));
-        buttons.push(button('btn-outline-light', 'closePollFromUi', 'bi-lock', 'Abstimmung beenden'));
+        buttons.push(button('btn-outline-light', 'data-click="showPollEditor"', 'bi-pencil', 'Bearbeiten'));
+        buttons.push(button('btn-outline-light', 'data-click="closePollFromUi"', 'bi-lock', 'Abstimmung beenden'));
     }
     if (poll.status !== 'decided') {
-        buttons.push(button('btn-accent', 'showPollDecideDialog', 'bi-calendar-plus', 'Event erstellen'));
+        buttons.push(button('btn-accent', 'data-click="showPollDecideDialog"', 'bi-calendar-plus', 'Event erstellen'));
     }
-    buttons.push(button('btn-outline-danger', 'deletePollFromUi', 'bi-trash', 'Löschen'));
+    buttons.push(button('btn-outline-danger', 'data-click="deletePollFromUi"', 'bi-trash', 'Löschen'));
     bar.innerHTML = `<div class="poll-admin-bar">${buttons.join('')}</div>`;
 }
 
@@ -264,5 +266,16 @@ export async function startEventFromPoll() {
     showToast('Termin übernommen – richte das Event ein und speichere es.', 'info');
 }
 
-// Temporary bridge for inline handlers; D-01 replaces them with data-click and removes it
-Object.assign(window, { togglePollRoles, showPollEditor, addPollOptionRow, savePoll, showPollAnnounceDialog, sendPollAnnouncement, closePollFromUi, deletePollFromUi, showPollDecideDialog, startEventFromPoll });
+registerActions({
+    showPollEditor: (el) => showPollEditor(el.dataset.pollId),
+    addPollOptionRow: () => addPollOptionRow(),
+    removePollOptionRow: (el) => el.closest('.poll-option-row').remove(),
+    togglePollRoles: () => togglePollRoles(),
+    savePoll: () => savePoll(),
+    showPollAnnounceDialog: (el) => showPollAnnounceDialog(el.dataset.pollId),
+    sendPollAnnouncement: () => sendPollAnnouncement(),
+    closePollFromUi: (el) => closePollFromUi(el.dataset.pollId),
+    deletePollFromUi: (el) => deletePollFromUi(el.dataset.pollId),
+    showPollDecideDialog: (el) => showPollDecideDialog(el.dataset.pollId),
+    startEventFromPoll: () => startEventFromPoll()
+});

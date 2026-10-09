@@ -421,7 +421,7 @@
             <h2><i class="bi bi-ui-checks-grid me-2"></i>Abstimmungen</h2>
             <p class="text-secondary mb-0">Stimme ab, wann die nächsten Events stattfinden.</p>
           </div>
-          <button class="btn btn-accent" id="polls-create-btn" style="display:none;" onclick="showPollEditor()">
+          <button class="btn btn-accent" id="polls-create-btn" style="display:none;" data-click="showPollEditor">
             <i class="bi bi-plus-circle me-1"></i>Neue Abstimmung
           </button>
         </div>
@@ -1634,7 +1634,7 @@
           </div>
           <label class="form-label">Termine</label>
           <div id="poll-option-rows" class="poll-option-rows"></div>
-          <button type="button" class="btn btn-sm btn-outline-light mt-2" onclick="addPollOptionRow()"><i class="bi bi-plus-lg me-1"></i>Termin</button>
+          <button type="button" class="btn btn-sm btn-outline-light mt-2" data-click="addPollOptionRow"><i class="bi bi-plus-lg me-1"></i>Termin</button>
           <small class="text-muted d-block mt-1">2–10 Termine. Termine mit Stimmen können nicht mehr entfernt oder verschoben werden.</small>
           <div class="row g-3 mt-2">
             <div class="col-md-6">
@@ -1643,7 +1643,7 @@
             </div>
             <div class="col-md-6">
               <label class="form-label" for="poll-access">Wer darf abstimmen?</label>
-              <select class="form-select" id="poll-access" onchange="togglePollRoles()">
+              <select class="form-select" id="poll-access" data-change="togglePollRoles">
                 <option value="open">Alle Mitglieder</option>
                 <option value="role-required">Nur bestimmte Rollen</option>
               </select>
@@ -1677,7 +1677,7 @@
         </div>
         <div class="modal-footer border-0">
           <button type="button" class="btn btn-outline-light" data-bs-dismiss="modal">Abbrechen</button>
-          <button type="button" class="btn btn-accent" onclick="savePoll()">Speichern</button>
+          <button type="button" class="btn btn-accent" data-click="savePoll">Speichern</button>
         </div>
       </div>
     </div>
@@ -1704,7 +1704,7 @@
         </div>
         <div class="modal-footer border-0">
           <button type="button" class="btn btn-outline-light" data-bs-dismiss="modal">Abbrechen</button>
-          <button type="button" class="btn btn-accent" onclick="sendPollAnnouncement()">Posten</button>
+          <button type="button" class="btn btn-accent" data-click="sendPollAnnouncement">Posten</button>
         </div>
       </div>
     </div>
@@ -1724,7 +1724,7 @@
         </div>
         <div class="modal-footer border-0">
           <button type="button" class="btn btn-outline-light" data-bs-dismiss="modal">Abbrechen</button>
-          <button type="button" class="btn btn-accent" onclick="startEventFromPoll()">Weiter zum Event</button>
+          <button type="button" class="btn btn-accent" data-click="startEventFromPoll">Weiter zum Event</button>
         </div>
       </div>
     </div>

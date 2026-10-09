@@ -3,6 +3,7 @@
  */
 import { state } from '../core/state.js';
 import { navigateTo } from '../core/router.js';
+import { registerActions } from '../core/actions.js';
 import { escapeHtml, renderMarkdownSafe, showToast } from '../core/ui.js';
 import { renderRosterAvatar } from '../events/slots.js';
 import { renderPollAdminBar } from './admin.js';
@@ -178,7 +179,7 @@ export function renderPollOptionRow(poll, entry) {
     const toggle = poll.isOpen && poll.canVote ? `
         <div class="btn-group btn-group-sm poll-vote-toggle" role="group" aria-label="Deine Stimme">
             ${['yes', 'maybe', 'no'].map(answer => `
-                <button type="button" class="btn ${myState === answer ? 'btn-accent' : 'btn-outline-light'}" data-option-id="${escapeHtml(entry.optionId)}" data-state="${answer}" aria-pressed="${myState === answer}" onclick="setPollVote(this.dataset.optionId, this.dataset.state)">${renderPollAnswerIcon(answer, false)}<span class="ms-1">${escapeHtml(labels[answer])}</span></button>`).join('')}
+                <button type="button" class="btn ${myState === answer ? 'btn-accent' : 'btn-outline-light'}" data-option-id="${escapeHtml(entry.optionId)}" data-state="${answer}" aria-pressed="${myState === answer}" data-click="setPollVote">${renderPollAnswerIcon(answer, false)}<span class="ms-1">${escapeHtml(labels[answer])}</span></button>`).join('')}
         </div>` : '';
     let marker = '';
     if (isWinner) marker = '<i class="bi bi-calendar-check poll-icon-yes me-1" title="Gewählter Termin"></i>';
@@ -230,5 +231,4 @@ export async function setPollVote(optionId, answer) {
     }
 }
 
-// Temporary bridge for inline handlers; D-01 replaces them with data-click and removes it
-Object.assign(window, { setPollVote });
+registerActions({ setPollVote: (el) => setPollVote(el.dataset.optionId, el.dataset.state) });

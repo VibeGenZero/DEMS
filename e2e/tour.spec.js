@@ -85,3 +85,15 @@ test('logging out leads back to the login page', async ({ page }) => {
     await expect(page.locator('#login-section')).toBeVisible();
     expect(errors).toEqual([]);
 });
+
+test('the raider votes in the open poll', async ({ page }) => {
+    const errors = watchErrors(page);
+    await loginAs(page, 'raider');
+    await navigate(page, 'polls');
+    await page.locator('#polls-open .poll-card').first().click();
+    await expect(page.locator('#poll-detail-section')).toBeVisible();
+    const yes = page.locator('#poll-detail [data-click="setPollVote"][data-state="yes"]').first();
+    await yes.click();
+    await expect(page.locator('#poll-detail [data-click="setPollVote"][data-state="yes"]').first()).toHaveAttribute('aria-pressed', 'true');
+    expect(errors).toEqual([]);
+});
