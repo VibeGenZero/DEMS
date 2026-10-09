@@ -10,7 +10,7 @@ see_also: [maintenance-mode, auth-session]
 ---
 # middleware/ — auth guards, maintenance gates, validators
 
-> TL;DR: Three small modules. `auth.js` exports `requireAuth` / `requireAdmin` (session-based, 401/403 JSON) plus the login helpers `createCsrfToken` and `startUserSession`. `maintenance.js` exports `isRegistrationBlocked`, `getLoginBlockReason` and the `checkRegistrationAllowed` middleware (503). `validators.js` exports `validateEvent`, `validateRegStatus`, `validateBotMessages` (400 with German messages).
+> TL;DR: Three small modules. `auth.js` exports `requireAuth` / `requireAdmin` (session-based, 401/403 JSON) plus `safeEqual` (constant-time secret compare) and the login helpers `createCsrfToken` and `startUserSession`. `maintenance.js` exports `isRegistrationBlocked`, `getLoginBlockReason` and the `checkRegistrationAllowed` middleware (503). `validators.js` exports `validateEvent`, `validateRegStatus`, `validateBotMessages` (400 with German messages).
 
 ## middleware/auth.js
 
@@ -18,6 +18,7 @@ see_also: [maintenance-mode, auth-session]
 |---|---|
 | `requireAuth` | 401 `{ error: 'Nicht eingeloggt. ...' }` without `req.session.user` |
 | `requireAdmin` | 401 without user, 403 unless `req.session.user.isAdmin` |
+| `safeEqual(submitted, expected)` | SHA-256 of both + `crypto.timingSafeEqual`; false for non-strings and an empty expected secret; used for `ADMIN_RESET_PASSWORD` |
 | `createCsrfToken()` | 32 random bytes hex; used by the CSRF middleware in `server.js` and by `startUserSession` |
 | `startUserSession(req, user)` | `req.session.regenerate` (new id), then `user` + a fresh CSRF token, saved; used by `routes/auth.js` and `dev/devAuth.js` |
 
@@ -37,7 +38,7 @@ The Discord registration path calls `isRegistrationBlocked()` directly (`checkRe
 
 | Export | Rules |
 |---|---|
-| `validateEvent` | `title` required, ≤200 chars; `maxParticipants` integer ≥0; `accessMode` ∈ `open`, `role-required`; `approvalMode` ∈ `manual`, `instant`; `status` ∈ `draft`, `active`, `archived`, `cancelled`; `description` ≤5000 chars |
+| `validateEvent` | `title` required, ≤200 chars; `maxParticipants` integer ≥0; `accessMode` ∈ `open`, `role-required`; `approvalMode` ∈ `manual`, `instant`; `status` ∈ `draft`, `active`, `archived`, `cancelled`; `description` ≤5000 chars; `bannerUrl` empty or an http(s) URL ≤2000 chars; `accentColor` empty or `#rgb`/`#rrggbb` |
 | `validateRegStatus` | `status` ∈ `accepted`, `rejected`, `waitlisted` |
 | `validateBotMessages` | `registration`, `accepted`, `rejected` ≤2000 chars each |
 
@@ -45,4 +46,4 @@ Validation is hand-written (no library). Errors are joined into one German `erro
 
 ## Gotchas
 
-- Validators do not check `bannerUrl`, `accentColor`, `formFields` or dates (audit M-08/M-09) — values are stored as sent.
+- Validators do not check `formFields` or dates — those are stored as sent.

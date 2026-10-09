@@ -13,6 +13,7 @@ const { db, collection, doc, getDoc, getDocs, addDoc, setDoc, updateDoc, deleteD
 const { debugLog } = require('./utils/debugLog');
 const { buildEventUrl, buildPollUrl } = require('./utils/eventUrl');
 const { buildBotInviteUrl } = require('./utils/botPermissions');
+const { parseTemplate } = require('./utils/template');
 const { normalizeReminderHours, findDueReminders } = require('./utils/reminders');
 const { isRegistrationBlocked } = require('./middleware/maintenance');
 const {
@@ -2096,17 +2097,6 @@ async function getPublicGuildChannels(guildId) {
         console.error('Failed to get public guild channels:', err.message);
         return [];
     }
-}
-
-/**
- * Replace template variables in bot messages
- */
-function parseTemplate(template, variables) {
-    let result = template;
-    for (const [key, value] of Object.entries(variables)) {
-        result = result.replace(new RegExp(`\\{${key}\\}`, 'g'), value);
-    }
-    return result;
 }
 
 /**

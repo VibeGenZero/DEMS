@@ -31,6 +31,20 @@ function requireAdmin(req, res, next) {
 }
 
 /**
+ * Compare a submitted secret with the configured one in constant time: both
+ * are hashed first, so neither length nor content leak through timing.
+ *
+ * @param {*} submitted -> Value from the request.
+ * @param {*} expected -> Configured secret.
+ * @returns {boolean} -> True only for equal, non-empty strings.
+ */
+function safeEqual(submitted, expected) {
+    if (typeof submitted !== 'string' || typeof expected !== 'string' || !expected) return false;
+    const digest = (text) => crypto.createHash('sha256').update(text).digest();
+    return crypto.timingSafeEqual(digest(submitted), digest(expected));
+}
+
+/**
  * New CSRF token for a session (double-submit check in server.js).
  *
  * @returns {string} -> 64 hex characters.
@@ -62,4 +76,4 @@ function startUserSession(req, user) {
     });
 }
 
-module.exports = { requireAuth, requireAdmin, createCsrfToken, startUserSession };
+module.exports = { requireAuth, requireAdmin, safeEqual, createCsrfToken, startUserSession };

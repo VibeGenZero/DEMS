@@ -267,6 +267,54 @@ test('draft and archived events exist only for admins', async () => {
     }
 });
 
+test('wrong check-in codes are limited per member', async () => {
+    const raider = await loginAs('raider');
+    const tryCode = (client) => client.send('POST', `/api/events/${EVENT_ID.RUNNING}/checkin`, { code: '000000' });
+    for (let attempt = 1; attempt <= 10; attempt++) {
+        assert.equal((await tryCode(raider)).status, 400, `attempt ${attempt}`);
+    }
+    const blocked = await tryCode(raider);
+    assert.equal(blocked.status, 429);
+    assert.equal((await blocked.json()).error, 'Zu viele Check-in-Versuche. Bitte warte ein paar Minuten.');
+
+    // Counted per member, not for everyone behind the same address
+    assert.equal((await tryCode(await loginAs('member'))).status, 400);
+});
+
+test('a generated check-in code has six digits', async () => {
+    const admin = await loginAs('admin');
+    const res = await admin.send('POST', `/api/admin/events/${EVENT_ID.FULL}/generate-checkin`);
+    assert.match((await res.json()).code, /^[1-9]\d{5}$/);
+});
+
+test('the CSV export defuses formulas in cells', async () => {
+    const raider = await loginAs('raider');
+    const formAnswers = { 'Ingame-Name': '=HYPERLINK("http://evil.example","Klick")', 'Bevorzugte Rolle': 'Tank', 'Regeln gelesen': true };
+    const registration = await raider.send('POST', `/api/events/${EVENT_ID.FORM}/register`, { formAnswers });
+    assert.equal(registration.status, 200, await registration.clone().text());
+
+    const admin = await loginAs('admin');
+    const csv = await (await admin.request(`/api/admin/events/${EVENT_ID.FORM}/registrations/export`)).text();
+    assert.ok(csv.includes('"\'=HYPERLINK(""http://evil.example"",""Klick"")"'), csv);
+    assert.doesNotMatch(csv, /(^|,)"?=/m);
+});
+
+test('events with an unsafe banner URL or colour are refused', async () => {
+    const admin = await loginAs('admin');
+    const create = (fields) => admin.send('POST', '/api/admin/events', { title: 'Härtungstest', status: 'draft', ...fields });
+
+    for (const [fields, message] of [
+        [{ bannerUrl: 'javascript:alert(1)' }, 'Banner-URL muss mit http:// oder https:// beginnen.'],
+        [{ accentColor: 'red;background:url(https://evil.example)' }, 'Akzentfarbe muss ein Hex-Farbwert wie #8b5cf6 sein.']
+    ]) {
+        const res = await create(fields);
+        assert.equal(res.status, 400, JSON.stringify(fields));
+        assert.equal((await res.json()).error, message);
+    }
+    assert.equal((await create({ bannerUrl: 'https://example.com/banner.png', accentColor: '#8b5cf6' })).status, 200);
+    assert.equal((await create({ bannerUrl: '', accentColor: '' })).status, 200);
+});
+
 test('the rate limiters do not get in the way during development', async () => {
     const client = createClient(server.baseUrl);
     for (let i = 0; i < 40; i++) {
@@ -577,7 +625,8 @@ test('the export lists slot and wish of every registration', async () => {
     await (await loginAs('raider')).send('POST', `/api/events/${event.id}/register`, { slotId: event.slots[0].id });
 
     const csv = await (await admin.request(`/api/admin/events/${event.id}/registrations/export`)).text();
-    assert.ok(csv.split('\n')[0].includes('Slot,Wunschrolle'));
+    // Every cell is quoted, headers included (form field labels are admin input)
+    assert.ok(csv.split('\n')[0].includes('"Slot","Wunschrolle"'));
     assert.ok(csv.includes('"🛡️ Tank","🛡️ Tank"'));
 });
 

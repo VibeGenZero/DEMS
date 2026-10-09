@@ -3,7 +3,7 @@ id: utils
 title: utils/ — domain helpers
 type: module
 tags: [utils, registration, form-fields, waitlist, audit-log, profile, debug]
-sources: [utils/registrationService.js, utils/formFields.js, utils/eventUtils.js, utils/eventUrl.js, utils/userProfile.js, utils/avatar.js, utils/botPermissions.js, utils/sessionStore.js, utils/reminders.js, utils/debugLog.js, utils/capacity.js, utils/slotService.js, utils/eventLock.js, utils/announcementRefresh.js, utils/pollService.js, utils/pollStore.js]
+sources: [utils/registrationService.js, utils/formFields.js, utils/eventUtils.js, utils/eventUrl.js, utils/userProfile.js, utils/avatar.js, utils/botPermissions.js, utils/csv.js, utils/template.js, utils/sessionStore.js, utils/reminders.js, utils/debugLog.js, utils/capacity.js, utils/slotService.js, utils/eventLock.js, utils/announcementRefresh.js, utils/pollService.js, utils/pollStore.js]
 part_of: [architecture]
 depends_on: [data-layer, bot]
 see_also: [registration-flow, form-fields, role-slots]
@@ -70,6 +70,10 @@ Pure, no database: `avatarUrlOf(user)` → `session.user.avatar` (already a comp
 ## utils/botPermissions.js
 
 `BOT_PERMISSIONS` (`{ flag, reason }` per Discord permission the bot needs, incl. everything it grants in channel overwrites) and `buildBotInviteUrl(clientId)` → OAuth2 URL with scopes `bot applications.commands`; used by `logBotInviteUrl` in `bot.js`. Pure, no database.
+
+## utils/csv.js and utils/template.js
+
+Pure, no database. `csvCell(value)` → one quoted CSV cell; values starting with `= + - @`, tab or CR get a leading apostrophe (CSV injection). `parseTemplate(template, vars)` → `{name}` placeholders replaced via split/join, so values stay literal (`$&` in a name) and `.` in a name is no wildcard; `bot.js` re-exports it.
 
 ## utils/userProfile.js
 
