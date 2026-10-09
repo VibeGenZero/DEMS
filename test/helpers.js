@@ -302,7 +302,7 @@ function createFakeElement(registry, id = '', display = '') {
  * @param {Object<string, *>} routes -> URL → JSON body or () => body.
  * @param {Object} [options] -> Harness options.
  * @param {Object<string, string>} [options.storage] -> Initial localStorage entries.
- * @returns {Object} -> `{ app, element, toasts, requests, location, fire }`: app exposes showEventDetail, showProfileSection, logout, getErrorMessage, editEvent, loadAdminEvents, showEventsSection, fetchDiscordEvents, markdownPreview, getCurrentUser, setCurrentUser and setCsrfToken, element(id) returns the fake element or null, toasts lists the shown messages, requests the fetch calls `{ url, method, headers }`, location is window.location, fire(type) runs the recorded document listeners.
+ * @returns {Object} -> `{ app, element, toasts, requests, location, fire }`: app exposes showEventDetail, showProfileSection, logout, getErrorMessage, editEvent, loadAdminEvents, showEventsSection, fetchDiscordEvents, markdownPreview, searchGuests, addGuestToList, showRegistrations, loadCategories, handleLocationInput, getCurrentUser, setCurrentUser and setCsrfToken, element(id) returns the fake element or null, toasts lists the shown messages, requests the fetch calls `{ url, method, headers }`, location is window.location, fire(type) runs the recorded document listeners.
  */
 function loadFrontendApp(routes, { storage = {} } = {}) {
     const registry = new Map();
@@ -368,7 +368,7 @@ function loadFrontendApp(routes, { storage = {} } = {}) {
     context.window = context;
     const source = fs.readFileSync(path.join(REPO_ROOT, 'public', 'js', 'app.js'), 'utf8');
     vm.runInContext(`${source}
-;globalThis.__app = { showEventDetail, showProfileSection, logout, getErrorMessage, editEvent, loadAdminEvents, showEventsSection, fetchDiscordEvents, markdownPreview, getCurrentUser: () => currentUser, setCurrentUser: (user) => { currentUser = user; }, setCsrfToken: (token) => { csrfToken = token; } };`, context, { filename: 'app.js' });
+;globalThis.__app = { showEventDetail, showProfileSection, logout, getErrorMessage, editEvent, loadAdminEvents, showEventsSection, fetchDiscordEvents, markdownPreview, searchGuests, addGuestToList, showRegistrations, loadCategories, handleLocationInput, getCurrentUser: () => currentUser, setCurrentUser: (user) => { currentUser = user; }, setCsrfToken: (token) => { csrfToken = token; } };`, context, { filename: 'app.js' });
     const fire = (type) => listeners.filter(entry => entry.type === type).forEach(entry => entry.listener({ type }));
     return { app: context.__app, element: (id) => registry.get(id) || null, toasts, requests, location: context.location, fire };
 }
