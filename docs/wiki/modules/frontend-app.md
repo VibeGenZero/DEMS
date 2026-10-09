@@ -16,7 +16,8 @@ see_also: [frontend-markup, api-index]
 
 1. `DOMContentLoaded` #1 → boot animation (`runBootAnimation`, GSAP) or skip if `localStorage.dems_boot_ts` is <24 h old → `finishLoading()`.
 2. `finishLoading()` → `fetchCSRFToken()` → `loadServerInfo()` (server name, guild id, `window.DEBUG_MODE`) → show `?error=` message → `checkAuth()` → `checkMaintenanceStatus()` → `restorePendingRoute()` → `handleRoute()` + `hashchange` listener.
-3. `DOMContentLoaded` #2 ("Initialization") → `checkUpdates()` and a second `/auth/me` fetch (buggy, see gotchas).
+3. `DOMContentLoaded` #2 ("Initialization") → `checkUpdates()` only. Login state comes from `checkAuth()` alone: `/auth/me` clears `isNewUser` on its first read, so a second request at startup would swallow the welcome dialog.
+4. `DOMContentLoaded` #3 → click listener of `#info-show-data-btn` (`showUserData`).
 
 ## Router (`handleRoute`)
 
@@ -40,7 +41,7 @@ Logged-out users see `#login-section` for every route except `info`. An event ro
 | Section | Functions |
 |---|---|
 | Boot | `createParticles`, `runBootAnimation`, `fetchCSRFToken`, `loadServerInfo`, `updateServerNameInUI`, `finishLoading`, `getErrorMessage` |
-| Auth | `logout` (`POST /auth/logout` with CSRF token, then `/`; toast on failure), `checkAuth`, `showLoggedIn`, `showLoggedOut`, `showUserData` (declared twice!) |
+| Auth | `logout` (`POST /auth/logout` with CSRF token, then `/`; toast on failure), `checkAuth`, `showLoggedIn`, `showLoggedOut`, `showUserData` (info page: profile + registrations from `/auth/me` and `/api/user/registrations`) |
 | Router | `handleRoute`, `navigateTo`, `rememberPendingRoute`, `restorePendingRoute` |
 | Countdown | `formatCountdown`, `renderCountdownHTML`, `startCountdown` |
 | Event list | `showEventsSection`, `loadCategories`, `filterByCategory`, `debouncedSearch`, `switchView`, `renderCalendar`, `toggleSeriesDates`, `getParticipantWarningBadge` |
@@ -83,5 +84,3 @@ Logged-out users see `#login-section` for every route except `info`. An event ro
 
 ## Gotchas
 
-- `showUserData` is declared twice; the later `async` version wins (function hoisting).
-- The second `DOMContentLoaded` handler calls `setupEventListeners()`, which does not exist → its `.catch` runs `showLoggedOut()`; this can race with `checkAuth()`.

@@ -296,23 +296,35 @@ function createFakeElement(registry, id = '', display = '') {
  * sent as JSON body, a function may return a value or a promise of one,
  * unknown URLs answer 404; every call is recorded in `requests`. Toasts are
  * recorded instead of shown, so a test can assert that no error was swallowed
- * by a catch block.
+ * by a catch block. document listeners are recorded; fire(type) runs them,
+ * e.g. fire('DOMContentLoaded') for the whole startup.
  *
  * @param {Object<string, *>} routes -> URL → JSON body or () => body.
- * @returns {Object} -> `{ app, element, toasts, requests, location }`: app exposes showEventDetail, showProfileSection, logout, getErrorMessage, editEvent, loadAdminEvents, setCurrentUser and setCsrfToken, element(id) returns the fake element or null, toasts lists the shown messages, requests the fetch calls `{ url, method, headers }`, location is window.location.
+ * @param {Object} [options] -> Harness options.
+ * @param {Object<string, string>} [options.storage] -> Initial localStorage entries.
+ * @returns {Object} -> `{ app, element, toasts, requests, location, fire }`: app exposes showEventDetail, showProfileSection, logout, getErrorMessage, editEvent, loadAdminEvents, getCurrentUser, setCurrentUser and setCsrfToken, element(id) returns the fake element or null, toasts lists the shown messages, requests the fetch calls `{ url, method, headers }`, location is window.location, fire(type) runs the recorded document listeners.
  */
-function loadFrontendApp(routes) {
+function loadFrontendApp(routes, { storage = {} } = {}) {
     const registry = new Map();
     registerHtmlIds(registry, fs.readFileSync(path.join(REPO_ROOT, 'public', 'index.html'), 'utf8'));
     const toasts = [];
     const requests = [];
     const container = createFakeElement(registry);
+    const listeners = [];
     const document = {
         getElementById: (id) => registry.get(id) || null,
         createElement: () => createFakeElement(registry),
         querySelector: () => container,
         querySelectorAll: () => [],
-        addEventListener() {}
+        addEventListener: (type, listener) => listeners.push({ type, listener })
+    };
+    const createStorage = (initial) => {
+        const items = new Map(Object.entries(initial));
+        return {
+            getItem: (key) => (items.has(key) ? items.get(key) : null),
+            setItem: (key, value) => items.set(key, String(value)),
+            removeItem: (key) => items.delete(key)
+        };
     };
     const fetch = async (url, options = {}) => {
         requests.push({ url, method: options.method || 'GET', headers: options.headers || {} });
@@ -324,8 +336,12 @@ function loadFrontendApp(routes) {
     const noop = () => {};
     const context = vm.createContext({
         document, fetch, console,
-        location: { hash: '' },
+        location: { hash: '', search: '' },
         history: { replaceState: noop, pushState: noop },
+        addEventListener: noop,
+        localStorage: createStorage(storage),
+        sessionStorage: createStorage({}),
+        URLSearchParams,
         setTimeout: noop, clearTimeout: noop, setInterval: () => 0, clearInterval: noop,
         gsap: { from: noop, to: noop, fromTo: noop, set: noop },
         marked: { parse: (text) => text },
@@ -335,7 +351,12 @@ function loadFrontendApp(routes) {
                 constructor(toastEl) { this.toastEl = toastEl; }
                 show() { toasts.push(registry.get('toast-message').textContent); }
             },
-            Modal: { getOrCreateInstance: () => ({ show: noop, hide: noop }), getInstance: () => null }
+            Modal: class {
+                show() {}
+                hide() {}
+                static getOrCreateInstance() { return { show: noop, hide: noop }; }
+                static getInstance() { return null; }
+            }
         },
         // Event wizard widgets
         EasyMDE: class {
@@ -347,8 +368,9 @@ function loadFrontendApp(routes) {
     context.window = context;
     const source = fs.readFileSync(path.join(REPO_ROOT, 'public', 'js', 'app.js'), 'utf8');
     vm.runInContext(`${source}
-;globalThis.__app = { showEventDetail, showProfileSection, logout, getErrorMessage, editEvent, loadAdminEvents, setCurrentUser: (user) => { currentUser = user; }, setCsrfToken: (token) => { csrfToken = token; } };`, context, { filename: 'app.js' });
-    return { app: context.__app, element: (id) => registry.get(id) || null, toasts, requests, location: context.location };
+;globalThis.__app = { showEventDetail, showProfileSection, logout, getErrorMessage, editEvent, loadAdminEvents, getCurrentUser: () => currentUser, setCurrentUser: (user) => { currentUser = user; }, setCsrfToken: (token) => { csrfToken = token; } };`, context, { filename: 'app.js' });
+    const fire = (type) => listeners.filter(entry => entry.type === type).forEach(entry => entry.listener({ type }));
+    return { app: context.__app, element: (id) => registry.get(id) || null, toasts, requests, location: context.location, fire };
 }
 
 module.exports = {

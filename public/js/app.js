@@ -315,20 +315,6 @@ function showLoggedOut() {
     document.getElementById('user-name').textContent = '';
 }
 
-function showUserData() {
-    if (!currentUser) {
-        showToast('Bitte melde dich zuerst an.', 'warning');
-        return;
-    }
-
-    const content = document.getElementById('user-data-content');
-    // Format JSON with 2-space indentation
-    content.textContent = JSON.stringify(currentUser, null, 2);
-
-    const modal = new bootstrap.Modal(document.getElementById('userDataModal'));
-    modal.show();
-}
-
 // ─── SPA Router ──────────────────────────────────
 // Discord messages sent before v2.5.1 link to #events/<id> instead of #event/<id>
 const LEGACY_EVENT_ROUTE = /^events\/(.+)$/;
@@ -2760,29 +2746,10 @@ function closeUpdatesModal() {
 }
 
 // ─── Initialization ──────────────────────────────
+// Login state and routing belong to finishLoading() -> checkAuth(); a second
+// /auth/me request here raced with it and swallowed the isNewUser flag
 document.addEventListener('DOMContentLoaded', () => {
     checkUpdates();
-
-    // Check session
-    fetch('/auth/me')
-        .then(res => {
-            if (res.ok) return res.json();
-            throw new Error('Not logged in');
-        })
-        .then(user => {
-            currentUser = user;
-            showLoggedIn();
-
-            const hash = window.location.hash.slice(1) || 'events';
-            navigateTo(hash);
-
-            // Setup listeners
-            setupEventListeners();
-        })
-        .catch(() => {
-            currentUser = null;
-            showLoggedOut();
-        });
 });
 
 // ─── Profile Section ─────────────────────────────
