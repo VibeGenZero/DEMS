@@ -25,7 +25,7 @@ Line counts as of 2026-10-02 (approximate; they drift).
 | `routes/admin.js` | ~1180 | admin CRUD, registrations, Discord sync, bot control, maintenance | grep `router.` then read one handler | [routes-admin](../modules/routes-admin.md) |
 | `routes/user.js` | ~390 | profile, badges, settings, guest search, account deletion | read handler you need | [routes-user](../modules/routes-user.md) |
 | `middleware/*.js` | ~30–90 each | `auth`, `maintenance`, `validators` | read whole | [middleware](../modules/middleware.md) |
-| `utils/*.js` | ~25–320 each | registration service, form fields, waitlist + audit, profiles, session store, debug log | read whole | [utils](../modules/utils.md) |
+| `utils/*.js` | ~25–320 each | registration service, form fields, waitlist + audit, profiles, session store, reminder rules, debug log | read whole | [utils](../modules/utils.md) |
 | `dev/*.js` | ~15–460 | dev mock mode (switch, mock guild/bot, persona login, seed) | read whole, `seedData.js` only when changing seed data | [dev-mock-mode](../modules/dev-mock-mode.md) |
 | `test/*.test.js` + `test/helpers.js` | ~30–200 | `node:test` suites | read `helpers.js` first | [testing](../ops/testing.md) |
 | `scripts/wiki-graph.js` | ~250 | builds/validates this wiki's `graph.json` | read whole | [index](../index.md) |

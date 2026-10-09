@@ -9,6 +9,7 @@ const { requireAuth, requireAdmin } = require('../middleware/auth');
 const { validateEvent, validateRegStatus, validateBotMessages } = require('../middleware/validators');
 const { sendDM, assignRole, parseTemplate, getGuildRoles, sendChannelMessage, buildEventEmbed, buildEventComponents, getGuildScheduledEvents, createEventChannels, deleteEventChannels, createScheduledEvent, getBotStatus, getBotSettings, saveBotSettings, getRunningEvents, getGuildChannels, buildPollEmbed, buildPollComponents } = require('../bot');
 const { promoteFromWaitlist, addAuditLog, loadEventRoster, loadEventRegistrations, saveEventWithSlots } = require('../utils/eventUtils');
+const { mergeReminderHours } = require('../utils/reminders');
 const { getSlots, findSlot, formatSlotLabel, normalizeSlots, sumCapacity, resolveAcceptanceSlot } = require('../utils/slotService');
 const { normalizePollInput, tallyPoll } = require('../utils/pollService');
 const {
@@ -170,7 +171,7 @@ router.post('/events', validateEvent, async (req, res) => {
             bannerUrl: bannerUrl || '',
             category: category || '',
             status: status || 'active',
-            reminderHours: Array.isArray(reminderHours) ? reminderHours : (reminderHours ? [{ hours: parseInt(reminderHours) || 0, sent: false }] : []),
+            reminderHours: mergeReminderHours(reminderHours, null, startDate || ''),
             checkinMessage: checkinMessage || '',
             customBotMessages: customBotMessages || {},
             autoCreateChannels: !!autoCreateChannels,
@@ -287,7 +288,8 @@ router.put('/events/:id', validateEvent, async (req, res) => {
             bannerUrl: bannerUrl || '',
             category: category || '',
             status: status || 'active',
-            reminderHours: Array.isArray(reminderHours) ? reminderHours : (reminderHours ? [{ hours: parseInt(reminderHours) || 0, sent: false }] : []),
+            // Same start -> reminders already sent stay sent, editing must not send them again
+            reminderHours: mergeReminderHours(reminderHours, oldEvent, startDate || ''),
             checkinMessage: checkinMessage || '',
             customBotMessages: customBotMessages || {},
             autoCreateChannels: !!autoCreateChannels,
@@ -564,6 +566,8 @@ router.post('/events/:id/duplicate', async (req, res) => {
             createdBy: req.session.user.id,
             checkinCode: '',  // Reset check-in code
             announcements: [],  // Each copy is announced on its own
+            reminderHours: mergeReminderHours(original.reminderHours, null, original.startDate),  // nothing sent for the copy yet
+            eventStartNotificationSent: false,
         };
         // Remove fields that shouldn't be copied
         delete duplicate.updatedAt;

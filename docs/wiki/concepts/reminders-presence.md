@@ -3,21 +3,24 @@ id: reminders-presence
 title: Reminders, start notifications and bot presence
 type: concept
 tags: [reminders, scheduler, presence, activity, bot-settings, bot-control]
-sources: [bot.js, routes/admin.js, server.js]
+sources: [bot.js, utils/reminders.js, routes/admin.js, server.js]
 depends_on: [bot, data-model]
 see_also: [event-lifecycle, discord-integration]
 ---
 # Reminders, start notifications and bot presence
 
-> TL;DR: `startReminderScheduler()` runs `checkReminders()` every 5 minutes: for each active event it DMs accepted participants when a configured reminder time (`reminderHours[].hours` before start) is reached, and once when the event starts. Bot presence (status + activity text with live variables) comes from `botSettings/config` and is applied on ready, on save, and every 5 minutes if `autoUpdatePresence` is on.
+> TL;DR: `startReminderScheduler()` runs `checkReminders()` every 5 minutes: for each active event it DMs accepted participants when a configured reminder time (`reminderHours[].hours` before start) is reached, and once when the event starts. Duplicates are prevented only by flags stored in the event (`reminderHours[].sent`, `eventStartNotificationSent`), written before the DMs go out. Bot presence (status + activity text with live variables) comes from `botSettings/config` and is applied on ready, on save, and every 5 minutes if `autoUpdatePresence` is on.
 
 ## Reminder scheduler (`checkReminders`)
 
 - Interval: 5 min (`setInterval`, first run 5 min after start). Started by `server.js`; `applyBotSettings` stops/starts it according to `reminderEnabled`.
 - For every event with `status === 'active'` and `startDate`:
-  - `reminderHours` (array of `{ hours, sent }`; a legacy number is converted) → when `now >= start - hours` and `now < start`, DM all `accepted` registrations: "⏰ Erinnerung! ...". Marks `sent: true` in the event.
-  - Start notification: within 5 minutes after `startDate`, if `eventStartNotificationSent` is false → DM accepted participants, then set the flag.
-- Duplicate protection is an in-memory `sentReminders` map (cleared when the event has started).
+  - `findDueReminders(event, now)` (`utils/reminders.js`): reminders with `sent !== true`, `now >= start - hours` and `now < start`. If any are due, they are stored as `sent: true` first (a legacy number becomes `[{ hours, sent }]` on the way), then **one** DM goes to all `accepted` registrations: "⏰ Erinnerung! ..." — several reminders due at once (after a downtime) do not send several DMs.
+  - Start notification: within 5 minutes after `startDate`, if `eventStartNotificationSent` is false → set the flag, then DM accepted participants.
+- Duplicate protection lives only in the database: a restart, or a crash while sending, never repeats a DM (at most once; a crash mid-send can leave some participants without the DM).
+- Event form: the text field `#event-reminder` takes several hours ("24, 1"; comma, semicolon or space; empty = none). `editEvent` fills it with `reminderHoursOf(event.reminderHours).join(', ')`, `saveEvent` sends the text, the server normalizes it; the admin card shows a "24h · 1h" badge.
+- `checkReminders({ now, send })` takes the time and the DM function for tests (`test/reminderScheduler.test.js`); the scheduler calls it without arguments.
+- Saving an event (`POST`/`PUT /api/admin/events`) stores `mergeReminderHours(...)`: a reminder that was already sent stays sent while `startDate` is unchanged, a new start time makes every reminder due again. Duplicating an event resets `sent` and `eventStartNotificationSent`.
 - Times are formatted with `TIMEZONE` (default `Europe/Berlin`).
 
 ## Presence (`applyBotSettings`)
@@ -37,6 +40,5 @@ see_also: [event-lifecycle, discord-integration]
 
 ## Gotchas
 
-- `checkReminders` does not read the stored `reminder.sent` flag; after a restart inside a reminder window the reminder is sent again.
 - `dmNotifications`, `eventStartNotifications`, `autoChannelCreation`, `welcomeMessage`, `announceChannel` are saved but not evaluated anywhere.
 - In dev mock mode reminder DMs are not simulated (internal call to the real `sendDM`).

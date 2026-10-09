@@ -22,14 +22,14 @@ see_also: [event-lifecycle, maintenance-mode, discord-integration, api-index]
 | GET | `/all-events` | all events incl. draft/archived, `orderBy('createdAt','desc')` | — |
 | GET | `/import/discord-events` | Discord scheduled events (`getGuildScheduledEvents`) | — |
 | POST | `/events` | `validateEvent`; creates one event or, with `recurring` + `recurringUntil`, a series (`seriesId`, weekly/biweekly/monthly); may `createEventChannels`; `slots` via `normalizeSlots` (slot events: `maxParticipants = Σ capacity`, `allowGuests = false`); optional `fromPoll: { pollId, optionId }` (only with status `active`) → `decidePollWithEvent` checks, creates (first instance of a series decides) and decides under the poll lock, event gets `sourcePollId` | `CREATE_EVENT`, `DECIDE_POLL` |
-| PUT | `/events/:id` | `validateEvent`; full update; creates/deletes channels when `autoCreateChannels`/status changes; slots validated and written by `saveEventWithSlots` under the event lock; afterwards promotes the waitlist and refreshes announcements | `UPDATE_EVENT` |
+| PUT | `/events/:id` | `validateEvent`; full update; creates/deletes channels when `autoCreateChannels`/status changes; slots validated and written by `saveEventWithSlots` under the event lock; afterwards promotes the waitlist and refreshes announcements; `reminderHours` via `mergeReminderHours` (sent reminders stay sent while `startDate` is unchanged) | `UPDATE_EVENT` |
 | PUT | `/events/:id/status` | body `{ status: draft\|active\|archived\|cancelled }` | `UPDATE_EVENT_STATUS` |
 | PUT | `/events/:id/cancel` | status `cancelled` + DM to accepted/pending | `CANCEL_EVENT` |
 | POST | `/events/:id/start` | status `active`, sets `startDate` if empty | `START_EVENT` |
 | POST | `/events/:id/end` | status `archived`, `endDate = now` | `END_EVENT` |
 | DELETE | `/events/:id` | deletes event + its registrations | `DELETE_EVENT` |
 | DELETE | `/events/series/:seriesId` | deletes all events + registrations of a series | `DELETE_SERIES` |
-| POST | `/events/:id/duplicate` | copy as `draft`, title `"<title> (Kopie)"`, `checkinCode` and `announcements` reset | `DUPLICATE_EVENT` |
+| POST | `/events/:id/duplicate` | copy as `draft`, title `"<title> (Kopie)"`, `checkinCode`, `announcements`, reminder `sent` flags and `eventStartNotificationSent` reset | `DUPLICATE_EVENT` |
 | POST | `/events/:id/generate-checkin` | 6-digit code (`Math.random`), `checkinEnabled: true` | `GENERATE_CHECKIN` |
 | GET | `/events/:id/checkin-stats` | `{ total, checkedIn, code }` over accepted registrations | — |
 | GET | `/events/:id/registrations` | paginated (`page`, `limit` 50), newest first; plus `slots` of the event | — |

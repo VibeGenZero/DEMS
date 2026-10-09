@@ -38,7 +38,7 @@ erDiagram
 | `allowGuests` | bool (default true) | |
 | `category`, `bannerUrl`, `accentColor` | string | UI only, not validated |
 | `location` | `{ text, channelId, channelType }` or `null` | |
-| `reminderHours` | `[{ hours, sent }]` (legacy: number) | see [reminders-presence](reminders-presence.md) |
+| `reminderHours` | `[{ hours, sent }]` (legacy: number, normalized by `utils/reminders.js`) | `sent` is the only duplicate protection; kept on save while `startDate` is unchanged — see [reminders-presence](reminders-presence.md) |
 | `customBotMessages` | `{ registration?, accepted?, rejected? }` | per-event DM templates |
 | `checkinMessage` / `checkinEnabled` / `checkinCode` | string / bool / 6-digit string | code never leaves the admin area (`toPublicEvent`); admins read it via `checkin-stats` |
 | `autoCreateChannels`, `channelConfig` | bool, `{ type: voice\|text\|both, voiceName?, textName? }` | private event channels |

@@ -23,7 +23,7 @@ see_also: [discord-integration, reminders-presence, form-fields]
 | Registration via Discord | `canRegisterViaDiscord`, `buildRegistrationModal` (+ `buildModalIntro`, `buildFieldDescription`, `applySelectConstraints`, `applyFieldComponent`, `buildFieldCustomId`), `readModalField`, `parseModalAnswers`, `resolveSelectedUserName`, `resolveInteractionRoles`, `ensureUserProfile`, `checkRegistrationConditions`, `completeDiscordRegistration`, `handleEventRegisterButton`, `handleEventRegisterModal`; slots: `addFormFieldLabels`, `buildSlotModal`, `readAltSlotIds`, `buildRegisteredSlotReply`, `handleEventSlotButton`, `handleEventSlotModal`, `handleSlotSwitchButton`, `handleSlotLeaveButton`, `replyWithFailure` |
 | Guild data | `getGuildName`, `getGuildRoles`, `getGuildChannels`, `getPublicGuildChannels`, `getUserRoles`, `isGuildMember`, `assignRole`, `removeRole` |
 | Event channels & scheduled events | `createEventChannels`, `addParticipantToEventChannels`, `removeParticipantFromEventChannels`, `deleteEventChannels`, `getGuildScheduledEvents`, `createScheduledEvent` |
-| Reminders | `checkReminders`, `startReminderScheduler` |
+| Reminders | `checkReminders({ now, send })` (exported for tests), `messageAcceptedParticipants`, `startReminderScheduler`; rules in `utils/reminders.js` |
 | Bot control center | `getBotStatus`, `getBotSettings`, `saveBotSettings`, `buildActivityVariables`, `applyBotSettings`, `getRunningEvents` |
 | Lifecycle | `startBot(token)`, `stopBot()`, `logBotInviteUrl` |
 
