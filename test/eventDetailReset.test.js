@@ -60,8 +60,8 @@ async function openEvent(app, eventId) {
 }
 
 test('opening a role-locked event hides participants and comments of the previous event', async () => {
-    const { app, element, toasts } = loadFrontendApp(eventRoutes());
-    app.setCurrentUser(MEMBER);
+    const { app, element, toasts, state } = await loadFrontendApp(eventRoutes());
+    state.currentUser = MEMBER;
 
     await openEvent(app, 'game-night');
     assert.equal(element('detail-participants-section').style.display, 'block');
@@ -94,11 +94,11 @@ function createGate() {
 
 test('late answers for the previous event do not land on the current one', async () => {
     const gate = createGate();
-    const { app, element, toasts } = loadFrontendApp(eventRoutes({
+    const { app, element, toasts, state } = await loadFrontendApp(eventRoutes({
         '/api/events/game-night/participants': gate.late({ participants: [{ displayName: 'Alice', avatar: null }], total: 1 }),
         '/api/events/game-night/comments': gate.late([GAME_NIGHT_COMMENT])
     }));
-    app.setCurrentUser(MEMBER);
+    state.currentUser = MEMBER;
 
     await openEvent(app, 'game-night');
     await openEvent(app, 'open-event');
@@ -112,10 +112,10 @@ test('late answers for the previous event do not land on the current one', async
 
 test('a slow event answer does not replace the event opened after it', async () => {
     const gate = createGate();
-    const { app, element, toasts } = loadFrontendApp(eventRoutes({
+    const { app, element, toasts, state } = await loadFrontendApp(eventRoutes({
         '/api/events/game-night': gate.late(GAME_NIGHT)
     }));
-    app.setCurrentUser(MEMBER);
+    state.currentUser = MEMBER;
 
     const slowOpen = app.showEventDetail('game-night');
     await openEvent(app, 'open-event');
@@ -129,10 +129,10 @@ test('a slow event answer does not replace the event opened after it', async () 
 });
 
 test('the check-in box of a registered event does not stay on the next event', async () => {
-    const { app, element, toasts } = loadFrontendApp(eventRoutes({
+    const { app, element, toasts, state } = await loadFrontendApp(eventRoutes({
         '/api/events/game-night/my-registration': { registered: true, status: 'accepted', checkedIn: false }
     }));
-    app.setCurrentUser(MEMBER);
+    state.currentUser = MEMBER;
 
     await openEvent(app, 'game-night');
     assert.match(element('checkin-section').innerHTML, /checkin-code-input/);

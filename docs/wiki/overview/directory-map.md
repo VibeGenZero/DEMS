@@ -3,12 +3,12 @@ id: directory-map
 title: Directory map and reading strategy
 type: overview
 tags: [files, navigation, tokens, structure]
-sources: [server.js, bot.js, public/js/app.js, public/index.html, public/css/style.css, routes, dev, test]
+sources: [server.js, bot.js, public/js, public/index.html, public/css/style.css, routes, dev, test]
 see_also: [architecture]
 ---
 # Directory map and reading strategy
 
-> TL;DR: Where every file lives, how big it is and how to read it cheaply. Four files hold most of the tokens (`public/js/app.js`, `public/css/style.css`, `bot.js`, `public/index.html`) — never read them whole; jump via the function/section maps in their wiki nodes and `grep -n`.
+> TL;DR: Where every file lives, how big it is and how to read it cheaply. Three files hold most of the tokens (`public/css/style.css`, `bot.js`, `public/index.html`) — never read them whole; jump via the function/section maps in their wiki nodes and `grep -n`.
 
 Line counts as of 2026-10-02 (approximate; they drift).
 
@@ -35,7 +35,7 @@ Line counts as of 2026-10-02 (approximate; they drift).
 
 | Path | Lines | Purpose | Read strategy | Node |
 |---|---|---|---|---|
-| `public/js/app.js` | ~4550 | the whole SPA: boot, router, sections, admin, forms | **grep** function from the map in [frontend-app](../modules/frontend-app.md) | [frontend-app](../modules/frontend-app.md) |
+| `public/js/main.js` + `public/js/{core,events,polls,admin,pages}/*.js` | ~20–520 each | the SPA as ES modules, one per area | open the module from the map in [frontend-app](../modules/frontend-app.md) | [frontend-app](../modules/frontend-app.md) |
 | `public/index.html` | ~1760 | all sections and modals as static markup | **grep** element id | [frontend-markup](../modules/frontend-markup.md) |
 | `public/css/style.css` | ~3270 | dark theme, CSS variables, per-feature blocks | **grep** section header | [frontend-markup](../modules/frontend-markup.md) |
 | `public/vendor/` | — | pinned third-party libraries and fonts: Bootstrap, Bootstrap Icons, Font Awesome, GSAP, marked, DOMPurify, EasyMDE, Flatpickr, Inter, UnifrakturCook (do not edit) | never read | [frontend-markup](../modules/frontend-markup.md) |

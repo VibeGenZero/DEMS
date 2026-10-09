@@ -1,0 +1,139 @@
+/**
+ * Hash router: handleRoute, navigateTo and the pending route before a login.
+ */
+import { state } from './state.js';
+import { showBotControlSection } from '../admin/bot-control.js';
+import { showAdminSection } from '../admin/dashboard.js';
+import { showEventDetail } from '../events/detail.js';
+import { showEventsSection } from '../events/list.js';
+import { showDebugSection } from '../pages/debug.js';
+import { showInfoSection } from '../pages/info.js';
+import { showProfileSection } from '../pages/profile.js';
+import { showPollDetail, showPollsSection } from '../polls/polls.js';
+
+// Discord messages sent before v2.5.1 link to #events/<id> instead of #event/<id>
+export const LEGACY_EVENT_ROUTE = /^events\/(.+)$/;
+
+// Event a logged-out user opened -> shown after the Discord login
+export const PENDING_ROUTE_KEY = 'dems_pending_route';
+
+export const PENDING_ROUTE_MAX_AGE_MS = 15 * 60 * 1000;
+
+/**
+ * Remember the event a logged-out user opened, because the OAuth callback
+ * always redirects to #events.
+ */
+export function rememberPendingRoute(route) {
+    localStorage.setItem(PENDING_ROUTE_KEY, JSON.stringify({ route, savedAt: Date.now() }));
+}
+
+/**
+ * Right after the login redirect (#events), go back to the event that was
+ * opened before the login. A remembered event is used at most once.
+ */
+export function restorePendingRoute() {
+    if (!state.currentUser) return;
+    const stored = localStorage.getItem(PENDING_ROUTE_KEY);
+    if (!stored) return;
+    localStorage.removeItem(PENDING_ROUTE_KEY);
+
+    let pending;
+    try {
+        pending = JSON.parse(stored);
+    } catch {
+        return;
+    }
+    const isFresh = Date.now() - pending.savedAt < PENDING_ROUTE_MAX_AGE_MS;
+    const hash = window.location.hash.replace('#', '');
+    if (isFresh && (hash === '' || hash === 'events')) {
+        history.replaceState(null, '', '#' + pending.route);
+    }
+}
+
+export function handleRoute() {
+    // Clear countdown timers
+    state.countdownTimers.forEach(t => clearInterval(t));
+    state.countdownTimers = [];
+
+    // Clear bot status refresh when navigating away
+    if (state.botStatusRefreshInterval) {
+        clearInterval(state.botStatusRefreshInterval);
+        state.botStatusRefreshInterval = null;
+    }
+
+    let hash = window.location.hash.replace('#', '') || 'events';
+    const legacyEvent = hash.match(LEGACY_EVENT_ROUTE);
+    if (legacyEvent) {
+        hash = 'event/' + legacyEvent[1];
+        history.replaceState(null, '', '#' + hash);
+    }
+    const parts = hash.split('/');
+    const route = parts[0];
+    const param = parts[1];
+
+    document.querySelectorAll('.app-section').forEach(s => s.style.display = 'none');
+
+    document.querySelectorAll('.nav-link').forEach(link => {
+        link.classList.remove('active');
+        if (link.getAttribute('data-section') === route + '-section') {
+            link.classList.add('active');
+        }
+    });
+
+    if (!state.currentUser && route !== 'login' && route !== 'info') {
+        if ((route === 'event' || route === 'poll') && param) rememberPendingRoute(hash);
+        document.getElementById('login-section').style.display = 'block';
+        return;
+    }
+
+    switch (route) {
+        case 'events':
+            showEventsSection();
+            break;
+        case 'event':
+            showEventDetail(param);
+            break;
+        case 'polls':
+            showPollsSection();
+            break;
+        case 'poll':
+            showPollDetail(param);
+            break;
+        case 'profile':
+            showProfileSection();
+            break;
+        case 'admin':
+            if (state.currentUser && state.currentUser.isAdmin) {
+                showAdminSection();
+            } else {
+                navigateTo('events');
+            }
+            break;
+        case 'bot-control':
+            if (state.currentUser && state.currentUser.isAdmin) {
+                showBotControlSection();
+            } else {
+                navigateTo('events');
+            }
+            break;
+        case 'info':
+            showInfoSection();
+            break;
+        case 'debug':
+            if (window.DEBUG_MODE) {
+                showDebugSection();
+            } else {
+                navigateTo('events');
+            }
+            break;
+        default:
+            showEventsSection();
+    }
+}
+
+export function navigateTo(route) {
+    window.location.hash = '#' + route;
+}
+
+// Temporary bridge for inline handlers; D-01 replaces them with data-click and removes it
+Object.assign(window, { navigateTo });

@@ -3,7 +3,7 @@ id: form-fields
 title: Registration form fields — types, web widgets, Discord components
 type: concept
 tags: [forms, form-fields, discord-modal, entity-picker, validation]
-sources: [utils/formFields.js, bot.js, public/js/app.js]
+sources: [utils/formFields.js, bot.js, public/js/events/registration-form.js, public/js/admin/wizard-builders.js]
 see_also: [registration-flow, discord-integration, add-form-field-type]
 ---
 # Registration form fields — types, web widgets, Discord components
@@ -12,7 +12,7 @@ see_also: [registration-flow, discord-integration, add-form-field-type]
 
 ## Type matrix
 
-| Type | Web widget (`renderFormFields` in app.js) | Discord modal component (`applyFieldComponent` in bot.js) | Stored answer |
+| Type | Web widget (`renderFormFields` in `events/registration-form.js`) | Discord modal component (`applyFieldComponent` in bot.js) | Stored answer |
 |---|---|---|---|
 | `text` (default/unknown) | input | TextInput short | string |
 | `textarea` | textarea | TextInput paragraph | string |
@@ -23,7 +23,7 @@ see_also: [registration-flow, discord-integration, add-form-field-type]
 | `channel` | public channel list from `/api/events/form-options` | ChannelSelect (text, voice, announcement, stage, forum) | `#name (id)` |
 | `mentionable` | combined search | MentionableSelect | `@Name (id)` |
 
-Entity answers are produced by `formatEntityAnswer(type, name, id)` (same function name in `utils/formFields.js` and `app.js`).
+Entity answers are produced by `formatEntityAnswer(type, name, id)` (same function name in `utils/formFields.js` and `public/js/events/registration-form.js`).
 
 ## Discord modal rules
 
@@ -43,10 +43,10 @@ Entity answers are produced by `formatEntityAnswer(type, name, id)` (same functi
 |---|---|
 | type constants | `FORM_FIELD_TYPE` (utils/formFields.js) |
 | Discord mapping | `function applyFieldComponent`, `function readModalField` (bot.js) |
-| web rendering / answers | `function renderFormFields`, `function collectFormAnswers`, `function initEntityPicker` (app.js) |
-| admin form builder | `function addFormField`, `function getFormFieldsFromBuilder` (app.js) |
+| web rendering / answers | `function renderFormFields`, `function collectFormAnswers`, `function initEntityPicker` (`public/js/events/registration-form.js`) |
+| admin form builder | `function addFormField`, `function getFormFieldsFromBuilder` (`public/js/admin/wizard-builders.js`) |
 
 ## Gotchas
 
 - Answers are keyed by label: renaming a label breaks the link to old answers; two fields with the same label overwrite each other.
-- The field type list exists twice: backend `FORM_FIELD_TYPE` / `MODAL_MAX_FIELDS` in `utils/formFields.js`, frontend `FORM_FIELD_TYPE_LABELS` (with German labels) / `DISCORD_MODAL_MAX_FIELDS` in `app.js` — keep both in sync.
+- The field type list exists twice: backend `FORM_FIELD_TYPE` / `MODAL_MAX_FIELDS` in `utils/formFields.js`, frontend `FORM_FIELD_TYPE_LABELS` (with German labels) / `DISCORD_MODAL_MAX_FIELDS` in `public/js/events/registration-form.js` — keep both in sync.

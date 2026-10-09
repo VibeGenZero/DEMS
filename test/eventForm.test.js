@@ -18,11 +18,11 @@ const storedEvent = (reminderHours) => ({
  * @returns {Promise<Object>} -> `{ element, toasts }` of loadFrontendApp().
  */
 async function editEventWith(reminderHours) {
-    const frontend = loadFrontendApp({
+    const frontend = await loadFrontendApp({
         '/api/events/evt-raid?status=all': storedEvent(reminderHours),
         '/api/admin/roles': []
     });
-    frontend.app.setCurrentUser(ADMIN);
+    frontend.state.currentUser = ADMIN;
     await frontend.app.editEvent('evt-raid');
     return frontend;
 }
@@ -43,7 +43,7 @@ test('editing an event without reminders leaves the field empty', async () => {
     assert.equal(element('event-reminder').value, '');
 });
 
-test('the reminder field accepts several hours', () => {
+test('the reminder field accepts several hours', async () => {
     const html = fs.readFileSync(path.join(REPO_ROOT, 'public', 'index.html'), 'utf8');
     const field = html.match(/<input[^>]*id="event-reminder"[^>]*>/)[0];
     // A number input would drop "24, 1" (and an array assigned to it) silently
@@ -51,10 +51,10 @@ test('the reminder field accepts several hours', () => {
 });
 
 test('the admin card shows every reminder', async () => {
-    const { app, element, toasts } = loadFrontendApp({
+    const { app, element, toasts, state } = await loadFrontendApp({
         '/api/admin/all-events': [storedEvent([{ hours: 24, sent: true }, { hours: 1, sent: false }])]
     });
-    app.setCurrentUser(ADMIN);
+    state.currentUser = ADMIN;
     await app.loadAdminEvents();
     assert.match(element('admin-events-grid').innerHTML, /bi-bell"><\/i>24h · 1h</);
     assert.deepEqual(toasts, []);

@@ -333,8 +333,9 @@ async function loadFrontendModules(entryFile, context) {
 }
 
 /**
- * Load public/js/app.js into a node:vm context with a fake DOM built from
- * the ids in public/index.html. `fetch` answers from `routes`: a value is
+ * Load the frontend ES modules (public/js/main.js) into a fresh node:vm
+ * context with a fake DOM built from the ids in public/index.html. `fetch`
+ * answers from `routes`: a value is
  * sent as JSON body, a function may return a value or a promise of one,
  * unknown URLs answer 404; every call is recorded in `requests`. Toasts are
  * recorded instead of shown, so a test can assert that no error was swallowed
@@ -344,9 +345,9 @@ async function loadFrontendModules(entryFile, context) {
  * @param {Object<string, *>} routes -> URL → JSON body or () => body.
  * @param {Object} [options] -> Harness options.
  * @param {Object<string, string>} [options.storage] -> Initial localStorage entries.
- * @returns {Object} -> `{ app, element, toasts, requests, location, fire }`: app exposes showEventDetail, showProfileSection, logout, getErrorMessage, editEvent, loadAdminEvents, showEventsSection, fetchDiscordEvents, markdownPreview, searchGuests, addGuestToList, showRegistrations, loadCategories, handleLocationInput, getCurrentUser, setCurrentUser and setCsrfToken, element(id) returns the fake element or null, toasts lists the shown messages, requests the fetch calls `{ url, method, headers }`, location is window.location, fire(type) runs the recorded document listeners.
+ * @returns {Promise<Object>} -> `{ app, state, element, toasts, requests, location, fire }`: app holds every export of every module, state is core/state.js (`state.currentUser = persona` logs a user in), element(id) returns the fake element or null, toasts lists the shown messages, requests the fetch calls `{ url, method, headers }`, location is window.location, fire(type) runs the recorded document listeners.
  */
-function loadFrontendApp(routes, { storage = {} } = {}) {
+async function loadFrontendApp(routes, { storage = {} } = {}) {
     const registry = new Map();
     registerHtmlIds(registry, fs.readFileSync(path.join(REPO_ROOT, 'public', 'index.html'), 'utf8'));
     const toasts = [];
@@ -408,11 +409,15 @@ function loadFrontendApp(routes, { storage = {} } = {}) {
         flatpickr: () => ({ setDate: noop, clear: noop, selectedDates: [] })
     });
     context.window = context;
-    const source = fs.readFileSync(path.join(REPO_ROOT, 'public', 'js', 'app.js'), 'utf8');
-    vm.runInContext(`${source}
-;globalThis.__app = { showEventDetail, showProfileSection, logout, getErrorMessage, editEvent, loadAdminEvents, showEventsSection, fetchDiscordEvents, markdownPreview, searchGuests, addGuestToList, showRegistrations, loadCategories, handleLocationInput, getCurrentUser: () => currentUser, setCurrentUser: (user) => { currentUser = user; }, setCsrfToken: (token) => { csrfToken = token; } };`, context, { filename: 'app.js' });
+    const app = {};
+    for (const [file, namespace] of await loadFrontendModules(path.join(FRONTEND_DIR, 'main.js'), context)) {
+        for (const [name, value] of Object.entries(namespace)) {
+            if (name in app) throw new Error(`${name} is exported twice (${file})`);
+            app[name] = value;
+        }
+    }
     const fire = (type) => listeners.filter(entry => entry.type === type).forEach(entry => entry.listener({ type }));
-    return { app: context.__app, element: (id) => registry.get(id) || null, toasts, requests, location: context.location, fire };
+    return { app, state: app.state, element: (id) => registry.get(id) || null, toasts, requests, location: context.location, fire };
 }
 
 module.exports = {

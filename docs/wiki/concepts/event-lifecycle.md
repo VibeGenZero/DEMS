@@ -3,7 +3,7 @@ id: event-lifecycle
 title: Event lifecycle — status, series, check-in
 type: concept
 tags: [events, status, draft, archive, cancel, series, recurring, checkin, duplicate]
-sources: [routes/admin.js, routes/events.js, public/js/app.js]
+sources: [routes/admin.js, routes/events.js, public/js/admin/event-actions.js, public/js/admin/wizard.js]
 depends_on: [data-model]
 see_also: [routes-admin, reminders-presence, registration-flow]
 ---

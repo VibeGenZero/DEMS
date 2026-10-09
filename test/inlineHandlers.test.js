@@ -108,8 +108,8 @@ const adminEvent = (id, fields = {}) => ({
 
 test('the reply button passes a comment author name with quotes as plain text', async () => {
     const comment = { id: 'c1', userId: 'u-x', userName: QUOTE_NAME, text: 'Hallo', createdAt: '2026-10-01T18:00:00.000Z' };
-    const { app, element } = loadFrontendApp(eventRoutes({ comments: [comment] }));
-    app.setCurrentUser(MEMBER);
+    const { app, element, state } = await loadFrontendApp(eventRoutes({ comments: [comment] }));
+    state.currentUser = MEMBER;
     await app.showEventDetail('ev');
     await settle();
 
@@ -119,8 +119,8 @@ test('the reply button passes a comment author name with quotes as plain text', 
 
 test('a broken participant avatar falls back to initials without running the name', async () => {
     const participant = { displayName: AVATAR_NAME, avatar: 'https://cdn.example/avatar.png' };
-    const { app, element } = loadFrontendApp(eventRoutes({ participants: [participant] }));
-    app.setCurrentUser(MEMBER);
+    const { app, element, state } = await loadFrontendApp(eventRoutes({ participants: [participant] }));
+    state.currentUser = MEMBER;
     await app.showEventDetail('ev');
     await settle();
 
@@ -141,7 +141,7 @@ test('a broken participant avatar falls back to initials without running the nam
 
 test('adding a guest from the search passes the member as data', async () => {
     const user = { id: '42', displayName: ENTITY_NAME, username: 'mal', avatar: 'https://cdn.example/a.png' };
-    const { app, element } = loadFrontendApp({ '/api/user/search?q=ma': [user] });
+    const { app, element } = await loadFrontendApp({ '/api/user/search?q=ma': [user] });
     element('guest-search-input').value = 'ma';
     await app.searchGuests();
 
@@ -149,8 +149,8 @@ test('adding a guest from the search passes the member as data', async () => {
     assertCallsOnly(handler, 'addGuestToList', [{ id: '42', displayName: ENTITY_NAME, avatar: user.avatar }]);
 });
 
-test('removing a selected guest passes the id unchanged', () => {
-    const { app, element } = loadFrontendApp({});
+test('removing a selected guest passes the id unchanged', async () => {
+    const { app, element } = await loadFrontendApp({});
     app.addGuestToList({ id: "4'2", displayName: 'Gast', avatar: '' });
 
     const handler = handlerCalling(element('selected-guests').innerHTML, 'removeGuestFromList');
@@ -158,7 +158,7 @@ test('removing a selected guest passes the id unchanged', () => {
 });
 
 test('admin event cards open the registrations with the exact title', async () => {
-    const { app, element } = loadFrontendApp({
+    const { app, element } = await loadFrontendApp({
         '/api/admin/all-events': [
             adminEvent('single'),
             adminEvent('s1', { seriesId: 'series', startDate: '2026-10-21T18:00:00.000Z' }),
@@ -183,7 +183,7 @@ test('admin event cards open the registrations with the exact title', async () =
 
 test('accepting and rejecting a registration keeps the exact event title', async () => {
     const reg = { id: 'r1', userId: 'u-x', userName: 'Mia', status: 'pending', source: 'web', createdAt: '2026-10-01T18:00:00.000Z' };
-    const { app, element } = loadFrontendApp({ '/api/admin/events/ev/registrations': { data: [reg], slots: [] } });
+    const { app, element } = await loadFrontendApp({ '/api/admin/events/ev/registrations': { data: [reg], slots: [] } });
     await app.showRegistrations('ev', TRICKY_TEXT);
 
     const handlers = attributeValues(element('registrations-tbody').innerHTML, 'onclick')
@@ -194,7 +194,7 @@ test('accepting and rejecting a registration keeps the exact event title', async
 });
 
 test('category pills filter by the exact category', async () => {
-    const { app, element } = loadFrontendApp({ '/api/events/categories': [TRICKY_TEXT] });
+    const { app, element } = await loadFrontendApp({ '/api/events/categories': [TRICKY_TEXT] });
     await app.loadCategories();
 
     const handlers = attributeValues(element('category-filter-bar').innerHTML, 'onclick');
@@ -205,7 +205,7 @@ test('category pills filter by the exact category', async () => {
 
 test('location suggestions select the exact channel', async () => {
     const channel = { id: '7', name: TRICKY_TEXT, type: 'voice' };
-    const { app, element } = loadFrontendApp({ '/api/admin/channels': [channel] });
+    const { app, element } = await loadFrontendApp({ '/api/admin/channels': [channel] });
     element('event-location-text').value = 'bob';
     await app.handleLocationInput();
 

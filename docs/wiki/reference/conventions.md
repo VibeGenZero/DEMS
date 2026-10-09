@@ -3,7 +3,7 @@ id: conventions
 title: Coding conventions
 type: reference
 tags: [conventions, style, language, git, commits, testing, jsdoc]
-sources: [bot.js, utils/formFields.js, routes/events.js, public/js/app.js, test/helpers.js]
+sources: [bot.js, utils/formFields.js, routes/events.js, public/js/core/ui.js, test/helpers.js]
 see_also: [testing, data-layer, glossary]
 ---
 # Coding conventions
@@ -38,7 +38,7 @@ see_also: [testing, data-layer, glossary]
 
 ## Frontend patterns
 
-- Global functions in `public/js/app.js`, referenced from inline `onclick`.
+- Frontend code lives in ES modules under `public/js/` (one per area, see [frontend-app](../modules/frontend-app.md)); values several modules share are in `state` (`core/state.js`). Functions still called from inline `onclick` sit on `window` through a temporary bridge at the end of their module (removed by D-01).
 - Escape everything interpolated into HTML with `escapeHtml`; Markdown only via `renderMarkdownSafe`; card previews via `escapeHtml(markdownPreview(text))`.
 - `fetch` with `X-CSRF-TOKEN: csrfToken` on mutating calls; feedback with `showToast(msg, 'success'|'danger'|'warning'|'info')`.
 - Colours from CSS variables in `:root`.

@@ -3,7 +3,7 @@ id: auth-session
 title: Authentication, session and CSRF
 type: concept
 tags: [auth, session, csrf, oauth2, admin, cookies, login]
-sources: [routes/auth.js, server.js, middleware/auth.js, utils/sessionStore.js, public/js/app.js, dev/devAuth.js]
+sources: [routes/auth.js, server.js, middleware/auth.js, utils/sessionStore.js, public/js/core/auth.js, public/js/core/boot.js, dev/devAuth.js]
 depends_on: [routes-auth, middleware]
 see_also: [security, maintenance-mode, request-lifecycle]
 ---

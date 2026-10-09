@@ -24,8 +24,8 @@ const PROFILE = {
  * @returns {Promise<Object>} -> `{ card, toasts }`.
  */
 async function renderCard(user, title) {
-    const { app, element, toasts } = loadFrontendApp({ '/api/user/profile': PROFILE });
-    app.setCurrentUser(user);
+    const { app, element, toasts, state } = await loadFrontendApp({ '/api/user/profile': PROFILE });
+    state.currentUser = user;
     await app.showProfileSection();
     const cards = element('profile-registrations').innerHTML.split('class="profile-reg-card').slice(1);
     return { card: cards.find(html => html.includes(title)), toasts };

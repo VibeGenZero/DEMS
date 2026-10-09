@@ -3,7 +3,7 @@ id: maintenance-mode
 title: Maintenance mode and panic mode
 type: concept
 tags: [maintenance, panic-mode, lockdown, banner, login, registration]
-sources: [routes/admin.js, middleware/maintenance.js, server.js, public/js/app.js]
+sources: [routes/admin.js, middleware/maintenance.js, server.js, public/js/admin/maintenance.js]
 depends_on: [data-model]
 see_also: [auth-session, registration-flow, middleware]
 ---
@@ -13,7 +13,7 @@ see_also: [auth-session, registration-flow, middleware]
 
 ## Effects
 
-| Setting | Server effect | UI effect (`checkMaintenanceStatus` in app.js) |
+| Setting | Server effect | UI effect (`checkMaintenanceStatus` in `public/js/admin/maintenance.js`) |
 |---|---|---|
 | `warningEnabled` + `warningText` | — | top warning banner |
 | `plannedMaintenance` + `plannedMaintenanceText` (+ start/end) | — | second banner with date range |
@@ -32,7 +32,7 @@ see_also: [auth-session, registration-flow, middleware]
 
 ## Where in code
 
-`getLoginBlockReason`, `isRegistrationBlocked`, `checkRegistrationAllowed` (middleware/maintenance.js); `MAINTENANCE MODE` block at the end of routes/admin.js; `checkMaintenanceStatus`, `showMaintenanceModal`, `activatePanicMode`, `deactivatePanicMode` (app.js).
+`getLoginBlockReason`, `isRegistrationBlocked`, `checkRegistrationAllowed` (middleware/maintenance.js); `MAINTENANCE MODE` block at the end of routes/admin.js; `checkMaintenanceStatus`, `showMaintenanceModal`, `activatePanicMode`, `deactivatePanicMode` (`public/js/admin/maintenance.js`).
 
 ## Gotchas
 

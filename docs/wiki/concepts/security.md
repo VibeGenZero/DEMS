@@ -3,7 +3,7 @@ id: security
 title: Security model and open audit findings
 type: concept
 tags: [security, csp, helmet, csrf, xss, rate-limit, audit, https]
-sources: [server.js, docs/security/SECURITY_AUDIT_2026-04-22.md, ISSUE.md, routes/events.js, routes/user.js, utils/eventUtils.js, public/js/app.js]
+sources: [server.js, docs/security/SECURITY_AUDIT_2026-04-22.md, ISSUE.md, routes/events.js, routes/user.js, utils/eventUtils.js, public/js/core/ui.js]
 depends_on: [server]
 see_also: [auth-session, known-issues, deployment]
 ---
