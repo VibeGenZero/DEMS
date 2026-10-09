@@ -8,6 +8,7 @@ const { loadEventRoster, toPublicEvent, isEventVisibleTo } = require('../utils/e
 const { registerUserForEvent, switchOwnSlot, unregisterUserFromEvent, REGISTRATION_SOURCE } = require('../utils/registrationService');
 const { hasSlots, withSlotSummary } = require('../utils/slotService');
 const { debugLog } = require('../utils/debugLog');
+const { avatarUrlOf, repairAvatarUrl } = require('../utils/avatar');
 
 // No public preview: every event endpoint needs a login. Runs before router.param
 // below, so anonymous requests get 401 and learn nothing about an event id
@@ -543,7 +544,9 @@ router.get('/:id/comments', requireAuth, async (req, res) => {
         const snapshot = await getDocs(q);
         const comments = [];
         snapshot.forEach(docSnap => {
-            comments.push({ id: docSnap.id, ...docSnap.data() });
+            const comment = docSnap.data();
+            // Older comments stored a wrapped avatar URL -> shown with the real one
+            comments.push({ id: docSnap.id, ...comment, userAvatar: repairAvatarUrl(comment.userAvatar) });
         });
         // Sort in memory to avoid Firestore composite index requirement
         comments.sort((a, b) => (a.createdAt || '').localeCompare(b.createdAt || ''));
@@ -574,9 +577,7 @@ router.post('/:id/comments', requireAuth, async (req, res) => {
             eventId: req.params.id,
             userId: user.id,
             userName: user.displayName,
-            userAvatar: user.avatar
-                ? `https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.png?size=64`
-                : `https://cdn.discordapp.com/embed/avatars/${parseInt(user.id) % 5}.png`,
+            userAvatar: avatarUrlOf(user),
             text: text.trim(),
             isAdmin: !!user.isAdmin,
             replyTo: replyTo || null,

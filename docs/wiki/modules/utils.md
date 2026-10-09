@@ -3,7 +3,7 @@ id: utils
 title: utils/ — domain helpers
 type: module
 tags: [utils, registration, form-fields, waitlist, audit-log, profile, debug]
-sources: [utils/registrationService.js, utils/formFields.js, utils/eventUtils.js, utils/eventUrl.js, utils/userProfile.js, utils/sessionStore.js, utils/reminders.js, utils/debugLog.js, utils/capacity.js, utils/slotService.js, utils/eventLock.js, utils/announcementRefresh.js, utils/pollService.js, utils/pollStore.js]
+sources: [utils/registrationService.js, utils/formFields.js, utils/eventUtils.js, utils/eventUrl.js, utils/userProfile.js, utils/avatar.js, utils/sessionStore.js, utils/reminders.js, utils/debugLog.js, utils/capacity.js, utils/slotService.js, utils/eventLock.js, utils/announcementRefresh.js, utils/pollService.js, utils/pollStore.js]
 part_of: [architecture]
 depends_on: [data-layer, bot]
 see_also: [registration-flow, form-fields, role-slots]
@@ -62,6 +62,10 @@ Exports `FORM_FIELD_TYPE` (`text, textarea, dropdown, checkbox, user, role, chan
 ## utils/eventUrl.js
 
 `buildEventUrl(eventId)` → `<BASE_URL>/#event/<id>` (fallback `http://localhost:3000`). Every event link that leaves the server is built with it: announcement embed and "Zum Event" button, `/events` command, event channel embed, DMs, guest invitation, `{event.url}`. `test/eventUrl.test.js` fails when server code builds `#events/<id>` links again. `buildPollUrl(pollId)` → `<BASE_URL>/#poll/<id>` for poll messages and DMs.
+
+## utils/avatar.js
+
+Pure, no database: `avatarUrlOf(user)` → `session.user.avatar` (already a complete URL), else Discord's first default avatar; `repairAvatarUrl(url)` → unwraps `https://cdn.discordapp.com/avatars/<id>/<complete URL>.png?size=64` (old comments), everything else unchanged.
 
 ## utils/userProfile.js
 

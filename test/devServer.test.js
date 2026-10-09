@@ -326,6 +326,18 @@ async function createSlotEvent(admin, title, slots, fields = {}) {
     return body;
 }
 
+test('a comment shows the avatar of its author', async () => {
+    const member = await loginAs('member');
+    const { avatar } = await currentUser(member);
+
+    const res = await member.send('POST', `/api/events/${EVENT_ID.OPEN}/comments`, { text: 'Avatar-Test' });
+    assert.equal(res.status, 200);
+    assert.equal((await res.json()).userAvatar, avatar);
+
+    const comments = await (await member.request(`/api/events/${EVENT_ID.OPEN}/comments`)).json();
+    assert.equal(comments.find(comment => comment.text === 'Avatar-Test').userAvatar, avatar);
+});
+
 test('deleting an event deletes its Discord channels', async () => {
     const admin = await loginAs('admin');
     const created = await createSlotEvent(admin, 'Channel-Löschtest', [], { autoCreateChannels: true, channelConfig: { type: 'both' } });

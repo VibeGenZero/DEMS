@@ -3,7 +3,7 @@ id: testing
 title: Testing — node:test suites and helpers
 type: ops
 tags: [testing, node-test, integration-tests, helpers, tdd]
-sources: [test/helpers.js, test/devServer.test.js, test/noMock.test.js, test/mockMode.test.js, test/mockBot.test.js, test/seed.test.js, test/sqliteAdapter.test.js, test/eventUrl.test.js, test/wiki.test.js, test/branding.test.js, test/vendorAssets.test.js, test/eventDetailReset.test.js, test/profileRegistrations.test.js, test/login.test.js, test/authFrontend.test.js, test/fixtures/fakeDiscordServer.js, test/sessionStore.test.js, test/sessionRestart.test.js, test/reminders.test.js, test/reminderScheduler.test.js, test/eventForm.test.js, test/startup.test.js]
+sources: [test/helpers.js, test/devServer.test.js, test/noMock.test.js, test/mockMode.test.js, test/mockBot.test.js, test/seed.test.js, test/sqliteAdapter.test.js, test/eventUrl.test.js, test/wiki.test.js, test/branding.test.js, test/vendorAssets.test.js, test/eventDetailReset.test.js, test/profileRegistrations.test.js, test/login.test.js, test/authFrontend.test.js, test/fixtures/fakeDiscordServer.js, test/sessionStore.test.js, test/sessionRestart.test.js, test/reminders.test.js, test/reminderScheduler.test.js, test/eventForm.test.js, test/startup.test.js, test/avatar.test.js]
 see_also: [dev-mock-mode, conventions]
 ---
 # Testing — node:test suites and helpers
@@ -19,7 +19,7 @@ see_also: [dev-mock-mode, conventions]
 | `mockBot.test.js` | mock Discord helpers (roles, channels, DMs, event channels, "Zum Event" button link) via `bot.js` |
 | `eventUrl.test.js` | `buildEventUrl` builds `#event/<id>`; no server file builds `#events/<id>` links |
 | `seed.test.js` | seed counts, idempotence, reset, refusal outside mock mode / with Firebase |
-| `devServer.test.js` | CSP (scripts/styles/fonts only `'self'`, no `unsafe-eval`), persona login (new session, parallel first changes pass CSRF), no session for cookie-less requests until `/api/csrf-token`, reminder `sent` kept on save / reset on duplicate, several reminders as "24, 1", deleting an event or series deletes its Discord channels (mock log), admin/member access, event API only with login, draft/archived only for admins, guests see only status and id of the inviting registration, no `checkinCode` in member answers, mock data in routes, announce, start event, check-in, rate limits, maintenance + panic lockout |
+| `devServer.test.js` | CSP (scripts/styles/fonts only `'self'`, no `unsafe-eval`), persona login (new session, parallel first changes pass CSRF), no session for cookie-less requests until `/api/csrf-token`, reminder `sent` kept on save / reset on duplicate, several reminders as "24, 1", deleting an event or series deletes its Discord channels (mock log), a comment carries its author's avatar URL, admin/member access, event API only with login, draft/archived only for admins, guests see only status and id of the inviting registration, no `checkinCode` in member answers, mock data in routes, announce, start event, check-in, rate limits, maintenance + panic lockout |
 | `noMock.test.js` | without `DEV_MOCK` the OAuth redirect stays and the persona login does not exist |
 | `wiki.test.js` | wiki frontmatter/link/graph validation and that `docs/wiki/graph.json` is current |
 | `branding.test.js` | the old product name ("Discord" + "Event Management") appears in no git-tracked file outside `public/vendor` (untracked files such as CI's npm logs are ignored) |
@@ -32,6 +32,7 @@ see_also: [dev-mock-mode, conventions]
 | `reminderScheduler.test.js` | `checkReminders({ now, send })` in mock mode on its own database: stored `sent` blocks a resend after a restart, flags written before the DMs, one DM for several due reminders, legacy numbers stored as a list, start notification once |
 | `eventForm.test.js` | event wizard: `editEvent` fills `#event-reminder` with every stored reminder ("24, 1", legacy number, none), the field is not a number input, `loadAdminEvents` shows the "24h · 1h" badge |
 | `startup.test.js` | `fire('DOMContentLoaded')`: the startup asks `/auth/me` once; a late `/auth/me` answer does not log the user out; `showUserData` exists once |
+| `avatar.test.js` | `utils/avatar.js`: session avatar used as is, wrapped comment avatars unwrapped, intact values unchanged |
 | `authFrontend.test.js` | frontend `logout()` posts the CSRF token, failure toast, no `/auth/logout` navigation left, `invalid_state` message |
 | `profileRegistrations.test.js` | profile cards link to events the user can open; archived events stay listed without a link for members |
 

@@ -62,7 +62,7 @@ Slot fields exist only on slot events: `slotId` = the slot actually taken (`null
 
 ## comments (auto id) — `POST /api/events/:id/comments`
 
-`{ eventId, userId, userName, userAvatar, text (≤1000), isAdmin, replyTo (comment id|null), createdAt }`
+`{ eventId, userId, userName, userAvatar, text (≤1000), isAdmin, replyTo (comment id|null), createdAt }` — `userAvatar` is the session avatar URL at posting time; comments written before F-11 store it wrapped (`cdn.discordapp.com/avatars/<id>/<URL>.png?size=64`), `GET /api/events/:id/comments` unwraps it.
 
 ## auditLogs (auto id) — `utils/eventUtils.js#addAuditLog`
 
