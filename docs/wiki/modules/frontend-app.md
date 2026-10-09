@@ -53,7 +53,7 @@ Logged-out users see `#login-section` for every route except `info`. An event ro
 | Comments | `loadComments`, `renderComment`, `postComment`, `replyToComment`, `deleteComment` |
 | Profile & account | `showProfileSection` (registration cards link only if `canOpenEvent(event)`, else class `profile-reg-card-static`), `canOpenEvent` (mirrors `isEventVisibleTo`), `loadAccountSettings`, `saveAccountSettings`, `deleteUserAccount`, `showFirstLoginModal`, `confirmInvitationPreference`, `toggleVerboseLog` |
 | Admin dashboard | `showAdminSection`, `loadAdminStats`, `loadAdminEvents`, `loadAuditLog`, `showResetModal`, `performSystemReset` |
-| Event wizard (create/edit) | `showCreateEventModal`, `editEvent`, `saveEvent`, `wizardGoTo`, `wizardNext`, `wizardBack`, `updateBannerPreview`, `loadRoles`, `populateRoles`, `getSelectedRoles` |
+| Event wizard (create/edit) | `showCreateEventModal`, `editEvent`, `saveEvent`, `reminderHoursOf` (stored list / legacy number / form text → hours, mirrors `normalizeReminderHours`; used for `#event-reminder` and the admin card badge), `wizardGoTo`, `wizardNext`, `wizardBack`, `updateBannerPreview`, `loadRoles`, `populateRoles`, `getSelectedRoles` |
 | Form builder | `addFormField`, `toggleOptionsInput`, `getFormFieldsFromBuilder` |
 | Event admin actions | `deleteEvent`, `deleteEventSeries`, `changeEventStatus`, `duplicateEvent`, `startEvent`, `endEvent`, `exportRegistrations`, `syncDiscordEvent` |
 | Announcements | `announceEvent`, `renderAnnounceButtonsPreview`, `sendAnnouncement` |

@@ -3,7 +3,7 @@ id: utils
 title: utils/ — domain helpers
 type: module
 tags: [utils, registration, form-fields, waitlist, audit-log, profile, debug]
-sources: [utils/registrationService.js, utils/formFields.js, utils/eventUtils.js, utils/eventUrl.js, utils/userProfile.js, utils/sessionStore.js, utils/debugLog.js, utils/capacity.js, utils/slotService.js, utils/eventLock.js, utils/announcementRefresh.js, utils/pollService.js, utils/pollStore.js]
+sources: [utils/registrationService.js, utils/formFields.js, utils/eventUtils.js, utils/eventUrl.js, utils/userProfile.js, utils/sessionStore.js, utils/reminders.js, utils/debugLog.js, utils/capacity.js, utils/slotService.js, utils/eventLock.js, utils/announcementRefresh.js, utils/pollService.js, utils/pollStore.js]
 part_of: [architecture]
 depends_on: [data-layer, bot]
 see_also: [registration-flow, form-fields, role-slots]
@@ -70,6 +70,10 @@ Exports `FORM_FIELD_TYPE` (`text, textarea, dropdown, checkbox, user, role, chan
 ## utils/sessionStore.js
 
 `PersistentSessionStore` (extends express-session `Store`, used by `server.js`): `get` / `set` / `destroy` on the collection `sessions` (`SESSION_COLLECTION`) through `firebaseAdmin.js`, document id = SHA-256 of the session id. Write-through cache in memory, database read only on a miss; expiry = cookie expiry (default 24 h), expired sessions are deleted on read; `pruneExpired()` runs every 6 h (`pruneIntervalMs`, 0 = off) and returns the number of deleted documents. No `touch` on purpose.
+
+## utils/reminders.js
+
+Pure rules for `event.reminderHours` (see [reminders-presence](../concepts/reminders-presence.md)): `normalizeReminderHours(value)` → `[{ hours, sent }]` from a list, a legacy number or the form text "24, 1" (comma, semicolon or space; hours > 0, each once); `mergeReminderHours(value, oldEvent, startDate)` → list to store on save, keeps `sent` for the same hours while the start is unchanged; `findDueReminders(event, now)` → indexes of unsent reminders whose time is reached before the start.
 
 ## utils/debugLog.js
 

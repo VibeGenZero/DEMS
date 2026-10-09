@@ -12,6 +12,7 @@ const { IS_MOCK_MODE } = require('./dev/mockMode');
 const { db, collection, doc, getDoc, getDocs, addDoc, setDoc, updateDoc, deleteDoc, query, where, orderBy } = require('./firebaseAdmin');
 const { debugLog } = require('./utils/debugLog');
 const { buildEventUrl, buildPollUrl } = require('./utils/eventUrl');
+const { normalizeReminderHours, findDueReminders } = require('./utils/reminders');
 const { isRegistrationBlocked } = require('./middleware/maintenance');
 const {
     FORM_FIELD_TYPE, MODAL_MAX_FIELDS, getFormFields, getFieldType,
@@ -2108,25 +2109,44 @@ function parseTemplate(template, variables) {
 }
 
 /**
- * Reminder scheduler — checks every 5 min for events starting soon
- * Sends DM reminders to accepted participants
+ * Reminder scheduler — every 5 min: DM accepted participants when a reminder
+ * time is reached, and once when the event starts. Duplicates are prevented only
+ * by the flags stored in the event (reminderHours[].sent, eventStartNotificationSent),
+ * written before the DMs go out: a restart or a crash while sending never repeats them.
  */
 let reminderInterval = null;
-const sentReminders = new Map(); // key -> eventStartTime, for cleanup
 
-async function checkReminders() {
+/**
+ * DM every accepted participant of an event.
+ *
+ * @param {string} eventId -> Event document id.
+ * @param {string} message -> DM text.
+ * @param {Function} send -> DM function (userId, message).
+ * @returns {Promise<number>} -> Number of recipients.
+ */
+async function messageAcceptedParticipants(eventId, message, send) {
+    const regs = await getDocs(query(
+        collection(db, 'registrations'),
+        where('eventId', '==', eventId),
+        where('status', '==', 'accepted')
+    ));
+    for (const regDoc of regs.docs) {
+        await send(regDoc.data().userId, message);
+    }
+    return regs.docs.length;
+}
+
+/**
+ * One scheduler pass.
+ *
+ * @param {Object} [options] -> Overrides for tests.
+ * @param {Date} [options.now] -> Current time.
+ * @param {Function} [options.send] -> DM function (userId, message), default sendDM.
+ * @returns {Promise<void>}
+ */
+async function checkReminders({ now = new Date(), send = sendDM } = {}) {
     try {
-        const now = new Date();
-
-        // Cleanup: remove entries for events that have already started
-        for (const [key, startTime] of sentReminders.entries()) {
-            if (now > startTime) {
-                sentReminders.delete(key);
-            }
-        }
-
-        const q = query(collection(db, 'events'));
-        const snapshot = await getDocs(q);
+        const snapshot = await getDocs(query(collection(db, 'events')));
 
         for (const docSnap of snapshot.docs) {
             const event = docSnap.data();
@@ -2136,81 +2156,29 @@ async function checkReminders() {
 
             const startTime = new Date(event.startDate);
 
-            // Backward compatibility: convert old single reminder to array format
-            let reminders = event.reminderHours;
-            if (typeof reminders === 'number' && reminders > 0) {
-                reminders = [{ hours: reminders, sent: false }];
-            }
-            if (!Array.isArray(reminders)) {
-                reminders = [];
-            }
+            // After a downtime several reminders can be due at once -> one DM, all marked.
+            // Legacy numeric reminderHours are stored as a list on the way.
+            const due = findDueReminders(event, now);
+            if (due.length > 0) {
+                const reminderHours = normalizeReminderHours(event.reminderHours)
+                    .map((reminder, index) => (due.includes(index) ? { ...reminder, sent: true } : reminder));
+                await updateDoc(doc(db, 'events', eventId), { reminderHours });
 
-            // Process multiple reminders
-            for (let i = 0; i < reminders.length; i++) {
-                const reminder = reminders[i];
-                if (!reminder || typeof reminder.hours !== 'number') continue;
-
-                const reminderTime = new Date(startTime.getTime() - (reminder.hours * 60 * 60 * 1000));
-                const reminderKey = `${eventId}-${reminder.hours}h`;
-
-                // Check if reminder should fire: within the 5-min check window
-                if (now >= reminderTime && now < startTime && !sentReminders.has(reminderKey)) {
-                    sentReminders.set(reminderKey, startTime);
-                    console.log(`⏰ Sending ${reminder.hours}h reminder for event: ${event.title}`);
-
-                    // Get accepted registrations
-                    const regQ = query(
-                        collection(db, 'registrations'),
-                        where('eventId', '==', eventId),
-                        where('status', '==', 'accepted')
-                    );
-                    const regs = await getDocs(regQ);
-
-                    const timeStr = startTime.toLocaleString('de-DE', { timeZone: TIMEZONE });
-                    debugLog('bot.sendReminder', { eventId, recipientCount: regs.docs?.length });
-                    for (const regDoc of regs.docs) {
-                        const reg = regDoc.data();
-                        await sendDM(reg.userId,
-                            `⏰ **Erinnerung!** Das Event **${event.title}** startet am ${timeStr}. Sei bereit!`
-                        );
-                    }
-
-                    // Mark reminder as sent in database
-                    if (Array.isArray(event.reminderHours)) {
-                        event.reminderHours[i].sent = true;
-                        await updateDoc(doc(db, 'events', eventId), {
-                            reminderHours: event.reminderHours
-                        });
-                    }
-                }
+                console.log(`⏰ Sending reminder for event: ${event.title}`);
+                const timeStr = startTime.toLocaleString('de-DE', { timeZone: TIMEZONE });
+                const recipientCount = await messageAcceptedParticipants(eventId,
+                    `⏰ **Erinnerung!** Das Event **${event.title}** startet am ${timeStr}. Sei bereit!`, send);
+                debugLog('bot.sendReminder', { eventId, recipientCount });
             }
 
-            // Event-start notification
-            const eventStartKey = `${eventId}-start`;
+            // Event-start notification during the first 5 minutes
             const fiveMinutes = 5 * 60 * 1000;
-            if (now >= startTime && now < new Date(startTime.getTime() + fiveMinutes) && !sentReminders.has(eventStartKey) && !event.eventStartNotificationSent) {
-                sentReminders.set(eventStartKey, now);
+            if (now >= startTime && now < new Date(startTime.getTime() + fiveMinutes) && !event.eventStartNotificationSent) {
+                await updateDoc(doc(db, 'events', eventId), { eventStartNotificationSent: true });
+
                 console.log(`🎯 Event started: ${event.title}`);
-
-                // Get accepted registrations
-                const regQ = query(
-                    collection(db, 'registrations'),
-                    where('eventId', '==', eventId),
-                    where('status', '==', 'accepted')
-                );
-                const regs = await getDocs(regQ);
-
-                for (const regDoc of regs.docs) {
-                    const reg = regDoc.data();
-                    await sendDM(reg.userId,
-                        `🎯 **${event.title}** hat gerade begonnen! Viel Spaß!\n\n🔗 Event ansehen: ${buildEventUrl(eventId)}`
-                    );
-                }
-
-                // Mark event-start notification as sent
-                await updateDoc(doc(db, 'events', eventId), {
-                    eventStartNotificationSent: true
-                });
+                await messageAcceptedParticipants(eventId,
+                    `🎯 **${event.title}** hat gerade begonnen! Viel Spaß!\n\n🔗 Event ansehen: ${buildEventUrl(eventId)}`, send);
             }
         }
     } catch (err) {
@@ -2921,6 +2889,7 @@ module.exports = {
     getGuildScheduledEvents,
     parseTemplate,
     startReminderScheduler,
+    checkReminders,
     createEventChannels,
     addParticipantToEventChannels,
     removeParticipantFromEventChannels,

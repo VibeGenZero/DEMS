@@ -280,6 +280,7 @@ function createFakeElement(registry, id = '', display = '') {
             contains: (name) => classes.has(name)
         },
         addEventListener() {},
+        removeEventListener() {},
         setAttribute() {},
         getAttribute: () => null,
         appendChild: register,
@@ -298,7 +299,7 @@ function createFakeElement(registry, id = '', display = '') {
  * by a catch block.
  *
  * @param {Object<string, *>} routes -> URL → JSON body or () => body.
- * @returns {Object} -> `{ app, element, toasts, requests, location }`: app exposes showEventDetail, showProfileSection, logout, getErrorMessage, setCurrentUser and setCsrfToken, element(id) returns the fake element or null, toasts lists the shown messages, requests the fetch calls `{ url, method, headers }`, location is window.location.
+ * @returns {Object} -> `{ app, element, toasts, requests, location }`: app exposes showEventDetail, showProfileSection, logout, getErrorMessage, editEvent, loadAdminEvents, setCurrentUser and setCsrfToken, element(id) returns the fake element or null, toasts lists the shown messages, requests the fetch calls `{ url, method, headers }`, location is window.location.
  */
 function loadFrontendApp(routes) {
     const registry = new Map();
@@ -333,13 +334,20 @@ function loadFrontendApp(routes) {
             Toast: class {
                 constructor(toastEl) { this.toastEl = toastEl; }
                 show() { toasts.push(registry.get('toast-message').textContent); }
-            }
-        }
+            },
+            Modal: { getOrCreateInstance: () => ({ show: noop, hide: noop }), getInstance: () => null }
+        },
+        // Event wizard widgets
+        EasyMDE: class {
+            constructor() { this.text = ''; this.codemirror = { refresh: noop }; }
+            value(text) { if (text === undefined) return this.text; this.text = text; }
+        },
+        flatpickr: () => ({ setDate: noop, clear: noop, selectedDates: [] })
     });
     context.window = context;
     const source = fs.readFileSync(path.join(REPO_ROOT, 'public', 'js', 'app.js'), 'utf8');
     vm.runInContext(`${source}
-;globalThis.__app = { showEventDetail, showProfileSection, logout, getErrorMessage, setCurrentUser: (user) => { currentUser = user; }, setCsrfToken: (token) => { csrfToken = token; } };`, context, { filename: 'app.js' });
+;globalThis.__app = { showEventDetail, showProfileSection, logout, getErrorMessage, editEvent, loadAdminEvents, setCurrentUser: (user) => { currentUser = user; }, setCsrfToken: (token) => { csrfToken = token; } };`, context, { filename: 'app.js' });
     return { app: context.__app, element: (id) => registry.get(id) || null, toasts, requests, location: context.location };
 }
 

@@ -3322,7 +3322,7 @@ async function loadAdminEvents() {
                 <span class="badge-pill"><i class="bi bi-${event.approvalMode === 'instant' ? 'lightning' : 'hourglass-split'}"></i>${event.approvalMode === 'instant' ? 'Instant' : 'Manuell'}</span>
                 ${event.maxParticipants > 0 ? `<span class="badge-pill"><i class="bi bi-people"></i>Max ${event.maxParticipants}</span>` : ''}
                 <span class="badge-pill"><i class="bi bi-ui-checks"></i>${(event.formFields || []).length} Felder</span>
-                ${event.reminderHours > 0 ? `<span class="badge-pill"><i class="bi bi-bell"></i>${event.reminderHours}h</span>` : ''}
+                ${reminderHoursOf(event.reminderHours).length ? `<span class="badge-pill"><i class="bi bi-bell"></i>${reminderHoursOf(event.reminderHours).map(hours => `${hours}h`).join(' · ')}</span>` : ''}
               </div>
               <div class="admin-actions">
                 <button class="btn btn-sm btn-outline-light" onclick="showRegistrations('${event.id}', '${escapeHtml(event.title).replace(/'/g, "\\\'")}')">
@@ -4167,6 +4167,12 @@ function wizardBack() {
 }
 
 // ─── Event CRUD ──────────────────────────────────
+// Mirrors normalizeReminderHours in utils/reminders.js: stored list, legacy number or the form text "24, 1"
+function reminderHoursOf(value) {
+    const raw = Array.isArray(value) ? value.map(reminder => reminder?.hours) : String(value ?? '').split(/[\s,;]+/);
+    return [...new Set(raw.map(hours => Number.parseFloat(hours)).filter(hours => Number.isFinite(hours) && hours > 0))];
+}
+
 async function showCreateEventModal() {
     pendingPollDecision = null;
     document.getElementById('eventModalTitle').textContent = 'Neues Event erstellen';
@@ -4181,7 +4187,7 @@ async function showCreateEventModal() {
     document.getElementById('event-access').value = 'open';
     document.getElementById('event-approval').value = 'manual';
     document.getElementById('event-status').value = 'active';
-    document.getElementById('event-reminder').value = '0';
+    document.getElementById('event-reminder').value = '';
     document.getElementById('event-assign-role').value = '';
     document.getElementById('event-auto-create-channels').checked = false;
     document.getElementById('channel-config-options').style.display = 'none';
@@ -4308,7 +4314,7 @@ async function editEvent(eventId) {
         document.getElementById('event-access').value = event.accessMode || 'open';
         document.getElementById('event-approval').value = event.approvalMode || 'manual';
         document.getElementById('event-status').value = event.status || 'active';
-        document.getElementById('event-reminder').value = event.reminderHours || 0;
+        document.getElementById('event-reminder').value = reminderHoursOf(event.reminderHours).join(', ');
         document.getElementById('event-checkin-message').value = event.checkinMessage || '';
         document.getElementById('event-auto-create-channels').checked = !!event.autoCreateChannels;
 

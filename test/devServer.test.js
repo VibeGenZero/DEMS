@@ -326,6 +326,44 @@ async function createSlotEvent(admin, title, slots, fields = {}) {
     return body;
 }
 
+test('a duplicated event gets its reminders and start notification again', async () => {
+    const admin = await loginAs('admin');
+    // Seed: the past event already sent its 24 h reminder and its start notification
+    const res = await admin.send('POST', `/api/admin/events/${EVENT_ID.PAST}/duplicate`);
+    assert.equal(res.status, 200);
+    const copy = await res.json();
+    assert.deepEqual(copy.reminderHours, [{ hours: 24, sent: false }]);
+    assert.equal(copy.eventStartNotificationSent, false);
+});
+
+test('saving an event keeps sent reminders sent until the start moves', async () => {
+    const admin = await loginAs('admin');
+    const storedReminders = async () => (await (await admin.request('/api/admin/all-events')).json())
+        .find(event => event.id === EVENT_ID.PAST).reminderHours;
+    const event = await (await admin.request(`/api/events/${EVENT_ID.PAST}`)).json();
+
+    // The event form sends the reminder as a plain number
+    assert.equal((await admin.send('PUT', `/api/admin/events/${EVENT_ID.PAST}`, { ...event, reminderHours: 24 })).status, 200);
+    assert.deepEqual(await storedReminders(), [{ hours: 24, sent: true }]);
+
+    const movedStart = new Date(new Date(event.startDate).getTime() + 7 * 24 * 60 * 60 * 1000).toISOString();
+    assert.equal((await admin.send('PUT', `/api/admin/events/${EVENT_ID.PAST}`, { ...event, startDate: movedStart, reminderHours: 24 })).status, 200);
+    assert.deepEqual(await storedReminders(), [{ hours: 24, sent: false }]);
+});
+
+test('the event form saves several reminders and an empty field removes them', async () => {
+    const admin = await loginAs('admin');
+    const storedReminders = async () => (await (await admin.request('/api/admin/all-events')).json())
+        .find(event => event.id === EVENT_ID.FULL).reminderHours;
+    const event = await (await admin.request(`/api/events/${EVENT_ID.FULL}`)).json();
+
+    assert.equal((await admin.send('PUT', `/api/admin/events/${EVENT_ID.FULL}`, { ...event, reminderHours: '24, 1' })).status, 200);
+    assert.deepEqual(await storedReminders(), [{ hours: 24, sent: false }, { hours: 1, sent: false }]);
+
+    assert.equal((await admin.send('PUT', `/api/admin/events/${EVENT_ID.FULL}`, { ...event, reminderHours: '' })).status, 200);
+    assert.deepEqual(await storedReminders(), []);
+});
+
 test('admins create events with role slots', async () => {
     const admin = await loginAs('admin');
     const created = await createSlotEvent(admin, 'Slot-Anlage', [
