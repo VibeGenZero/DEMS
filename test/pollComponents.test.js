@@ -48,7 +48,8 @@ test('poll links open the poll page', () => {
 });
 
 test('the open poll embed shows counts, names and the favorite', () => {
-    const embed = bot.buildPollEmbed(poll({ deadline: '2026-10-09T16:00:00.000Z' }), tallyPoll(poll(), votes)).toJSON();
+    // Deadline far in the future: a past one closes the poll. 2099-10-09 is a Friday, 18:00 in Berlin.
+    const embed = bot.buildPollEmbed(poll({ deadline: '2099-10-09T16:00:00.000Z' }), tallyPoll(poll(), votes)).toJSON();
     assert.equal(embed.title, '📅 Raid-Termin');
     assert.equal(embed.description, 'Wann passt es?');
     assert.deepEqual(fieldsOf(bot.buildPollEmbed(poll(), tallyPoll(poll(), votes))).map(f => f.name), [
