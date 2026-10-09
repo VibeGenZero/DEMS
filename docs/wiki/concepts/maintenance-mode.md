@@ -36,6 +36,6 @@ see_also: [auth-session, registration-flow, middleware]
 
 ## Gotchas
 
-- Panic mode does not end existing sessions; non-admin users already logged in are only blocked by the frontend overlay, the API still answers them (except registrations).
+- Panic mode does not end existing sessions; non-admin users already logged in are only blocked by the frontend overlay, the API still answers them (except registrations). Sessions are stored in the database, so restarting the server does not log anyone out either.
 - Without `ADMIN_RESET_PASSWORD` set, panic mode cannot be deactivated via UI (and the system reset is impossible). Dev mock mode defaults it to `dev`.
 - Read errors of the settings document fail open (login and registration allowed).

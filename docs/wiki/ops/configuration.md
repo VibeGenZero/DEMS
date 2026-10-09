@@ -12,7 +12,7 @@ see_also: [docker, deployment, dev-mock-mode]
 
 | Variable | Required | Default | Used for |
 |---|---|---|---|
-| `SESSION_SECRET` | **yes** | — | session signing; missing or `your_random_session_secret_here` → exit 1 |
+| `SESSION_SECRET` | **yes** | — | session signing; missing or `your_random_session_secret_here` → exit 1; changing it invalidates all stored sessions (everyone logged out) |
 | `BASE_URL` | yes (prod) | `http://localhost:3000` fallback | OAuth redirect (`${BASE_URL}/auth/discord/callback`), links in Discord messages, CORS origin |
 | `DISCORD_CLIENT_ID` / `DISCORD_CLIENT_SECRET` | yes (login) | — | OAuth2; client id also in the bot invite URL |
 | `DISCORD_BOT_TOKEN` | no | — | bot login; empty → bot off, Discord helpers no-op |
@@ -27,7 +27,7 @@ see_also: [docker, deployment, dev-mock-mode]
 | `TIMEZONE` | no | `Europe/Berlin` | date formatting in bot messages |
 | `DEBUG_MODE` | no | `false` | verbose request/Firestore/bot logging + `#debug` UI section; never in production |
 | `ADMIN_RESET_PASSWORD` | no | — | system reset and panic-mode deactivation; empty → both impossible |
-| `NODE_ENV` | no | `production` in the Docker image | blocks `DEV_MOCK`; enables express-session MemoryStore warning; makes session and `XSRF-TOKEN` cookies `Secure` → DEMS must be reached via HTTPS (TLS proxy sending `X-Forwarded-Proto: https`), otherwise the login does not stick |
+| `NODE_ENV` | no | `production` in the Docker image | blocks `DEV_MOCK`; makes session and `XSRF-TOKEN` cookies `Secure` → DEMS must be reached via HTTPS (TLS proxy sending `X-Forwarded-Proto: https`), otherwise the login does not stick |
 | `DEMS_PORT` | no | `3000` | host port in `compose.yaml` |
 | `DEV_MOCK` | no | — | dev mock mode (set automatically by `npm run dev:mock`) |
 | `DEV_SQLITE_PATH` | no | `data/dems.dev.sqlite` | database of the dev mock mode |

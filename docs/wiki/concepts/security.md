@@ -44,7 +44,8 @@ see_also: [auth-session, known-issues, deployment]
 | M-05 | public comments | fixed (comments require login) |
 | M-06 / M-07 | unbounded queries, user search enumeration | open |
 | M-08 / M-09 | `bannerUrl` / `accentColor` not validated server-side | open |
-| L-02 / L-03 / L-04 | MemoryStore, `parseTemplate` `$` patterns, CSV formula injection | open |
+| L-02 | MemoryStore | fixed: sessions in the database via `PersistentSessionStore`, document id = SHA-256 of the session id (F-06) |
+| L-03 / L-04 | `parseTemplate` `$` patterns, CSV formula injection | open |
 | L-07 | logout via GET | fixed: `POST /auth/logout` with CSRF token (F-05) |
 
 Full report: `docs/security/SECURITY_AUDIT_2026-04-22.md`; older notes: `ISSUE.md`.

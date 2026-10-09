@@ -15,6 +15,7 @@ const rateLimit = require('express-rate-limit');
 const { startBot, startReminderScheduler, stopBot, getGuildName } = require('./bot');
 const { startPollScheduler, stopPollScheduler } = require('./utils/pollStore');
 const { createCsrfToken } = require('./middleware/auth');
+const { PersistentSessionStore } = require('./utils/sessionStore');
 
 // Production runs behind a TLS proxy (trust proxy below) -> cookies only over HTTPS
 const IS_PRODUCTION = process.env.NODE_ENV === 'production';
@@ -94,6 +95,8 @@ app.use((req, res, next) => {
     next();
 });
 app.use(session({
+    // Sessions in the database (SQLite/Firestore) -> logins survive restarts and deploys
+    store: new PersistentSessionStore(),
     secret: process.env.SESSION_SECRET,
     resave: false,
     saveUninitialized: false,
@@ -108,8 +111,10 @@ app.use(session({
 // ── CSRF Protection (Double-Submit Cookie) ──────────────────────────────
 // Generate a CSRF token per session and validate on mutating requests
 app.use((req, res, next) => {
-    // Initialize CSRF token in session
-    if (req.session && !req.session.csrfToken) {
+    // The token is minted only where the SPA asks for it (and at login, startUserSession):
+    // sessions are stored in the database, so minting it on every cookie-less request
+    // (pages, assets, crawlers) would write a session document each time
+    if (req.session && !req.session.csrfToken && req.method === 'GET' && req.path === '/api/csrf-token') {
         req.session.csrfToken = createCsrfToken();
     }
 

@@ -26,7 +26,7 @@ see_also: [request-lifecycle, security, configuration]
 | Method | Path | Auth | Response |
 |---|---|---|---|
 | GET | `/healthz` | none | `{ status: 'ok' }` — registered before session/CSRF (Docker healthcheck) |
-| GET | `/api/csrf-token` | none | `{ token }` = `req.session.csrfToken` |
+| GET | `/api/csrf-token` | none | `{ token }` = `req.session.csrfToken`; the CSRF middleware mints it (and thereby the session) here when missing — the only place besides the login |
 | GET | `/api/maintenance/status` | none | public subset of `maintenanceSettings/config` (`active`, `warningEnabled`, `warningText`, `loginDisabled`, `registrationDisabled`, `plannedMaintenance*`, `panicMode`); `{ active: false }` when unset/error |
 | GET | `/api/server-info` | none | `{ serverName, guildId, debugMode }`; name from `SERVER_NAME`, else `getGuildName()`, else `'DEMS'` |
 | GET | `/api/updates` | none | sends `updates.json` (version, date, `news[]` with German title/content) |
@@ -48,7 +48,7 @@ see_also: [request-lifecycle, security, configuration]
 ## Gotchas
 
 - `app.set('trust proxy', 1)` assumes exactly ONE reverse proxy (Traefik, Caddy, Railway). More hops → wrong `req.ip` in rate limits.
-- Session store is the default `MemoryStore`: all users are logged out on every restart; warning printed with `NODE_ENV=production`.
+- Session store is `PersistentSessionStore` (`utils/sessionStore.js`, collection `sessions`): logins survive restarts; it assumes it is the only DEMS process (write-through cache).
 - Express 5 path syntax: wildcards must be named (`/{*splat}`), `*` alone throws at startup.
 - Express 5 hands listen errors (e.g. `EADDRINUSE`) to the `listen` callback; the code exits with 1 so Docker restarts it.
 - Adding middleware: place it relative to session/CSRF consciously — see [add-api-endpoint](../howto/add-api-endpoint.md).
