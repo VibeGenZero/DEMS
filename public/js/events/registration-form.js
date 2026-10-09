@@ -2,6 +2,7 @@
  * Registration form widgets, sign-up and sign-off.
  */
 import { state } from '../core/state.js';
+import { registerActions } from '../core/actions.js';
 import { escapeHtml, showToast } from '../core/ui.js';
 import { showEventDetail } from './detail.js';
 import { eventHasSlots } from './slots.js';
@@ -383,5 +384,4 @@ export function collectFormAnswers(fields, containerId = 'dynamic-form-fields') 
     return answers;
 }
 
-// Temporary bridge for inline handlers; D-01 replaces them with data-click and removes it
-Object.assign(window, { unregisterFromEvent });
+registerActions({ unregisterFromEvent: () => unregisterFromEvent() });

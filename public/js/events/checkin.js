@@ -2,7 +2,8 @@
  * Check-in section of the event page.
  */
 import { state } from '../core/state.js';
-import { renderMarkdownSafe, showToast } from '../core/ui.js';
+import { registerActions } from '../core/actions.js';
+import { escapeHtml, renderMarkdownSafe, showToast } from '../core/ui.js';
 import { showEventDetail } from './detail.js';
 
 export async function renderCheckinSection(eventId, event, registration) {
@@ -40,7 +41,7 @@ export async function renderCheckinSection(eventId, event, registration) {
                         </div>
                     </div>
                     <div class="col-md-4 text-end">
-                        <button class="btn btn-accent" onclick="generateCheckinCode('${eventId}')">
+                        <button class="btn btn-accent" data-click="generateCheckinCode" data-event-id="${escapeHtml(eventId)}">
                             <i class="bi bi-arrow-clockwise me-1"></i>Neuen Code generieren
                         </button>
                     </div>
@@ -67,7 +68,7 @@ export async function renderCheckinSection(eventId, event, registration) {
                 <div class="d-flex gap-2">
                     <input type="text" class="form-control font-monospace" id="checkin-code-input" 
                         placeholder="6-stelliger Code" maxlength="6" style="max-width:200px;letter-spacing:3px;text-align:center;">
-                    <button class="btn btn-accent" onclick="submitCheckin('${eventId}')">
+                    <button class="btn btn-accent" data-click="submitCheckin" data-event-id="${escapeHtml(eventId)}">
                         <i class="bi bi-check-lg me-1"></i>Einchecken
                     </button>
                 </div>`;
@@ -166,5 +167,7 @@ export async function submitCheckin(eventId) {
     }
 }
 
-// Temporary bridge for inline handlers; D-01 replaces them with data-click and removes it
-Object.assign(window, { generateCheckinCode, submitCheckin });
+registerActions({
+    generateCheckinCode: (el) => generateCheckinCode(el.dataset.eventId),
+    submitCheckin: (el) => submitCheckin(el.dataset.eventId)
+});

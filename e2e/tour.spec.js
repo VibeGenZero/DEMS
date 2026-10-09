@@ -62,6 +62,14 @@ test('the raid shows the role picker to the raider and stays locked for others',
     await expect(page.locator('#slot-picker-area')).toBeVisible();
     await expect(page.locator('#detail-no-access')).toBeHidden();
 
+    // Slot choice and wish roles run as data-click actions
+    const firstSlot = page.locator('#slot-picker-cards [data-click="selectPrimarySlot"]').first();
+    await firstSlot.click();
+    await expect(firstSlot).toHaveClass(/selected/);
+    const firstWish = page.locator('#slot-alt-chips [data-click="toggleAltSlot"]').first();
+    await firstWish.click();
+    await expect(firstWish).toHaveClass(/selected/);
+
     await page.context().clearCookies();
     await loginAs(page, 'member');
     await page.goto('/#event/dev-event-role');

@@ -2,7 +2,8 @@
  * Guest search and selected guests of a registration.
  */
 import { state } from '../core/state.js';
-import { escapeHtml, inlineArg } from '../core/ui.js';
+import { registerActions } from '../core/actions.js';
+import { escapeHtml } from '../core/ui.js';
 
 export let guestSearchTimer = null;
 
@@ -39,8 +40,8 @@ export async function searchGuests() {
 
         resultsEl.innerHTML = filtered.map(u => `
             <button type="button" class="list-group-item list-group-item-action bg-dark text-white border-secondary d-flex align-items-center gap-2"
-                onclick="addGuestToList(${inlineArg({ id: u.id, displayName: u.displayName, avatar: u.avatar })})">
-                <img src="${escapeHtml(u.avatar)}" width="28" height="28" class="rounded-circle" onerror="this.src='/img/default-avatar.png'">
+                data-click="addGuestToList" data-user-id="${escapeHtml(u.id)}" data-display-name="${escapeHtml(u.displayName)}" data-avatar="${escapeHtml(u.avatar || '')}">
+                <img src="${escapeHtml(u.avatar)}" width="28" height="28" class="rounded-circle" data-fallback="hide">
                 <span>${escapeHtml(u.displayName)}</span>
                 <small class="text-muted ms-1">@${escapeHtml(u.username)}</small>
             </button>
@@ -77,10 +78,10 @@ export function renderSelectedGuests() {
     }
     container.innerHTML = state.selectedGuests.map(g => `
         <div class="badge d-flex align-items-center gap-1 p-2" style="background:rgba(139,92,246,0.2);border:1px solid rgba(139,92,246,0.4);font-size:0.85rem;">
-            <img src="${escapeHtml(g.avatar)}" width="18" height="18" class="rounded-circle" onerror="this.src=''">
+            <img src="${escapeHtml(g.avatar)}" width="18" height="18" class="rounded-circle" data-fallback="hide">
             <span>${escapeHtml(g.displayName)}</span>
             <button type="button" class="btn-close btn-close-white ms-1" style="font-size:0.6rem;"
-                onclick="removeGuestFromList(${inlineArg(g.id)})"></button>
+                data-click="removeGuestFromList" data-user-id="${escapeHtml(g.id)}"></button>
         </div>
     `).join('');
 }
@@ -95,5 +96,8 @@ export function resetGuestSelection() {
     if (resultsEl) { resultsEl.style.display = 'none'; resultsEl.innerHTML = ''; }
 }
 
-// Temporary bridge for inline handlers; D-01 replaces them with data-click and removes it
-Object.assign(window, { debounceGuestSearch, addGuestToList, removeGuestFromList });
+registerActions({
+    debounceGuestSearch: () => debounceGuestSearch(),
+    addGuestToList: (el) => addGuestToList({ id: el.dataset.userId, displayName: el.dataset.displayName, avatar: el.dataset.avatar }),
+    removeGuestFromList: (el) => removeGuestFromList(el.dataset.userId)
+});

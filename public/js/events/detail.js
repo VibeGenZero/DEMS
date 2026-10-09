@@ -3,6 +3,7 @@
  */
 import { state } from '../core/state.js';
 import { navigateTo } from '../core/router.js';
+import { registerActions } from '../core/actions.js';
 import { escapeHtml, isValidBannerUrl, renderMarkdownSafe, showToast } from '../core/ui.js';
 import { renderCheckinSection } from './checkin.js';
 import { loadComments } from './comments.js';
@@ -115,7 +116,7 @@ export function renderSidebarAction(state, event = null) {
 
         if (hasFormFields) {
             // Scroll to form so required fields can be filled
-            area.innerHTML = `<button class="btn ${cls} mt-2" onclick="document.getElementById('detail-register-area')?.scrollIntoView({behavior:'smooth'}); return false;">${label}</button>`;
+            area.innerHTML = `<button class="btn ${cls} mt-2" data-click="scrollTo" data-target="detail-register-area">${label}</button>`;
         } else {
             // No custom fields — submit directly from sidebar
             const btnId = 'sidebar-register-btn';
@@ -202,7 +203,7 @@ export async function loadDetailParticipants(eventId) {
             const initials = (p.displayName || '?').charAt(0).toUpperCase();
             if (p.avatar) {
                 // The fallback reads name and initials from attributes; no user text in handler code
-                return `<img src="${escapeHtml(p.avatar)}" class="participant-avatar" title="${escapeHtml(p.displayName)}" alt="${escapeHtml(p.displayName)}" data-initials="${escapeHtml(initials)}" onerror="const fallback = document.createElement('div'); fallback.className = 'participant-avatar-placeholder'; fallback.title = this.title; fallback.textContent = this.dataset.initials; this.replaceWith(fallback)">`;
+                return `<img src="${escapeHtml(p.avatar)}" class="participant-avatar" title="${escapeHtml(p.displayName)}" alt="${escapeHtml(p.displayName)}" data-initials="${escapeHtml(initials)}" data-fallback="initials">`;
             }
             return `<div class="participant-avatar-placeholder" title="${escapeHtml(p.displayName)}">${escapeHtml(initials)}</div>`;
         }).join('') + (overflow > 0 ? `<div class="participants-overflow-badge">+${overflow}</div>` : '');
@@ -292,7 +293,7 @@ export async function showEventDetail(eventId) {
                         const safeD = se.startDate ? se.startDate.replace(' ', 'T') : null;
                         const dateStr = safeD ? new Date(safeD).toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
                         return `
-                            <a class="series-date-item ${isCurrent ? 'active' : ''}" href="#" onclick="navigateTo('event/${se.id}'); return false;">
+                            <a class="series-date-item ${isCurrent ? 'active' : ''}" href="#" data-click="navigateTo" data-route="event/${escapeHtml(se.id)}">
                                 <span><i class="bi bi-calendar-event me-2"></i>${dateStr}</span>
                                 <span class="series-date-participants"><i class="bi bi-people me-1"></i>${se.currentParticipants || 0}${se.maxParticipants > 0 ? '/' + se.maxParticipants : ''}</span>
                             </a>`;
@@ -307,7 +308,7 @@ export async function showEventDetail(eventId) {
                                     <div id="detail-series-hidden" style="display:none;">
                                         ${hiddenSeries.map(renderSeriesItem).join('')}
                                     </div>
-                                    <a class="series-dates-toggle" href="#" onclick="toggleDetailSeriesDates(); return false;">
+                                    <a class="series-dates-toggle" href="#" data-click="toggleDetailSeriesDates">
                                         <i class="bi bi-chevron-down me-1" id="detail-series-icon"></i>
                                         <span id="detail-series-toggle-text">${hiddenCount} weitere Termine anzeigen</span>
                                     </a>` : ''}
@@ -450,5 +451,4 @@ export function toggleDetailSeriesDates() {
     text.textContent = isOpen ? `${count} weitere Termine anzeigen` : 'Weniger anzeigen';
 }
 
-// Temporary bridge for inline handlers; D-01 replaces them with data-click and removes it
-Object.assign(window, { toggleDetailSeriesDates });
+registerActions({ toggleDetailSeriesDates: () => toggleDetailSeriesDates() });

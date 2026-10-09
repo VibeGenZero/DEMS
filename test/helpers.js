@@ -281,6 +281,7 @@ function createFakeElement(registry, id = '', display = '') {
         },
         addEventListener() {},
         removeEventListener() {},
+        focus() {},
         setAttribute() {},
         getAttribute: () => null,
         appendChild: register,
@@ -345,7 +346,7 @@ async function loadFrontendModules(entryFile, context) {
  * @param {Object<string, *>} routes -> URL → JSON body or () => body.
  * @param {Object} [options] -> Harness options.
  * @param {Object<string, string>} [options.storage] -> Initial localStorage entries.
- * @returns {Promise<Object>} -> `{ app, state, element, toasts, requests, location, fire }`: app holds every export of every module, state is core/state.js (`state.currentUser = persona` logs a user in), element(id) returns the fake element or null, toasts lists the shown messages, requests the fetch calls `{ url, method, headers }`, location is window.location, fire(type) runs the recorded document listeners.
+ * @returns {Promise<Object>} -> `{ app, state, element, toasts, requests, location, fire }`: app holds every export of every module, state is core/state.js (`state.currentUser = persona` logs a user in), element(id) returns the fake element or null, toasts lists the shown messages, requests the fetch calls `{ url, method, headers, body }`, location is window.location, fire(type) runs the recorded document listeners.
  */
 async function loadFrontendApp(routes, { storage = {} } = {}) {
     const registry = new Map();
@@ -370,7 +371,7 @@ async function loadFrontendApp(routes, { storage = {} } = {}) {
         };
     };
     const fetch = async (url, options = {}) => {
-        requests.push({ url, method: options.method || 'GET', headers: options.headers || {} });
+        requests.push({ url, method: options.method || 'GET', headers: options.headers || {}, body: options.body });
         if (!(url in routes)) return { ok: false, status: 404, json: async () => ({ error: 'Nicht gefunden' }) };
         const route = routes[url];
         const body = typeof route === 'function' ? await route() : route;

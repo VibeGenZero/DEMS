@@ -2,6 +2,7 @@
  * Role slots on the event page: picker, roster, own slot.
  */
 import { state } from '../core/state.js';
+import { registerActions } from '../core/actions.js';
 import { escapeHtml, showToast } from '../core/ui.js';
 import { showEventDetail } from './detail.js';
 
@@ -33,7 +34,7 @@ export function renderSlotPicker(event) {
             ${summary.map(slot => {
                 const full = slot.taken >= slot.capacity;
                 return `
-                <button type="button" class="slot-card${full ? ' full' : ''}" data-slot-id="${escapeHtml(slot.id)}" onclick="selectPrimarySlot(this.dataset.slotId)">
+                <button type="button" class="slot-card${full ? ' full' : ''}" data-slot-id="${escapeHtml(slot.id)}" data-click="selectPrimarySlot">
                     <span class="slot-card-emoji">${escapeHtml(slot.emoji || '🎯')}</span>
                     <span class="slot-card-name">${escapeHtml(slot.name)}</span>
                     <span class="slot-card-count">${slot.taken}/${slot.capacity}</span>
@@ -67,7 +68,7 @@ export function renderAltSlotChips() {
     }
     area.style.display = 'block';
     chips.innerHTML = others.map(slot => `
-        <button type="button" class="slot-alt-chip${state.selectedAltSlotIds.includes(slot.id) ? ' selected' : ''}" data-slot-id="${escapeHtml(slot.id)}" onclick="toggleAltSlot(this.dataset.slotId)">
+        <button type="button" class="slot-alt-chip${state.selectedAltSlotIds.includes(slot.id) ? ' selected' : ''}" data-slot-id="${escapeHtml(slot.id)}" data-click="toggleAltSlot">
             ${escapeHtml(formatSlotLabel(slot))}
         </button>`).join('');
 }
@@ -82,7 +83,7 @@ export function toggleAltSlot(slotId) {
 export function renderRosterAvatar(person) {
     const initial = escapeHtml((person.displayName || '?').charAt(0).toUpperCase());
     if (person.avatar) {
-        return `<img src="${escapeHtml(person.avatar)}" class="roster-avatar" alt="" onerror="this.style.visibility='hidden'">`;
+        return `<img src="${escapeHtml(person.avatar)}" class="roster-avatar" alt="" data-fallback="invisible">`;
     }
     return `<span class="roster-avatar roster-avatar-fallback">${initial}</span>`;
 }
@@ -153,7 +154,7 @@ export function renderOwnSlot(event, registration) {
             <select class="form-select" id="own-slot-select" aria-label="Neuer Slot">
                 ${freeSlots.map(slot => `<option value="${escapeHtml(slot.id)}">${escapeHtml(formatSlotLabel(slot))} (${slot.taken}/${slot.capacity})</option>`).join('')}
             </select>
-            <button class="btn btn-outline-light" type="button" data-event-id="${escapeHtml(event.id)}" onclick="switchMySlot(this.dataset.eventId)">Slot wechseln</button>
+            <button class="btn btn-outline-light" type="button" data-event-id="${escapeHtml(event.id)}" data-click="switchMySlot">Slot wechseln</button>
         </div>`;
     area.innerHTML = `<div class="small">${placement}</div>${switcher}`;
 }
@@ -184,5 +185,8 @@ export function formatSlotLabel(slot) {
     return slot.emoji ? `${slot.emoji} ${slot.name}` : slot.name;
 }
 
-// Temporary bridge for inline handlers; D-01 replaces them with data-click and removes it
-Object.assign(window, { selectPrimarySlot, toggleAltSlot, switchMySlot });
+registerActions({
+    selectPrimarySlot: (el) => selectPrimarySlot(el.dataset.slotId),
+    toggleAltSlot: (el) => toggleAltSlot(el.dataset.slotId),
+    switchMySlot: (el) => switchMySlot(el.dataset.eventId)
+});

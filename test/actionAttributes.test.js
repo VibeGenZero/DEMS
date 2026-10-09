@@ -153,55 +153,61 @@ const adminEvent = (id, fields = {}) => ({
     startDate: '2026-10-20T18:00:00.000Z', createdAt: '2026-10-01T18:00:00.000Z', maxParticipants: 0, currentParticipants: 0, formFields: [], ...fields
 });
 
-test('the reply button passes a comment author name with quotes as plain text', async () => {
+test('replying sends the next comment once as a reply, the one after as a normal comment', async () => {
     const comment = { id: 'c1', userId: 'u-x', userName: QUOTE_NAME, text: 'Hallo', createdAt: '2026-10-01T18:00:00.000Z' };
-    const { app, element, state } = await loadFrontendApp(eventRoutes({ comments: [comment] }));
+    const { app, state, element, requests } = await loadFrontendApp(eventRoutes({ comments: [comment] }));
     state.currentUser = MEMBER;
     await app.showEventDetail('ev');
     await settle();
+    const html = element('comments-section').innerHTML;
+    assertNoInlineHandlers(html);
 
-    const handler = handlerCalling(element('comments-section').innerHTML, 'replyToComment');
-    assertCallsOnly(handler, 'replyToComment', ['ev', 'c1', QUOTE_NAME]);
+    const [reply] = actionTargets(html, 'replyToComment');
+    assert.equal(reply.attributes['data-user-name'], QUOTE_NAME);
+    await app.runAction('replyToComment', actionElement(reply));
+    assert.equal(element('comment-input').value, `@${QUOTE_NAME} `);
+
+    const [send] = actionTargets(html, 'postComment');
+    element('comment-input').value = 'Antwort';
+    await app.runAction('postComment', actionElement(send));
+    await settle();
+    element('comment-input').value = 'Noch was';
+    await app.runAction('postComment', actionElement(send));
+    await settle();
+
+    const posts = requests.filter(r => r.method === 'POST').map(r => JSON.parse(r.body));
+    assert.deepEqual(posts, [{ text: 'Antwort', replyTo: 'c1' }, { text: 'Noch was', replyTo: null }]);
 });
 
-test('a broken participant avatar falls back to initials without running the name', async () => {
+test('a participant avatar carries its initials fallback as data', async () => {
     const participant = { displayName: AVATAR_NAME, avatar: 'https://cdn.example/avatar.png' };
-    const { app, element, state } = await loadFrontendApp(eventRoutes({ participants: [participant] }));
+    const { app, state, element } = await loadFrontendApp(eventRoutes({ participants: [participant] }));
     state.currentUser = MEMBER;
     await app.showEventDetail('ev');
     await settle();
-
     const html = element('detail-participants-avatars').innerHTML;
-    const [handler] = attributeValues(html, 'onerror');
-    const [title] = attributeValues(html, 'title');
-    const [initials] = attributeValues(html, 'data-initials');
-    let replacement = null;
-    const img = { title, dataset: { initials }, replaceWith(node) { replacement = node; } };
-    const { context } = runHandler(handler, {
-        element: img,
-        globals: { document: { createElement: (tag) => ({ tag }) } }
-    });
-
-    assert.equal(context.pwned, undefined, `injected code ran: ${handler}`);
-    assert.deepEqual(replacement, { tag: 'div', className: 'participant-avatar-placeholder', title: AVATAR_NAME, textContent: 'X' });
+    assertNoInlineHandlers(html);
+    const [img] = elementsWith(html, 'data-fallback');
+    assert.deepEqual([img.attributes['data-fallback'], img.attributes['data-initials'], img.attributes.title], ['initials', 'X', AVATAR_NAME]);
 });
 
-test('adding a guest from the search passes the member as data', async () => {
+test('guests are added and removed through actions with their exact data', async () => {
     const user = { id: '42', displayName: ENTITY_NAME, username: 'mal', avatar: 'https://cdn.example/a.png' };
-    const { app, element } = await loadFrontendApp({ '/api/user/search?q=ma': [user] });
+    const { app, state, element } = await loadFrontendApp({ '/api/user/search?q=ma': [user] });
     element('guest-search-input').value = 'ma';
     await app.searchGuests();
+    const results = element('guest-search-results').innerHTML;
+    assertNoInlineHandlers(results);
 
-    const handler = handlerCalling(element('guest-search-results').innerHTML, 'addGuestToList');
-    assertCallsOnly(handler, 'addGuestToList', [{ id: '42', displayName: ENTITY_NAME, avatar: user.avatar }]);
-});
+    const [add] = actionTargets(results, 'addGuestToList');
+    await app.runAction('addGuestToList', actionElement(add));
+    assert.deepEqual({ ...state.selectedGuests[0] }, { id: '42', displayName: ENTITY_NAME, avatar: user.avatar });
 
-test('removing a selected guest passes the id unchanged', async () => {
-    const { app, element } = await loadFrontendApp({});
-    app.addGuestToList({ id: "4'2", displayName: 'Gast', avatar: '' });
-
-    const handler = handlerCalling(element('selected-guests').innerHTML, 'removeGuestFromList');
-    assertCallsOnly(handler, 'removeGuestFromList', ["4'2"]);
+    const selected = element('selected-guests').innerHTML;
+    assertNoInlineHandlers(selected);
+    const [remove] = actionTargets(selected, 'removeGuestFromList');
+    await app.runAction('removeGuestFromList', actionElement(remove));
+    assert.equal(state.selectedGuests.length, 0);
 });
 
 test('admin event cards open the registrations with the exact title', async () => {

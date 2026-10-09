@@ -2,7 +2,8 @@
  * Comments and questions on the event page.
  */
 import { state } from '../core/state.js';
-import { escapeHtml, inlineArg, showToast } from '../core/ui.js';
+import { registerActions } from '../core/actions.js';
+import { escapeHtml, showToast } from '../core/ui.js';
 
 export async function loadComments(eventId) {
     // Check if comment area exists, if not create it
@@ -33,7 +34,7 @@ export async function loadComments(eventId) {
             html += `
             <div class="comment-form">
                 <textarea class="form-control" id="comment-input" rows="2" placeholder="Frage oder Kommentar schreiben..." maxlength="1000"></textarea>
-                <button class="btn btn-accent" onclick="postComment('${eventId}')">
+                <button class="btn btn-accent" data-click="postComment" data-event-id="${escapeHtml(eventId)}">
                     <i class="bi bi-send"></i>
                 </button>
             </div>`;
@@ -74,15 +75,15 @@ export function renderComment(comment, eventId, isLoggedIn) {
     return `
     <div class="comment-card ${comment.isAdmin ? 'comment-admin-reply' : ''}">
         <div class="comment-header">
-            <img class="comment-avatar" src="${escapeHtml(comment.userAvatar || '')}" alt="" onerror="this.style.display='none'">
+            <img class="comment-avatar" src="${escapeHtml(comment.userAvatar || '')}" alt="" data-fallback="hide">
             <span class="comment-username">${escapeHtml(comment.userName)}</span>
             ${comment.isAdmin ? '<span class="comment-admin-badge">ADMIN</span>' : ''}
             <span class="comment-date">${dateStr}</span>
         </div>
         <div class="comment-text">${escapeHtml(comment.text).replace(/\n/g, '<br>')}</div>
         <div class="comment-actions">
-            ${isLoggedIn && !comment.replyTo ? `<button onclick="replyToComment('${eventId}', '${comment.id}', ${inlineArg(comment.userName)})"><i class="bi bi-reply me-1"></i>Antworten</button>` : ''}
-            ${isOwn || isAdmin ? `<button onclick="deleteComment('${eventId}', '${comment.id}')"><i class="bi bi-trash me-1"></i>Löschen</button>` : ''}
+            ${isLoggedIn && !comment.replyTo ? `<button data-click="replyToComment" data-comment-id="${escapeHtml(comment.id)}" data-user-name="${escapeHtml(comment.userName)}"><i class="bi bi-reply me-1"></i>Antworten</button>` : ''}
+            ${isOwn || isAdmin ? `<button data-click="deleteComment" data-event-id="${escapeHtml(eventId)}" data-comment-id="${escapeHtml(comment.id)}"><i class="bi bi-trash me-1"></i>Löschen</button>` : ''}
         </div>
     </div>`;
 }
@@ -112,23 +113,13 @@ export async function postComment(eventId, replyTo = null) {
     }
 }
 
-export function replyToComment(eventId, commentId, userName) {
+export function replyToComment(commentId, userName) {
     const input = document.getElementById('comment-input');
-    if (input) {
-        input.value = `@${userName} `;
-        input.focus();
-        // Store reply target
-        input.dataset.replyTo = commentId;
-        // Override the send button
-        const btn = input.nextElementSibling;
-        if (btn) {
-            btn.onclick = () => {
-                postComment(eventId, commentId);
-                delete input.dataset.replyTo;
-                btn.onclick = () => postComment(eventId);
-            };
-        }
-    }
+    if (!input) return;
+    input.value = `@${userName} `;
+    input.focus();
+    // The postComment action sends the next comment as a reply to this one
+    input.dataset.replyTo = commentId;
 }
 
 export async function deleteComment(eventId, commentId) {
@@ -148,5 +139,14 @@ export async function deleteComment(eventId, commentId) {
     }
 }
 
-// Temporary bridge for inline handlers; D-01 replaces them with data-click and removes it
-Object.assign(window, { postComment, replyToComment, deleteComment });
+registerActions({
+    postComment: (el) => {
+        // A reply target set by replyToComment applies to the next post only
+        const input = document.getElementById('comment-input');
+        const replyTo = input?.dataset.replyTo || null;
+        if (input) delete input.dataset.replyTo;
+        return postComment(el.dataset.eventId, replyTo);
+    },
+    replyToComment: (el) => replyToComment(el.dataset.commentId, el.dataset.userName),
+    deleteComment: (el) => deleteComment(el.dataset.eventId, el.dataset.commentId)
+});

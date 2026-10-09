@@ -314,7 +314,7 @@
                     <div class="input-group mb-2">
                       <input type="text" class="form-control" id="guest-search-input"
                         placeholder="Name oder Benutzername suchen..."
-                        oninput="debounceGuestSearch()" autocomplete="off">
+                        data-input="debounceGuestSearch" autocomplete="off">
                       <span class="input-group-text bg-transparent border-secondary">
                         <i class="bi bi-search text-muted"></i>
                       </span>
@@ -360,7 +360,7 @@
                     <p class="text-secondary mb-0">Status: <span id="detail-reg-status" class="fw-bold"></span></p>
                     <div id="detail-reg-slot" class="mt-2"></div>
                   </div>
-                  <button class="btn btn-outline-danger" onclick="unregisterFromEvent()" id="unregister-btn">
+                  <button class="btn btn-outline-danger" data-click="unregisterFromEvent" id="unregister-btn">
                     <i class="bi bi-x-circle me-1"></i>Abmelden
                   </button>
                 </div>
