@@ -39,7 +39,7 @@ see_also: [testing, data-layer, glossary]
 ## Frontend patterns
 
 - Global functions in `public/js/app.js`, referenced from inline `onclick`.
-- Escape everything interpolated into HTML with `escapeHtml`; Markdown only via `renderMarkdownSafe`.
+- Escape everything interpolated into HTML with `escapeHtml`; Markdown only via `renderMarkdownSafe`; card previews via `escapeHtml(markdownPreview(text))`.
 - `fetch` with `X-CSRF-TOKEN: csrfToken` on mutating calls; feedback with `showToast(msg, 'success'|'danger'|'warning'|'info')`.
 - Colours from CSS variables in `:root`.
 
