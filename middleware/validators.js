@@ -4,6 +4,21 @@
  */
 
 /**
+ * Whether a value is an absolute http(s) URL of at most 2000 characters.
+ *
+ * @param {*} value -> Submitted value.
+ * @returns {boolean} -> True for http:// and https:// URLs.
+ */
+function isHttpUrl(value) {
+    if (typeof value !== 'string' || value.length > 2000) return false;
+    try {
+        return ['http:', 'https:'].includes(new URL(value).protocol);
+    } catch {
+        return false;
+    }
+}
+
+/**
  * Validate event creation/update body
  */
 function validateEvent(req, res, next) {
@@ -47,6 +62,15 @@ function validateEvent(req, res, next) {
     // Description length check
     if (req.body.description && typeof req.body.description === 'string' && req.body.description.length > 5000) {
         errors.push('Beschreibung darf maximal 5000 Zeichen lang sein.');
+    }
+
+    // Banner and colour end up in <img src> and inline CSS -> only http(s) URLs and hex colours
+    const { bannerUrl, accentColor } = req.body;
+    if (bannerUrl && !isHttpUrl(bannerUrl)) {
+        errors.push('Banner-URL muss mit http:// oder https:// beginnen.');
+    }
+    if (accentColor && !(typeof accentColor === 'string' && /^#(?:[0-9a-fA-F]{3}){1,2}$/.test(accentColor))) {
+        errors.push('Akzentfarbe muss ein Hex-Farbwert wie #8b5cf6 sein.');
     }
 
     if (errors.length > 0) {

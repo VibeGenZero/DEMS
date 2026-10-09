@@ -1,4 +1,5 @@
 const express = require('express');
+const { rateLimit, ipKeyGenerator } = require('express-rate-limit');
 const router = express.Router();
 const { db, collection, doc, getDoc, getDocs, addDoc, deleteDoc, updateDoc, query, where, orderBy } = require('../firebaseAdmin');
 const { requireAuth } = require('../middleware/auth');
@@ -486,7 +487,19 @@ router.get('/:id/participants', requireAuth, async (req, res) => {
 /**
  * POST /api/events/:id/checkin — User check-in with code
  */
-router.post('/:id/checkin', requireAuth, async (req, res) => {
+// Six-digit codes: wrong guesses are limited per member. Only failed attempts count,
+// so this limiter stays on in dev mock mode as well (unlike the global ones)
+const checkinLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    limit: 10,
+    skipSuccessfulRequests: true,
+    keyGenerator: (req) => req.session?.user?.id || ipKeyGenerator(req.ip),
+    message: { error: 'Zu viele Check-in-Versuche. Bitte warte ein paar Minuten.' },
+    standardHeaders: true,
+    legacyHeaders: false
+});
+
+router.post('/:id/checkin', requireAuth, checkinLimiter, async (req, res) => {
     try {
         const { code } = req.body;
         const eventSnap = await getDoc(doc(db, 'events', req.params.id));

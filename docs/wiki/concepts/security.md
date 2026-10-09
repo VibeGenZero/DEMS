@@ -17,7 +17,7 @@ see_also: [auth-session, known-issues, deployment]
 |---|---|
 | Security headers + CSP | `helmet(...)` in `server.js` (directive list there) |
 | CORS | `cors({ origin: BASE_URL, credentials: true })` |
-| Rate limits | `/api/` 200 / 15 min, `/auth/` 30 / 15 min (off in dev mock mode) |
+| Rate limits | `/api/` 200 / 15 min, `/auth/` 30 / 15 min (off in dev mock mode); failed check-ins 10 / 15 min per member (`checkinLimiter`, on in mock mode too) |
 | CSRF | double-submit token, see [auth-session](auth-session.md) |
 | AuthZ | `requireAuth`, `requireAdmin`; the whole event API needs a login (no public preview); `draft`/`archived` events answer 404 to non-admins; comment delete = owner or admin |
 | XSS | frontend `escapeHtml()` for interpolated values, `renderMarkdownSafe()` = marked + DOMPurify for descriptions |
@@ -37,15 +37,16 @@ see_also: [auth-session, known-issues, deployment]
 | H-03 | 24 h admin cache | open |
 | H-04 | guest `my-registration` leaks registrant data | fixed: guests get only `{ registered, asGuest, id, status }` (F-04) |
 | H-05 | CSP `unsafe-inline` + `unsafe-eval` | **partial**: `unsafe-eval` removed (F-07); `unsafe-inline` stays while inline `onclick` handlers exist |
-| H-06 | check-in code via `Math.random`, not specifically rate-limited | open (only the global `/api` limit) |
+| H-06 | check-in code via `Math.random`, not specifically rate-limited | fixed: `crypto.randomInt`, 10 failed check-ins / 15 min per member (F-14) |
 | M-01 | Firebase client SDK used server-side | open (depends on Firestore rules) |
 | M-02 | CDN assets without SRI | fixed: no CDN assets, libraries and fonts are vendored in `public/vendor/` (F-07) |
-| M-03 / M-04 | non-constant-time password compare, panic without 2nd factor | open |
+| M-03 | non-constant-time password compare | fixed: `safeEqual` (SHA-256 + `timingSafeEqual`) for reset and panic deactivation (F-14) |
+| M-04 | panic without 2nd factor | open |
 | M-05 | public comments | fixed (comments require login) |
 | M-06 / M-07 | unbounded queries, user search enumeration | open |
-| M-08 / M-09 | `bannerUrl` / `accentColor` not validated server-side | open |
+| M-08 / M-09 | `bannerUrl` / `accentColor` not validated server-side | fixed: `validateEvent` allows only http(s) URLs and hex colours (F-14) |
 | L-02 | MemoryStore | fixed: sessions in the database via `PersistentSessionStore`, document id = SHA-256 of the session id (F-06) |
-| L-03 / L-04 | `parseTemplate` `$` patterns, CSV formula injection | open |
+| L-03 / L-04 | `parseTemplate` `$` patterns, CSV formula injection | fixed: `parseTemplate` inserts values literally (`utils/template.js`), CSV cells via `csvCell` with a leading apostrophe for `= + - @` (F-14) |
 | L-07 | logout via GET | fixed: `POST /auth/logout` with CSRF token (F-05) |
 
 Full report: `docs/security/SECURITY_AUDIT_2026-04-22.md`; older notes: `ISSUE.md`.

@@ -5,7 +5,8 @@ const {
     db, collection, doc, getDoc, getDocs, addDoc, setDoc, updateDoc, deleteDoc,
     query, where, orderBy, writeBatch
 } = require('../firebaseAdmin');
-const { requireAuth, requireAdmin } = require('../middleware/auth');
+const { requireAuth, requireAdmin, safeEqual } = require('../middleware/auth');
+const { csvCell } = require('../utils/csv');
 const { validateEvent, validateRegStatus, validateBotMessages } = require('../middleware/validators');
 const { sendDM, assignRole, parseTemplate, getGuildRoles, sendChannelMessage, buildEventEmbed, buildEventComponents, getGuildScheduledEvents, createEventChannels, deleteEventChannels, createScheduledEvent, getBotStatus, getBotSettings, saveBotSettings, getRunningEvents, getGuildChannels, buildPollEmbed, buildPollComponents } = require('../bot');
 const { promoteFromWaitlist, addAuditLog, loadEventRoster, loadEventRegistrations, saveEventWithSlots } = require('../utils/eventUtils');
@@ -582,7 +583,7 @@ router.post('/events/:id/duplicate', async (req, res) => {
  */
 router.post('/events/:id/generate-checkin', async (req, res) => {
     try {
-        const code = String(Math.floor(100000 + Math.random() * 900000));
+        const code = String(crypto.randomInt(100000, 1000000));
         await updateDoc(doc(db, 'events', req.params.id), {
             checkinCode: code,
             checkinEnabled: true
@@ -672,7 +673,7 @@ router.get('/events/:id/registrations/export', async (req, res) => {
         const event = eventSnap.exists() ? eventSnap.data() : {};
         const eventTitle = event.title || 'Event';
         const slots = getSlots(event);
-        const slotLabel = (slotId) => `"${formatSlotLabel(findSlot(slots, slotId)).replace(/"/g, '""')}"`;
+        const slotLabel = (slotId) => formatSlotLabel(findSlot(slots, slotId));
 
         const q = query(
             collection(db, 'registrations'),
@@ -695,25 +696,23 @@ router.get('/events/:id/registrations/export', async (req, res) => {
 
         // Build CSV
         const slotHeaders = slots.length > 0 ? ['Slot', 'Wunschrolle'] : [];
-        const headers = ['User', 'UserID', 'Status', 'Quelle', 'Datum', 'Gäste (Anzahl)', 'Gäste IDs', ...slotHeaders, ...formKeysArr];
+        const headers = ['User', 'UserID', 'Status', 'Quelle', 'Datum', 'Gäste (Anzahl)', 'Gäste IDs', ...slotHeaders, ...formKeysArr].map(csvCell);
         const rows = registrations.map(r => {
             const guestCount = Array.isArray(r.guests) ? r.guests.length : 0;
             const guestIds = Array.isArray(r.guests) ? r.guests.join('; ') : '';
             const base = [
-                `"${(r.userName || '').replace(/"/g, '""')}"`,
+                r.userName || '',
                 r.userId,
                 r.status,
                 r.source === 'discord' ? 'Discord' : 'Website',
                 r.createdAt ? new Date(r.createdAt).toLocaleDateString('de-DE') : '',
                 guestCount,
-                `"${guestIds}"`
+                guestIds
             ];
-            const formVals = formKeysArr.map(k => {
-                const val = r.formAnswers ? r.formAnswers[k] : '';
-                return `"${String(val || '').replace(/"/g, '""')}"`;
-            });
+            const formVals = formKeysArr.map(k => (r.formAnswers ? r.formAnswers[k] : '') || '');
             const slotValues = slots.length > 0 ? [slotLabel(r.slotId), slotLabel(r.preferredSlotId)] : [];
-            return [...base, ...slotValues, ...formVals].join(',');
+            // csvCell quotes every cell and defuses formulas (=, +, -, @) for Excel/LibreOffice
+            return [...base, ...slotValues, ...formVals].map(csvCell).join(',');
         });
 
         const csv = [headers.join(','), ...rows].join('\n');
@@ -1112,8 +1111,7 @@ router.delete('/reset', async (req, res) => {
         const { password, targets } = req.body;
 
         // 1. Verify Password
-        const adminPassword = process.env.ADMIN_RESET_PASSWORD;
-        if (!adminPassword || password !== adminPassword) {
+        if (!safeEqual(password, process.env.ADMIN_RESET_PASSWORD)) {
             return res.status(401).json({ error: 'Ungültiges Admin-Reset-Passwort.' });
         }
 
@@ -1362,9 +1360,7 @@ router.post('/maintenance/panic', async (req, res) => {
 router.post('/maintenance/panic/deactivate', async (req, res) => {
     try {
         const { password } = req.body;
-        const adminPassword = process.env.ADMIN_RESET_PASSWORD;
-
-        if (!adminPassword || password !== adminPassword) {
+        if (!safeEqual(password, process.env.ADMIN_RESET_PASSWORD)) {
             return res.status(401).json({ error: 'Ungültiges Admin-Reset-Passwort.' });
         }
 

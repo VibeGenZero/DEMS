@@ -26,7 +26,7 @@ see_also: [registration-flow, event-lifecycle, api-index]
 | DELETE | `/:id/register` | user | `unregisterUserFromEvent`: deletes the own registration, removes role/channel access if it was accepted, promotes the waitlist, refreshes announcements |
 | GET | `/:id/my-registration` | user | own registration, or only `{ registered: true, asGuest: true, id, status }` of the inviting registration when the user is an accepted guest (never its `formAnswers` or guest list), or `{ registered: false }` |
 | GET | `/:id/participants` | user | first 20 accepted participants `{ displayName, avatar }` + `total`; slot events also get `slots` (line-up with members) and `waitlist` |
-| POST | `/:id/checkin` | user | body `{ code }`; requires `checkinEnabled` + matching `checkinCode` + own accepted registration; sets `checkedIn`, `checkedInAt` |
+| POST | `/:id/checkin` | user + `checkinLimiter` (10 failed attempts / 15 min per member, also in mock mode → 429 "Zu viele Check-in-Versuche …") | body `{ code }`; requires `checkinEnabled` + matching `checkinCode` + own accepted registration; sets `checkedIn`, `checkedInAt` |
 | GET | `/:id/comments` | user | comments of the event, sorted by `createdAt` ascending |
 | POST | `/:id/comments` | user | body `{ text (≤1000), replyTo }` |
 | DELETE | `/:id/comments/:commentId` | user (owner or admin) | deletes one comment |

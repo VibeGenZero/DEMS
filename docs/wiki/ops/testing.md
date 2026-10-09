@@ -3,7 +3,7 @@ id: testing
 title: Testing — node:test suites and helpers
 type: ops
 tags: [testing, node-test, integration-tests, helpers, tdd]
-sources: [test/helpers.js, test/devServer.test.js, test/noMock.test.js, test/mockMode.test.js, test/mockBot.test.js, test/seed.test.js, test/sqliteAdapter.test.js, test/eventUrl.test.js, test/wiki.test.js, test/branding.test.js, test/vendorAssets.test.js, test/eventDetailReset.test.js, test/profileRegistrations.test.js, test/login.test.js, test/authFrontend.test.js, test/fixtures/fakeDiscordServer.js, test/sessionStore.test.js, test/sessionRestart.test.js, test/reminders.test.js, test/reminderScheduler.test.js, test/eventForm.test.js, test/startup.test.js, test/avatar.test.js, test/eventCards.test.js, test/botPermissions.test.js]
+sources: [test/helpers.js, test/devServer.test.js, test/noMock.test.js, test/mockMode.test.js, test/mockBot.test.js, test/seed.test.js, test/sqliteAdapter.test.js, test/eventUrl.test.js, test/wiki.test.js, test/branding.test.js, test/vendorAssets.test.js, test/eventDetailReset.test.js, test/profileRegistrations.test.js, test/login.test.js, test/authFrontend.test.js, test/fixtures/fakeDiscordServer.js, test/sessionStore.test.js, test/sessionRestart.test.js, test/reminders.test.js, test/reminderScheduler.test.js, test/eventForm.test.js, test/startup.test.js, test/avatar.test.js, test/eventCards.test.js, test/botPermissions.test.js, test/hardening.test.js]
 see_also: [dev-mock-mode, conventions]
 ---
 # Testing — node:test suites and helpers
@@ -19,7 +19,7 @@ see_also: [dev-mock-mode, conventions]
 | `mockBot.test.js` | mock Discord helpers (roles, channels, DMs, event channels, "Zum Event" button link) via `bot.js` |
 | `eventUrl.test.js` | `buildEventUrl` builds `#event/<id>`; no server file builds `#events/<id>` links |
 | `seed.test.js` | seed counts, idempotence, reset, refusal outside mock mode / with Firebase |
-| `devServer.test.js` | CSP (scripts/styles/fonts only `'self'`, no `unsafe-eval`), persona login (new session, parallel first changes pass CSRF), no session for cookie-less requests until `/api/csrf-token`, reminder `sent` kept on save / reset on duplicate, several reminders as "24, 1", deleting an event or series deletes its Discord channels (mock log), a comment carries its author's avatar URL, admin/member access, event API only with login, draft/archived only for admins, guests see only status and id of the inviting registration, no `checkinCode` in member answers, mock data in routes, announce, start event, check-in, rate limits, maintenance + panic lockout |
+| `devServer.test.js` | CSP (scripts/styles/fonts only `'self'`, no `unsafe-eval`), persona login (new session, parallel first changes pass CSRF), no session for cookie-less requests until `/api/csrf-token`, reminder `sent` kept on save / reset on duplicate, several reminders as "24, 1", deleting an event or series deletes its Discord channels (mock log), a comment carries its author's avatar URL, wrong check-in codes limited per member (429 after 10), six-digit check-in code, CSV formulas defused, unsafe banner URL / colour refused, admin/member access, event API only with login, draft/archived only for admins, guests see only status and id of the inviting registration, no `checkinCode` in member answers, mock data in routes, announce, start event, check-in, rate limits, maintenance + panic lockout |
 | `noMock.test.js` | without `DEV_MOCK` the OAuth redirect stays and the persona login does not exist |
 | `wiki.test.js` | wiki frontmatter/link/graph validation and that `docs/wiki/graph.json` is current |
 | `branding.test.js` | the old product name ("Discord" + "Event Management") appears in no git-tracked file outside `public/vendor` (untracked files such as CI's npm logs are ignored) |
@@ -35,6 +35,7 @@ see_also: [dev-mock-mode, conventions]
 | `avatar.test.js` | `utils/avatar.js`: session avatar used as is, wrapped comment avatars unwrapped, intact values unchanged |
 | `eventCards.test.js` | `markdownPreview` (plain one-liner, keeps `snake_case` and `5 * 3`, cut on a word); overview, admin and Discord import cards show no raw Markdown; a cut preview never splits `&amp;` |
 | `botPermissions.test.js` | the bot invite URL asks for CreateEvents, for every right granted to participants (ViewChannel, Connect, SendMessages) and uses scopes `bot applications.commands` |
+| `hardening.test.js` | `safeEqual`, `csvCell` (formula starts defused, quoting), `parseTemplate` (values literal, no wildcard keys) |
 | `authFrontend.test.js` | frontend `logout()` posts the CSRF token, failure toast, no `/auth/logout` navigation left, `invalid_state` message |
 | `profileRegistrations.test.js` | profile cards link to events the user can open; archived events stay listed without a link for members |
 
