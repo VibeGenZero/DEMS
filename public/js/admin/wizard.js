@@ -5,6 +5,7 @@ import { state } from '../core/state.js';
 import { loadAdminEvents, loadAdminStats } from './dashboard.js';
 import { addFormField, getFormFieldsFromBuilder, getSlotsFromEditor, renderSlotEditor } from './wizard-builders.js';
 import { navigateTo } from '../core/router.js';
+import { registerActions } from '../core/actions.js';
 import { escapeHtml, inlineArg, showToast } from '../core/ui.js';
 import { showPollDetail } from '../polls/polls.js';
 
@@ -462,5 +463,7 @@ export function getSelectedRoles() {
     return Array.from(checkboxes).map(cb => cb.value);
 }
 
+registerActions({ editEvent: (el) => editEvent(el.dataset.eventId), showCreateEventModal: () => showCreateEventModal() });
+
 // Temporary bridge for inline handlers; D-01 replaces them with data-click and removes it
-Object.assign(window, { handleLocationInput, selectLocationChannel, wizardGoTo, wizardNext, wizardBack, showCreateEventModal, editEvent, saveEvent });
+Object.assign(window, { handleLocationInput, selectLocationChannel, wizardGoTo, wizardNext, wizardBack, saveEvent });

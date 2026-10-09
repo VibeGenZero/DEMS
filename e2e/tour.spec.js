@@ -41,6 +41,11 @@ for (const persona of PERSONAS) {
         if (isAdmin) {
             await navigate(page, 'admin');
             await expect(page.locator('#admin-events-grid .admin-event-card').first()).toBeVisible();
+            // Audit log opens and closes through actions
+            await page.locator('[data-click="loadAuditLog"]').click();
+            await expect(page.locator('#audit-log-container')).toBeVisible();
+            await page.locator('#audit-log-container [data-click="hide"]').click();
+            await expect(page.locator('#audit-log-container')).toBeHidden();
             await navigate(page, 'bot-control');
         } else {
             await openMenu(page);

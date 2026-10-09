@@ -672,19 +672,19 @@
             <p class="text-secondary mb-0">Erstelle und verwalte Events.</p>
           </div>
           <div class="d-flex gap-2">
-            <button class="btn btn-outline-light" onclick="showImportDiscordEventsModal()">
+            <button class="btn btn-outline-light" data-click="showImportDiscordEventsModal">
               <i class="bi bi-discord me-1"></i>Import aus Discord
             </button>
-            <button class="btn btn-accent" onclick="showCreateEventModal()">
+            <button class="btn btn-accent" data-click="showCreateEventModal">
               <i class="bi bi-plus-circle me-1"></i>Neues Event
             </button>
             <a class="btn btn-outline-light" href="#polls">
               <i class="bi bi-ui-checks-grid me-1"></i>Abstimmungen
             </a>
-            <button class="btn btn-outline-light" onclick="showBotMessagesModal()">
+            <button class="btn btn-outline-light" data-click="showBotMessagesModal">
               <i class="bi bi-chat-dots me-1"></i>Bot-Nachrichten
             </button>
-            <button class="btn btn-outline-light" onclick="loadAuditLog()">
+            <button class="btn btn-outline-light" data-click="loadAuditLog">
               <i class="bi bi-journal-text me-1"></i>Audit-Log
             </button>
             <div class="dropdown ms-2">
@@ -692,14 +692,14 @@
                 <i class="bi bi-exclamation-triangle-fill me-1"></i>Danger Zone
               </button>
               <ul class="dropdown-menu dropdown-menu-dark dropdown-menu-end">
-                <li><a class="dropdown-item" href="#" onclick="showMaintenanceModal(); return false;">
+                <li><a class="dropdown-item" href="#" data-click="showMaintenanceModal">
                   <i class="bi bi-tools me-2"></i>Wartungsmodus
                 </a></li>
-                <li><a class="dropdown-item" href="#" onclick="showResetModal(); return false;">
+                <li><a class="dropdown-item" href="#" data-click="showResetModal">
                   <i class="bi bi-trash3 me-2"></i>System Reset
                 </a></li>
                 <li><hr class="dropdown-divider"></li>
-                <li><a class="dropdown-item text-danger" href="#" onclick="activatePanicMode(); return false;">
+                <li><a class="dropdown-item text-danger" href="#" data-click="activatePanicMode">
                   <i class="bi bi-shield-exclamation me-2"></i>PANIC BUTTON
                 </a></li>
               </ul>
@@ -722,7 +722,7 @@
             <div class="d-flex justify-content-between align-items-center mb-3">
               <h4 class="mb-0"><i class="bi bi-journal-text me-2"></i>Audit-Log</h4>
               <button class="btn btn-sm btn-outline-light"
-                onclick="document.getElementById('audit-log-container').style.display='none'">
+                data-click="hide" data-target="audit-log-container">
                 <i class="bi bi-x-lg"></i>
               </button>
             </div>
@@ -1296,7 +1296,7 @@
         </div>
         <div class="modal-footer border-0">
           <button type="button" class="btn btn-outline-light" data-bs-dismiss="modal">Abbrechen</button>
-          <button type="button" class="btn btn-danger" onclick="performSystemReset()">
+          <button type="button" class="btn btn-danger" data-click="performSystemReset">
             Alles Löschen
           </button>
         </div>
@@ -1517,7 +1517,7 @@
         </div>
         <div class="modal-footer border-0">
           <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Abbrechen</button>
-          <button type="button" class="btn btn-accent" id="announce-send-btn" onclick="sendAnnouncement()">
+          <button type="button" class="btn btn-accent" id="announce-send-btn" data-click="sendAnnouncement">
             <i class="bi bi-megaphone me-1"></i>Ankündigen
           </button>
         </div>

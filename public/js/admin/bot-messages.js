@@ -2,6 +2,7 @@
  * Bot message templates dialog.
  */
 import { state } from '../core/state.js';
+import { registerActions } from '../core/actions.js';
 import { showToast } from '../core/ui.js';
 
 export async function showBotMessagesModal() {
@@ -41,5 +42,7 @@ export async function saveBotMessages() {
     }
 }
 
+registerActions({ showBotMessagesModal: () => showBotMessagesModal() });
+
 // Temporary bridge for inline handlers; D-01 replaces them with data-click and removes it
-Object.assign(window, { showBotMessagesModal, saveBotMessages });
+Object.assign(window, { saveBotMessages });

@@ -3,6 +3,7 @@
  */
 import { state } from '../core/state.js';
 import { showCreateEventModal, updateBannerPreview } from './wizard.js';
+import { registerActions } from '../core/actions.js';
 import { escapeHtml, markdownPreview, showToast } from '../core/ui.js';
 
 export async function showImportDiscordEventsModal() {
@@ -79,5 +80,7 @@ export function selectDiscordEvent(el) {
     });
 }
 
+registerActions({ showImportDiscordEventsModal: () => showImportDiscordEventsModal() });
+
 // Temporary bridge for inline handlers; D-01 replaces them with data-click and removes it
-Object.assign(window, { showImportDiscordEventsModal, selectDiscordEvent });
+Object.assign(window, { selectDiscordEvent });

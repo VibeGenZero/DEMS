@@ -2,7 +2,8 @@
  * Registrations dialog: list, accept/reject, move slot.
  */
 import { state } from '../core/state.js';
-import { escapeHtml, inlineArg, showToast } from '../core/ui.js';
+import { registerActions } from '../core/actions.js';
+import { escapeHtml, showToast } from '../core/ui.js';
 import { formatSlotLabel } from '../events/slots.js';
 
 export async function showRegistrations(eventId, eventTitle) {
@@ -66,10 +67,10 @@ export async function showRegistrations(eventId, eventTitle) {
         <td><small>${new Date(reg.createdAt).toLocaleDateString('de-DE')}</small></td>
         <td>
           ${reg.status === 'pending' || reg.status === 'waitlisted' ? `
-            <button class="btn btn-sm btn-outline-success me-1" onclick="updateRegStatus('${reg.id}', 'accepted', '${eventId}', ${inlineArg(eventTitle)})">
+            <button class="btn btn-sm btn-outline-success me-1" data-click="updateRegStatus" data-reg-id="${escapeHtml(reg.id)}" data-status="accepted" data-event-id="${escapeHtml(eventId)}" data-event-title="${escapeHtml(eventTitle)}">
               <i class="bi bi-check"></i>
             </button>
-            <button class="btn btn-sm btn-outline-danger" onclick="updateRegStatus('${reg.id}', 'rejected', '${eventId}', ${inlineArg(eventTitle)})">
+            <button class="btn btn-sm btn-outline-danger" data-click="updateRegStatus" data-reg-id="${escapeHtml(reg.id)}" data-status="rejected" data-event-id="${escapeHtml(eventId)}" data-event-title="${escapeHtml(eventTitle)}">
               <i class="bi bi-x"></i>
             </button>
           ` : '—'}
@@ -120,7 +121,7 @@ export function renderRegistrationSlotCell(reg, slots, eventId, eventTitle) {
     ).join('');
     return `<select class="form-select form-select-sm" aria-label="Slot"
         data-reg-id="${escapeHtml(reg.id)}" data-event-id="${escapeHtml(eventId)}" data-event-title="${escapeHtml(eventTitle)}"
-        onchange="moveRegistrationSlot(this)">${options}</select>${wish}`;
+        data-change="moveRegistrationSlot">${options}</select>${wish}`;
 }
 
 export async function moveRegistrationSlot(select) {
@@ -143,5 +144,8 @@ export async function moveRegistrationSlot(select) {
     showRegistrations(eventId, eventTitle);
 }
 
-// Temporary bridge for inline handlers; D-01 replaces them with data-click and removes it
-Object.assign(window, { showRegistrations, updateRegStatus, moveRegistrationSlot });
+registerActions({
+    showRegistrations: (el) => showRegistrations(el.dataset.eventId, el.dataset.eventTitle),
+    updateRegStatus: (el) => updateRegStatus(el.dataset.regId, el.dataset.status, el.dataset.eventId, el.dataset.eventTitle),
+    moveRegistrationSlot: (el) => moveRegistrationSlot(el)
+});

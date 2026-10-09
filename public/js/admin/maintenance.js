@@ -2,6 +2,7 @@
  * Maintenance mode and panic mode.
  */
 import { state } from '../core/state.js';
+import { registerActions } from '../core/actions.js';
 import { showToast } from '../core/ui.js';
 
 
@@ -174,5 +175,7 @@ export async function deactivatePanicMode() {
     }
 }
 
+registerActions({ showMaintenanceModal: () => showMaintenanceModal(), activatePanicMode: () => activatePanicMode() });
+
 // Temporary bridge for inline handlers; D-01 replaces them with data-click and removes it
-Object.assign(window, { showMaintenanceModal, saveMaintenanceSettings, activatePanicMode, deactivatePanicMode });
+Object.assign(window, { saveMaintenanceSettings, deactivatePanicMode });

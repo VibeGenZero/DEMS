@@ -3,7 +3,8 @@
  */
 import { state } from '../core/state.js';
 import { reminderHoursOf } from './wizard.js';
-import { escapeHtml, inlineArg, isValidBannerUrl, markdownPreview, renderSkeletonEvents, showToast } from '../core/ui.js';
+import { registerActions } from '../core/actions.js';
+import { escapeHtml, isValidBannerUrl, markdownPreview, renderSkeletonEvents, showToast } from '../core/ui.js';
 
 export async function showAdminSection() {
     const section = document.getElementById('admin-section');
@@ -114,8 +115,8 @@ export async function loadAdminEvents() {
                         <span><i class="bi bi-calendar-event me-2"></i>${dateStr}</span>
                         <div class="d-flex gap-1">
                           <span class="event-status-badge event-status-${seStatus}" style="font-size:0.7rem;">${statusMap[seStatus] || seStatus}</span>
-                          <button class="btn btn-sm btn-outline-light py-0 px-1" onclick="editEvent('${se.id}')" title="Bearbeiten"><i class="bi bi-pencil"></i></button>
-                          <button class="btn btn-sm btn-outline-light py-0 px-1" onclick="showRegistrations('${se.id}', ${inlineArg(se.title)})"><i class="bi bi-list-check"></i></button>
+                          <button class="btn btn-sm btn-outline-light py-0 px-1" data-click="editEvent" data-event-id="${escapeHtml(se.id)}" title="Bearbeiten"><i class="bi bi-pencil"></i></button>
+                          <button class="btn btn-sm btn-outline-light py-0 px-1" data-click="showRegistrations" data-event-id="${escapeHtml(se.id)}" data-event-title="${escapeHtml(se.title)}"><i class="bi bi-list-check"></i></button>
                         </div>
                       </div>`;
                 }).join('');
@@ -138,7 +139,7 @@ export async function loadAdminEvents() {
                     ${datesHtml}
                   </div>
                   <div class="admin-actions">
-                    <button class="btn btn-sm btn-outline-danger" onclick="deleteEventSeries('${event._seriesId}')">
+                    <button class="btn btn-sm btn-outline-danger" data-click="deleteEventSeries" data-series-id="${escapeHtml(event._seriesId)}">
                       <i class="bi bi-trash me-1"></i>Ganze Serie löschen
                     </button>
                   </div>
@@ -167,23 +168,23 @@ export async function loadAdminEvents() {
                 ${reminderHoursOf(event.reminderHours).length ? `<span class="badge-pill"><i class="bi bi-bell"></i>${reminderHoursOf(event.reminderHours).map(hours => `${hours}h`).join(' · ')}</span>` : ''}
               </div>
               <div class="admin-actions">
-                <button class="btn btn-sm btn-outline-light" onclick="showRegistrations('${event.id}', ${inlineArg(event.title)})">
+                <button class="btn btn-sm btn-outline-light" data-click="showRegistrations" data-event-id="${escapeHtml(event.id)}" data-event-title="${escapeHtml(event.title)}">
                   <i class="bi bi-list-check me-1"></i>Anmeldungen
                 </button>
-                <button class="btn btn-sm btn-outline-light" onclick="exportRegistrations('${event.id}')">
+                <button class="btn btn-sm btn-outline-light" data-click="exportRegistrations" data-event-id="${escapeHtml(event.id)}">
                   <i class="bi bi-download me-1"></i>CSV
                 </button>
-                <button class="btn btn-sm btn-outline-light" onclick="announceEvent('${event.id}')">
+                <button class="btn btn-sm btn-outline-light" data-click="announceEvent" data-event-id="${escapeHtml(event.id)}">
                   <i class="bi bi-megaphone me-1"></i>Ankündigen
                 </button>
-                <button class="btn btn-sm btn-outline-light" onclick="duplicateEvent('${event.id}')">
+                <button class="btn btn-sm btn-outline-light" data-click="duplicateEvent" data-event-id="${escapeHtml(event.id)}">
                   <i class="bi bi-copy me-1"></i>Duplizieren
                 </button>
-                <button class="btn btn-sm btn-outline-light" onclick="editEvent('${event.id}')">
+                <button class="btn btn-sm btn-outline-light" data-click="editEvent" data-event-id="${escapeHtml(event.id)}">
                   <i class="bi bi-pencil me-1"></i>Bearbeiten
                 </button>
                 ${!event.discordScheduledEventId ? `
-                <button class="btn btn-sm btn-outline-primary" onclick="syncDiscordEvent('${event.id}')" title="Als geplantes Event in Discord erstellen">
+                <button class="btn btn-sm btn-outline-primary" data-click="syncDiscordEvent" data-event-id="${escapeHtml(event.id)}" title="Als geplantes Event in Discord erstellen">
                   <i class="bi bi-discord me-1"></i>Sync
                 </button>
                 ` : ''}
@@ -192,22 +193,22 @@ export async function loadAdminEvents() {
                     <i class="bi bi-toggle-on me-1"></i>Status
                   </button>
                   <ul class="dropdown-menu">
-                    <li><a class="dropdown-item" href="#" onclick="changeEventStatus('${event.id}', 'active'); return false;">✅ Aktiv</a></li>
-                    <li><a class="dropdown-item" href="#" onclick="changeEventStatus('${event.id}', 'draft'); return false;">📝 Entwurf</a></li>
-                    <li><a class="dropdown-item" href="#" onclick="changeEventStatus('${event.id}', 'archived'); return false;">📦 Archiviert</a></li>
+                    <li><a class="dropdown-item" href="#" data-click="changeEventStatus" data-event-id="${escapeHtml(event.id)}" data-status="active">✅ Aktiv</a></li>
+                    <li><a class="dropdown-item" href="#" data-click="changeEventStatus" data-event-id="${escapeHtml(event.id)}" data-status="draft">📝 Entwurf</a></li>
+                    <li><a class="dropdown-item" href="#" data-click="changeEventStatus" data-event-id="${escapeHtml(event.id)}" data-status="archived">📦 Archiviert</a></li>
                   </ul>
                 </div>
                 ${event.status === 'draft' ? `
-                <button class="btn btn-sm btn-outline-success" onclick="startEvent('${event.id}')" title="Event starten (Status Aktiv + Startzeit jetzt)">
+                <button class="btn btn-sm btn-outline-success" data-click="startEvent" data-event-id="${escapeHtml(event.id)}" title="Event starten (Status Aktiv + Startzeit jetzt)">
                   <i class="bi bi-play-fill"></i>
                 </button>
                 ` : ''}
                 ${event.status === 'active' ? `
-                <button class="btn btn-sm btn-outline-warning" onclick="endEvent('${event.id}')" title="Event beenden (Status Archiviert + Endzeit jetzt)">
+                <button class="btn btn-sm btn-outline-warning" data-click="endEvent" data-event-id="${escapeHtml(event.id)}" title="Event beenden (Status Archiviert + Endzeit jetzt)">
                   <i class="bi bi-stop-fill"></i>
                 </button>
                 ` : ''}
-                <button class="btn btn-sm btn-outline-danger" onclick="deleteEvent('${event.id}')">
+                <button class="btn btn-sm btn-outline-danger" data-click="deleteEvent" data-event-id="${escapeHtml(event.id)}">
                   <i class="bi bi-trash me-1"></i>Löschen
                 </button>
               </div>
@@ -338,5 +339,8 @@ export async function performSystemReset() {
     }
 }
 
-// Temporary bridge for inline handlers; D-01 replaces them with data-click and removes it
-Object.assign(window, { loadAuditLog, showResetModal, performSystemReset });
+registerActions({
+    loadAuditLog: () => loadAuditLog(),
+    showResetModal: () => showResetModal(),
+    performSystemReset: () => performSystemReset()
+});

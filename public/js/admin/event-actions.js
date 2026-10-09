@@ -4,6 +4,7 @@
  */
 import { state } from '../core/state.js';
 import { loadAdminEvents, loadAdminStats } from './dashboard.js';
+import { registerActions } from '../core/actions.js';
 import { escapeHtml, showToast } from '../core/ui.js';
 import { DISCORD_MODAL_MAX_FIELDS } from '../events/registration-form.js';
 
@@ -269,5 +270,15 @@ export async function syncDiscordEvent(eventId) {
     }
 }
 
-// Temporary bridge for inline handlers; D-01 replaces them with data-click and removes it
-Object.assign(window, { duplicateEvent, deleteEvent, deleteEventSeries, changeEventStatus, announceEvent, sendAnnouncement, startEvent, endEvent, exportRegistrations, syncDiscordEvent });
+registerActions({
+    deleteEvent: (el) => deleteEvent(el.dataset.eventId),
+    deleteEventSeries: (el) => deleteEventSeries(el.dataset.seriesId),
+    changeEventStatus: (el) => changeEventStatus(el.dataset.eventId, el.dataset.status),
+    announceEvent: (el) => announceEvent(el.dataset.eventId),
+    sendAnnouncement: () => sendAnnouncement(),
+    startEvent: (el) => startEvent(el.dataset.eventId),
+    endEvent: (el) => endEvent(el.dataset.eventId),
+    exportRegistrations: (el) => exportRegistrations(el.dataset.eventId),
+    duplicateEvent: (el) => duplicateEvent(el.dataset.eventId),
+    syncDiscordEvent: (el) => syncDiscordEvent(el.dataset.eventId)
+});

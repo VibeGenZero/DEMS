@@ -210,40 +210,47 @@ test('guests are added and removed through actions with their exact data', async
     assert.equal(state.selectedGuests.length, 0);
 });
 
-test('admin event cards open the registrations with the exact title', async () => {
-    const { app, element } = await loadFrontendApp({
+test('admin cards name every action with the event it belongs to', async () => {
+    const { app, state, element, requests } = await loadFrontendApp({
         '/api/admin/all-events': [
             adminEvent('single'),
             adminEvent('s1', { seriesId: 'series', startDate: '2026-10-21T18:00:00.000Z' }),
             adminEvent('s2', { seriesId: 'series', startDate: '2026-10-28T18:00:00.000Z' })
-        ]
+        ],
+        '/api/admin/events/single/registrations': { data: [], slots: [] }
     });
+    state.currentUser = { ...MEMBER, isAdmin: true };
     await app.loadAdminEvents();
-
-    const handlers = attributeValues(element('admin-events-grid').innerHTML, 'onclick')
-        .filter(code => code.includes('showRegistrations('));
-    assert.ok(handlers.length >= 3, `expected handlers for the single event and both series dates, got ${handlers.length}`);
-    const ids = [];
-    for (const handler of handlers) {
-        const { calls, context } = runHandler(handler, { stubs: ['showRegistrations'] });
-        assert.equal(context.pwned, undefined);
-        assert.equal(calls.length, 1);
-        assert.equal(calls[0][1][1], TRICKY_TEXT);
-        ids.push(calls[0][1][0]);
+    const html = element('admin-events-grid').innerHTML;
+    assertNoInlineHandlers(html);
+    for (const target of elementsWith(html, 'data-click')) {
+        const { attributes } = target;
+        assert.ok(['single', 's1', 's2'].includes(attributes['data-event-id']) || attributes['data-series-id'] === 'series',
+            `${attributes['data-click']} without its event`);
     }
-    assert.ok(['single', 's1', 's2'].every(id => ids.includes(id)), ids.join(','));
+    const open = actionTargets(html, 'showRegistrations').find(t => t.attributes['data-event-id'] === 'single');
+    await app.runAction('showRegistrations', actionElement(open));
+    assert.equal(element('reg-event-title').textContent, TRICKY_TEXT);
+    assert.ok(requests.some(r => r.url === '/api/admin/events/single/registrations'));
 });
 
-test('accepting and rejecting a registration keeps the exact event title', async () => {
+test('accepting a registration sends the status and reloads with the exact title', async () => {
     const reg = { id: 'r1', userId: 'u-x', userName: 'Mia', status: 'pending', source: 'web', createdAt: '2026-10-01T18:00:00.000Z' };
-    const { app, element } = await loadFrontendApp({ '/api/admin/events/ev/registrations': { data: [reg], slots: [] } });
+    const { app, state, element, requests } = await loadFrontendApp({
+        '/api/admin/events/ev/registrations': { data: [reg], slots: [] },
+        '/api/admin/registrations/r1/status': { success: true }
+    });
+    state.currentUser = { ...MEMBER, isAdmin: true };
     await app.showRegistrations('ev', TRICKY_TEXT);
-
-    const handlers = attributeValues(element('registrations-tbody').innerHTML, 'onclick')
-        .filter(code => code.includes('updateRegStatus('));
-    assert.equal(handlers.length, 2);
-    assertCallsOnly(handlers[0], 'updateRegStatus', ['r1', 'accepted', 'ev', TRICKY_TEXT]);
-    assertCallsOnly(handlers[1], 'updateRegStatus', ['r1', 'rejected', 'ev', TRICKY_TEXT]);
+    const html = element('registrations-tbody').innerHTML;
+    assertNoInlineHandlers(html);
+    const accept = actionTargets(html, 'updateRegStatus').find(t => t.attributes['data-status'] === 'accepted');
+    assert.equal(accept.attributes['data-event-title'], TRICKY_TEXT);
+    element('reg-event-title').textContent = '';
+    await app.runAction('updateRegStatus', actionElement(accept));
+    const put = requests.find(r => r.method === 'PUT');
+    assert.deepEqual([put.url, JSON.parse(put.body)], ['/api/admin/registrations/r1/status', { status: 'accepted' }]);
+    assert.equal(element('reg-event-title').textContent, TRICKY_TEXT);
 });
 
 test('the overview opens events and filters categories through actions', async () => {
