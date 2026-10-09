@@ -45,9 +45,11 @@ app.use(helmet({
     contentSecurityPolicy: {
         directives: {
             defaultSrc: ["'self'"],
-            // Libraries and fonts are vendored in public/vendor/, so no CDN host is allowed
-            scriptSrc: ["'self'", "'unsafe-inline'"],
-            scriptSrcAttr: ["'unsafe-inline'"],
+            // Libraries and fonts are vendored in public/vendor/, so no CDN host is allowed.
+            // No inline scripts or handlers: actions run through data-click (public/js/core/actions.js);
+            // styles keep 'unsafe-inline' until D-02 removes the style attributes.
+            scriptSrc: ["'self'"],
+            scriptSrcAttr: ["'none'"],
             styleSrc: ["'self'", "'unsafe-inline'"],
             fontSrc: ["'self'"],
             imgSrc: ["'self'", "data:", "https:", "blob:"],

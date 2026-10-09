@@ -92,20 +92,6 @@ export function escapeHtml(str) {
 }
 
 /**
- * Encode a value as a JavaScript literal for an inline event handler:
- * `onclick="fn(${inlineArg(value)})"`. escapeHtml alone is not enough there,
- * because the browser decodes `&#039;` back to `'` before it runs the handler.
- * JSON makes the value a valid JS literal, escapeHtml keeps it inside the
- * double-quoted attribute.
- *
- * @param {*} value -> String, number, boolean or plain object.
- * @returns {string} -> HTML-escaped JS literal.
- */
-export function inlineArg(value) {
-    return escapeHtml(JSON.stringify(value === undefined ? null : value));
-}
-
-/**
  * Render Markdown string to safe HTML using marked + DOMPurify
  */
 export function renderMarkdownSafe(mdString) {

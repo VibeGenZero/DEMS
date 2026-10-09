@@ -6,7 +6,7 @@ const { frontendSources, REPO_ROOT } = require('./helpers');
 const { maskJsSource, lineDepths, codeIdentifiers } = require('./jsSource');
 
 // Code that may run on import besides import/export declarations
-const ALLOWED_TOP_LEVEL = [/^registerActions\(/, /^Object\.assign\(window, /];
+const ALLOWED_TOP_LEVEL = [/^registerActions\(/];
 const MAIN_TOP_LEVEL = [/^document\.addEventListener\(/, /^initActions\(/];
 const MAX_MODULE_LINES = 550;
 

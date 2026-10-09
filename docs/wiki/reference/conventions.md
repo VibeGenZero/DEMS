@@ -38,7 +38,7 @@ see_also: [testing, data-layer, glossary]
 
 ## Frontend patterns
 
-- Frontend code lives in ES modules under `public/js/` (one per area, see [frontend-app](../modules/frontend-app.md)); values several modules share are in `state` (`core/state.js`). Functions still called from inline `onclick` sit on `window` through a temporary bridge at the end of their module (removed by D-01).
+- Frontend code lives in ES modules under `public/js/` (one per area, see [frontend-app](../modules/frontend-app.md)); values several modules share are in `state` (`core/state.js`). Markup names actions (`data-click="name"`), the owning module registers them with `registerActions`; there are no inline handlers.
 - Escape everything interpolated into HTML with `escapeHtml`; Markdown only via `renderMarkdownSafe`; card previews via `escapeHtml(markdownPreview(text))`.
 - `fetch` with `X-CSRF-TOKEN: csrfToken` on mutating calls; feedback with `showToast(msg, 'success'|'danger'|'warning'|'info')`.
 - Colours from CSS variables in `:root`.

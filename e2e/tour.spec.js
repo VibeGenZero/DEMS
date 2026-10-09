@@ -127,3 +127,18 @@ test('the news dialog closes through its action', async ({ page }) => {
     await expect(dialog).toBeHidden();
     expect(errors).toEqual([]);
 });
+
+// The safety net of D-01: with the strict CSP a forgotten inline handler is blocked,
+// and Chromium reports that as a console error, so every tour step fails on it
+test('the error watch reports a blocked inline handler', async ({ page }) => {
+    const errors = watchErrors(page);
+    await loginAs(page, 'member');
+    await page.evaluate(() => {
+        const probe = document.createElement('button');
+        probe.id = 'csp-probe';
+        probe.setAttribute('onclick', 'void 0');
+        document.body.appendChild(probe);
+    });
+    await page.locator('#csp-probe').click({ force: true });
+    await expect.poll(() => errors.join('\n')).toMatch(/inline event handler violates .*'script-src-attr 'none''/);
+});

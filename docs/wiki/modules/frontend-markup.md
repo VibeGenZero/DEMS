@@ -48,6 +48,17 @@ No CDN: every library and font is a pinned copy with its license next to it.
 
 `--bg-primary #0a0a0f`, `--bg-secondary`, `--bg-card`, `--bg-glass`, `--accent #8b5cf6` (violet), `--accent-light`, `--accent-dark`, `--danger #ef4444`, `--success #22c55e`, `--warning #eab308`, `--info #06b6d4`, `--text-primary/secondary/muted`, `--border-subtle`, `--border-accent`, `--font-display` (UnifrakturCook), `--font-body` (Inter), `--radius 12px`, `--radius-lg 16px`, `--shadow-glow`, `--transition`. Use these instead of hard-coded colours.
 
+## Actions
+
+No inline handlers (`onclick`, `onchange`, `oninput`, `onerror`): the CSP blocks them (`script-src-attr 'none'`). Instead:
+
+| Attribute | Meaning |
+|---|---|
+| `data-click="name"` / `data-change="name"` / `data-input="name"` | runs the action `name` registered with `registerActions` (see [frontend-app](frontend-app.md)); the innermost element with an action wins; links get `preventDefault` |
+| other `data-*` | parameters of the action, read via `el.dataset` (always escaped with `escapeHtml`) |
+| `data-fallback="hide\|invisible\|initials"` | broken image: hide it, keep its space, or replace it with an initials tile (`data-initials`, `title`) |
+| `data-click="hide"` / `data-click="scrollTo"` / `data-change="toggleVisible"` + `data-target="<id>"` | built-in actions: hide, scroll to, or show/hide (checkbox) the element with that id |
+
 ## Rules
 
 - Do not edit `public/vendor/` (third-party builds).

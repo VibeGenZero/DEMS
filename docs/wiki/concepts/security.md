@@ -3,13 +3,13 @@ id: security
 title: Security model and open audit findings
 type: concept
 tags: [security, csp, helmet, csrf, xss, rate-limit, audit, https]
-sources: [server.js, docs/security/SECURITY_AUDIT_2026-04-22.md, ISSUE.md, routes/events.js, routes/user.js, utils/eventUtils.js, public/js/core/ui.js]
+sources: [server.js, docs/security/SECURITY_AUDIT_2026-04-22.md, ISSUE.md, routes/events.js, routes/user.js, utils/eventUtils.js, public/js/core/ui.js, public/js/core/actions.js]
 depends_on: [server]
 see_also: [auth-session, known-issues, deployment]
 ---
 # Security model and open audit findings
 
-> TL;DR: Defenses: helmet CSP (scripts, styles and fonts only from `'self'`, still allows `unsafe-inline`), CORS to `BASE_URL`, rate limits, double-submit CSRF on `/api` and `/auth`, httpOnly session cookie, server-side admin guards, `escapeHtml` + DOMPurify in the SPA. The 2026-04-22 audit lists 28 findings; most are still open — check the table before touching auth, events or exports. Serve DEMS over HTTPS: helmet's default `upgrade-insecure-requests` breaks plain-HTTP access from anything but localhost.
+> TL;DR: Defenses: helmet CSP (scripts, styles and fonts only from `'self'`; no inline scripts or event handlers; styles still allow `unsafe-inline`), CORS to `BASE_URL`, rate limits, double-submit CSRF on `/api` and `/auth`, httpOnly session cookie, server-side admin guards, `escapeHtml` + DOMPurify in the SPA. The 2026-04-22 audit lists 28 findings; most are still open — check the table before touching auth, events or exports. Serve DEMS over HTTPS: helmet's default `upgrade-insecure-requests` breaks plain-HTTP access from anything but localhost.
 
 ## Defenses in place
 
@@ -20,7 +20,7 @@ see_also: [auth-session, known-issues, deployment]
 | Rate limits | `/api/` 200 / 15 min, `/auth/` 30 / 15 min (off in dev mock mode); failed check-ins 10 / 15 min per member (`checkinLimiter`, on in mock mode too) |
 | CSRF | double-submit token, see [auth-session](auth-session.md) |
 | AuthZ | `requireAuth`, `requireAdmin`; the whole event API needs a login (no public preview); `draft`/`archived` events answer 404 to non-admins; comment delete = owner or admin |
-| XSS | frontend `escapeHtml()` for interpolated values, `inlineArg()` for values inside inline handlers (`onclick="fn(${inlineArg(text)})"`: JSON literal, then HTML-escaped — `escapeHtml` alone breaks out, the browser decodes `&#039;` before it runs the handler), `renderMarkdownSafe()` = marked + DOMPurify for descriptions |
+| XSS | frontend `escapeHtml()` for interpolated values, values for actions in `data-*` attributes (escaped with `escapeHtml`, read via `dataset`), never in handler code — the CSP blocks inline handlers, `renderMarkdownSafe()` = marked + DOMPurify for descriptions |
 | Secrets | `.env` never in the image (`.dockerignore`); `checkinCode` removed from every event answer outside `/api/admin` (`toPublicEvent` in `utils/eventUtils.js`) |
 | Dev mode | `DEV_MOCK=true` + `NODE_ENV=production` → refuses to start |
 | Container | runs as user `node`; production compose pins `NODE_ENV=production` |
@@ -36,7 +36,7 @@ see_also: [auth-session, known-issues, deployment]
 | H-01 / H-02 | OAuth `state`, session regeneration | fixed: one-time `state` per login, `startUserSession` regenerates the session (F-05) |
 | H-03 | 24 h admin cache | fixed: roles and `isAdmin` are re-read from Discord at most every 5 minutes (`createRoleRefresh`, F-15) |
 | H-04 | guest `my-registration` leaks registrant data | fixed: guests get only `{ registered, asGuest, id, status }` (F-04) |
-| H-05 | CSP `unsafe-inline` + `unsafe-eval` | **partial**: `unsafe-eval` removed (F-07); `unsafe-inline` stays while inline `onclick` handlers exist |
+| H-05 | CSP `unsafe-inline` + `unsafe-eval` | **done for scripts** (D-01): `unsafe-eval` removed (F-07); `script-src 'self'`, `script-src-attr 'none'`; actions via `data-click`/`data-change`/`data-input` (`core/actions.js`); `style-src` keeps `'unsafe-inline'` until D-02 removes the `style` attributes |
 | H-06 | check-in code via `Math.random`, not specifically rate-limited | fixed: `crypto.randomInt`, 10 failed check-ins / 15 min per member (F-14) |
 | M-01 | Firebase client SDK used server-side | open (depends on Firestore rules) |
 | M-02 | CDN assets without SRI | fixed: no CDN assets, libraries and fonts are vendored in `public/vendor/` (F-07) |
