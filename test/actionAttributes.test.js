@@ -1,7 +1,9 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const vm = require('node:vm');
-const { loadFrontendApp } = require('./helpers');
+const fs = require('fs');
+const path = require('path');
+const { loadFrontendApp, REPO_ROOT } = require('./helpers');
 
 // setImmediate runs after the microtask queue is drained, so every
 // fire-and-forget fetch chain inside app.js has settled by then.
@@ -27,6 +29,51 @@ const ENTITIES = { quot: '"', amp: '&', lt: '<', gt: '>' };
  */
 function decodeAttribute(value) {
     return value.replace(/&(quot|amp|lt|gt|#0*39);/g, (match, name) => ENTITIES[name] || "'");
+}
+
+const INDEX_HTML = fs.readFileSync(path.join(REPO_ROOT, 'public', 'index.html'), 'utf8');
+
+/**
+ * Elements in rendered HTML that carry `attribute`, with every attribute decoded.
+ *
+ * @param {string} html -> Rendered HTML.
+ * @param {string} attribute -> e.g. "data-click".
+ * @returns {Array<{ tag: string, attributes: Object<string, string> }>}
+ */
+function elementsWith(html, attribute) {
+    const found = [];
+    for (const tag of html.matchAll(/<([a-z][a-z0-9-]*)\b([^>]*)>/gi)) {
+        const attributes = {};
+        for (const attr of tag[2].matchAll(/([\w-]+)\s*=\s*(?:"([^"]*)"|'([^']*)')/g)) {
+            attributes[attr[1]] = decodeAttribute(attr[2] ?? attr[3]);
+        }
+        if (attribute in attributes) found.push({ tag: tag[1].toLowerCase(), attributes });
+    }
+    return found;
+}
+
+/**
+ * Elements whose data-click/change/input names `action`; at least one must exist.
+ */
+function actionTargets(html, action, type = 'click') {
+    const targets = elementsWith(html, `data-${type}`).filter(element => element.attributes[`data-${type}`] === action);
+    assert.ok(targets.length > 0, `no element with data-${type}="${action}"`);
+    return targets;
+}
+
+/**
+ * Element double for app.runAction(): dataset from the data-* attributes.
+ */
+function actionElement({ tag, attributes }, extra = {}) {
+    const dataset = {};
+    for (const [name, value] of Object.entries(attributes)) {
+        if (name.startsWith('data-')) dataset[name.slice(5).replace(/-([a-z])/g, (m, c) => c.toUpperCase())] = value;
+    }
+    return { tagName: tag.toUpperCase(), dataset, value: attributes.value, getAttribute: (name) => attributes[name] ?? null, ...extra };
+}
+
+function assertNoInlineHandlers(html) {
+    assert.doesNotMatch(html, /\son[a-z]+\s*=\s*["']/i);
 }
 
 /**
@@ -193,14 +240,49 @@ test('accepting and rejecting a registration keeps the exact event title', async
     assertCallsOnly(handlers[1], 'updateRegStatus', ['r1', 'rejected', 'ev', TRICKY_TEXT]);
 });
 
-test('category pills filter by the exact category', async () => {
-    const { app, element } = await loadFrontendApp({ '/api/events/categories': [TRICKY_TEXT] });
-    await app.loadCategories();
+test('the overview opens events and filters categories through actions', async () => {
+    const solo = adminEvent('solo', { title: 'Solo' });
+    const series = adminEvent('s1', { title: 'Serie', seriesId: 'series-1', seriesDates: [{ id: 's1', startDate: '2026-10-20T18:00:00.000Z' }, { id: 's2', startDate: '2026-10-27T18:00:00.000Z' }] });
+    const { app, state, element, location, requests } = await loadFrontendApp({
+        '/api/events/categories': [TRICKY_TEXT],
+        '/api/events': { data: [solo, series], meta: { total: 2, page: 1, limit: 20, totalPages: 1 } }
+    });
+    state.currentUser = MEMBER;
+    await app.showEventsSection();
+    const grid = element('events-grid').innerHTML;
+    const bar = element('category-filter-bar').innerHTML;
+    assertNoInlineHandlers(grid);
+    assertNoInlineHandlers(bar);
 
-    const handlers = attributeValues(element('category-filter-bar').innerHTML, 'onclick');
-    assert.equal(handlers.length, 2);
-    assertCallsOnly(handlers[0], 'filterByCategory', ['']);
-    assertCallsOnly(handlers[1], 'filterByCategory', [TRICKY_TEXT]);
+    const card = actionTargets(grid, 'navigateTo').find(target => target.attributes['data-route'] === 'event/solo');
+    await app.runAction('navigateTo', actionElement(card));
+    assert.equal(location.hash, '#event/solo');
+    const routes = actionTargets(grid, 'navigateTo').map(target => target.attributes['data-route']);
+    assert.ok(routes.includes('event/s2'), 'series dates open their event');
+
+    const pill = actionTargets(bar, 'filterByCategory').find(target => target.attributes['data-category'] === TRICKY_TEXT);
+    await app.runAction('filterByCategory', actionElement(pill));
+    await settle();   // filterByCategory starts showEventsSection without awaiting it
+    assert.ok(requests.some(r => r.url.includes(`category=${encodeURIComponent(TRICKY_TEXT)}`)), 'filters by the exact category');
+});
+
+test('the calendar arrows move one month in each direction', async () => {
+    const { app, state, element } = await loadFrontendApp({
+        '/api/events/categories': [],
+        '/api/events': { data: [], meta: { total: 0, page: 1, limit: 20, totalPages: 1 } }
+    });
+    state.currentUser = MEMBER;
+    const [calendarButton] = elementsWith(INDEX_HTML, 'data-click').filter(e => e.attributes['data-view'] === 'calendar');
+    await app.runAction('switchView', actionElement(calendarButton));
+    const month = () => element('events-calendar').innerHTML.match(/<h4>([^<]*)<\/h4>/)[1];
+    const start = month();
+    const back = actionTargets(element('events-calendar').innerHTML, 'shiftCalendarMonth').find(t => t.attributes['data-delta'] === '-1');
+    await app.runAction('shiftCalendarMonth', actionElement(back));
+    assert.notEqual(month(), start);
+    assert.doesNotMatch(month(), /undefined/);
+    const forward = actionTargets(element('events-calendar').innerHTML, 'shiftCalendarMonth').find(t => t.attributes['data-delta'] === '1');
+    await app.runAction('shiftCalendarMonth', actionElement(forward));
+    assert.equal(month(), start);
 });
 
 test('location suggestions select the exact channel', async () => {

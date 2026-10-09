@@ -227,15 +227,15 @@
             <i class="bi bi-search position-absolute"
               style="left:12px;top:50%;transform:translateY(-50%);color:var(--text-secondary);"></i>
             <input type="search" class="form-control" id="events-search" placeholder="Events durchsuchen..."
-              style="padding-left:36px;" oninput="debouncedSearch()">
+              style="padding-left:36px;" data-input="debouncedSearch">
           </div>
           <div class="btn-group" role="group">
             <button type="button" class="btn btn-outline-light btn-sm active" id="view-grid-btn"
-              onclick="switchView('grid')">
+              data-click="switchView" data-view="grid">
               <i class="bi bi-grid-3x3-gap"></i>
             </button>
             <button type="button" class="btn btn-outline-light btn-sm" id="view-calendar-btn"
-              onclick="switchView('calendar')">
+              data-click="switchView" data-view="calendar">
               <i class="bi bi-calendar3"></i>
             </button>
           </div>
@@ -265,7 +265,7 @@
       <div id="detail-banner-area" class="event-detail-banner-header"></div>
 
       <div class="container section-container">
-        <button class="btn btn-sm btn-outline-light mt-3 mb-4" onclick="navigateTo('events')">
+        <button class="btn btn-sm btn-outline-light mt-3 mb-4" data-click="navigateTo" data-route="events">
           <i class="bi bi-arrow-left me-1"></i>Zurück zur Übersicht
         </button>
 

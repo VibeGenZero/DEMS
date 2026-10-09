@@ -3,7 +3,8 @@
  * series dates.
  */
 import { state } from '../core/state.js';
-import { escapeHtml, inlineArg, isValidBannerUrl, markdownPreview, renderSkeletonEvents } from '../core/ui.js';
+import { registerActions } from '../core/actions.js';
+import { escapeHtml, isValidBannerUrl, markdownPreview, renderSkeletonEvents } from '../core/ui.js';
 import { getEventGradient } from './detail.js';
 
 export let activeCategory = '';
@@ -90,7 +91,7 @@ export async function showEventsSection() {
                     <i class="bi bi-clock-history fs-1 text-warning mb-3 d-block"></i>
                     <h5 class="text-warning">Zu viele Anfragen</h5>
                     <p class="text-muted">Du hast zu viele Anfragen in kurzer Zeit gesendet.<br>Bitte warte einen Moment und lade die Seite neu.</p>
-                    <button class="btn btn-outline-warning mt-2" onclick="showEventsSection()">
+                    <button class="btn btn-outline-warning mt-2" data-click="showEventsSection">
                         <i class="bi bi-arrow-clockwise me-1"></i>Erneut versuchen
                     </button>
                 </div>`;
@@ -145,7 +146,7 @@ export async function showEventsSection() {
                     const safeD = d.startDate ? d.startDate.replace(' ', 'T') : null;
                     const dateStr = safeD ? new Date(safeD).toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
                     return `
-                      <a class="series-date-item" href="#" onclick="event.stopPropagation(); navigateTo('event/${d.id}'); return false;">
+                      <a class="series-date-item" href="#" data-click="navigateTo" data-route="event/${escapeHtml(d.id)}">
                         <span><i class="bi bi-calendar-event me-2"></i>${dateStr}</span>
                         <span class="series-date-participants"><i class="bi bi-people me-1"></i>${d.currentParticipants || 0}${event.maxParticipants > 0 ? '/' + event.maxParticipants : ''}</span>
                       </a>`;
@@ -156,7 +157,7 @@ export async function showEventsSection() {
                         const safeD = d.startDate ? d.startDate.replace(' ', 'T') : null;
                         const dateStr = safeD ? new Date(safeD).toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
                         return `
-                          <a class="series-date-item" href="#" onclick="event.stopPropagation(); navigateTo('event/${d.id}'); return false;">
+                          <a class="series-date-item" href="#" data-click="navigateTo" data-route="event/${escapeHtml(d.id)}">
                             <span><i class="bi bi-calendar-event me-2"></i>${dateStr}</span>
                             <span class="series-date-participants"><i class="bi bi-people me-1"></i>${d.currentParticipants || 0}${event.maxParticipants > 0 ? '/' + event.maxParticipants : ''}</span>
                           </a>`;
@@ -184,7 +185,7 @@ export async function showEventsSection() {
                       <div class="series-dates-hidden" id="${seriesCardId}-hidden" style="display:none;">
                         ${hiddenDatesHtml}
                       </div>
-                      <a class="series-dates-toggle" href="#" onclick="event.stopPropagation(); toggleSeriesDates('${seriesCardId}'); return false;">
+                      <a class="series-dates-toggle" href="#" data-click="toggleSeriesDates" data-card-id="${escapeHtml(seriesCardId)}">
                         <i class="bi bi-chevron-down me-1" id="${seriesCardId}-icon"></i><span id="${seriesCardId}-text">${hiddenCount} weitere Termine anzeigen</span>
                       </a>
                     ` : ''}
@@ -246,7 +247,7 @@ export async function showEventsSection() {
 
             return `
         <div class="col-md-6">
-          <div class="glass-card event-card" onclick="navigateTo('event/${event.id}')">
+          <div class="glass-card event-card" data-click="navigateTo" data-route="event/${escapeHtml(event.id)}">
             ${bannerHtml}
             <div class="card-body">
               <div class="event-card-header-row">
@@ -321,11 +322,11 @@ export async function loadCategories() {
         }
 
         bar.innerHTML = `
-      <button class="category-pill ${!activeCategory ? 'active' : ''}" onclick="filterByCategory('')">
+      <button class="category-pill ${!activeCategory ? 'active' : ''}" data-click="filterByCategory" data-category="">
         <i class="bi bi-grid-3x3-gap"></i>Alle
       </button>
       ${categories.map(cat => `
-        <button class="category-pill ${activeCategory === cat ? 'active' : ''}" onclick="filterByCategory(${inlineArg(cat)})">
+        <button class="category-pill ${activeCategory === cat ? 'active' : ''}" data-click="filterByCategory" data-category="${escapeHtml(cat)}">
           <i class="bi bi-tag"></i>${escapeHtml(cat)}
         </button>
       `).join('')}
@@ -453,11 +454,11 @@ export function renderCalendar(events) {
     let html = `
     <div class="calendar-container">
       <div class="calendar-header">
-        <button class="btn btn-sm btn-outline-light" onclick="shiftCalendarMonth(-1)">
+        <button class="btn btn-sm btn-outline-light" data-click="shiftCalendarMonth" data-delta="-1">
           <i class="bi bi-chevron-left"></i>
         </button>
         <h4>${monthNames[calendarMonth]} ${calendarYear}</h4>
-        <button class="btn btn-sm btn-outline-light" onclick="shiftCalendarMonth(1)">
+        <button class="btn btn-sm btn-outline-light" data-click="shiftCalendarMonth" data-delta="1">
           <i class="bi bi-chevron-right"></i>
         </button>
       </div>
@@ -485,7 +486,7 @@ export function renderCalendar(events) {
         if (dayEvents.length > 0) {
             eventsHtml = '<div class="calendar-day-events">';
             dayEvents.slice(0, 3).forEach(ev => {
-                eventsHtml += `<div class="calendar-day-event" onclick="event.stopPropagation();navigateTo('event/${ev.id}')">${escapeHtml(ev.title)}</div>`;
+                eventsHtml += `<div class="calendar-day-event" data-click="navigateTo" data-route="event/${escapeHtml(ev.id)}">${escapeHtml(ev.title)}</div>`;
             });
             if (dayEvents.length > 3) {
                 eventsHtml += `<div class="calendar-day-event" style="opacity:0.6">+${dayEvents.length - 3} mehr</div>`;
@@ -510,5 +511,11 @@ export function renderCalendar(events) {
     container.innerHTML = html;
 }
 
-// Temporary bridge for inline handlers; D-01 replaces them with data-click and removes it
-Object.assign(window, { showEventsSection, filterByCategory, toggleSeriesDates, debouncedSearch, switchView, shiftCalendarMonth });
+registerActions({
+    showEventsSection: () => showEventsSection(),
+    toggleSeriesDates: (el) => toggleSeriesDates(el.dataset.cardId),
+    filterByCategory: (el) => filterByCategory(el.dataset.category),
+    debouncedSearch: () => debouncedSearch(),
+    switchView: (el) => switchView(el.dataset.view),
+    shiftCalendarMonth: (el) => shiftCalendarMonth(Number(el.dataset.delta))
+});

@@ -13,6 +13,18 @@ for (const persona of PERSONAS) {
 
         // Event overview -> event page
         await expect(page.locator('#events-grid .event-card').first()).toBeVisible();
+
+        // Grid/calendar switch, month arrows and category filter run as data-click actions
+        await page.locator('#view-calendar-btn').click();
+        await expect(page.locator('#events-calendar')).toBeVisible();
+        await page.locator('#events-calendar [data-click="shiftCalendarMonth"][data-delta="1"]').click();
+        await page.locator('#view-grid-btn').click();
+        await expect(page.locator('#events-grid')).toBeVisible();
+        await page.locator('#category-filter-bar .category-pill', { hasText: 'Gaming' }).click();
+        await expect(page.locator('#events-grid .event-card', { hasText: 'Community-Spieleabend' })).toBeVisible();
+        await expect(page.locator('#events-grid')).not.toContainText('Raid: Schattenfestung');
+        await page.locator('#category-filter-bar .category-pill', { hasText: 'Alle' }).click();
+
         await page.locator('#events-grid .event-card', { hasText: 'Community-Spieleabend' }).click();
         await expect(page.locator('#event-detail-section')).toBeVisible();
         await expect(page.locator('#detail-title')).toHaveText('Community-Spieleabend');

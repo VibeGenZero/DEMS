@@ -1,6 +1,7 @@
 /**
  * Hash router: handleRoute, navigateTo and the pending route before a login.
  */
+import { registerActions } from './actions.js';
 import { state } from './state.js';
 import { showBotControlSection } from '../admin/bot-control.js';
 import { showAdminSection } from '../admin/dashboard.js';
@@ -134,6 +135,8 @@ export function handleRoute() {
 export function navigateTo(route) {
     window.location.hash = '#' + route;
 }
+
+registerActions({ navigateTo: (el) => navigateTo(el.dataset.route) });
 
 // Temporary bridge for inline handlers; D-01 replaces them with data-click and removes it
 Object.assign(window, { navigateTo });
