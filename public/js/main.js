@@ -25,9 +25,12 @@ import './pages/debug.js';
 import './pages/profile.js';
 import './polls/admin.js';
 import './polls/polls.js';
+import { initActions } from './core/actions.js';
 import { createParticles, finishLoading, runBootAnimation } from './core/boot.js';
 import { checkUpdates } from './core/updates.js';
 import { showUserData } from './pages/info.js';
+
+initActions(document);
 
 document.addEventListener('DOMContentLoaded', () => {
     const lastBoot = localStorage.getItem('dems_boot_ts');

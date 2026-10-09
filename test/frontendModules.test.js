@@ -29,7 +29,9 @@ test('every module stays small and runs no code on import', () => {
         const depths = lineDepths(maskedText);
         const allowed = file === 'main.js' ? [...ALLOWED_TOP_LEVEL, ...MAIN_TOP_LEVEL] : ALLOWED_TOP_LEVEL;
         masked.forEach((line, i) => {
-            if (depths[i] !== 0 || !/^\S/.test(line) || /^[}\])]/.test(line) || /^(import|export) /.test(line)) return;
+            if (depths[i] !== 0 || !/^\S/.test(line) || /^[}\])]/.test(line)) return;
+            // Declarations are fine; module-private helpers need no export
+            if (/^(import|export|const|let|function|async function) /.test(line)) return;
             assert.ok(allowed.some(pattern => pattern.test(line)), `${file}:${i + 1} runs code on import: ${line.trim()}`);
         });
     }

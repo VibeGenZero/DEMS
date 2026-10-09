@@ -44,6 +44,7 @@ Logged-out users see `#login-section` for every route except `info`. An event ro
 |---|---|---|
 | `main.js` | entry point | imports every module, registers the startup listeners |
 | `core/state.js` | shared values | `state` (see below) |
+| `core/actions.js` | event delegation | `registerActions(map)`, `initActions(root)` (called once in `main.js`), `runAction(name, element, event)`, `actionNames()`; built-in actions `toggleVisible`, `hide`, `scrollTo`; image fallbacks `hide`, `invisible`, `initials` |
 | `core/boot.js` | startup | `createParticles`, `runBootAnimation`, `fetchCSRFToken`, `loadServerInfo`, `updateServerNameInUI`, `finishLoading` |
 | `core/auth.js` | login state | `logout` (`POST /auth/logout` with CSRF token, then `/`; toast on failure), `checkAuth`, `showLoggedIn`, `showLoggedOut` |
 | `core/router.js` | hash router | `handleRoute`, `navigateTo`, `rememberPendingRoute`, `restorePendingRoute` |
@@ -83,6 +84,7 @@ Module-local values (e.g. `activeCategory`, `cachedEvents`, `currentView`, `cale
 - Rendering is string-built HTML: wrap every user value in `escapeHtml(...)`; render Markdown only via `renderMarkdownSafe(...)`; short previews of Markdown (cards, lists) via `escapeHtml(markdownPreview(text))` — cut first, escape after, so no `&amp;` is cut in half.
 - Mutating calls: `fetch(url, { method, headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': state.csrfToken }, body })`.
 - Show results with `showToast(msg, type)` where `type` is a Bootstrap context (`success`, `danger`, `warning`, `info` → class `text-bg-<type>`; there is no `error`); texts in German. Login/OAuth errors use `showError(msg)` (banner).
+- Actions: `data-click="name"` / `data-change` / `data-input` on the element, parameters in `data-*` (escaped with `escapeHtml`), `registerActions({ name: (el) => fn(el.dataset.x) })` at the end of the owning module; the innermost action wins; links get `preventDefault`. Broken images: `data-fallback="hide|invisible|initials"`. Built-in: `toggleVisible`, `hide`, `scrollTo` with `data-target`.
 - Inline `onclick="fn(...)"` handlers still exist (CSP allows `unsafe-inline`) — the function must be listed in the temporary `Object.assign(window, { … })` bridge at the end of its module; text values go in as `fn(${inlineArg(value)})`, never as `'${escapeHtml(value)}'`: the browser decodes `&#039;` back to `'` before it runs the handler, so a display name with `'` would end the string and run code. Ids from the server may stay `'${id}'`; fallbacks read user text from attributes (`this.title`, `this.dataset.*`). D-01 replaces these handlers with `data-click` actions.
 - New per-event areas on the event page: clear them in `resetEventDetailAreas`, show them again where they are filled, and drop late answers with `if (state.detailEventId !== eventId) return;` after each `await`.
 
