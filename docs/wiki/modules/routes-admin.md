@@ -27,8 +27,8 @@ see_also: [event-lifecycle, maintenance-mode, discord-integration, api-index]
 | PUT | `/events/:id/cancel` | status `cancelled` + DM to accepted/pending | `CANCEL_EVENT` |
 | POST | `/events/:id/start` | status `active`, sets `startDate` if empty | `START_EVENT` |
 | POST | `/events/:id/end` | status `archived`, `endDate = now` | `END_EVENT` |
-| DELETE | `/events/:id` | deletes event + its registrations | `DELETE_EVENT` |
-| DELETE | `/events/series/:seriesId` | deletes all events + registrations of a series | `DELETE_SERIES` |
+| DELETE | `/events/:id` | `await deleteEventChannels(id)` first (it reads the channel ids from the event), then deletes event + its registrations | `DELETE_EVENT` |
+| DELETE | `/events/series/:seriesId` | per event: `await deleteEventChannels(id)`, then event + registrations | `DELETE_SERIES` |
 | POST | `/events/:id/duplicate` | copy as `draft`, title `"<title> (Kopie)"`, `checkinCode`, `announcements`, reminder `sent` flags and `eventStartNotificationSent` reset | `DUPLICATE_EVENT` |
 | POST | `/events/:id/generate-checkin` | 6-digit code (`Math.random`), `checkinEnabled: true` | `GENERATE_CHECKIN` |
 | GET | `/events/:id/checkin-stats` | `{ total, checkedIn, code }` over accepted registrations | — |
@@ -60,7 +60,7 @@ grep `router.(get|post|put|delete)('/<path>` in `routes/admin.js`; the file is g
 ## Gotchas
 
 - `POST /events/:id/start|end` use `doc(collectionRef, id)`; the SQLite adapter supports that form since 2026-09 (it used to 404).
-- `DELETE /events/:id` deletes the event document BEFORE calling `deleteEventChannels(id)`, which reads that document → auto-created channels are never removed. See [known-issues](../reference/known-issues.md).
+- `deleteEventChannels(id)` reads the channel ids from the event document → call it (and await it) before the event is deleted; it checks for channel ids itself, so no status condition is needed.
 - The event payload is whitelisted field by field in POST and PUT (`baseEvent`, `updates`) — adding an event field means editing both. See [add-event-field](../howto/add-event-field.md).
 - Status, cancel, start, end and event updates call `notifyRegistrationsChanged`, so announcement buttons disappear on inactive events.
 - CSV export does not neutralise `= + - @` (audit L-04, open).

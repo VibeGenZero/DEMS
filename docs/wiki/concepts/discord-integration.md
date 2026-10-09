@@ -24,7 +24,7 @@ see_also: [form-fields, registration-flow, reminders-presence, configuration]
 | Status DMs | registration created / accepted / rejected / waitlisted / promoted / cancelled | `sendDM` with templates (`parseTemplate`) |
 | Guest invitations | registrant invites members | `sendGuestInvitation` (DM with accept/decline buttons) |
 | Event role | `event.assignRoleId` | `assignRole` on accept, `removeRole` on unregister |
-| Private event channels | `event.autoCreateChannels` + `channelConfig.type` (`voice`/`text`/`both`) | `createEventChannels` in `DISCORD_EVENT_CATEGORY_ID`, `@everyone` denied, accepted users allowed; `add/removeParticipantToEventChannels`; `deleteEventChannels` |
+| Private event channels | `event.autoCreateChannels` + `channelConfig.type` (`voice`/`text`/`both`) | `createEventChannels` in `DISCORD_EVENT_CATEGORY_ID`, `@everyone` denied, accepted users allowed; `add/removeParticipantToEventChannels`; `deleteEventChannels(eventId)` reads the ids from the event → called before an event or series is deleted |
 | Scheduled event sync | admin "Mit Discord synchronisieren" | `createScheduledEvent` (voice channel if `discordChannelId`, else external location "TBD"; guild-only; banner image) |
 | Scheduled event import | admin import dialog | `getGuildScheduledEvents` → prefills the create wizard |
 | Reminders / start DMs / presence | scheduler, bot settings | [reminders-presence](reminders-presence.md) |

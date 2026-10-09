@@ -17,7 +17,6 @@ see_also: [security, frontend-app, bot, reminders-presence]
 | 1 | second `DOMContentLoaded` handler calls undefined `setupEventListeners()` | `public/js/app.js` "Initialization" | `.catch` runs `showLoggedOut()`; can race with `checkAuth()` and hide the logged-in UI |
 | 2 | `showUserData` declared twice | `public/js/app.js` | the later `async` version silently wins |
 | 3 | comment avatar built as `cdn.discordapp.com/avatars/<id>/<session.avatar>.png` although `session.avatar` is already a URL | `routes/events.js` `POST /:id/comments` | broken avatars on new comments |
-| 4 | `DELETE /api/admin/events/:id` deletes the event before `deleteEventChannels(id)` reads it | `routes/admin.js` | auto-created Discord channels are never removed |
 | 7 | bot settings `dmNotifications`, `eventStartNotifications`, `autoChannelCreation`, `announceChannel`, `welcomeMessage` are stored but never read | `bot.js`, `routes/admin.js` | toggles in the bot control center have no effect |
 | 8 | `parseTemplate` passes values to `String.replace` as replacement strings | `bot.js` | `$&`, `$1` in names/titles are interpreted |
 
