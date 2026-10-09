@@ -40,5 +40,5 @@ grep `router.(get|post|put|delete)\('` in `routes/events.js`; handler order matt
 - **Route order:** `/series/:seriesId`, `/categories` and `/form-options` are declared BEFORE `/:id`; new static paths must also go above `/:id`, otherwise `/:id` swallows them.
 - Every handler builds event answers with `toPublicEvent` (`utils/eventUtils.js`), which drops `checkinCode`.
 - `router.param('id')` loads the event once more before each `/:id` handler; unknown ids pass through, so handlers keep their own "not found" answers. `cancelled` events stay readable by id. The frontend's `?status=all` query is ignored by `GET /:id`.
-- Comment avatars: `POST /:id/comments` treats `session.user.avatar` as an avatar *hash*, but the session stores a full URL → broken image URL. See [known-issues](../reference/known-issues.md).
+- Comment avatars: `session.user.avatar` is already a complete URL → `POST /:id/comments` stores it as is (`avatarUrlOf`); `GET /:id/comments` unwraps URLs that older versions stored wrapped into a second one (`repairAvatarUrl`, `utils/avatar.js`). The stored documents are not rewritten.
 - Participant counts include accepted guests (`1 + guests.length`) — keep that rule when adding counters.
