@@ -775,7 +775,7 @@ async function handleLocationInput() {
 
     suggestionsEl.innerHTML = filtered.map(c => `
         <div class="location-suggestion-item"
-             onclick="selectLocationChannel('${escapeHtml(c.id)}', '${escapeHtml(c.name)}', '${c.type}')">
+             onclick="selectLocationChannel(${inlineArg(c.id)}, ${inlineArg(c.name)}, ${inlineArg(c.type)})">
             <i class="bi bi-${c.type === 'voice' ? 'volume-up' : 'hash'} me-2"></i>${escapeHtml(c.name)}
         </div>`).join('');
     suggestionsEl.style.display = 'block';
@@ -816,7 +816,7 @@ async function loadCategories() {
         <i class="bi bi-grid-3x3-gap"></i>Alle
       </button>
       ${categories.map(cat => `
-        <button class="category-pill ${activeCategory === cat ? 'active' : ''}" onclick="filterByCategory('${escapeHtml(cat)}')">
+        <button class="category-pill ${activeCategory === cat ? 'active' : ''}" onclick="filterByCategory(${inlineArg(cat)})">
           <i class="bi bi-tag"></i>${escapeHtml(cat)}
         </button>
       `).join('')}
@@ -1022,9 +1022,10 @@ async function loadDetailParticipants(eventId) {
         avatarsEl.innerHTML = data.participants.map(p => {
             const initials = (p.displayName || '?').charAt(0).toUpperCase();
             if (p.avatar) {
-                return `<img src="${escapeHtml(p.avatar)}" class="participant-avatar" title="${escapeHtml(p.displayName)}" alt="${escapeHtml(p.displayName)}" onerror="this.outerHTML='<div class=\\'participant-avatar-placeholder\\' title=\\'${escapeHtml(p.displayName)}\\'>${initials}</div>'">`;
+                // The fallback reads name and initials from attributes; no user text in handler code
+                return `<img src="${escapeHtml(p.avatar)}" class="participant-avatar" title="${escapeHtml(p.displayName)}" alt="${escapeHtml(p.displayName)}" data-initials="${escapeHtml(initials)}" onerror="const fallback = document.createElement('div'); fallback.className = 'participant-avatar-placeholder'; fallback.title = this.title; fallback.textContent = this.dataset.initials; this.replaceWith(fallback)">`;
             }
-            return `<div class="participant-avatar-placeholder" title="${escapeHtml(p.displayName)}">${initials}</div>`;
+            return `<div class="participant-avatar-placeholder" title="${escapeHtml(p.displayName)}">${escapeHtml(initials)}</div>`;
         }).join('') + (overflow > 0 ? `<div class="participants-overflow-badge">+${overflow}</div>` : '');
     } catch { /* non-fatal */ }
 }
@@ -2175,7 +2176,7 @@ function renderComment(comment, eventId, isLoggedIn) {
         </div>
         <div class="comment-text">${escapeHtml(comment.text).replace(/\n/g, '<br>')}</div>
         <div class="comment-actions">
-            ${isLoggedIn && !comment.replyTo ? `<button onclick="replyToComment('${eventId}', '${comment.id}', '${escapeHtml(comment.userName).replace(/'/g, "\\'")}')"><i class="bi bi-reply me-1"></i>Antworten</button>` : ''}
+            ${isLoggedIn && !comment.replyTo ? `<button onclick="replyToComment('${eventId}', '${comment.id}', ${inlineArg(comment.userName)})"><i class="bi bi-reply me-1"></i>Antworten</button>` : ''}
             ${isOwn || isAdmin ? `<button onclick="deleteComment('${eventId}', '${comment.id}')"><i class="bi bi-trash me-1"></i>Löschen</button>` : ''}
         </div>
     </div>`;
@@ -3240,7 +3241,7 @@ async function loadAdminEvents() {
                         <div class="d-flex gap-1">
                           <span class="event-status-badge event-status-${seStatus}" style="font-size:0.7rem;">${statusMap[seStatus] || seStatus}</span>
                           <button class="btn btn-sm btn-outline-light py-0 px-1" onclick="editEvent('${se.id}')" title="Bearbeiten"><i class="bi bi-pencil"></i></button>
-                          <button class="btn btn-sm btn-outline-light py-0 px-1" onclick="showRegistrations('${se.id}', '${escapeHtml(se.title).replace(/'/g, "\\\'")}')"><i class="bi bi-list-check"></i></button>
+                          <button class="btn btn-sm btn-outline-light py-0 px-1" onclick="showRegistrations('${se.id}', ${inlineArg(se.title)})"><i class="bi bi-list-check"></i></button>
                         </div>
                       </div>`;
                 }).join('');
@@ -3292,7 +3293,7 @@ async function loadAdminEvents() {
                 ${reminderHoursOf(event.reminderHours).length ? `<span class="badge-pill"><i class="bi bi-bell"></i>${reminderHoursOf(event.reminderHours).map(hours => `${hours}h`).join(' · ')}</span>` : ''}
               </div>
               <div class="admin-actions">
-                <button class="btn btn-sm btn-outline-light" onclick="showRegistrations('${event.id}', '${escapeHtml(event.title).replace(/'/g, "\\\'")}')">
+                <button class="btn btn-sm btn-outline-light" onclick="showRegistrations('${event.id}', ${inlineArg(event.title)})">
                   <i class="bi bi-list-check me-1"></i>Anmeldungen
                 </button>
                 <button class="btn btn-sm btn-outline-light" onclick="exportRegistrations('${event.id}')">
@@ -4892,10 +4893,10 @@ async function showRegistrations(eventId, eventTitle) {
         <td><small>${new Date(reg.createdAt).toLocaleDateString('de-DE')}</small></td>
         <td>
           ${reg.status === 'pending' || reg.status === 'waitlisted' ? `
-            <button class="btn btn-sm btn-outline-success me-1" onclick="updateRegStatus('${reg.id}', 'accepted', '${eventId}', '${escapeHtml(eventTitle).replace(/'/g, "\\'")}')">
+            <button class="btn btn-sm btn-outline-success me-1" onclick="updateRegStatus('${reg.id}', 'accepted', '${eventId}', ${inlineArg(eventTitle)})">
               <i class="bi bi-check"></i>
             </button>
-            <button class="btn btn-sm btn-outline-danger" onclick="updateRegStatus('${reg.id}', 'rejected', '${eventId}', '${escapeHtml(eventTitle).replace(/'/g, "\\'")}')">
+            <button class="btn btn-sm btn-outline-danger" onclick="updateRegStatus('${reg.id}', 'rejected', '${eventId}', ${inlineArg(eventTitle)})">
               <i class="bi bi-x"></i>
             </button>
           ` : '—'}
@@ -5090,6 +5091,20 @@ function escapeHtml(str) {
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#039;');
+}
+
+/**
+ * Encode a value as a JavaScript literal for an inline event handler:
+ * `onclick="fn(${inlineArg(value)})"`. escapeHtml alone is not enough there,
+ * because the browser decodes `&#039;` back to `'` before it runs the handler.
+ * JSON makes the value a valid JS literal, escapeHtml keeps it inside the
+ * double-quoted attribute.
+ *
+ * @param {*} value -> String, number, boolean or plain object.
+ * @returns {string} -> HTML-escaped JS literal.
+ */
+function inlineArg(value) {
+    return escapeHtml(JSON.stringify(value === undefined ? null : value));
 }
 
 /**
@@ -5378,7 +5393,7 @@ async function searchGuests() {
 
         resultsEl.innerHTML = filtered.map(u => `
             <button type="button" class="list-group-item list-group-item-action bg-dark text-white border-secondary d-flex align-items-center gap-2"
-                onclick="addGuestToList(${JSON.stringify({ id: u.id, displayName: u.displayName, avatar: u.avatar }).replace(/"/g, '&quot;')})">
+                onclick="addGuestToList(${inlineArg({ id: u.id, displayName: u.displayName, avatar: u.avatar })})">
                 <img src="${escapeHtml(u.avatar)}" width="28" height="28" class="rounded-circle" onerror="this.src='/img/default-avatar.png'">
                 <span>${escapeHtml(u.displayName)}</span>
                 <small class="text-muted ms-1">@${escapeHtml(u.username)}</small>
@@ -5419,7 +5434,7 @@ function renderSelectedGuests() {
             <img src="${escapeHtml(g.avatar)}" width="18" height="18" class="rounded-circle" onerror="this.src=''">
             <span>${escapeHtml(g.displayName)}</span>
             <button type="button" class="btn-close btn-close-white ms-1" style="font-size:0.6rem;"
-                onclick="removeGuestFromList('${escapeHtml(g.id)}')"></button>
+                onclick="removeGuestFromList(${inlineArg(g.id)})"></button>
         </div>
     `).join('');
 }

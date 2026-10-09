@@ -20,7 +20,7 @@ see_also: [auth-session, known-issues, deployment]
 | Rate limits | `/api/` 200 / 15 min, `/auth/` 30 / 15 min (off in dev mock mode); failed check-ins 10 / 15 min per member (`checkinLimiter`, on in mock mode too) |
 | CSRF | double-submit token, see [auth-session](auth-session.md) |
 | AuthZ | `requireAuth`, `requireAdmin`; the whole event API needs a login (no public preview); `draft`/`archived` events answer 404 to non-admins; comment delete = owner or admin |
-| XSS | frontend `escapeHtml()` for interpolated values, `renderMarkdownSafe()` = marked + DOMPurify for descriptions |
+| XSS | frontend `escapeHtml()` for interpolated values, `inlineArg()` for values inside inline handlers (`onclick="fn(${inlineArg(text)})"`: JSON literal, then HTML-escaped — `escapeHtml` alone breaks out, the browser decodes `&#039;` before it runs the handler), `renderMarkdownSafe()` = marked + DOMPurify for descriptions |
 | Secrets | `.env` never in the image (`.dockerignore`); `checkinCode` removed from every event answer outside `/api/admin` (`toPublicEvent` in `utils/eventUtils.js`) |
 | Dev mode | `DEV_MOCK=true` + `NODE_ENV=production` → refuses to start |
 | Container | runs as user `node`; production compose pins `NODE_ENV=production` |
