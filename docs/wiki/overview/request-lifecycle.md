@@ -25,11 +25,12 @@ see_also: [auth-session, security]
 | 8 | `express-session` (`PersistentSessionStore`, collection `sessions`) | all | cookie `httpOnly`, `sameSite: lax`, `secure` only with `NODE_ENV=production`, 24 h |
 | 9 | CSRF (double submit) | all | mints `req.session.csrfToken` only on `GET /api/csrf-token`, sets cookie `XSRF-TOKEN` when the session has one, rejects POST/PUT/DELETE/PATCH on `/api/*` and `/auth/*` without matching `X-CSRF-TOKEN` / `X-XSRF-TOKEN` header → 403 |
 | 10 | `express.static('public')` | files | served before routers |
-| 11 | debug request logger | all | only with `DEBUG_MODE=true`; registered after static, so static files are not logged |
-| 12 | `dev/devAuth` router | `/auth` | only when `DEV_MOCK=true` |
-| 13 | routers | `/auth`, `/api/events`, `/api/admin`, `/api/user` | see [api-index](../reference/api-index.md) |
-| 14 | `GET /api/csrf-token`, `/api/maintenance/status`, `/api/server-info`, `/api/updates` | — | defined in `server.js` |
-| 15 | `GET /{*splat}` | everything else | SPA fallback → `public/index.html` (also for unknown `/api/...` GETs) |
+| 11 | `createRoleRefresh` | logged-in requests | roles and `isAdmin` re-read from Discord at most every 5 min ([auth-session](../concepts/auth-session.md)) |
+| 12 | debug request logger | all | only with `DEBUG_MODE=true`; registered after static, so static files are not logged |
+| 13 | `dev/devAuth` router | `/auth` | only when `DEV_MOCK=true` |
+| 14 | routers | `/auth`, `/api/events`, `/api/admin`, `/api/user` | see [api-index](../reference/api-index.md) |
+| 15 | `GET /api/csrf-token`, `/api/maintenance/status`, `/api/server-info`, `/api/updates` | — | defined in `server.js` |
+| 16 | `GET /{*splat}` | everything else | SPA fallback → `public/index.html` (also for unknown `/api/...` GETs) |
 
 ## Response conventions
 

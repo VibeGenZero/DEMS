@@ -50,5 +50,5 @@ Error codes are translated in the frontend by `getErrorMessage(code)` (`public/j
 ## Gotchas
 
 - Tests run these routes against a fake Discord API: `test/fixtures/fakeDiscordServer.js` stubs `fetch` for `discord.com/api` and starts `server.js` (see [testing](../ops/testing.md)).
-- `isAdmin` and `roles` are cached in the session for 24 h; role changes in Discord apply only after re-login.
+- `isAdmin` and `roles` are set at login and re-checked against Discord at most every 5 minutes by `createRoleRefresh` (see [auth-session](../concepts/auth-session.md)).
 - In dev mock mode `dev/devAuth.js` shadows `/discord` and `/discord/callback` with the persona login — see [dev-mock-mode](dev-mock-mode.md).

@@ -1998,6 +1998,27 @@ async function getUserRoles(userId, guildId) {
 }
 
 /**
+ * Current role ids of a member for the periodic rights check (createRoleRefresh).
+ * Unlike getUserRoles it tells "not a member" apart from "Discord cannot answer".
+ *
+ * @param {string} userId -> Discord user id.
+ * @returns {Promise<{isMember: boolean, roleIds: string[]}|null>} -> null when the bot is not ready or Discord fails.
+ */
+async function fetchMemberRoleIds(userId) {
+    if (!isReady) return null;
+    try {
+        const guild = await client.guilds.fetch(process.env.DISCORD_GUILD_ID);
+        const member = await guild.members.fetch({ user: userId, force: true });
+        // roles.cache contains @everyone (id = guild id); the OAuth login does not list it
+        return { isMember: true, roleIds: [...member.roles.cache.keys()].filter(id => id !== guild.id) };
+    } catch (err) {
+        if (err.code === 10007 || err.code === 10013) return { isMember: false, roleIds: [] }; // Unknown Member / User
+        console.error(`Failed to check roles of ${userId}:`, err.message);
+        return null;
+    }
+}
+
+/**
  * Check if user is a member of the guild
  */
 async function isGuildMember(userId, guildId) {
@@ -2860,6 +2881,7 @@ module.exports = {
     assignRole,
     removeRole,
     getUserRoles,
+    fetchMemberRoleIds,
     isGuildMember,
     getGuildName,
     getGuildRoles,

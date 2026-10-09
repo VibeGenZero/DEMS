@@ -30,6 +30,56 @@ function requireAdmin(req, res, next) {
     next();
 }
 
+const ROLE_REFRESH_MS = 5 * 60 * 1000;
+const ROLE_RETRY_MS = 60 * 1000;
+
+/**
+ * Middleware that re-reads the Discord roles of a logged-in user at most every
+ * five minutes, so a revoked admin role (or a new one) takes effect without a
+ * new login. If Discord cannot answer, the session keeps its values and the
+ * check is retried a minute later — a bot outage must not lock admins out.
+ *
+ * @param {Object} options -> Dependencies.
+ * @param {Function} options.fetchMemberRoleIds -> (userId) => { isMember, roleIds } or null (bot.js).
+ * @param {Function} [options.getAdminRoleId] -> Admin role id, default DISCORD_ADMIN_ROLE_ID.
+ * @param {Function} [options.now] -> Clock in ms.
+ * @returns {Function} -> Express middleware.
+ */
+function createRoleRefresh({ fetchMemberRoleIds, getAdminRoleId = () => process.env.DISCORD_ADMIN_ROLE_ID, now = Date.now }) {
+    const lookups = new Map(); // userId -> pending lookup, shared by parallel requests
+
+    const lookup = (userId) => {
+        if (!lookups.has(userId)) {
+            const pending = Promise.resolve()
+                .then(() => fetchMemberRoleIds(userId))
+                .catch(err => {
+                    console.error(`Role check for ${userId} failed:`, err.message);
+                    return null;
+                })
+                .finally(() => lookups.delete(userId));
+            lookups.set(userId, pending);
+        }
+        return lookups.get(userId);
+    };
+
+    return async function refreshSessionRoles(req, res, next) {
+        const user = req.session?.user;
+        if (!user || now() - (user.rolesCheckedAt || 0) < ROLE_REFRESH_MS) return next();
+
+        const result = await lookup(user.id);
+        if (result) {
+            const adminRoleId = getAdminRoleId();
+            user.roles = result.isMember ? result.roleIds : [];
+            user.isAdmin = !!adminRoleId && user.roles.includes(adminRoleId);
+            user.rolesCheckedAt = now();
+        } else {
+            // Discord unreachable: keep the values, ask again in a minute
+            user.rolesCheckedAt = now() - ROLE_REFRESH_MS + ROLE_RETRY_MS;
+        }
+        next();
+    };
+}
+
 /**
  * Compare a submitted secret with the configured one in constant time: both
  * are hashed first, so neither length nor content leak through timing.
@@ -76,4 +126,4 @@ function startUserSession(req, user) {
     });
 }
 
-module.exports = { requireAuth, requireAdmin, safeEqual, createCsrfToken, startUserSession };
+module.exports = { requireAuth, requireAdmin, createRoleRefresh, safeEqual, createCsrfToken, startUserSession };

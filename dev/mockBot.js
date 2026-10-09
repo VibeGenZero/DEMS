@@ -117,6 +117,11 @@ async function getUserRoles(userId) {
         .map(role => ({ id: role.id, name: role.name, color: `#${role.color.toString(16).padStart(6, '0')}` }));
 }
 
+async function fetchMemberRoleIds(userId) {
+    const member = findMember(userId);
+    return member ? { isMember: true, roleIds: [...member.roles] } : { isMember: false, roleIds: [] };
+}
+
 async function isGuildMember(userId) {
     return !!findMember(userId);
 }
@@ -283,6 +288,7 @@ module.exports = {
     getPublicGuildChannels,
     getGuildScheduledEvents,
     getUserRoles,
+    fetchMemberRoleIds,
     isGuildMember,
     getBotStatus,
     sendDM,

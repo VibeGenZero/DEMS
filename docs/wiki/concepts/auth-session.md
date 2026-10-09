@@ -35,7 +35,7 @@ sequenceDiagram
 - Store: `PersistentSessionStore` (`utils/sessionStore.js`) in the collection `sessions` → logins survive restarts and deploys. Write-through memory cache: the database is read only for sessions this process does not know yet (after a restart). No `touch` (express-session would call it on every unchanged request = one write each), so a session expires with its cookie, 24 h after its last change. One process only: the cache is the source of truth.
 - Cookie: `connect.sid`, `httpOnly`, `sameSite: 'lax'`, `maxAge` 24 h; `secure` only with `NODE_ENV=production` (also for `XSRF-TOKEN`). Production must sit behind a TLS proxy that sends `X-Forwarded-Proto: https` (`trust proxy` 1), otherwise express-session sends no cookie and the login does not stick.
 - Login: `startUserSession(req, user)` (`middleware/auth.js`) regenerates the session (new id → a session id planted before the login is worthless) and mints its CSRF token at once; parallel first requests after the login would otherwise each mint their own token and all but one get 403.
-- `isAdmin` and `roles` are snapshots from login; Discord role changes need a re-login.
+- `isAdmin` and `roles` come from the login and are re-read from Discord at most every 5 minutes (`createRoleRefresh` in `middleware/auth.js`, registered after the static files): a revoked or new admin role takes effect within 5 minutes, a member who left the server keeps no roles. If Discord cannot answer (`fetchMemberRoleIds` → `null`), the session keeps its values and the check is retried a minute later; parallel requests of one user share one lookup. `session.user.rolesCheckedAt` holds the time of the last check.
 - `isNewUser` is `true` only on the first `/auth/me` after the very first login → frontend shows `#firstLoginModal` (asks for `acceptInvitations`).
 - Logout: `POST /auth/logout` with CSRF token destroys the session; the frontend `logout()` then loads `/`. A plain GET does not log out.
 
@@ -56,4 +56,4 @@ sequenceDiagram
 
 ## Known weaknesses (audit 2026-04-22, still open)
 
-24 h admin cache (H-03). OAuth `state` (H-01), session regeneration (H-02), `secure` cookie (C-03), logout via POST (L-07) (all F-05) and the MemoryStore (L-02, F-06) are fixed. Details: [security](security.md).
+None of the login findings. OAuth `state` (H-01), session regeneration (H-02), `secure` cookie (C-03), logout via POST (L-07) (all F-05), the MemoryStore (L-02, F-06) and the 24 h admin cache (H-03, F-15) are fixed. Details: [security](security.md).

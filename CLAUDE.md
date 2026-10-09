@@ -68,7 +68,7 @@ When you change behaviour that a wiki node describes, update that node in the sa
 ## Top traps (details: `docs/wiki/reference/known-issues.md`)
 
 1. Opening the app via plain `http://<ip>` (not localhost) hangs on the loading screen — helmet CSP `upgrade-insecure-requests`; serve via HTTPS.
-2. Sessions are stored in the database (collection `sessions`, `utils/sessionStore.js`) and survive restarts; `isAdmin` is still cached for 24 h in the session.
+2. Sessions are stored in the database (collection `sessions`, `utils/sessionStore.js`) and survive restarts; `roles`/`isAdmin` are re-read from Discord at most every 5 minutes (`createRoleRefresh`).
 3. Event field changes must be whitelisted in BOTH `POST /events` and `PUT /events/:id` in `routes/admin.js`.
 4. Form answers are keyed by field label.
 5. Compose: `.env` reaches the container only via `env_file:`.

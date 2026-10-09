@@ -12,9 +12,9 @@ const path = require('path');
 const helmet = require('helmet');
 const cors = require('cors');
 const rateLimit = require('express-rate-limit');
-const { startBot, startReminderScheduler, stopBot, getGuildName } = require('./bot');
+const { startBot, startReminderScheduler, stopBot, getGuildName, fetchMemberRoleIds } = require('./bot');
 const { startPollScheduler, stopPollScheduler } = require('./utils/pollStore');
-const { createCsrfToken } = require('./middleware/auth');
+const { createCsrfToken, createRoleRefresh } = require('./middleware/auth');
 const { PersistentSessionStore } = require('./utils/sessionStore');
 
 // Production runs behind a TLS proxy (trust proxy below) -> cookies only over HTTPS
@@ -141,6 +141,10 @@ app.use((req, res, next) => {
 
 // ── Static files ────────────────────────────────────────────────────────
 app.use(express.static(path.join(__dirname, 'public')));
+
+// Roles and admin right of logged-in users are re-read from Discord at most every
+// 5 minutes (after static files, so assets never wait for Discord)
+app.use(createRoleRefresh({ fetchMemberRoleIds }));
 
 // ── Debug HTTP logging ───────────────────────────────────────────────────
 if (IS_DEBUG) {
