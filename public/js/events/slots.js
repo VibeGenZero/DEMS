@@ -75,7 +75,7 @@ export function renderAltSlotChips() {
 export function toggleAltSlot(slotId) {
     state.selectedAltSlotIds = state.selectedAltSlotIds.includes(slotId)
         ? state.selectedAltSlotIds.filter(id => id !== slotId)
-        : [...selectedAltSlotIds, slotId];
+        : [...state.selectedAltSlotIds, slotId];
     renderAltSlotChips();
 }
 

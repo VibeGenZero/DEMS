@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('fs');
 const path = require('path');
 const { frontendSources, REPO_ROOT } = require('./helpers');
-const { maskJsSource, lineDepths } = require('./jsSource');
+const { maskJsSource, lineDepths, codeIdentifiers } = require('./jsSource');
 
 // Code that may run on import besides import/export declarations
 const ALLOWED_TOP_LEVEL = [/^registerActions\(/, /^Object\.assign\(window, /];
@@ -34,5 +34,22 @@ test('every module stays small and runs no code on import', () => {
             if (/^(import|export|const|let|function|async function) /.test(line)) return;
             assert.ok(allowed.some(pattern => pattern.test(line)), `${file}:${i + 1} runs code on import: ${line.trim()}`);
         });
+    }
+});
+
+test('shared values are only used through state', () => {
+    const sources = frontendSources();
+    const stateFile = sources.find(entry => entry.file === 'core/state.js').source.replace(/\r\n/g, '\n');
+    const stateNames = [...stateFile.matchAll(/^ {4}([\w$]+):/gm)].map(match => match[1]);
+    assert.ok(stateNames.includes('currentUser'), 'state.js lists its fields');
+    for (const { file, source } of sources) {
+        if (file === 'core/state.js') continue;
+        const text = source.replace(/\r\n/g, '\n');
+        const masked = maskJsSource(text);
+        for (const ref of codeIdentifiers(masked)) {
+            if (!stateNames.includes(ref.name)) continue;
+            const line = masked.slice(0, ref.index).split('\n').length;
+            assert.fail(`${file}:${line} uses ${ref.name} without state.`);
+        }
     }
 });

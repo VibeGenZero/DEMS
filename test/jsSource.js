@@ -148,14 +148,15 @@ function lineDepths(masked) {
 
 /**
  * Identifiers used as code in masked source: not after `.`, `?.`, and not
- * an object key (`{ name:` / `, name:`).
+ * an object key (`{ name:` / `, name:`). A spread operand (`...name`) is code.
  *
  * @param {string} masked -> Output of maskJsSource().
  * @returns {Array<{ name: string, index: number }>} -> Every reference.
  */
 function codeIdentifiers(masked) {
     const found = [];
-    for (const match of masked.matchAll(/(?<![\w$.])[A-Za-z_$][\w$]*/g)) {
+    // A single dot before the name is property access; the last dot of `...` is not
+    for (const match of masked.matchAll(/(?<![\w$])(?<!(?:^|[^.])\.)[A-Za-z_$][\w$]*/g)) {
         const after = masked.slice(match.index + match[0].length, match.index + match[0].length + 50).match(/^\s*(\S)(\S)?/);
         const before = masked.slice(Math.max(0, match.index - 200), match.index).match(/(\S)\s*$/);
         const isKey = after && after[1] === ':' && after[2] !== ':' && before && (before[1] === '{' || before[1] === ',');

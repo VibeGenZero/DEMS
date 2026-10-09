@@ -22,6 +22,11 @@ test('line depth counts braces and open template literals', () => {
     assert.deepEqual(lineDepths(masked), [0, 1, 2, 1, 0]);
 });
 
+test('a spread operand is code, a property after . or ?. is not', () => {
+    const names = codeIdentifiers(maskJsSource('f(...list); g({ ...opts }); a?.b; c.d;')).map(ref => ref.name);
+    assert.deepEqual(names, ['f', 'list', 'g', 'opts', 'a', 'c']);
+});
+
 test('code identifiers skip property names and object keys', () => {
     const names = codeIdentifiers(maskJsSource('const o = { key: value, other }; o.prop(call());')).map(ref => ref.name);
     assert.deepEqual(names, ['const', 'o', 'value', 'other', 'o', 'call']);
