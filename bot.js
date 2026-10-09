@@ -12,6 +12,7 @@ const { IS_MOCK_MODE } = require('./dev/mockMode');
 const { db, collection, doc, getDoc, getDocs, addDoc, setDoc, updateDoc, deleteDoc, query, where, orderBy } = require('./firebaseAdmin');
 const { debugLog } = require('./utils/debugLog');
 const { buildEventUrl, buildPollUrl } = require('./utils/eventUrl');
+const { buildBotInviteUrl } = require('./utils/botPermissions');
 const { normalizeReminderHours, findDueReminders } = require('./utils/reminders');
 const { isRegistrationBlocked } = require('./middleware/maintenance');
 const {
@@ -2202,20 +2203,8 @@ function logBotInviteUrl() {
         return;
     }
 
-    const permissions = new PermissionsBitField([
-        PermissionsBitField.Flags.ManageRoles,        // Rollen zuweisen/entfernen
-        PermissionsBitField.Flags.ManageChannels,      // Kanäle erstellen/löschen
-        PermissionsBitField.Flags.SendMessages,        // Nachrichten in Channels senden
-        PermissionsBitField.Flags.SendMessagesInThreads, // Nachrichten in Threads senden
-        PermissionsBitField.Flags.EmbedLinks,          // Rich Embeds senden
-        PermissionsBitField.Flags.MentionEveryone,     // @everyone und Rollen erwähnen
-        PermissionsBitField.Flags.ViewChannel,         // Channels sehen
-        PermissionsBitField.Flags.ReadMessageHistory,  // Nachrichtenverlauf lesen
-        PermissionsBitField.Flags.UseExternalEmojis,   // Externe Emojis verwenden
-    ]);
-
-    const scopes = ['bot', 'applications.commands'];
-    const inviteUrl = `https://discord.com/oauth2/authorize?client_id=${clientId}&permissions=${permissions.bitfield}&scope=${scopes.join('%20')}`;
+    // Permission list with reasons: utils/botPermissions.js
+    const inviteUrl = buildBotInviteUrl(clientId);
 
     console.log('\n🔗 ════════════════════════════════════════════════════');
     console.log('   Bot Invite URL (mit allen benötigten Rechten):');

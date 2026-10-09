@@ -3,7 +3,7 @@ id: discord-integration
 title: Discord integration — what DEMS does in Discord
 type: concept
 tags: [discord, announcements, roles, channels, scheduled-events, dm, slash-commands, permissions, intents]
-sources: [bot.js, routes/admin.js, utils/registrationService.js, utils/eventUtils.js, utils/eventUrl.js]
+sources: [bot.js, routes/admin.js, utils/registrationService.js, utils/eventUtils.js, utils/eventUrl.js, utils/botPermissions.js]
 depends_on: [bot]
 see_also: [form-fields, registration-flow, reminders-presence, configuration]
 ---
@@ -33,7 +33,8 @@ see_also: [form-fields, registration-flow, reminders-presence, configuration]
 ## Discord application setup
 
 - OAuth2 redirect: `${BASE_URL}/auth/discord/callback`; scopes for users: `identify guilds guilds.members.read`.
-- Bot scopes: `bot applications.commands`. The bot logs its invite URL with the needed permissions on startup (`logBotInviteUrl`): ManageRoles, ManageChannels, SendMessages, SendMessagesInThreads, EmbedLinks, MentionEveryone, ViewChannel, ReadMessageHistory, UseExternalEmojis.
+- Bot scopes: `bot applications.commands`. The bot logs its invite URL with the needed permissions on startup (`logBotInviteUrl` → `buildBotInviteUrl`, list with reasons in `utils/botPermissions.js` `BOT_PERMISSIONS`): ManageRoles, ManageChannels, SendMessages, SendMessagesInThreads, EmbedLinks, MentionEveryone, ViewChannel, ReadMessageHistory, UseExternalEmojis, Connect, CreateEvents.
+- Discord lets a bot grant only permissions it has itself: everything `addParticipantToEventChannels` allows (ViewChannel, Connect, SendMessages) must be in `BOT_PERMISSIONS`. "Mit Discord synchronisieren" (`createScheduledEvent`) needs CreateEvents. A bot invited with an older URL lacks Connect and CreateEvents → re-invite with the logged URL or grant them to the bot role in the server settings.
 - Gateway intents: Guilds, **GuildMembers (privileged — enable "Server Members Intent" in the developer portal)**, GuildMessages, DirectMessages, GuildScheduledEvents.
 - The bot's role must be above `assignRoleId` roles to assign them.
 

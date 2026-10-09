@@ -69,7 +69,7 @@ sources: [scripts/wiki-graph.js, docs/wiki/graph.json, CLAUDE.md]
 | `utils/pollService.js`, `utils/pollStore.js` | date-polls, utils |
 | `utils/formFields.js` | form-fields, utils |
 | `utils/eventUrl.js` | utils, discord-integration |
-| `utils/eventUtils.js`, `utils/userProfile.js`, `utils/avatar.js`, `utils/sessionStore.js`, `utils/debugLog.js` | utils |
+| `utils/eventUtils.js`, `utils/userProfile.js`, `utils/avatar.js`, `utils/botPermissions.js`, `utils/sessionStore.js`, `utils/debugLog.js` | utils |
 | `utils/reminders.js` | utils, reminders-presence |
 | `public/js/app.js` | frontend-app |
 | `public/index.html`, `public/css/style.css` | frontend-markup |
