@@ -480,6 +480,9 @@ router.delete('/events/:id', async (req, res) => {
         const eventSnap = await getDoc(doc(db, 'events', req.params.id));
         const event = eventSnap.exists() ? eventSnap.data() : null;
 
+        // deleteEventChannels reads the channel ids from the event -> before the event is gone
+        if (event) await deleteEventChannels(req.params.id);
+
         await deleteDoc(doc(db, 'events', req.params.id));
         // Also delete all registrations for this event
         const regQ = query(collection(db, 'registrations'), where('eventId', '==', req.params.id));
@@ -491,10 +494,6 @@ router.delete('/events/:id', async (req, res) => {
         await Promise.all(deletePromises);
 
         await addAuditLog('DELETE_EVENT', req.session.user.id, `Deleted event ${req.params.id}`, req.params.id);
-
-        if (event && event.autoCreateChannels && event.status === 'active') {
-            deleteEventChannels(req.params.id).catch(console.error);
-        }
 
         res.json({ success: true });
     } catch (err) {
@@ -523,7 +522,8 @@ router.delete('/events/series/:seriesId', async (req, res) => {
 
         // Delete all events and their registrations
         for (const eventId of eventIds) {
-            const event = (await getDoc(doc(db, 'events', eventId))).data();
+            // Channels first: deleteEventChannels reads their ids from the event
+            await deleteEventChannels(eventId);
             await deleteDoc(doc(db, 'events', eventId));
 
             const regQ = query(collection(db, 'registrations'), where('eventId', '==', eventId));
@@ -533,10 +533,6 @@ router.delete('/events/series/:seriesId', async (req, res) => {
                 deletePromises.push(deleteDoc(doc(db, 'registrations', regDoc.id)));
             });
             await Promise.all(deletePromises);
-
-            if (event && event.autoCreateChannels && event.status === 'active') {
-                deleteEventChannels(eventId).catch(console.error);
-            }
         }
 
         await addAuditLog('DELETE_SERIES', req.session.user.id, `Deleted series ${seriesId} (${eventIds.length} events)`, eventIds[0]);

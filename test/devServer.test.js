@@ -326,6 +326,32 @@ async function createSlotEvent(admin, title, slots, fields = {}) {
     return body;
 }
 
+test('deleting an event deletes its Discord channels', async () => {
+    const admin = await loginAs('admin');
+    const created = await createSlotEvent(admin, 'Channel-Löschtest', [], { autoCreateChannels: true, channelConfig: { type: 'both' } });
+    await server.waitForOutput('Event-Channels für "Channel-Löschtest" erstellt');
+
+    assert.equal((await admin.send('DELETE', `/api/admin/events/${created.id}`)).status, 200);
+    await server.waitForOutput('Event-Channels für "Channel-Löschtest" gelöscht');
+});
+
+test('deleting a series deletes the Discord channels of its events', async () => {
+    const admin = await loginAs('admin');
+    const res = await admin.send('POST', '/api/admin/events', {
+        title: 'Serien-Löschtest', status: 'draft', accessMode: 'open', approvalMode: 'instant',
+        autoCreateChannels: true, channelConfig: { type: 'voice' },
+        recurring: true, recurringInterval: 'weekly', startDate: '2026-11-02T18:00:00.000Z', recurringUntil: '2026-11-10'
+    });
+    const { events } = await res.json();
+    assert.equal(events.length, 2);
+    // Channels appear when an instance becomes active
+    assert.equal((await admin.send('PUT', `/api/admin/events/${events[0].id}/status`, { status: 'active' })).status, 200);
+    await server.waitForOutput('Event-Channels für "Serien-Löschtest" erstellt');
+
+    assert.equal((await admin.send('DELETE', `/api/admin/events/series/${events[0].seriesId}`)).status, 200);
+    await server.waitForOutput('Event-Channels für "Serien-Löschtest" gelöscht');
+});
+
 test('a duplicated event gets its reminders and start notification again', async () => {
     const admin = await loginAs('admin');
     // Seed: the past event already sent its 24 h reminder and its start notification
