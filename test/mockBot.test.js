@@ -53,6 +53,11 @@ test('member roles come from the persona', async () => {
     assert.equal(await bot.isGuildMember('1', GUILD.id), false);
 });
 
+test('the periodic rights check reads the persona roles', async () => {
+    assert.deepEqual(await bot.fetchMemberRoleIds(raider.userId), { isMember: true, roleIds: [...raider.roles] });
+    assert.deepEqual(await bot.fetchMemberRoleIds('1'), { isMember: false, roleIds: [] });
+});
+
 test('messages are logged and reported as sent', async () => {
     const event = { title: 'Mock-Test', status: 'active', startDate: new Date().toISOString() };
 
