@@ -33,7 +33,7 @@ see_also: [auth-session, dev-mock-mode, maintenance-mode]
 8. `saveUserProfile(...)` (errors are logged, login continues) → `isNewUser`.
 9. `startUserSession(req, { id, username, displayName, avatar, roles, isAdmin, isNewUser })` (`middleware/auth.js`): new session id and CSRF token, then `req.session.user` → `/#events`.
 
-Error codes are translated in the frontend by `getErrorMessage(code)` (`public/js/app.js`).
+Error codes are translated in the frontend by `getErrorMessage(code)` (`public/js/core/ui.js`).
 
 ## Where in code
 

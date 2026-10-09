@@ -3,7 +3,7 @@ id: known-issues
 title: Known issues and pitfalls
 type: reference
 tags: [bugs, pitfalls, technical-debt, gotchas]
-sources: [public/js/app.js, bot.js, routes/events.js, routes/admin.js, utils/eventUtils.js, server.js, public/css/style.css, README.md]
+sources: [public/js, bot.js, routes/events.js, routes/admin.js, utils/eventUtils.js, server.js, public/css/style.css, README.md]
 see_also: [security, frontend-app, bot, reminders-presence]
 ---
 # Known issues and pitfalls

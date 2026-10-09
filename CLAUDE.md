@@ -38,7 +38,8 @@ Node ≥ 22. No build step, no TypeScript, no linter config.
 
 ## Save tokens
 
-- **Never read these files whole:** `public/js/app.js` (~4550 lines), `public/css/style.css` (~3270), `bot.js` (~2200), `public/index.html` (~1760), `routes/admin.js` (~1180). The wiki nodes list their functions/sections — `grep -n "function <name>" <file>` and read ~80 lines from there.
+- **Never read these files whole:** `public/css/style.css` (~3270), `bot.js` (~2200), `public/index.html` (~1760), `routes/admin.js` (~1180). The wiki nodes list their functions/sections — `grep -n "function <name>" <file>` and read ~80 lines from there.
+- The frontend is ES modules under `public/js/` (one per area, ≤ ~500 lines); open only the module from the map in `docs/wiki/modules/frontend-app.md`.
 - Ignore `node_modules/`, `public/vendor/`, `landing/`, `package-lock.json`, `data/`.
 - `docs/wiki/graph.json` has one node per line: `grep '"waitlist"' docs/wiki/graph.json` (or a file name like `"bot.js"`) returns complete nodes with summary, sources and neighbours — cheaper than opening pages or reading the whole file.
 
@@ -48,10 +49,10 @@ Node ≥ 22. No build step, no TypeScript, no linter config.
 - **Language:** everything users see (UI, API `{ error }` messages, Discord messages) in German; code, comments, commits and the wiki in English.
 - **Routes:** each handler has its own `try/catch` and answers `res.status(x).json({ error: '<German>' })`. Admin routes live in `routes/admin.js` (already guarded). Static paths go above `/:id`. Admin mutations call `addAuditLog(...)`.
 - **Express 5:** named wildcards (`/{*splat}`), `req.body` defaults to `{}` via a shim, never assign to `req.query`.
-- **CSRF:** mutating `/api/*` and `/auth/*` requests (e.g. `POST /auth/logout`) need header `X-CSRF-TOKEN` (frontend global `csrfToken`). Logins go through `startUserSession` (new session + CSRF token).
-- **Frontend:** global functions in `public/js/app.js` used by inline `onclick`; escape interpolated values with `escapeHtml`, values inside inline handlers with `inlineArg` (never `'${escapeHtml(x)}'` in handler code), Markdown only via `renderMarkdownSafe` (previews: `escapeHtml(markdownPreview(text))`); `showToast(msg, 'success'|'danger'|'warning'|'info')`.
+- **CSRF:** mutating `/api/*` and `/auth/*` requests (e.g. `POST /auth/logout`) need header `X-CSRF-TOKEN` (frontend `state.csrfToken` from `public/js/core/state.js`). Logins go through `startUserSession` (new session + CSRF token).
+- **Frontend:** ES modules under `public/js/` (one per area; shared values in `state` from `core/state.js`); actions via `data-click`/`data-change`/`data-input` + `registerActions` in the owning module (no inline handlers — the CSP blocks them); escape interpolated values with `escapeHtml`, values for actions in `data-*` attributes, escaped with `escapeHtml`, Markdown only via `renderMarkdownSafe` (previews: `escapeHtml(markdownPreview(text))`); `showToast(msg, 'success'|'danger'|'warning'|'info')`.
 - **Discord:** new Discord calls go into exported `bot.js` helpers guarded by `if (!isReady) return <neutral>` + `try/catch`, and get a logging twin in `dev/mockBot.js`. Use `flags: MessageFlags.Ephemeral` and `Events.ClientReady`. Links to an event only via `buildEventUrl(id)` from `utils/eventUrl.js`.
-- **Security:** never return `checkinCode` or other secrets in event responses; choose `requireAuth`/`requireAdmin` explicitly; no CDNs: libraries and fonts go as pinned files into `public/vendor/` (the CSP allows scripts, styles and fonts only from `'self'`).
+- **Security:** never return `checkinCode` or other secrets in event responses; choose `requireAuth`/`requireAdmin` explicitly; no CDNs: libraries and fonts go as pinned files into `public/vendor/` (the CSP allows scripts, styles and fonts only from `'self'`; no inline scripts or event handlers (`script-src-attr 'none'`)).
 - **Config:** document new env variables in `.env.example` (German comments) and `docs/wiki/ops/configuration.md`.
 - **Dev mock mode** (`DEV_MOCK=true`) must stay impossible with `NODE_ENV=production`.
 - **Tests:** `node:test` + `node:assert/strict`, test first (TDD), helpers in `test/helpers.js`; server behaviour via `test/devServer.test.js` with personas (`admin`, `raider`, `member`, `newbie`).

@@ -135,9 +135,9 @@
             <!-- Logged in -->
             <div id="user-info" style="display:none;" class="d-flex align-items-center gap-2">
               <img id="user-avatar" src="" alt="Avatar" class="rounded-circle" width="32" height="32"
-                onerror="this.style.display='none'">
+                data-fallback="hide">
               <span id="user-name" class="text-light fw-medium"></span>
-              <button type="button" class="btn btn-sm btn-outline-light ms-2" id="logout-btn" onclick="logout()" aria-label="Abmelden">
+              <button type="button" class="btn btn-sm btn-outline-light ms-2" id="logout-btn" data-click="logout" aria-label="Abmelden">
                 <i class="bi bi-box-arrow-right"></i>
               </button>
             </div>
@@ -227,15 +227,15 @@
             <i class="bi bi-search position-absolute"
               style="left:12px;top:50%;transform:translateY(-50%);color:var(--text-secondary);"></i>
             <input type="search" class="form-control" id="events-search" placeholder="Events durchsuchen..."
-              style="padding-left:36px;" oninput="debouncedSearch()">
+              style="padding-left:36px;" data-input="debouncedSearch">
           </div>
           <div class="btn-group" role="group">
             <button type="button" class="btn btn-outline-light btn-sm active" id="view-grid-btn"
-              onclick="switchView('grid')">
+              data-click="switchView" data-view="grid">
               <i class="bi bi-grid-3x3-gap"></i>
             </button>
             <button type="button" class="btn btn-outline-light btn-sm" id="view-calendar-btn"
-              onclick="switchView('calendar')">
+              data-click="switchView" data-view="calendar">
               <i class="bi bi-calendar3"></i>
             </button>
           </div>
@@ -265,7 +265,7 @@
       <div id="detail-banner-area" class="event-detail-banner-header"></div>
 
       <div class="container section-container">
-        <button class="btn btn-sm btn-outline-light mt-3 mb-4" onclick="navigateTo('events')">
+        <button class="btn btn-sm btn-outline-light mt-3 mb-4" data-click="navigateTo" data-route="events">
           <i class="bi bi-arrow-left me-1"></i>Zurück zur Übersicht
         </button>
 
@@ -314,7 +314,7 @@
                     <div class="input-group mb-2">
                       <input type="text" class="form-control" id="guest-search-input"
                         placeholder="Name oder Benutzername suchen..."
-                        oninput="debounceGuestSearch()" autocomplete="off">
+                        data-input="debounceGuestSearch" autocomplete="off">
                       <span class="input-group-text bg-transparent border-secondary">
                         <i class="bi bi-search text-muted"></i>
                       </span>
@@ -360,7 +360,7 @@
                     <p class="text-secondary mb-0">Status: <span id="detail-reg-status" class="fw-bold"></span></p>
                     <div id="detail-reg-slot" class="mt-2"></div>
                   </div>
-                  <button class="btn btn-outline-danger" onclick="unregisterFromEvent()" id="unregister-btn">
+                  <button class="btn btn-outline-danger" data-click="unregisterFromEvent" id="unregister-btn">
                     <i class="bi bi-x-circle me-1"></i>Abmelden
                   </button>
                 </div>
@@ -421,7 +421,7 @@
             <h2><i class="bi bi-ui-checks-grid me-2"></i>Abstimmungen</h2>
             <p class="text-secondary mb-0">Stimme ab, wann die nächsten Events stattfinden.</p>
           </div>
-          <button class="btn btn-accent" id="polls-create-btn" style="display:none;" onclick="showPollEditor()">
+          <button class="btn btn-accent" id="polls-create-btn" style="display:none;" data-click="showPollEditor">
             <i class="bi bi-plus-circle me-1"></i>Neue Abstimmung
           </button>
         </div>
@@ -493,7 +493,7 @@
             </div>
             <div class="form-check form-switch">
               <input class="form-check-input" type="checkbox" id="accept-invitations-toggle" role="switch"
-                onchange="saveAccountSettings()">
+                data-change="saveAccountSettings">
             </div>
           </div>
           <hr class="border-secondary">
@@ -502,7 +502,7 @@
               <div class="fw-semibold text-danger">Account löschen</div>
               <small class="text-muted">Löscht deinen Account und alle Registrierungen dauerhaft.</small>
             </div>
-            <button class="btn btn-outline-danger btn-sm" onclick="deleteUserAccount()">
+            <button class="btn btn-outline-danger btn-sm" data-click="deleteUserAccount">
               <i class="bi bi-trash me-1"></i>Account löschen
             </button>
           </div>
@@ -539,7 +539,7 @@
                   </div>
                   <div class="form-check form-switch">
                     <input class="form-check-input" type="checkbox" id="verbose-log-toggle" role="switch"
-                      onchange="toggleVerboseLog(this.checked)">
+                      data-change="toggleVerboseLog">
                   </div>
                 </div>
               </div>
@@ -638,7 +638,7 @@
         <div class="glass-card p-4 mb-4">
           <div class="d-flex flex-wrap gap-3 align-items-center mb-3" id="sg-spinners"></div>
           <div id="sg-alerts" class="mb-3"></div>
-          <button class="btn btn-outline-secondary btn-sm" onclick="showToast('🐛 Test-Toast vom Styling Guide!', 'info')">
+          <button class="btn btn-outline-secondary btn-sm" data-click="showTestToast">
             <i class="bi bi-bell me-1"></i>Toast testen
           </button>
         </div>
@@ -672,19 +672,19 @@
             <p class="text-secondary mb-0">Erstelle und verwalte Events.</p>
           </div>
           <div class="d-flex gap-2">
-            <button class="btn btn-outline-light" onclick="showImportDiscordEventsModal()">
+            <button class="btn btn-outline-light" data-click="showImportDiscordEventsModal">
               <i class="bi bi-discord me-1"></i>Import aus Discord
             </button>
-            <button class="btn btn-accent" onclick="showCreateEventModal()">
+            <button class="btn btn-accent" data-click="showCreateEventModal">
               <i class="bi bi-plus-circle me-1"></i>Neues Event
             </button>
             <a class="btn btn-outline-light" href="#polls">
               <i class="bi bi-ui-checks-grid me-1"></i>Abstimmungen
             </a>
-            <button class="btn btn-outline-light" onclick="showBotMessagesModal()">
+            <button class="btn btn-outline-light" data-click="showBotMessagesModal">
               <i class="bi bi-chat-dots me-1"></i>Bot-Nachrichten
             </button>
-            <button class="btn btn-outline-light" onclick="loadAuditLog()">
+            <button class="btn btn-outline-light" data-click="loadAuditLog">
               <i class="bi bi-journal-text me-1"></i>Audit-Log
             </button>
             <div class="dropdown ms-2">
@@ -692,14 +692,14 @@
                 <i class="bi bi-exclamation-triangle-fill me-1"></i>Danger Zone
               </button>
               <ul class="dropdown-menu dropdown-menu-dark dropdown-menu-end">
-                <li><a class="dropdown-item" href="#" onclick="showMaintenanceModal(); return false;">
+                <li><a class="dropdown-item" href="#" data-click="showMaintenanceModal">
                   <i class="bi bi-tools me-2"></i>Wartungsmodus
                 </a></li>
-                <li><a class="dropdown-item" href="#" onclick="showResetModal(); return false;">
+                <li><a class="dropdown-item" href="#" data-click="showResetModal">
                   <i class="bi bi-trash3 me-2"></i>System Reset
                 </a></li>
                 <li><hr class="dropdown-divider"></li>
-                <li><a class="dropdown-item text-danger" href="#" onclick="activatePanicMode(); return false;">
+                <li><a class="dropdown-item text-danger" href="#" data-click="activatePanicMode">
                   <i class="bi bi-shield-exclamation me-2"></i>PANIC BUTTON
                 </a></li>
               </ul>
@@ -722,7 +722,7 @@
             <div class="d-flex justify-content-between align-items-center mb-3">
               <h4 class="mb-0"><i class="bi bi-journal-text me-2"></i>Audit-Log</h4>
               <button class="btn btn-sm btn-outline-light"
-                onclick="document.getElementById('audit-log-container').style.display='none'">
+                data-click="hide" data-target="audit-log-container">
                 <i class="bi bi-x-lg"></i>
               </button>
             </div>
@@ -878,7 +878,7 @@
             </div>
 
             <div class="d-flex justify-content-end gap-2 mt-4">
-              <button type="button" class="btn btn-outline-light" onclick="loadBotSettings()">
+              <button type="button" class="btn btn-outline-light" data-click="loadBotSettings">
                 <i class="bi bi-arrow-clockwise me-1"></i>Zurücksetzen
               </button>
               <button type="submit" class="btn btn-accent">
@@ -932,27 +932,27 @@
         <!-- Wizard Step Indicator -->
         <div class="px-4 pt-3">
           <div class="wizard-nav">
-            <div class="wizard-step-item active" id="wstep-1" onclick="wizardGoTo(1)">
+            <div class="wizard-step-item active" id="wstep-1" data-click="wizardGoTo" data-step="1">
               <div class="wizard-step-bubble">1</div>
               <div class="wizard-step-label">Grundlagen</div>
             </div>
             <div class="wizard-step-connector"></div>
-            <div class="wizard-step-item" id="wstep-2" onclick="wizardGoTo(2)">
+            <div class="wizard-step-item" id="wstep-2" data-click="wizardGoTo" data-step="2">
               <div class="wizard-step-bubble">2</div>
               <div class="wizard-step-label">Datum & Zeit</div>
             </div>
             <div class="wizard-step-connector"></div>
-            <div class="wizard-step-item" id="wstep-3" onclick="wizardGoTo(3)">
+            <div class="wizard-step-item" id="wstep-3" data-click="wizardGoTo" data-step="3">
               <div class="wizard-step-bubble">3</div>
               <div class="wizard-step-label">Teilnehmer</div>
             </div>
             <div class="wizard-step-connector"></div>
-            <div class="wizard-step-item" id="wstep-4" onclick="wizardGoTo(4)">
+            <div class="wizard-step-item" id="wstep-4" data-click="wizardGoTo" data-step="4">
               <div class="wizard-step-bubble">4</div>
               <div class="wizard-step-label">Formular</div>
             </div>
             <div class="wizard-step-connector"></div>
-            <div class="wizard-step-item" id="wstep-5" onclick="wizardGoTo(5)">
+            <div class="wizard-step-item" id="wstep-5" data-click="wizardGoTo" data-step="5">
               <div class="wizard-step-bubble">5</div>
               <div class="wizard-step-label">Erweitert</div>
             </div>
@@ -997,7 +997,7 @@
                 <label class="form-label small text-muted"><i class="bi bi-geo-alt me-1"></i>Ort (optional)</label>
                 <input type="text" class="form-control form-control-sm" id="event-location-text"
                   placeholder="z.B. #gaming-voice oder Teamspeak Server"
-                  autocomplete="off" oninput="handleLocationInput()">
+                  autocomplete="off" data-input="handleLocationInput">
                 <div id="location-suggestions" class="location-dropdown" style="display:none;"></div>
                 <input type="hidden" id="event-location-channel-id">
                 <input type="hidden" id="event-location-channel-type">
@@ -1045,7 +1045,7 @@
               <div class="mb-3 glass-card p-3" style="background:rgba(139,92,246,0.05);">
                 <div class="form-check mb-2">
                   <input class="form-check-input" type="checkbox" id="event-recurring"
-                    onchange="document.getElementById('recurring-options').style.display=this.checked?'':'none'">
+                    data-change="toggleVisible" data-target="recurring-options">
                   <label class="form-check-label" for="event-recurring">🔁 Wiederkehrendes Event</label>
                 </div>
                 <div id="recurring-options" style="display:none;">
@@ -1085,14 +1085,14 @@
               </div>
               <div class="mb-3">
                 <div class="form-check form-switch">
-                  <input class="form-check-input" type="checkbox" id="event-use-slots" onchange="toggleSlotEditor()">
+                  <input class="form-check-input" type="checkbox" id="event-use-slots" data-change="toggleSlotEditor">
                   <label class="form-check-label" for="event-use-slots"><i class="bi bi-diagram-3 me-1"></i>Rollen-Slots verwenden</label>
                 </div>
                 <div id="slot-editor-area" style="display:none;">
                   <div id="slot-editor-rows" class="slot-editor-rows"></div>
                   <div class="d-flex flex-wrap gap-2 mt-2">
-                    <button type="button" class="btn btn-sm btn-outline-light" onclick="addSlotRow()"><i class="bi bi-plus-lg me-1"></i>Slot</button>
-                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="applySlotPreset('mmo-raid')"><i class="bi bi-magic me-1"></i>Vorlage: MMO-Raid</button>
+                    <button type="button" class="btn btn-sm btn-outline-light" data-click="addSlotRow"><i class="bi bi-plus-lg me-1"></i>Slot</button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" data-click="applySlotPreset" data-preset="mmo-raid"><i class="bi bi-magic me-1"></i>Vorlage: MMO-Raid</button>
                   </div>
                   <small class="text-muted d-block mt-1">Max. 10 Slots. Die Teilnehmerzahl ergibt sich aus der Summe der Plätze.</small>
                 </div>
@@ -1145,7 +1145,7 @@
               <div id="form-fields-builder">
                 <!-- Dynamic field rows -->
               </div>
-              <button type="button" class="btn btn-sm btn-outline-light mt-2" onclick="addFormField()">
+              <button type="button" class="btn btn-sm btn-outline-light mt-2" data-click="addFormField">
                 <i class="bi bi-plus me-1"></i>Feld hinzufügen
               </button>
             </div>
@@ -1156,7 +1156,7 @@
               <div class="mb-3 glass-card p-3" style="background:rgba(139,92,246,0.05);">
                 <div class="form-check mb-2">
                   <input class="form-check-input" type="checkbox" id="event-auto-create-channels"
-                    onchange="document.getElementById('channel-config-options').style.display=this.checked?'':'none'">
+                    data-change="toggleVisible" data-target="channel-config-options">
                   <label class="form-check-label" for="event-auto-create-channels">🎧 Auto-Voice/Text Channels
                     generieren</label>
                 </div>
@@ -1189,7 +1189,7 @@
               <div class="mb-3 glass-card p-3" style="background:rgba(139,92,246,0.05);">
                 <div class="form-check mb-2">
                   <input class="form-check-input" type="checkbox" id="event-custom-msg-toggle"
-                    onchange="document.getElementById('custom-msg-options').style.display=this.checked?'':'none'">
+                    data-change="toggleVisible" data-target="custom-msg-options">
                   <label class="form-check-label" for="event-custom-msg-toggle">🤖 Eigene Bot-Nachrichten</label>
                 </div>
                 <div id="custom-msg-options" style="display:none;">
@@ -1231,14 +1231,14 @@
           <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Abbrechen</button>
           <div class="d-flex gap-2 align-items-center">
             <span class="text-muted small me-2" id="wizard-step-counter">Schritt 1 von 5</span>
-            <button type="button" class="btn btn-outline-secondary" id="wizard-btn-back" onclick="wizardBack()"
+            <button type="button" class="btn btn-outline-secondary" id="wizard-btn-back" data-click="wizardBack"
               style="display:none;">
               <i class="bi bi-arrow-left me-1"></i>Zurück
             </button>
-            <button type="button" class="btn btn-accent" id="wizard-btn-next" onclick="wizardNext()">
+            <button type="button" class="btn btn-accent" id="wizard-btn-next" data-click="wizardNext">
               Weiter<i class="bi bi-arrow-right ms-1"></i>
             </button>
-            <button type="button" class="btn btn-accent" id="wizard-btn-save" onclick="saveEvent()"
+            <button type="button" class="btn btn-accent" id="wizard-btn-save" data-click="saveEvent"
               style="display:none;">
               <i class="bi bi-save me-1"></i>Speichern
             </button>
@@ -1296,7 +1296,7 @@
         </div>
         <div class="modal-footer border-0">
           <button type="button" class="btn btn-outline-light" data-bs-dismiss="modal">Abbrechen</button>
-          <button type="button" class="btn btn-danger" onclick="performSystemReset()">
+          <button type="button" class="btn btn-danger" data-click="performSystemReset">
             Alles Löschen
           </button>
         </div>
@@ -1327,7 +1327,7 @@
                 <label class="form-label small">Admin-Reset-Passwort zum Deaktivieren:</label>
                 <input type="password" class="form-control glass-input" id="panic-deactivate-password" placeholder="Passwort eingeben">
               </div>
-              <button class="btn btn-outline-danger" onclick="deactivatePanicMode()">
+              <button class="btn btn-outline-danger" data-click="deactivatePanicMode">
                 <i class="bi bi-unlock me-1"></i>Panic Mode Deaktivieren
               </button>
             </div>
@@ -1396,7 +1396,7 @@
         </div>
         <div class="modal-footer border-0">
           <button type="button" class="btn btn-outline-light" data-bs-dismiss="modal">Abbrechen</button>
-          <button type="button" class="btn btn-warning text-dark" onclick="saveMaintenanceSettings()">
+          <button type="button" class="btn btn-warning text-dark" data-click="saveMaintenanceSettings">
             <i class="bi bi-save me-1"></i>Speichern
           </button>
         </div>
@@ -1466,7 +1466,7 @@
         </div>
         <div class="modal-footer border-0">
           <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Abbrechen</button>
-          <button type="button" class="btn btn-accent" onclick="saveBotMessages()">
+          <button type="button" class="btn btn-accent" data-click="saveBotMessages">
             <i class="bi bi-save me-1"></i>Speichern
           </button>
         </div>
@@ -1517,7 +1517,7 @@
         </div>
         <div class="modal-footer border-0">
           <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Abbrechen</button>
-          <button type="button" class="btn btn-accent" id="announce-send-btn" onclick="sendAnnouncement()">
+          <button type="button" class="btn btn-accent" id="announce-send-btn" data-click="sendAnnouncement">
             <i class="bi bi-megaphone me-1"></i>Ankündigen
           </button>
         </div>
@@ -1607,7 +1607,7 @@
             </label>
           </div>
           <button type="button" class="btn btn-accent" data-bs-dismiss="modal"
-            onclick="closeUpdatesModal()">Verstanden</button>
+            data-click="closeUpdatesModal">Verstanden</button>
         </div>
       </div>
     </div>
@@ -1634,7 +1634,7 @@
           </div>
           <label class="form-label">Termine</label>
           <div id="poll-option-rows" class="poll-option-rows"></div>
-          <button type="button" class="btn btn-sm btn-outline-light mt-2" onclick="addPollOptionRow()"><i class="bi bi-plus-lg me-1"></i>Termin</button>
+          <button type="button" class="btn btn-sm btn-outline-light mt-2" data-click="addPollOptionRow"><i class="bi bi-plus-lg me-1"></i>Termin</button>
           <small class="text-muted d-block mt-1">2–10 Termine. Termine mit Stimmen können nicht mehr entfernt oder verschoben werden.</small>
           <div class="row g-3 mt-2">
             <div class="col-md-6">
@@ -1643,7 +1643,7 @@
             </div>
             <div class="col-md-6">
               <label class="form-label" for="poll-access">Wer darf abstimmen?</label>
-              <select class="form-select" id="poll-access" onchange="togglePollRoles()">
+              <select class="form-select" id="poll-access" data-change="togglePollRoles">
                 <option value="open">Alle Mitglieder</option>
                 <option value="role-required">Nur bestimmte Rollen</option>
               </select>
@@ -1677,7 +1677,7 @@
         </div>
         <div class="modal-footer border-0">
           <button type="button" class="btn btn-outline-light" data-bs-dismiss="modal">Abbrechen</button>
-          <button type="button" class="btn btn-accent" onclick="savePoll()">Speichern</button>
+          <button type="button" class="btn btn-accent" data-click="savePoll">Speichern</button>
         </div>
       </div>
     </div>
@@ -1704,7 +1704,7 @@
         </div>
         <div class="modal-footer border-0">
           <button type="button" class="btn btn-outline-light" data-bs-dismiss="modal">Abbrechen</button>
-          <button type="button" class="btn btn-accent" onclick="sendPollAnnouncement()">Posten</button>
+          <button type="button" class="btn btn-accent" data-click="sendPollAnnouncement">Posten</button>
         </div>
       </div>
     </div>
@@ -1724,7 +1724,7 @@
         </div>
         <div class="modal-footer border-0">
           <button type="button" class="btn btn-outline-light" data-bs-dismiss="modal">Abbrechen</button>
-          <button type="button" class="btn btn-accent" onclick="startEventFromPoll()">Weiter zum Event</button>
+          <button type="button" class="btn btn-accent" data-click="startEventFromPoll">Weiter zum Event</button>
         </div>
       </div>
     </div>
@@ -1900,10 +1900,10 @@
           <p class="text-muted small mt-2">Du kannst diese Einstellung jederzeit in deinem Profil ändern.</p>
         </div>
         <div class="modal-footer border-secondary">
-          <button class="btn btn-outline-secondary" onclick="confirmInvitationPreference(false)">
+          <button class="btn btn-outline-secondary" data-click="confirmInvitationPreference" data-accept="false">
             <i class="bi bi-x-circle me-1"></i>Nein, danke
           </button>
-          <button class="btn btn-accent" onclick="confirmInvitationPreference(true)">
+          <button class="btn btn-accent" data-click="confirmInvitationPreference" data-accept="true">
             <i class="bi bi-check-circle me-1"></i>Ja, erlauben
           </button>
         </div>
@@ -1914,7 +1914,7 @@
   <!-- Scripts -->
   <script src="/vendor/bootstrap/bootstrap.bundle.min.js"></script>
   <script src="/vendor/gsap/gsap.min.js"></script>
-  <script src="/js/app.js"></script>
+  <script type="module" src="/js/main.js"></script>
 </body>
 
 </html>

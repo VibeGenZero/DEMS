@@ -3,7 +3,7 @@ id: date-polls
 title: Date polls — finding a date with "passt" / "wenn nötig"
 type: concept
 tags: [polls, voting, dates, doodle, discord, scheduler, events]
-sources: [utils/pollService.js, utils/pollStore.js, routes/polls.js, routes/admin.js, bot.js, public/js/app.js]
+sources: [utils/pollService.js, utils/pollStore.js, routes/polls.js, routes/admin.js, bot.js, public/js/polls/polls.js, public/js/polls/admin.js]
 depends_on: [data-model]
 see_also: [routes-polls, discord-integration, event-lifecycle, role-slots]
 ---

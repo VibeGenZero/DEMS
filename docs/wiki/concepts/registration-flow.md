@@ -50,7 +50,7 @@ Admin changes go through `PUT /api/admin/registrations/:id/status` (allowed targ
 
 | Channel | Path |
 |---|---|
-| Web | `POST /api/events/:id/register` → `submitRegistration()` in `app.js` |
+| Web | `POST /api/events/:id/register` → `submitRegistration()` in `public/js/events/registration-form.js` |
 | Discord button | `event_register:<eventId>` → `handleEventRegisterButton` → pre-checks → modal if the event has form fields that fit (≤5) → `handleEventRegisterModal` → `completeDiscordRegistration` → `registerUserForEvent({ source: 'discord' })` → `ensureUserProfile` |
 | Discord slot button | `event_slot:<eventId>:<slotId>` → `handleEventSlotButton` → slot modal (`alt_slots` select + form) → `handleEventSlotModal` → `completeDiscordRegistration({ slotId, altSlotIds })` |
 | Unregister | `unregisterUserFromEvent`: web `DELETE /api/events/:id/register`, Discord `/unregister` and the "Abmelden" button |

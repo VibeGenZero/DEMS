@@ -2,7 +2,7 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');
 const path = require('path');
-const { loadFrontendApp, REPO_ROOT } = require('./helpers');
+const { loadFrontendApp, frontendSources, REPO_ROOT } = require('./helpers');
 
 // setImmediate runs after the microtask queue is drained
 const settle = () => new Promise(resolve => setImmediate(resolve));
@@ -29,7 +29,7 @@ const startupRoutes = (me) => ({
 const RECENT_BOOT = { dems_boot_ts: String(Date.now()) };
 
 test('the startup asks the server once who is logged in', async () => {
-    const { fire, requests } = loadFrontendApp(startupRoutes(() => MEMBER), { storage: RECENT_BOOT });
+    const { fire, requests } = await loadFrontendApp(startupRoutes(() => MEMBER), { storage: RECENT_BOOT });
     fire('DOMContentLoaded');
     await settle();
 
@@ -41,20 +41,20 @@ test('a logged-in user stays logged in whatever answer arrives last', async () =
     let releaseFirstAnswer;
     const firstAnswerHeld = new Promise(resolve => { releaseFirstAnswer = resolve; });
     let calls = 0;
-    const { app, element, fire } = loadFrontendApp(startupRoutes(() => (++calls === 1 ? firstAnswerHeld.then(() => MEMBER) : MEMBER)), { storage: RECENT_BOOT });
+    const { element, fire, state } = await loadFrontendApp(startupRoutes(() => (++calls === 1 ? firstAnswerHeld.then(() => MEMBER) : MEMBER)), { storage: RECENT_BOOT });
 
     fire('DOMContentLoaded');
     await settle();
     releaseFirstAnswer();
     await settle();
 
-    assert.equal(app.getCurrentUser()?.username, 'tom');
+    assert.equal(state.currentUser?.username, 'tom');
     assert.equal(element('user-info').style.display, 'flex');
     assert.equal(element('login-btn-container').style.display, 'none');
 });
 
 test('showUserData exists once, the unused user data modal is gone', () => {
-    const appJs = fs.readFileSync(path.join(REPO_ROOT, 'public', 'js', 'app.js'), 'utf8');
+    const appJs = frontendSources().map(entry => entry.source).join('\n');
     const html = fs.readFileSync(path.join(REPO_ROOT, 'public', 'index.html'), 'utf8');
     assert.equal(appJs.match(/function showUserData\b/g).length, 1);
     assert.doesNotMatch(html, /id="userDataModal"/);

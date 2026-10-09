@@ -8,7 +8,7 @@ see_also: [dev-mock-mode, conventions]
 ---
 # Testing — node:test suites and helpers
 
-> TL;DR: `npm test` runs `node --test "test/**/*.test.js"` (built-in runner, no dependencies). Server behaviour is tested end-to-end by spawning `server.js` / `dev/start.js` in a child process with a temp SQLite file and driving it with a cookie-aware fetch client that handles CSRF. Single frontend functions run in `node:vm` against a fake DOM (`loadFrontendApp`). Browser smoke tests (Playwright, Chromium only) run separately with `npm run test:e2e`.
+> TL;DR: `npm test` runs `node --experimental-vm-modules --disable-warning=ExperimentalWarning --test "test/**/*.test.js"` (built-in runner, no dependencies; the flag lets `loadFrontendModules` load the frontend ES modules with `vm.SourceTextModule`). Server behaviour is tested end-to-end by spawning `server.js` / `dev/start.js` in a child process with a temp SQLite file and driving it with a cookie-aware fetch client that handles CSRF. Single frontend functions run in `node:vm` against a fake DOM (`loadFrontendApp`). Browser smoke tests (Playwright, Chromium only) run separately with `npm run test:e2e`.
 
 ## Suites
 
@@ -19,7 +19,7 @@ see_also: [dev-mock-mode, conventions]
 | `mockBot.test.js` | mock Discord helpers (roles incl. `fetchMemberRoleIds`, channels, DMs, event channels, "Zum Event" button link) via `bot.js` |
 | `eventUrl.test.js` | `buildEventUrl` builds `#event/<id>`; no server file builds `#events/<id>` links |
 | `seed.test.js` | seed counts, idempotence, reset, refusal outside mock mode / with Firebase |
-| `devServer.test.js` | CSP (scripts/styles/fonts only `'self'`, no `unsafe-eval`), persona login (new session, parallel first changes pass CSRF), no session for cookie-less requests until `/api/csrf-token`, reminder `sent` kept on save / reset on duplicate, several reminders as "24, 1", deleting an event or series deletes its Discord channels (mock log), a comment carries its author's avatar URL, wrong check-in codes limited per member (429 after 10), six-digit check-in code, CSV formulas defused, unsafe banner URL / colour refused, admin/member access, event API only with login, draft/archived only for admins, guests see only status and id of the inviting registration, no `checkinCode` in member answers, mock data in routes, announce, start event, check-in, rate limits, maintenance + panic lockout |
+| `devServer.test.js` | CSP (scripts/styles/fonts only `'self'`, no `unsafe-eval`, `script-src-attr 'none'`), persona login (new session, parallel first changes pass CSRF), no session for cookie-less requests until `/api/csrf-token`, reminder `sent` kept on save / reset on duplicate, several reminders as "24, 1", deleting an event or series deletes its Discord channels (mock log), a comment carries its author's avatar URL, wrong check-in codes limited per member (429 after 10), six-digit check-in code, CSV formulas defused, unsafe banner URL / colour refused, admin/member access, event API only with login, draft/archived only for admins, guests see only status and id of the inviting registration, no `checkinCode` in member answers, mock data in routes, announce, start event, check-in, rate limits, maintenance + panic lockout |
 | `noMock.test.js` | without `DEV_MOCK` the OAuth redirect stays and the persona login does not exist |
 | `wiki.test.js` | wiki frontmatter/link/graph validation and that `docs/wiki/graph.json` is current |
 | `branding.test.js` | the old product name ("Discord" + "Event Management") appears in no git-tracked file outside `public/vendor` (untracked files such as CI's npm logs are ignored) |
@@ -39,6 +39,12 @@ see_also: [dev-mock-mode, conventions]
 | `roleRefresh.test.js` | `createRoleRefresh` with a fake clock and fake Discord: revoked/new admin role within 5 min, left server, sessions without check time, Discord unreachable (values kept, retry after 1 min), shared lookup |
 | `roleRefreshServer.test.js` | plants a session with a stale `isAdmin: true` for the member persona in the shared SQLite file, signs the cookie with the mock secret → `/api/admin/stats` answers 403, `/auth/me` shows the real roles |
 | `authFrontend.test.js` | frontend `logout()` posts the CSRF token, failure toast, no `/auth/logout` navigation left, `invalid_state` message |
+| `jsSource.test.js` | `test/jsSource.js` scanner: strings, comments, template text and regex bodies blanked with positions kept, nesting depth per line, code identifiers (spread operands count, properties and object keys do not), `findMissingImports` (exports used without import; same-named own declarations are skipped) |
+| `frontendLoader.test.js` | `loadFrontendModules`: new module instances per load, a missing export fails, a clear message without `--experimental-vm-modules` |
+| `frontendModules.test.js` | `app.js` is gone and `index.html` loads `/js/main.js` as a module; modules ≤ 550 lines and run no code on import (only `registerActions` and the startup listeners in `main.js`); shared values only through `state`; no local binding named `state` in modules that import it |
+| `frontendActions.test.js` | `core/actions.js` alone: innermost action wins, `preventDefault` only for links, change/input attributes, unknown/failing actions logged, duplicate names refused, built-in `toggleVisible`/`hide`/`scrollTo`, image fallbacks incl. images that failed before start |
+| `actionAttributes.test.js` | rendered markup carries values as data attributes (display names with quotes and entities arrive unchanged) and the actions do the right thing: overview, calendar, event page, replies (one reply POST), guests, polls (vote sends the answer), admin cards and registrations, wizard steps and location, Discord import, welcome dialog booleans |
+| `frontendCsp.test.js` | guards: no inline handler in `index.html` or `public/js/**`, every `data-click`/`data-change`/`data-input` name is registered and literal, no `window` bridge, every use of another module's export (call, reference or constant) is imported (`findMissingImports`) |
 | `profileRegistrations.test.js` | profile cards link to events the user can open; archived events stay listed without a link for members |
 
 ## Helpers (`test/helpers.js`)
@@ -51,13 +57,13 @@ see_also: [dev-mock-mode, conventions]
 | `repoPath(rel)` | absolute path as JS string literal for `runNode` snippets |
 | `startServer(entry, env)` | spawn `server.js` / `dev/start.js` on a free port, wait for `/healthz`; returns `{ baseUrl, output(), waitForOutput(text), stop() }` |
 | `createClient(baseUrl)` | cookie jar; `request(path, opts)` (redirect: manual), `send(method, path, body)` with CSRF token, `cookie(name)` reads the jar (e.g. `connect.sid`) |
-| `loadFrontendApp(routes)` | runs `public/js/app.js` in `node:vm`; fake elements for every `id` in `index.html` and in assigned `innerHTML`; `fetch` answers from `routes` (URL → body or `() => body`/promise, else 404); records every `fetch` as `{ url, method, headers }`; returns `{ app, element(id), toasts, requests, location }` — stubs EasyMDE, flatpickr and `bootstrap.Modal` for the event wizard; `localStorage`/`sessionStorage` stubs (`{ storage }` option for initial entries); document listeners are recorded and `fire(type)` runs them; `app` exposes `showEventDetail`, `showProfileSection`, `logout`, `getErrorMessage`, `editEvent`, `loadAdminEvents`, `showEventsSection`, `fetchDiscordEvents`, `markdownPreview`, `getCurrentUser`, `setCurrentUser` and `setCsrfToken`; extend the export line at the end of the helper for more functions |
+| `await loadFrontendApp(routes)` | links the ES modules from `public/js/main.js` with `loadFrontendModules` in a fresh `node:vm` context per call (needs `--experimental-vm-modules`, set by `npm test`); returns `{ app, state, … }` — `app` holds every export of every module, `state` is `core/state.js` (`state.currentUser = persona` logs a user in); fake elements for every `id` in `index.html` and in assigned `innerHTML`; `fetch` answers from `routes` (URL → body or `() => body`/promise, else 404); records every `fetch` as `{ url, method, headers, body }`; also returns `element(id)`, `toasts`, `requests`, `location` and `fire(type)` (runs the recorded document listeners) — stubs EasyMDE, flatpickr and `bootstrap.Modal` for the event wizard; `localStorage`/`sessionStorage` stubs (`{ storage }` option for initial entries). Run an action like a click with `app.runAction(name, element)` |
 
 ## Writing a test
 
 - Endpoint behaviour → extend `devServer.test.js` (mock mode, seeded data: ids in `dev/seedData.js` `EVENT_ID`) and log in with `loginAs('<persona>')`.
 - In-process module tests: set `process.env` (e.g. `DEV_MOCK`, `DEV_SQLITE_PATH`) and `process.chdir(createTempDir(...))` BEFORE requiring app modules — `firebaseAdmin.js` and the adapter read the environment at require time.
-- Frontend function → `loadFrontendApp` (see `eventDetailReset.test.js`); assert `toasts` is empty, because most `app.js` handlers swallow errors in a `catch` that only shows a toast.
+- Frontend function → `loadFrontendApp` (see `eventDetailReset.test.js`); assert `toasts` is empty, because most frontend handlers swallow errors in a `catch` that only shows a toast.
 - Each test file runs in its own process (node:test default), so module state does not leak between files.
 - Test order inside a file is sequential; some `devServer` tests depend on earlier ones (e.g. draft visibility before "start event").
 
@@ -66,7 +72,7 @@ see_also: [dev-mock-mode, conventions]
 - Playwright `@playwright/test` (devDependency, pinned exactly; no install script, so `npm ci` and `npm test` download no browser). Once per machine: `npx playwright install chromium`.
 - `playwright.config.js` starts `node dev/start.js` on port 3123 with a fresh temp database (`DEV_SQLITE_PATH` in the OS temp dir) — `data/dems.dev.sqlite` and a running dev server on 3000 stay untouched. Projects: `desktop` 1440×900 and `mobile` 390×844 (touch, folded navigation).
 - `e2e/tour.spec.js`: every persona (`admin`, `raider`, `member`, `newbie`) logs in through `/auth/dev-login/<id>` and walks overview → event page → polls → profile → info, admin also admin area and bot control; non-admins do not see the admin nav and are sent back from `#admin`. Plus: raid role picker for the raider vs. "Zugriff eingeschränkt" for the member, logout back to the login page.
-- `e2e/helpers.js`: `loginAs` (skips boot animation and "Neuigkeiten" dialog via `localStorage`, closes the welcome dialog of `newbie`), `navigate` (opens the folded menu on the phone), `watchErrors` — every test fails on an uncaught page error or a `console.error` (failed resource loads ignored).
+- `e2e/helpers.js`: `loginAs` (skips boot animation and "Neuigkeiten" dialog via `localStorage`, closes the welcome dialog of `newbie`), `navigate` (opens the folded menu on the phone and folds it again afterwards, waiting for the Bootstrap animation — the open menu covers the page and Bootstrap ignores toggles while it animates), `watchErrors` — every test fails on an uncaught page error or a `console.error` (failed resource loads ignored). Chromium reports an inline handler blocked by the CSP (`script-src-attr 'none'`) as such an error, so a forgotten `onclick=` fails every tour step that reaches it; the test "the error watch reports a blocked inline handler" pins that.
 - Not part of `npm test` and not in CI; run it before frontend changes, especially the 3.0 redesign. Output (`test-results/`, `playwright-report/`) is git-ignored.
 
 ## Commands
@@ -75,6 +81,7 @@ see_also: [dev-mock-mode, conventions]
 npm test                                    # all suites
 npm run test:e2e                            # browser smoke tests (Playwright, needs Chromium once)
 node --test test/devServer.test.js          # one file
+node --experimental-vm-modules --test test/eventCards.test.js   # one frontend file (needs the flag)
 npm run wiki:check                          # wiki only
 ```
 

@@ -128,14 +128,15 @@ test('an unknown persona is rejected', async () => {
     assert.equal(await currentUser(client), null);
 });
 
-test('the content security policy allows only own scripts, styles and fonts and no eval', async () => {
+test('the content security policy allows only own scripts, styles and fonts, no eval and no inline scripts or handlers', async () => {
     const res = await createClient(server.baseUrl).request('/');
     assert.equal(res.status, 200);
     const directives = Object.fromEntries(res.headers.get('content-security-policy').split(';')
         .map(part => part.trim().split(/\s+/))
         .map(([name, ...sources]) => [name, sources.join(' ')]));
 
-    assert.equal(directives['script-src'], "'self' 'unsafe-inline'");
+    assert.equal(directives['script-src'], "'self'");
+    assert.equal(directives['script-src-attr'], "'none'");
     assert.equal(directives['style-src'], "'self' 'unsafe-inline'");
     assert.equal(directives['font-src'], "'self'");
     assert.ok(!directives['connect-src'].includes('cdn.jsdelivr.net'), directives['connect-src']);

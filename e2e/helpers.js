@@ -64,7 +64,23 @@ async function openMenu(page) {
     const toggler = page.locator('.navbar-toggler');
     if (await toggler.isVisible() && !(await page.locator('#navContent').isVisible())) {
         await toggler.click();
-        await expect(page.locator('#navContent')).toBeVisible();
+        // "show" comes after the animation; Bootstrap ignores toggles while it runs
+        await expect(page.locator('#navContent')).toHaveClass(/\bshow\b/);
+    }
+}
+
+/**
+ * Fold the navigation again on the phone viewport; the open menu covers the page.
+ *
+ * @param {import('@playwright/test').Page} page -> Page.
+ * @returns {Promise<void>}
+ */
+async function closeMenu(page) {
+    const toggler = page.locator('.navbar-toggler');
+    if (await toggler.isVisible() && await page.locator('#navContent').isVisible()) {
+        await expect(page.locator('#navContent')).toHaveClass(/\bshow\b/);
+        await toggler.click();
+        await expect(page.locator('#navContent')).toBeHidden();
     }
 }
 
@@ -79,6 +95,7 @@ async function navigate(page, route) {
     await openMenu(page);
     await page.locator(`#navContent a.nav-link[href="#${route}"]`).click();
     await expect(page.locator(`#${route}-section`)).toBeVisible();
+    await closeMenu(page);
 }
 
-module.exports = { watchErrors, loginAs, openMenu, navigate };
+module.exports = { watchErrors, loginAs, openMenu, closeMenu, navigate };

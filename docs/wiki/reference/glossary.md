@@ -3,7 +3,7 @@ id: glossary
 title: Glossary — German UI terms and code names
 type: reference
 tags: [glossary, terminology, german, i18n]
-sources: [public/index.html, public/js/app.js, utils/registrationService.js]
+sources: [public/index.html, public/js, utils/registrationService.js]
 see_also: [data-model, conventions]
 ---
 # Glossary — German UI terms and code names

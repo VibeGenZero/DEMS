@@ -40,7 +40,7 @@ see_also: [form-fields, registration-flow, reminders-presence, configuration]
 
 ## Announcement buttons
 
-`buildEventComponents(event, id, roster)`: slot events get one button per slot (5 per row, "(voll)" when full) instead of "Anmelden"; otherwise "Anmelden" (`event_register:<id>`, only if `canRegisterViaDiscord(event)`: active and form fits into a modal) + "Zum Event" link button. The admin dialog previews this via `renderAnnounceButtonsPreview` (app.js).
+`buildEventComponents(event, id, roster)`: slot events get one button per slot (5 per row, "(voll)" when full) instead of "Anmelden"; otherwise "Anmelden" (`event_register:<id>`, only if `canRegisterViaDiscord(event)`: active and form fits into a modal) + "Zum Event" link button. The admin dialog previews this via `renderAnnounceButtonsPreview` (`public/js/admin/event-actions.js`).
 
 ## Gotchas
 

@@ -41,4 +41,4 @@ see_also: [auth-session, security]
 
 ## Frontend side
 
-`public/js/app.js` calls `fetchCSRFToken()` once at startup (`GET /api/csrf-token`, stored in the global `csrfToken`) and sends `headers: { 'X-CSRF-TOKEN': csrfToken }` on every mutating call. Session cookie travels automatically (same origin).
+`public/js/core/boot.js` calls `fetchCSRFToken()` once at startup (`GET /api/csrf-token`, stored in `state.csrfToken` from `core/state.js`) and sends `headers: { 'X-CSRF-TOKEN': state.csrfToken }` on every mutating call. Session cookie travels automatically (same origin).

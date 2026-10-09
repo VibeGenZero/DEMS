@@ -3,7 +3,7 @@ id: architecture
 title: System architecture
 type: overview
 tags: [architecture, overview, express, discord, firestore, sqlite, spa]
-sources: [server.js, bot.js, firebaseAdmin.js, db/sqliteAdapter.js, public/js/app.js, routes]
+sources: [server.js, bot.js, firebaseAdmin.js, db/sqliteAdapter.js, public/js, routes]
 see_also: [directory-map, request-lifecycle, data-model]
 ---
 # System architecture
@@ -20,7 +20,7 @@ see_also: [directory-map, request-lifecycle, data-model]
 | Data layer | `firebaseAdmin.js`, `db/sqliteAdapter.js` | Firestore-compatible API, backend chosen at startup | [data-layer](../modules/data-layer.md) |
 | Middleware | `middleware/*.js` | auth guards, maintenance gates, input validation | [middleware](../modules/middleware.md) |
 | Domain helpers | `utils/*.js` | registration service, form fields, waitlist, audit log, profiles, debug log | [utils](../modules/utils.md) |
-| Frontend | `public/` | SPA: `index.html` + `js/app.js` + `css/style.css` + vendored libs | [frontend-app](../modules/frontend-app.md), [frontend-markup](../modules/frontend-markup.md) |
+| Frontend | `public/` | SPA: `index.html` + `js/main.js` with ES modules per area (`js/core`, `js/events`, `js/polls`, `js/admin`, `js/pages`) + `css/style.css` + vendored libs | [frontend-app](../modules/frontend-app.md), [frontend-markup](../modules/frontend-markup.md) |
 | Dev mock mode | `dev/` | runs without Discord/Firebase: persona login, mock bot, seed data | [dev-mock-mode](../modules/dev-mock-mode.md) |
 | Landing page | `landing/` | separate static marketing site, NOT served by `server.js` | [landing-page](../modules/landing-page.md) |
 

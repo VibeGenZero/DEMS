@@ -23,11 +23,13 @@ see_also: [security, dev-mock-mode, docker]
 | 2026-10-02 | LLM wiki (this graph) + `CLAUDE.md` | cheaper, more accurate navigation for coding agents | [index](../index.md) |
 | 2026-10-08 | product name: DEMS now stands for "Dein Event-Management-System"; technical identifiers (`dems` image, `dems-data` volume, `DEMS_PORT`, `dems.sqlite`, localStorage keys, domain) stay unchanged | "Discord" in a product name invites trademark trouble with Discord; keeping the acronym avoids migrating running deployments | `test/branding.test.js` |
 | 2026-10-08 | all frontend libraries and fonts vendored in `public/vendor/` with pinned versions (F-07); CSP without CDN hosts and without `unsafe-eval` | the SPA stayed empty when the CDN was unreachable (`gsap is not defined`), `marked` had no version pin; smaller CSP (audit M-02, part of H-05) | `test/vendorAssets.test.js`, [frontend-markup](../modules/frontend-markup.md) |
+| 2026-10-09 | frontend as native ES modules per area, event delegation (`data-click`/`data-change`/`data-input`, `data-fallback`) instead of inline handlers, CSP without `'unsafe-inline'` for scripts (D-01) | redesign tickets work in small modules; the CSP stops inline handlers from coming back | [spec](../../superpowers/specs/2026-10-09-frontend-modules-design.md), [plan](../../superpowers/plans/2026-10-09-frontend-modules.md) |
 
 ## Standing decisions (apply to new work)
 
 - Data access only via the Firestore-compatible API (keeps Firebase and SQLite interchangeable).
-- No frontend build pipeline; vanilla JS + pinned libraries and fonts in `public/vendor/` (no CDN).
+- No frontend build pipeline; vanilla JS as native ES modules + pinned libraries and fonts in `public/vendor/` (no CDN).
+- No inline event handlers or inline scripts: markup names actions (`data-click`), modules register them (`registerActions`).
 - German user-facing language.
 - Every route works without a Discord bot (helpers degrade to no-ops).
 - Dev mock mode must never be activatable in production (`NODE_ENV=production` guard).
