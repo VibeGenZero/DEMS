@@ -165,4 +165,65 @@ function codeIdentifiers(masked) {
     return found;
 }
 
-module.exports = { maskJsSource, lineDepths, codeIdentifiers };
+// Bindings a module declares itself: functions, classes, variables, parameters, catch variables
+const DECLARATIONS = [
+    /\b(?:function|class)\s+([\w$]+)/g,
+    /\b(?:const|let|var)\s+([\w$]+)/g,
+    /\b(?:const|let|var)\s*[{[]([^}\]=]*)[}\]]/g,
+    /\bfunction\s*[\w$]*\s*\(([^)]*)\)/g,
+    /\(([^()]*)\)\s*=>/g,
+    /(?<![\w$.])([\w$]+)\s*=>/g,
+    /\bcatch\s*\(\s*([\w$]+)/g
+];
+
+/**
+ * Names a module declares itself, without scope: the scanner cannot tell
+ * which block a declaration belongs to.
+ *
+ * @param {string} masked -> Output of maskJsSource().
+ * @returns {Set<string>}
+ */
+function declaredNames(masked) {
+    const names = new Set();
+    for (const pattern of DECLARATIONS) {
+        for (const match of masked.matchAll(pattern)) {
+            for (const part of match[1].split(',')) {
+                // "a = 1", "...rest", "{ x }", "key: alias" -> the bound name
+                const name = part.split('=')[0].split(':').pop().replace(/[{}[\].\s]/g, '');
+                if (name) names.add(name);
+            }
+        }
+    }
+    return names;
+}
+
+/**
+ * Exports of other modules a module uses (called or as a value) without
+ * importing them. A name the module declares itself anywhere is skipped,
+ * so a same-named local can hide a real gap, never cause a false report.
+ *
+ * @param {Array<{ file: string, source: string }>} sources -> Modules, path with /.
+ * @returns {Array<{ file: string, name: string, from: string, line: number }>}
+ */
+function findMissingImports(sources) {
+    const owner = new Map();
+    for (const { file, source } of sources) {
+        for (const match of source.matchAll(/^export (?:async )?(?:function|class|const|let) ([\w$]+)/gm)) owner.set(match[1], file);
+    }
+    const missing = [];
+    for (const { file, source } of sources) {
+        const text = source.replace(/\r\n/g, '\n');
+        const imported = new Set([...text.matchAll(/^import \{([^}]*)\} from/gm)]
+            .flatMap(match => match[1].split(',').map(name => name.trim()).filter(Boolean)));
+        const masked = maskJsSource(text);
+        const declared = declaredNames(masked);
+        for (const ref of codeIdentifiers(masked)) {
+            const from = owner.get(ref.name);
+            if (!from || from === file || imported.has(ref.name) || declared.has(ref.name)) continue;
+            missing.push({ file, name: ref.name, from, line: masked.slice(0, ref.index).split('\n').length });
+        }
+    }
+    return missing;
+}
+
+module.exports = { maskJsSource, lineDepths, codeIdentifiers, findMissingImports };
