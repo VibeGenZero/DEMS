@@ -53,3 +53,20 @@ test('shared values are only used through state', () => {
         }
     }
 });
+
+test('no local binding hides the imported state', () => {
+    // A parameter or variable named `state` turns every `state.x` in its scope into a property of that value
+    const BINDINGS = [/function\s*[\w$]*\s*\(([^)]*)\)/g, /\(([^()]*)\)\s*=>/g, /(?<![\w$.])([\w$]+)\s*=>/g, /\b(?:const|let|var)\s+([^=;]+?)\s*=/g, /catch\s*\(([^)]*)\)/g];
+    for (const { file, source } of frontendSources()) {
+        const text = source.replace(/\r\n/g, '\n');
+        if (!/^import \{ state \} from/m.test(text)) continue;
+        const masked = maskJsSource(text);
+        for (const pattern of BINDINGS) {
+            for (const match of masked.matchAll(pattern)) {
+                if (!/(?<![\w$.])state(?![\w$])/.test(match[1])) continue;
+                const line = masked.slice(0, match.index).split('\n').length;
+                assert.fail(`${file}:${line} declares a local "state": ${match[0].trim()}`);
+            }
+        }
+    }
+});

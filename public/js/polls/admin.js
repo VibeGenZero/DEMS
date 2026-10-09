@@ -43,9 +43,9 @@ export async function showPollEditor(pollId = null) {
     document.getElementById('poll-description').value = poll ? poll.description || '' : '';
     document.getElementById('poll-access').value = poll ? poll.accessMode : 'open';
     // Empty fields fall back to the default answers -> only renamed answers are filled in
-    ['yes', 'maybe', 'no'].forEach(state => {
-        const custom = poll ? getPollLabels(poll)[state] : '';
-        document.getElementById(`poll-label-${state}`).value = custom === DEFAULT_POLL_LABELS[state] ? '' : custom;
+    ['yes', 'maybe', 'no'].forEach(answer => {
+        const custom = poll ? getPollLabels(poll)[answer] : '';
+        document.getElementById(`poll-label-${answer}`).value = custom === DEFAULT_POLL_LABELS[answer] ? '' : custom;
     });
     await renderPollRoleCheckboxes(poll ? poll.requiredRoles || [] : []);
     togglePollRoles();

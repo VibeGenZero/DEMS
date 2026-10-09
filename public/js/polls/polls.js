@@ -40,13 +40,13 @@ export function getPollLabels(poll) {
     return labels;
 }
 
-export function renderPollAnswerIcon(state, colored = true) {
-    return `<i class="bi ${POLL_ANSWER_ICONS[state]}${colored ? ` poll-icon-${state}` : ''}" aria-hidden="true"></i>`;
+export function renderPollAnswerIcon(answer, colored = true) {
+    return `<i class="bi ${POLL_ANSWER_ICONS[answer]}${colored ? ` poll-icon-${answer}` : ''}" aria-hidden="true"></i>`;
 }
 
 export function renderPollCounts(entry, labels) {
-    return ['yes', 'maybe'].map(state => `
-        <span class="poll-count" title="${escapeHtml(labels[state])}">${renderPollAnswerIcon(state)} ${entry[state]}<span class="visually-hidden"> ${escapeHtml(labels[state])}</span></span>`).join('');
+    return ['yes', 'maybe'].map(answer => `
+        <span class="poll-count" title="${escapeHtml(labels[answer])}">${renderPollAnswerIcon(answer)} ${entry[answer]}<span class="visually-hidden"> ${escapeHtml(labels[answer])}</span></span>`).join('');
 }
 
 export async function refreshPollBadge() {
@@ -177,8 +177,8 @@ export function renderPollOptionRow(poll, entry) {
     const names = (list) => list.map(voter => escapeHtml(voter.displayName)).join(', ') || '—';
     const toggle = poll.isOpen && poll.canVote ? `
         <div class="btn-group btn-group-sm poll-vote-toggle" role="group" aria-label="Deine Stimme">
-            ${['yes', 'maybe', 'no'].map(state => `
-                <button type="button" class="btn ${myState === state ? 'btn-accent' : 'btn-outline-light'}" data-option-id="${escapeHtml(entry.optionId)}" data-state="${state}" aria-pressed="${myState === state}" onclick="setPollVote(this.dataset.optionId, this.dataset.state)">${renderPollAnswerIcon(state, false)}<span class="ms-1">${escapeHtml(labels[state])}</span></button>`).join('')}
+            ${['yes', 'maybe', 'no'].map(answer => `
+                <button type="button" class="btn ${myState === answer ? 'btn-accent' : 'btn-outline-light'}" data-option-id="${escapeHtml(entry.optionId)}" data-state="${answer}" aria-pressed="${myState === answer}" onclick="setPollVote(this.dataset.optionId, this.dataset.state)">${renderPollAnswerIcon(answer, false)}<span class="ms-1">${escapeHtml(labels[answer])}</span></button>`).join('')}
         </div>` : '';
     let marker = '';
     if (isWinner) marker = '<i class="bi bi-calendar-check poll-icon-yes me-1" title="Gewählter Termin"></i>';
@@ -204,7 +204,7 @@ export function renderPollOptionRow(poll, entry) {
 
 export let pollVoteSequence = 0;
 
-export async function setPollVote(optionId, state) {
+export async function setPollVote(optionId, answer) {
     if (!state.currentPoll) return;
     const pollId = state.currentPoll.id;
     const sequence = ++pollVoteSequence;
@@ -213,7 +213,7 @@ export async function setPollVote(optionId, state) {
         const res = await fetch(`/api/polls/${encodeURIComponent(pollId)}/vote`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': state.csrfToken },
-            body: JSON.stringify({ optionId, state })
+            body: JSON.stringify({ optionId, state: answer })
         });
         const result = await res.json();
         if (!res.ok) {

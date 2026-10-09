@@ -100,15 +100,15 @@ export function renderSidebarDetails(event) {
     renderSidebarCapacity(event);
 }
 
-export function renderSidebarAction(state, event = null) {
+export function renderSidebarAction(mode, event = null) {
     const area = document.getElementById('sidebar-action-area');
     if (!area) return;
 
     // Slot events need the role picker in the form -> the sidebar scrolls there instead of submitting
     const hasFormFields = event && ((Array.isArray(event.formFields) && event.formFields.length > 0) || eventHasSlots(event));
 
-    if (state === 'register' || state === 'waitlist') {
-        const isWaitlist = state === 'waitlist';
+    if (mode === 'register' || mode === 'waitlist') {
+        const isWaitlist = mode === 'waitlist';
         const label = isWaitlist
             ? '<i class="bi bi-list-nested me-2"></i>Auf Warteliste setzen'
             : '<i class="bi bi-pencil-square me-2"></i>Jetzt anmelden';
@@ -134,7 +134,7 @@ export function renderSidebarAction(state, event = null) {
         noaccess:   { label: '<i class="bi bi-lock me-2"></i>Kein Zugang',         cls: 'btn-outline-danger w-100',  disabled: true },
         none:       { label: '',                                                    cls: '',                          disabled: true }
     };
-    const cfg = configs[state] || configs.none;
+    const cfg = configs[mode] || configs.none;
     if (!cfg.label) { area.innerHTML = ''; return; }
     area.innerHTML = `<button class="btn ${cfg.cls} mt-2" disabled>${cfg.label}</button>`;
 }
