@@ -28,6 +28,7 @@ Line counts as of 2026-10-02 (approximate; they drift).
 | `utils/*.js` | ~25–320 each | registration service, form fields, waitlist + audit, profiles, avatar URLs, bot permissions, CSV cells, message templates, session store, reminder rules, debug log | read whole | [utils](../modules/utils.md) |
 | `dev/*.js` | ~15–460 | dev mock mode (switch, mock guild/bot, persona login, seed) | read whole, `seedData.js` only when changing seed data | [dev-mock-mode](../modules/dev-mock-mode.md) |
 | `test/*.test.js` + `test/helpers.js` | ~30–200 | `node:test` suites | read `helpers.js` first | [testing](../ops/testing.md) |
+| `e2e/*.spec.js` + `e2e/helpers.js`, `playwright.config.js` | ~60–100 | Playwright browser smoke tests (`npm run test:e2e`) | read whole | [testing](../ops/testing.md) |
 | `scripts/wiki-graph.js` | ~250 | builds/validates this wiki's `graph.json` | read whole | [index](../index.md) |
 
 ## Frontend (`public/`, served statically)

@@ -30,3 +30,7 @@ logs/
 # OS specific
 .DS_Store
 Thumbs.db
+
+# Playwright (npm run test:e2e)
+test-results/
+playwright-report/

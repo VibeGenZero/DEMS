@@ -75,6 +75,7 @@ sources: [scripts/wiki-graph.js, docs/wiki/graph.json, CLAUDE.md]
 | `public/index.html`, `public/css/style.css` | frontend-markup |
 | `dev/*` | dev-mock-mode |
 | `test/*` | testing |
+| `e2e/*`, `playwright.config.js` | testing |
 | `Dockerfile`, `compose*.yaml` | docker, deployment |
 | `.gitlab-ci.yml`, `ci/runner/*` | ci |
 | `.env.example` | configuration |

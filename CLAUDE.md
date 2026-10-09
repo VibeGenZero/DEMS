@@ -29,6 +29,7 @@ npm run dev:reset    # reset the dev mock database
 npm run dev          # real Discord (needs .env), nodemon
 npm start            # production-like
 npm test             # all node:test suites (incl. wiki validation)
+npm run test:e2e     # browser smoke tests (Playwright; once: npx playwright install chromium)
 npm run wiki         # regenerate docs/wiki/graph.json after editing wiki pages
 docker compose -f compose.dev.yaml up --build   # mock mode in Docker
 ```

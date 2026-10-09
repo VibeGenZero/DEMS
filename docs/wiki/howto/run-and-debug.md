@@ -21,6 +21,7 @@ see_also: [docker, testing, known-issues]
 | `npm start` | `.env` | like production, no reload |
 | `docker compose -f compose.dev.yaml up --build` | Docker | mock mode in a container (port bound to 127.0.0.1) |
 | `npm test` | — | all node:test suites |
+| `npm run test:e2e` | `npx playwright install chromium` once | browser smoke tour (Playwright) in mock mode on its own port and database, desktop + phone |
 
 Nodemon ignores `data/`, `public/`, `docs/`, `landing/`, `test/` — frontend edits need only a browser reload.
 

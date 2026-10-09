@@ -3,12 +3,12 @@ id: testing
 title: Testing — node:test suites and helpers
 type: ops
 tags: [testing, node-test, integration-tests, helpers, tdd]
-sources: [test/helpers.js, test/devServer.test.js, test/noMock.test.js, test/mockMode.test.js, test/mockBot.test.js, test/seed.test.js, test/sqliteAdapter.test.js, test/eventUrl.test.js, test/wiki.test.js, test/branding.test.js, test/vendorAssets.test.js, test/eventDetailReset.test.js, test/profileRegistrations.test.js, test/login.test.js, test/authFrontend.test.js, test/fixtures/fakeDiscordServer.js, test/sessionStore.test.js, test/sessionRestart.test.js, test/reminders.test.js, test/reminderScheduler.test.js, test/eventForm.test.js, test/startup.test.js, test/avatar.test.js, test/eventCards.test.js, test/botPermissions.test.js, test/hardening.test.js, test/roleRefresh.test.js, test/roleRefreshServer.test.js]
+sources: [playwright.config.js, e2e/helpers.js, e2e/tour.spec.js, test/helpers.js, test/devServer.test.js, test/noMock.test.js, test/mockMode.test.js, test/mockBot.test.js, test/seed.test.js, test/sqliteAdapter.test.js, test/eventUrl.test.js, test/wiki.test.js, test/branding.test.js, test/vendorAssets.test.js, test/eventDetailReset.test.js, test/profileRegistrations.test.js, test/login.test.js, test/authFrontend.test.js, test/fixtures/fakeDiscordServer.js, test/sessionStore.test.js, test/sessionRestart.test.js, test/reminders.test.js, test/reminderScheduler.test.js, test/eventForm.test.js, test/startup.test.js, test/avatar.test.js, test/eventCards.test.js, test/botPermissions.test.js, test/hardening.test.js, test/roleRefresh.test.js, test/roleRefreshServer.test.js]
 see_also: [dev-mock-mode, conventions]
 ---
 # Testing — node:test suites and helpers
 
-> TL;DR: `npm test` runs `node --test "test/**/*.test.js"` (built-in runner, no dependencies). Server behaviour is tested end-to-end by spawning `server.js` / `dev/start.js` in a child process with a temp SQLite file and driving it with a cookie-aware fetch client that handles CSRF. There are no browser tests; single frontend functions run in `node:vm` against a fake DOM (`loadFrontendApp`).
+> TL;DR: `npm test` runs `node --test "test/**/*.test.js"` (built-in runner, no dependencies). Server behaviour is tested end-to-end by spawning `server.js` / `dev/start.js` in a child process with a temp SQLite file and driving it with a cookie-aware fetch client that handles CSRF. Single frontend functions run in `node:vm` against a fake DOM (`loadFrontendApp`). Browser smoke tests (Playwright, Chromium only) run separately with `npm run test:e2e`.
 
 ## Suites
 
@@ -61,10 +61,19 @@ see_also: [dev-mock-mode, conventions]
 - Each test file runs in its own process (node:test default), so module state does not leak between files.
 - Test order inside a file is sequential; some `devServer` tests depend on earlier ones (e.g. draft visibility before "start event").
 
+## Browser smoke tests (`npm run test:e2e`)
+
+- Playwright `@playwright/test` (devDependency, pinned exactly; no install script, so `npm ci` and `npm test` download no browser). Once per machine: `npx playwright install chromium`.
+- `playwright.config.js` starts `node dev/start.js` on port 3123 with a fresh temp database (`DEV_SQLITE_PATH` in the OS temp dir) — `data/dems.dev.sqlite` and a running dev server on 3000 stay untouched. Projects: `desktop` 1440×900 and `mobile` 390×844 (touch, folded navigation).
+- `e2e/tour.spec.js`: every persona (`admin`, `raider`, `member`, `newbie`) logs in through `/auth/dev-login/<id>` and walks overview → event page → polls → profile → info, admin also admin area and bot control; non-admins do not see the admin nav and are sent back from `#admin`. Plus: raid role picker for the raider vs. "Zugriff eingeschränkt" for the member, logout back to the login page.
+- `e2e/helpers.js`: `loginAs` (skips boot animation and "Neuigkeiten" dialog via `localStorage`, closes the welcome dialog of `newbie`), `navigate` (opens the folded menu on the phone), `watchErrors` — every test fails on an uncaught page error or a `console.error` (failed resource loads ignored).
+- Not part of `npm test` and not in CI; run it before frontend changes, especially the 3.0 redesign. Output (`test-results/`, `playwright-report/`) is git-ignored.
+
 ## Commands
 
 ```bash
 npm test                                    # all suites
+npm run test:e2e                            # browser smoke tests (Playwright, needs Chromium once)
 node --test test/devServer.test.js          # one file
 npm run wiki:check                          # wiki only
 ```

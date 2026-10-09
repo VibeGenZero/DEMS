@@ -15,7 +15,7 @@ see_also: [deployment]
 
 | Job | Stage | Runs | What it does |
 |---|---|---|---|
-| `test` | test | every pipeline | `node:24-bookworm` (full image: python3, make, g++ for npm's implicit `node-gyp rebuild` of better-sqlite3), npm cache keyed on `package-lock.json`, `npm ci`, `npm test` (includes the wiki validation) |
+| `test` | test | every pipeline | `node:24-bookworm` (full image: python3, make, g++ for npm's implicit `node-gyp rebuild` of better-sqlite3), npm cache keyed on `package-lock.json`, `npm ci`, `npm test` (includes the wiki validation; the Playwright browser tests `npm run test:e2e` do not run in CI) |
 | `docker-build` | build | tags, `main`, MRs that change `Dockerfile`, `.dockerignore`, `package*.json` or `compose*.yaml` | `docker:29` with the `docker:29-dind` service; builds `--target runtime` and `--target dev`, starts the runtime image with a dummy `SESSION_SECRET` and polls `docker inspect` until the HEALTHCHECK reports `healthy` (about 2 minutes at most). Nothing is pushed. |
 
 - `workflow:rules`: MR pipelines, tags and the default branch always; a branch pipeline only when the branch has no open MR, so there are no duplicate pipelines.
