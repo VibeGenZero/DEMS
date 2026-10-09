@@ -25,7 +25,7 @@ see_also: [discord-integration, reminders-presence, form-fields]
 | Event channels & scheduled events | `createEventChannels`, `addParticipantToEventChannels`, `removeParticipantFromEventChannels`, `deleteEventChannels`, `getGuildScheduledEvents`, `createScheduledEvent` |
 | Reminders | `checkReminders({ now, send })` (exported for tests), `messageAcceptedParticipants`, `startReminderScheduler`; rules in `utils/reminders.js` |
 | Bot control center | `getBotStatus`, `getBotSettings`, `saveBotSettings`, `buildActivityVariables`, `applyBotSettings`, `getRunningEvents` |
-| Lifecycle | `startBot(token)`, `stopBot()`, `logBotInviteUrl` |
+| Lifecycle | `startBot(token)`, `stopBot()`, `logBotInviteUrl` (URL from `buildBotInviteUrl`, `utils/botPermissions.js`) |
 
 ## Interaction custom IDs
 
