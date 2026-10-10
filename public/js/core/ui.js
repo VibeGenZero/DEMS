@@ -74,15 +74,15 @@ export function renderSkeletonEvents(container, count, isAdmin = false) {
         <div class="col-md-6">
             <div class="glass-card skeleton-card p-0">
                 <div class="skeleton skeleton-img"></div>
-                <div class="p-4" style="height:200px; display:flex; flex-direction:column; justify-content:space-between;">
+                <div class="skeleton-card-body p-4">
                     <div>
                         <div class="skeleton skeleton-title mb-3"></div>
                         <div class="skeleton skeleton-text"></div>
-                        <div class="skeleton skeleton-text" style="width:80%"></div>
+                        <div class="skeleton skeleton-text is-short"></div>
                     </div>
                     <div class="d-flex gap-2 mt-3">
-                        <div class="skeleton" style="width:60px; height:24px; border-radius:99px;"></div>
-                        <div class="skeleton" style="width:60px; height:24px; border-radius:99px;"></div>
+                        <div class="skeleton skeleton-chip"></div>
+                        <div class="skeleton skeleton-chip"></div>
                     </div>
                 </div>
             </div>

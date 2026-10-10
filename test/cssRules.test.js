@@ -23,11 +23,21 @@ const COMPONENT_SELECTORS = [
     '.btn', '.btn-primary', '.btn-accent', '.btn-secondary', '.btn-outline-light', '.btn-outline-secondary', '.btn-ghost', '.btn-danger', '.btn-discord', '.btn-warning',
     '.btn-outline-primary', '.btn-outline-success', '.btn-outline-warning', '.btn-outline-danger', '.btn-sm', '.btn-lg', '.btn-icon',
     '.modal', '.nav-pills', '.nav-pills .nav-link',
-    '.toast', '.toast-success', '.toast-danger', '.toast-warning', '.toast-info', '.toast-icon'
+    '.toast', '.toast-success', '.toast-danger', '.toast-warning', '.toast-info', '.toast-icon',
+    '.glass-card', '.glass-card[data-click]:hover', 'a.glass-card:hover', '.glass-card.is-clickable:hover',
+    '.chip', '.badge-pill', '.category-pill', '.event-status-badge', '.event-category-tag', '.chip-sm',
+    '.chip-success', '.chip-warning', '.chip-danger', '.chip-info', '.chip-accent',
+    '.badge-pill.status-accepted', '.badge-pill.status-pending', '.badge-pill.status-rejected', '.badge-pill.status-waitlisted',
+    'button.chip.active', '.category-pill.active',
+    '.skeleton', '.skeleton-text', '.skeleton-title', '.skeleton-img', '.skeleton-chip', '.skeleton-avatar', '.skeleton-card-body'
 ];
 // Selectors that moved into components.css or were dropped; style.css must not style them again
 const MOVED = ['.btn-accent', '.btn-accent:hover', '.btn-discord', '.btn-discord:hover', '.btn-outline-light', '.btn-outline-light:hover', '.glass-modal', '.nav-link', '.nav-link.active',
-    '.toast'
+    '.toast',
+    '.glass-card', '.glass-card:hover', '.stat-card:hover', '.info-card:hover',
+    '.badge-pill', '.badge-pill.status-accepted', '.category-pill', '.category-pill:hover', '.category-pill.active',
+    '.event-status-draft', '.event-status-active', '.event-status-archived',
+    '.skeleton', '.skeleton-text', '.skeleton-title', '.skeleton-img'
 ];
 
 test('index.html loads Bootstrap, the tokens and the DEMS styles in this order', () => {

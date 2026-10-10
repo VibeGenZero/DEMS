@@ -69,3 +69,13 @@ test('index.html carries the toast icon element', () => {
     assert.match(INDEX_HTML, /<i id="toast-icon" class="toast-icon bi bi-info-circle-fill ms-3"><\/i>/);
     assert.match(INDEX_HTML, /<div id="app-toast" class="toast toast-info" role="alert">/);
 });
+
+test('skeleton cards use component classes, no style attributes', async () => {
+    const { ui } = await loadUi();
+    const container = { innerHTML: '' };
+    ui.renderSkeletonEvents(container, 2);
+    assert.equal(container.innerHTML.match(/skeleton-img/g).length, 2);
+    assert.equal(container.innerHTML.match(/skeleton-chip/g).length, 4);
+    assert.match(container.innerHTML, /class="skeleton skeleton-text is-short"/);
+    assert.doesNotMatch(container.innerHTML, /style=/);
+});

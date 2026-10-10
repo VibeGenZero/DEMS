@@ -383,3 +383,192 @@ a {
   color: var(--toast-tone);
   font-size: var(--font-size-lg);
 }
+
+/* ═══════════════════════════════════════════ */
+/* CARD                                        */
+/* .glass-card; reacts to hover only when it   */
+/* can be clicked                              */
+/* ═══════════════════════════════════════════ */
+.glass-card {
+  background: var(--bg-glass);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  transition: var(--transition);
+}
+
+.glass-card[data-click],
+a.glass-card,
+.glass-card.is-clickable {
+  cursor: pointer;
+}
+
+.glass-card[data-click]:hover,
+a.glass-card:hover,
+.glass-card.is-clickable:hover {
+  background: var(--bg-glass-hover);
+  border-color: var(--border-accent);
+  box-shadow: var(--shadow-glow);
+  transform: translateY(-2px);
+}
+
+/* ═══════════════════════════════════════════ */
+/* CHIP                                        */
+/* .chip + .chip-<status>; old names:          */
+/* .badge-pill, .category-pill,                */
+/* .event-status-badge, .event-category-tag    */
+/* ═══════════════════════════════════════════ */
+.chip,
+.badge-pill,
+.category-pill,
+.event-status-badge,
+.event-category-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-4);
+  min-width: 0;
+  max-width: 100%;
+  min-height: 1.75rem;
+  overflow: hidden;
+  padding: 0 var(--space-12);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-pill);
+  background: var(--bg-tint-2);
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  line-height: 1.25;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.chip-sm,
+.event-status-badge,
+.event-category-tag {
+  min-height: 1.375rem;
+  padding: 0 var(--space-8);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+}
+
+.chip-success,
+.badge-pill.status-accepted,
+.event-status-active {
+  border-color: var(--success-border);
+  background: var(--success-bg);
+  color: var(--success);
+}
+
+.chip-warning,
+.badge-pill.status-pending,
+.event-status-archived {
+  border-color: var(--warning-border);
+  background: var(--warning-bg);
+  color: var(--warning);
+}
+
+.chip-danger,
+.badge-pill.status-rejected {
+  border-color: var(--danger-border);
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
+.chip-info,
+.badge-pill.status-waitlisted,
+.event-category-tag {
+  border-color: var(--info-border);
+  background: var(--info-bg);
+  color: var(--info);
+}
+
+.chip-accent {
+  border-color: var(--border-accent);
+  background: var(--accent-tint-2);
+  color: var(--accent-text);
+}
+
+/* Chips that filter: a <button class="chip"> or the old .category-pill */
+button.chip,
+.category-pill {
+  cursor: pointer;
+  font-family: inherit;
+  transition: var(--transition);
+}
+
+button.chip:hover,
+.category-pill:hover {
+  border-color: var(--border-accent);
+  color: var(--text-primary);
+}
+
+button.chip.active,
+.category-pill.active {
+  border-color: var(--accent-fill);
+  background: var(--accent-fill);
+  color: var(--on-accent);
+}
+
+/* ═══════════════════════════════════════════ */
+/* SKELETON                                    */
+/* Placeholder while content loads             */
+/* ═══════════════════════════════════════════ */
+.skeleton {
+  background: linear-gradient(90deg, var(--bg-tint-1) 25%, var(--bg-tint-2) 50%, var(--bg-tint-1) 75%);
+  background-size: 200% 100%;
+  animation: skeleton-loading 1.5s infinite;
+  border-radius: var(--radius);
+}
+
+@keyframes skeleton-loading {
+  0% {
+    background-position: 200% 0;
+  }
+
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+.skeleton-text {
+  height: 1em;
+  margin-bottom: var(--space-8);
+  width: 100%;
+}
+
+.skeleton-text.is-short {
+  width: 80%;
+}
+
+.skeleton-title {
+  height: 1.5em;
+  width: 70%;
+  margin-bottom: var(--space-16);
+}
+
+.skeleton-img {
+  width: 100%;
+  height: 160px;
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+}
+
+.skeleton-chip {
+  width: 60px;
+  height: 24px;
+  border-radius: var(--radius-pill);
+}
+
+.skeleton-avatar {
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 50%;
+}
+
+/* Text part of a skeleton card: title and lines on top, chips at the bottom */
+.skeleton-card-body {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  height: 200px;
+}
