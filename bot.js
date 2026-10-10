@@ -15,6 +15,7 @@ const { buildEventUrl, buildPollUrl } = require('./utils/eventUrl');
 const { buildBotInviteUrl } = require('./utils/botPermissions');
 const { parseTemplate } = require('./utils/template');
 const { normalizeReminderHours, findDueReminders } = require('./utils/reminders');
+const { isEventOver } = require('./utils/eventListing');
 const { isRegistrationBlocked } = require('./middleware/maintenance');
 const {
     FORM_FIELD_TYPE, MODAL_MAX_FIELDS, getFormFields, getFieldType,
@@ -2707,12 +2708,8 @@ async function applyBotSettings() {
                 const events = [];
                 snapshot.forEach(d => events.push({ id: d.id, ...d.data() }));
 
-                const running = events.some(e => {
-                    if (!e.startDate) return false;
-                    const start = new Date(e.startDate);
-                    const end = e.endDate ? new Date(e.endDate) : new Date(start.getTime() + 2 * 60 * 60 * 1000);
-                    return start <= now && now <= end;
-                });
+                // Same end rule as the event overview (utils/eventListing.js)
+                const running = events.some(e => e.startDate && new Date(e.startDate) <= now && !isEventOver(e, now));
 
                 const upcoming = events.some(e => {
                     if (!e.startDate) return false;

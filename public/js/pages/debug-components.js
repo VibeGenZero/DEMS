@@ -5,6 +5,7 @@
  */
 import { registerActions } from '../core/actions.js';
 import { avatar, emptyState } from '../core/components.js';
+import { renderCapacity, renderDateTile } from '../events/cards.js';
 import { showConfirmDialog, showToast, TOAST_ICONS } from '../core/ui.js';
 
 // Long German words show what happens when a label does not fit
@@ -176,8 +177,28 @@ function avatarBlock() {
     ].join(''));
 }
 
+function dateTileBlock() {
+    // Fixed example dates; "now" is Saturday afternoon
+    const now = new Date(2026, 9, 10, 15, 0);
+    const at = (day, hour, minute = 0) => ({ startDate: new Date(2026, 9, day, hour, minute).toISOString() });
+    return block('date-tile', 'Datums-Kachel', 'renderDateTile(event, now) → .date-tile, .is-live', [
+        row('Kommend', renderDateTile(at(11, 19), now) + renderDateTile(at(15, 20), now) + renderDateTile(at(31, 18), now)),
+        row('Läuft gerade', renderDateTile(at(10, 14, 30), now))
+    ].join(''));
+}
+
+function capacityBlock() {
+    const sample = (currentParticipants, maxParticipants) => `<div class="sg-capacity-sample">${renderCapacity({ currentParticipants, maxParticipants })}</div>`;
+    return block('capacity', 'Plätze-Balken', 'renderCapacity(event) → .capacity, .is-low ab 80 %, .is-full', [
+        row('Frei', sample(5, 20)),
+        row('Fast voll', sample(8, 10)),
+        row('Ausgebucht', sample(5, 5)),
+        row('Unbegrenzt', sample(3, 0))
+    ].join(''));
+}
+
 /**
- * Render the nine component blocks.
+ * Render one block per component.
  *
  * @param {Element} container -> #sg-components.
  * @returns {void}
@@ -185,7 +206,7 @@ function avatarBlock() {
 export function renderDebugComponents(container) {
     container.innerHTML = [
         buttonBlock(), cardBlock(), chipBlock(), tabsBlock(), dialogBlock(),
-        toastBlock(), emptyStateBlock(), skeletonBlock(), avatarBlock()
+        toastBlock(), emptyStateBlock(), skeletonBlock(), avatarBlock(), dateTileBlock(), capacityBlock()
     ].join('');
 }
 

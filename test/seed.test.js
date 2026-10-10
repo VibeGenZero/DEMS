@@ -1,5 +1,6 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('fs');
 const path = require('path');
 const { createTempDir, repoPath, runNode } = require('./helpers');
 
@@ -18,7 +19,7 @@ const { db, collection, doc, getDoc, getDocs, setDoc } = require('../firebaseAdm
 const EXPECTED_COUNTS = {
     events: 12,
     users: 12,
-    registrations: 32,
+    registrations: 34,
     comments: 6,
     auditLogs: 10,
     polls: 2,
@@ -83,6 +84,24 @@ test('the seed covers the scenarios of the spec', async () => {
     assert.ok(registrations.some(registration => registration.guests.length > 0));
     assert.ok(registrations.some(registration => registration.pendingGuests.length > 0));
     assert.ok(registrations.some(registration => registration.checkedIn));
+
+    // The member persona waits for a place and for an approval (overview markers)
+    const member = PERSONAS.find(persona => persona.id === 'member');
+    const ofMember = (eventId) => registrations.find(registration => registration.eventId === eventId && registration.userId === member.userId);
+    assert.equal(ofMember(EVENT_ID.FULL).status, 'waitlisted');
+    assert.equal(ofMember(EVENT_ID.FORM).status, 'pending');
+});
+
+test('every seeded event has a banner of dev/banners, the workshop a missing one', async () => {
+    const events = (await getDocs(collection(db, 'events'))).docs.map(d => ({ id: d.id, ...d.data() }));
+    assert.equal(events.length, EXPECTED_COUNTS.events);
+    for (const event of events) {
+        const match = event.bannerUrl.match(/^http:\/\/localhost:\d+\/dev-banners\/([a-z-]+\.svg)$/);
+        assert.ok(match, `${event.id}: ${event.bannerUrl}`);
+        const exists = fs.existsSync(path.join(__dirname, '..', 'dev', 'banners', match[1]));
+        // The workshop's banner is missing on purpose: the overview shows its colour fallback
+        assert.equal(exists, event.id !== EVENT_ID.BIG_FORM, event.id);
+    }
 });
 
 test('the seed has an open poll for the raiders and a decided one', async () => {

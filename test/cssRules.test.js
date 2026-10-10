@@ -31,7 +31,9 @@ const COMPONENT_SELECTORS = [
     'button.chip.active', '.category-pill.active',
     '.skeleton', '.skeleton-text', '.skeleton-title', '.skeleton-img', '.skeleton-chip', '.skeleton-avatar', '.skeleton-card-body',
     '.empty-state', '.empty-state-icon', '.empty-state-title', '.empty-state-text',
-    '.avatar', '.avatar-sm', '.avatar-lg', '.avatar-xl', '.avatar-initials', '.avatar-stack', '.avatar-more'
+    '.avatar', '.avatar-sm', '.avatar-lg', '.avatar-xl', '.avatar-initials', '.avatar-stack', '.avatar-more',
+    '.date-tile', '.date-tile-weekday', '.date-tile-month', '.date-tile-day', '.date-tile.is-live',
+    '.capacity', '.capacity-meter', '.capacity-text', '.capacity.is-low .capacity-text', '.capacity.is-full .capacity-text'
 ];
 // Selectors that moved into components.css or were dropped; style.css must not style them again
 const MOVED = ['.btn-accent', '.btn-accent:hover', '.btn-discord', '.btn-discord:hover', '.btn-outline-light', '.btn-outline-light:hover', '.glass-modal', '.nav-link', '.nav-link.active',
@@ -39,7 +41,10 @@ const MOVED = ['.btn-accent', '.btn-accent:hover', '.btn-discord', '.btn-discord
     '.glass-card', '.glass-card:hover', '.stat-card:hover', '.info-card:hover',
     '.badge-pill', '.badge-pill.status-accepted', '.category-pill', '.category-pill:hover', '.category-pill.active',
     '.event-status-draft', '.event-status-active', '.event-status-archived',
-    '.skeleton', '.skeleton-text', '.skeleton-title', '.skeleton-img'
+    '.skeleton', '.skeleton-text', '.skeleton-title', '.skeleton-img',
+    // Old overview cards, dropped by D-04
+    '.event-banner-placeholder', '.event-card-header-row', '.event-card-mini-progress', '.event-card-capacity-label',
+    '.series-card', '.slot-chips', '.slot-chip', '.spots-warning', '.spots-full'
 ];
 // A colour written out: hex, rgb(), hsl() or a colour name (white-space is no colour)
 const RAW_COLOR = /#[0-9a-fA-F]{3,8}\b|\brgba?\(|\bhsla?\(|(?<![-\w])(white|black)(?![-\w])/;
@@ -49,8 +54,13 @@ const describe = (rule, declaration) => `${rule.file}:${declaration.line} ${rule
 // never raise it. Before D-02 there were 132 style attributes and 57
 // !important in style.css. D-16 brings the style attributes to 0.
 // components.css has its own rule: !important only in the colour helpers.
-const STYLE_ATTRIBUTE_BUDGET = 123;
-const IMPORTANT_BUDGET = 36;
+const STYLE_ATTRIBUTE_BUDGET = 116;
+const IMPORTANT_BUDGET = 30;
+// Emojis in index.html and the modules. Symbols are Bootstrap Icons (bi-*);
+// lower the number when a page drops some, never raise it. Emojis that users
+// type in (slot emojis) are data, not source, and do not count.
+const EMOJI_BUDGET = 40;
+const EMOJI = /\p{Extended_Pictographic}/gu;
 
 test('index.html loads Bootstrap, the tokens and the DEMS styles in this order', () => {
     const hrefs = [...INDEX_HTML.matchAll(/<link[^>]+href="([^"]+\.css[^"]*)"/g)].map(match => match[1]);
@@ -137,6 +147,12 @@ test('the number of style attributes matches its budget', () => {
     const count = [INDEX_HTML, ...frontendSources().map(entry => entry.source)]
         .reduce((sum, source) => sum + (source.match(/style="/g) || []).length, 0);
     assert.equal(count, STYLE_ATTRIBUTE_BUDGET, `found ${count} style attributes; lower STYLE_ATTRIBUTE_BUDGET if you removed some, otherwise use a class`);
+});
+
+test('the number of emojis in the frontend matches its budget', () => {
+    const count = [INDEX_HTML, ...frontendSources().map(entry => entry.source)]
+        .reduce((sum, source) => sum + (source.match(EMOJI) || []).length, 0);
+    assert.equal(count, EMOJI_BUDGET, `found ${count} emojis; lower EMOJI_BUDGET if you removed some, otherwise use a Bootstrap icon (bi-*)`);
 });
 
 test('the number of !important in style.css matches its budget', () => {

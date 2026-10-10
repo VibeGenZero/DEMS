@@ -6,6 +6,7 @@ const { requireAuth } = require('../middleware/auth');
 const { checkRegistrationAllowed } = require('../middleware/maintenance');
 const { getGuildRoles, getPublicGuildChannels } = require('../bot');
 const { loadEventRoster, toPublicEvent, isEventVisibleTo } = require('../utils/eventUtils');
+const { isEventOver, pickSeriesRepresentative, myRegistrationStatus } = require('../utils/eventListing');
 const { registerUserForEvent, switchOwnSlot, unregisterUserFromEvent, REGISTRATION_SOURCE } = require('../utils/registrationService');
 const { hasSlots, withSlotSummary } = require('../utils/slotService');
 const { debugLog } = require('../utils/debugLog');
@@ -34,7 +35,9 @@ router.param('id', async (req, res, next, id) => {
 
 /**
  * GET /api/events — List all events (paginated)
- * Query params: ?status=active&category=tournament&page=1&limit=20
+ * Query params: ?status=active&category=tournament&search=raid&page=1&limit=20
+ * ?upcoming=1 leaves out events that are over (the overview); every event
+ * carries myStatus, the signed-in member's status (utils/eventListing.js).
  */
 router.get('/', async (req, res) => {
     try {
@@ -66,6 +69,13 @@ router.get('/', async (req, res) => {
             events = events.filter(e => !e.status || e.status === 'active');
         }
 
+        // Overview: leave out events that are over, before series are grouped,
+        // so seriesDates only lists the dates still to come
+        if (req.query.upcoming === '1') {
+            const now = new Date();
+            events = events.filter(e => !isEventOver(e, now));
+        }
+
         // Filter by category
         if (req.query.category) {
             events = events.filter(e => e.category === req.query.category);
@@ -95,10 +105,12 @@ router.get('/', async (req, res) => {
             }
         });
 
-        // Attach participant counts to events
+        // Attach participant counts and the member's own status to events
+        const userId = req.session.user.id;
         events = events.map(e => withSlotSummary({
             ...e,
-            currentParticipants: participantCounts[e.id] || 0
+            currentParticipants: participantCounts[e.id] || 0,
+            myStatus: myRegistrationStatus(registrationsByEvent[e.id] || [], userId)
         }, registrationsByEvent[e.id] || []));
 
         // Group series events: replace multiple events with same seriesId by one representative
@@ -115,14 +127,15 @@ router.get('/', async (req, res) => {
             }
         }
 
-        // For each series, pick the next upcoming event as representative and attach seriesDates
-        const now = new Date().toISOString();
+        // For each series, pick the date that is not over yet (a running one included) as
+        // representative and attach seriesDates
+        const now = new Date();
         for (const [seriesId, seriesEvents] of Object.entries(seriesGroups)) {
             // Sort by startDate ascending
             seriesEvents.sort((a, b) => (a.startDate || '').localeCompare(b.startDate || ''));
 
-            // Pick the next upcoming event, or the last one if all are past
-            const representative = seriesEvents.find(e => e.startDate >= now) || seriesEvents[seriesEvents.length - 1];
+            // A running date stays the representative, so the overview shows "Läuft gerade"
+            const representative = pickSeriesRepresentative(seriesEvents, now);
 
             representative.seriesDates = seriesEvents.map(e => ({
                 id: e.id,
@@ -210,24 +223,6 @@ router.get('/series/:seriesId', async (req, res) => {
     } catch (err) {
         console.error('Error fetching series:', err);
         res.status(500).json({ error: 'Fehler beim Laden der Serie' });
-    }
-});
-
-/**
- * GET /api/events/categories — Get all unique categories
- */
-router.get('/categories', async (req, res) => {
-    try {
-        const q = query(collection(db, 'events'));
-        const snapshot = await getDocs(q);
-        const categories = new Set();
-        snapshot.forEach(docSnap => {
-            const cat = docSnap.data().category;
-            if (cat) categories.add(cat);
-        });
-        res.json([...categories].sort());
-    } catch (err) {
-        res.status(500).json({ error: 'Fehler' });
     }
 });
 

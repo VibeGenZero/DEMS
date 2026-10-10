@@ -20,10 +20,10 @@ for (const persona of PERSONAS) {
         await page.locator('#events-calendar [data-click="shiftCalendarMonth"][data-delta="1"]').click();
         await page.locator('#view-grid-btn').click();
         await expect(page.locator('#events-grid')).toBeVisible();
-        await page.locator('#category-filter-bar .category-pill', { hasText: 'Gaming' }).click();
+        await page.locator('#category-filter-bar .chip', { hasText: 'Gaming' }).click();
         await expect(page.locator('#events-grid .event-card', { hasText: 'Community-Spieleabend' })).toBeVisible();
         await expect(page.locator('#events-grid')).not.toContainText('Raid: Schattenfestung');
-        await page.locator('#category-filter-bar .category-pill', { hasText: 'Alle' }).click();
+        await page.locator('#category-filter-bar .chip', { hasText: 'Alle' }).click();
 
         await page.locator('#events-grid .event-card', { hasText: 'Community-Spieleabend' }).click();
         await expect(page.locator('#event-detail-section')).toBeVisible();

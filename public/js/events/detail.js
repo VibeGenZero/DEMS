@@ -8,7 +8,6 @@ import { escapeHtml, isValidBannerUrl, renderMarkdownSafe, showToast } from '../
 import { renderCheckinSection } from './checkin.js';
 import { loadComments } from './comments.js';
 import { resetGuestSelection } from './guests.js';
-import { startCountdown } from './list.js';
 import { renderFormFields, submitRegistration } from './registration-form.js';
 import { eventHasSlots, renderOwnSlot, renderRoster, renderSlotPicker } from './slots.js';
 
@@ -23,6 +22,52 @@ export const GRADIENT_PRESETS = [
 export function getEventGradient(eventId) {
     const idx = (eventId || '').charCodeAt(0) % GRADIENT_PRESETS.length;
     return GRADIENT_PRESETS[isNaN(idx) ? 0 : idx];
+}
+
+export function formatCountdown(targetDate) {
+    const now = new Date();
+    const target = new Date(targetDate);
+    const diff = target - now;
+
+    if (diff <= 0) return null;
+
+    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+    const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+    const mins = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+    const secs = Math.floor((diff % (1000 * 60)) / 1000);
+
+    return { days, hours, mins, secs };
+}
+
+export function renderCountdownHTML(cd) {
+    if (!cd) return '<span class="countdown-expired"><i class="bi bi-clock-history me-1"></i>Event hat bereits begonnen</span>';
+    return `
+    <div class="countdown-item"><span class="countdown-value">${cd.days}</span><span class="countdown-label">Tage</span></div>
+    <div class="countdown-item"><span class="countdown-value">${String(cd.hours).padStart(2, '0')}</span><span class="countdown-label">Std</span></div>
+    <div class="countdown-item"><span class="countdown-value">${String(cd.mins).padStart(2, '0')}</span><span class="countdown-label">Min</span></div>
+    <div class="countdown-item"><span class="countdown-value">${String(cd.secs).padStart(2, '0')}</span><span class="countdown-label">Sek</span></div>
+  `;
+}
+
+export function startCountdown(element, targetDate) {
+    let timer; // Declare first to avoid TDZ
+    const update = () => {
+        const cd = formatCountdown(targetDate);
+        element.innerHTML = renderCountdownHTML(cd);
+        if (!cd) {
+            if (timer) clearInterval(timer);
+            element.classList.remove('countdown-live');
+            return false;
+        }
+        return true;
+    };
+
+    // Run once immediately
+    if (update()) {
+        timer = setInterval(update, 1000);
+        state.countdownTimers.push(timer);
+        return timer;
+    }
 }
 
 export function renderDetailBanner(event) {

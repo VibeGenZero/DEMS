@@ -3,7 +3,7 @@ id: reminders-presence
 title: Reminders, start notifications and bot presence
 type: concept
 tags: [reminders, scheduler, presence, activity, bot-settings, bot-control]
-sources: [bot.js, utils/reminders.js, routes/admin.js, server.js]
+sources: [bot.js, utils/reminders.js, utils/eventListing.js, routes/admin.js, server.js]
 depends_on: [bot, data-model]
 see_also: [event-lifecycle, discord-integration]
 ---
@@ -31,7 +31,7 @@ see_also: [event-lifecycle, discord-integration]
 | `activityType` | `PLAYING`, `WATCHING`, `LISTENING`, `COMPETING` |
 | `activityText` | template with `{events.count}`, `{events.next}`, `{events.next.date}`, `{events.next.time}`, `{events.next.participants}`, `{events.list}`, `{events.list.details}`, `{server.members}`, `{server.name}`, `{link.events}` (`buildActivityVariables`) |
 | `autoUpdatePresence` | refresh every 5 min |
-| `autoStatusCalendarEvents` (needs `autoUpdatePresence`) | `dnd` while an event runs, `online` if one is upcoming, else `idle` |
+| `autoStatusCalendarEvents` (needs `autoUpdatePresence`) | `dnd` while an event runs (started and not `isEventOver`: end, else start + 2 h), `online` if one is upcoming, else `idle` |
 | `reminderEnabled` | starts/stops the reminder scheduler |
 
 ## Bot control center (admin `#bot-control`)

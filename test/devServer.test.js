@@ -151,6 +151,16 @@ test('seeded events are served', async () => {
     assert.ok(!data.some(event => event.id === EVENT_ID.DRAFT));
 });
 
+test('the dummy banners are served in mock mode', async () => {
+    const member = await loginAs('member');
+    const event = await (await member.request(`/api/events/${EVENT_ID.ROLE}`)).json();
+    const { pathname } = new URL(event.bannerUrl);
+    assert.equal(pathname, '/dev-banners/raid.svg');
+    const res = await createClient(server.baseUrl).request(pathname);
+    assert.equal(res.status, 200);
+    assert.match(res.headers.get('content-type'), /^image\/svg\+xml/);
+});
+
 test('the routes read the mock Discord server', async () => {
     const admin = await loginAs('admin');
     const roles = await (await admin.request('/api/admin/roles')).json();
@@ -234,15 +244,52 @@ test('a guest sees only status and id of the registration that invited them', as
     assert.deepEqual(await res.json(), { registered: true, asGuest: true, id: 'dev-reg-bigform-chiara', status: 'pending' });
 });
 
+test('the overview gets only events that are not over, each with the own status', async () => {
+    const upcomingFor = async (personaId) => {
+        const res = await (await loginAs(personaId)).request('/api/events?upcoming=1&limit=100');
+        assert.equal(res.status, 200);
+        return (await res.json()).data;
+    };
+    const statusById = (events) => Object.fromEntries(events.map(event => [event.id, event.myStatus]));
+
+    const raiderEvents = await upcomingFor('raider');
+    const raider = statusById(raiderEvents);
+    assert.ok(!(EVENT_ID.PAST in raider), 'the past event is left out');
+    assert.equal(raider[EVENT_ID.RUNNING], 'accepted', 'the running event stays');
+    assert.equal(raider[EVENT_ID.OPEN], 'accepted');
+    assert.equal(raider[EVENT_ID.ROLE], null);
+    assert.equal(raider[SERIES_EVENT_IDS[0]], 'accepted', 'a series carries the status of its next date');
+    const series = raiderEvents.find(event => event.id === SERIES_EVENT_IDS[0]);
+    assert.deepEqual(series.seriesDates.map(date => date.id), SERIES_EVENT_IDS);
+
+    const member = statusById(await upcomingFor('member'));
+    assert.equal(member[EVENT_ID.FULL], 'waitlisted');
+    assert.equal(member[EVENT_ID.FORM], 'pending');
+    assert.equal(member[EVENT_ID.OPEN], null);
+
+    assert.equal(statusById(await upcomingFor('newbie'))[EVENT_ID.BIG_FORM], 'guest');
+
+    // Without the parameter the list stays as before, past events included
+    const { data: all } = await (await (await loginAs('member')).request('/api/events?limit=500')).json();
+    assert.ok(all.some(event => event.id === EVENT_ID.PAST));
+    assert.ok(all.every(event => !('checkinCode' in event)));
+});
+
 test('the event API answers only logged-in users', async () => {
     const admin = await loginAs('admin');
     const { seriesId } = await (await admin.request(`/api/events/${SERIES_EVENT_IDS[0]}`)).json();
     const anonymous = createClient(server.baseUrl);
 
-    for (const url of ['/api/events', '/api/events/categories', `/api/events/series/${seriesId}`, `/api/events/${EVENT_ID.OPEN}`]) {
+    for (const url of ['/api/events', `/api/events/series/${seriesId}`, `/api/events/${EVENT_ID.OPEN}`]) {
         const res = await anonymous.request(url);
         assert.equal(res.status, 401, url);
     }
+});
+
+test('the category list of all events is gone', async () => {
+    // It also showed the categories of drafts and archived events to members
+    const res = await (await loginAs('member')).request('/api/events/categories');
+    assert.equal(res.status, 404);
 });
 
 test('draft and archived events exist only for admins', async () => {

@@ -20,8 +20,7 @@ const startupRoutes = (me) => ({
     '/api/server-info': { serverName: 'DEMS', guildId: '1', debugMode: false },
     '/api/maintenance/status': { active: false },
     '/api/updates': { version: '9.9.9', date: '2026-10-01', news: [] },
-    '/api/events/categories': [],
-    '/api/events': { data: [], meta: { total: 0, page: 1, limit: 20, totalPages: 0 } },
+    '/api/events?upcoming=1&limit=100': { data: [], meta: { total: 0, page: 1, limit: 100, totalPages: 0 } },
     '/auth/me': me
 });
 
