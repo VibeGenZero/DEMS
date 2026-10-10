@@ -47,7 +47,7 @@ Logged-out users see `#login-section` for every route except `info`. An event ro
 | `core/actions.js` | event delegation | `registerActions(map)`, `initActions(root)` (called once in `main.js`), `runAction(name, element, event)`, `actionNames()`; built-in actions `toggleVisible`, `hide`, `scrollTo`; image fallbacks `hide`, `invisible`, `initials` |
 | `core/boot.js` | startup | `createParticles`, `runBootAnimation`, `fetchCSRFToken`, `loadServerInfo`, `updateServerNameInUI`, `finishLoading` |
 | `core/auth.js` | login state | `logout` (`POST /auth/logout` with CSRF token, then `/`; toast on failure), `checkAuth`, `showLoggedIn`, `showLoggedOut` |
-| `core/router.js` | hash router | `handleRoute`, `navigateTo`, `rememberPendingRoute`, `restorePendingRoute` |
+| `core/router.js` | hash router | `handleRoute` (shows the section and marks its link among `#main-navbar .nav-link`; other `.nav-link`s, e.g. tabs, are left alone), `navigateTo`, `rememberPendingRoute`, `restorePendingRoute` |
 | `core/ui.js` | shared UI helpers | `escapeHtml`, `renderMarkdownSafe` (marked + DOMPurify), `markdownPreview(text, maxLength = 120)` (one line of plain text for card previews: Markdown characters removed, cut on a word with "…"), `showToast(message, type)`, `showError`, `showConfirmDialog`, `getErrorMessage`, `renderSkeletonEvents`, `isValidBannerUrl` |
 | `core/updates.js` | "Neuigkeiten & Updates" | `checkUpdates`, `closeUpdatesModal` |
 | `events/list.js` | overview | `showEventsSection`, `loadCategories`, `filterByCategory`, `debouncedSearch`, `switchView`, `renderCalendar`, `shiftCalendarMonth(delta)`, `toggleSeriesDates`, `getParticipantWarningBadge`, `renderSlotChips`, `formatCountdown`, `renderCountdownHTML`, `startCountdown` |

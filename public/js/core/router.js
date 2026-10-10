@@ -74,7 +74,8 @@ export function handleRoute() {
 
     document.querySelectorAll('.app-section').forEach(s => s.style.display = 'none');
 
-    document.querySelectorAll('.nav-link').forEach(link => {
+    // Only the navbar: the tabs component (.nav.nav-pills) uses .nav-link too
+    document.querySelectorAll('#main-navbar .nav-link').forEach(link => {
         link.classList.remove('active');
         if (link.getAttribute('data-section') === route + '-section') {
             link.classList.add('active');

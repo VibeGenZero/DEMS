@@ -1,0 +1,344 @@
+/* ═══════════════════════════════════════════ */
+/* DEMS — Components                           */
+/* Bootstrap bridge and the nine components.   */
+/* Every value comes from tokens.css.          */
+/* Shown in the styleguide (#debug).           */
+/* ═══════════════════════════════════════════ */
+
+/* ═══════════════════════════════════════════ */
+/* BOOTSTRAP BRIDGE                            */
+/* ═══════════════════════════════════════════ */
+[data-bs-theme="dark"] {
+  --bs-body-bg: var(--bg-primary);
+  --bs-body-color: var(--text-primary);
+  --bs-body-font-family: var(--font-body);
+  --bs-secondary-color: var(--text-secondary);
+  --bs-tertiary-color: var(--text-muted);
+  --bs-border-color: var(--border-strong);
+  --bs-border-radius: var(--radius-sm);
+  --bs-border-radius-sm: var(--radius-sm);
+  --bs-border-radius-lg: var(--radius-lg);
+  --bs-border-radius-pill: var(--radius-pill);
+}
+
+a {
+  color: var(--accent-text);
+}
+
+/* Bootstrap's colour helpers carry !important, so these need it too */
+.text-primary {
+  color: var(--accent-text) !important;
+}
+
+.text-success {
+  color: var(--success) !important;
+}
+
+.text-warning {
+  color: var(--warning) !important;
+}
+
+.text-danger {
+  color: var(--danger) !important;
+}
+
+.text-info {
+  color: var(--info) !important;
+}
+
+.bg-primary,
+.text-bg-primary {
+  background-color: var(--accent-fill) !important;
+  color: var(--on-accent) !important;
+}
+
+.bg-success,
+.text-bg-success {
+  background-color: var(--success-fill) !important;
+  color: var(--on-success) !important;
+}
+
+.bg-warning,
+.text-bg-warning {
+  background-color: var(--warning-fill) !important;
+  color: var(--on-warning) !important;
+}
+
+.bg-danger,
+.text-bg-danger {
+  background-color: var(--danger-fill) !important;
+  color: var(--on-danger) !important;
+}
+
+.bg-info,
+.text-bg-info {
+  background-color: var(--info-fill) !important;
+  color: var(--on-info) !important;
+}
+
+.alert-success {
+  --bs-alert-color: var(--success);
+  --bs-alert-bg: var(--success-bg);
+  --bs-alert-border-color: var(--success-border);
+  --bs-alert-link-color: var(--success);
+}
+
+.alert-warning {
+  --bs-alert-color: var(--warning);
+  --bs-alert-bg: var(--warning-bg);
+  --bs-alert-border-color: var(--warning-border);
+  --bs-alert-link-color: var(--warning);
+}
+
+.alert-danger {
+  --bs-alert-color: var(--danger);
+  --bs-alert-bg: var(--danger-bg);
+  --bs-alert-border-color: var(--danger-border);
+  --bs-alert-link-color: var(--danger);
+}
+
+.alert-info {
+  --bs-alert-color: var(--info);
+  --bs-alert-bg: var(--info-bg);
+  --bs-alert-border-color: var(--info-border);
+  --bs-alert-link-color: var(--info);
+}
+
+/* ═══════════════════════════════════════════ */
+/* BUTTON                                      */
+/* .btn + one variant; sizes .btn-sm, .btn-lg  */
+/* ═══════════════════════════════════════════ */
+.btn {
+  --bs-btn-padding-x: var(--space-16);
+  --bs-btn-padding-y: var(--space-4);
+  --bs-btn-font-size: var(--font-size-md);
+  --bs-btn-font-weight: 600;
+  --bs-btn-border-radius: var(--radius);
+  --bs-btn-disabled-opacity: 0.5;
+  --bs-btn-focus-box-shadow: var(--shadow-ring);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.5rem;
+  transition: background-color var(--duration-fast) var(--ease-standard), border-color var(--duration-fast) var(--ease-standard), color var(--duration-fast) var(--ease-standard);
+}
+
+.btn-sm {
+  --bs-btn-padding-x: var(--space-12);
+  --bs-btn-font-size: var(--font-size-sm);
+  --bs-btn-border-radius: var(--radius-sm);
+  min-height: 2rem;
+}
+
+.btn-lg {
+  --bs-btn-padding-x: var(--space-24);
+  --bs-btn-font-size: var(--font-size-lg);
+  --bs-btn-border-radius: var(--radius);
+  min-height: 3rem;
+}
+
+/* Square button for a single icon */
+.btn-icon {
+  --bs-btn-padding-x: 0;
+  width: 2.5rem;
+}
+
+.btn-icon.btn-sm {
+  width: 2rem;
+}
+
+.btn-icon.btn-lg {
+  width: 3rem;
+}
+
+/* Primary: the one main action of a view. .btn-accent is the old name. */
+.btn-primary,
+.btn-accent {
+  --bs-btn-color: var(--on-accent);
+  --bs-btn-bg: var(--accent-fill);
+  --bs-btn-border-color: var(--accent-fill);
+  --bs-btn-hover-color: var(--on-accent);
+  --bs-btn-hover-bg: var(--accent-fill-hover);
+  --bs-btn-hover-border-color: var(--accent-fill-hover);
+  --bs-btn-active-color: var(--on-accent);
+  --bs-btn-active-bg: var(--accent-fill-hover);
+  --bs-btn-active-border-color: var(--accent-fill-hover);
+  --bs-btn-disabled-color: var(--on-accent);
+  --bs-btn-disabled-bg: var(--accent-fill);
+  --bs-btn-disabled-border-color: var(--accent-fill);
+}
+
+/* Secondary: every other action. The outline names are the old ones. */
+.btn-secondary,
+.btn-outline-light,
+.btn-outline-secondary {
+  --bs-btn-color: var(--text-primary);
+  --bs-btn-bg: var(--bg-tint-1);
+  --bs-btn-border-color: var(--border-strong);
+  --bs-btn-hover-color: var(--text-primary);
+  --bs-btn-hover-bg: var(--bg-tint-2);
+  --bs-btn-hover-border-color: var(--border-accent);
+  --bs-btn-active-color: var(--text-primary);
+  --bs-btn-active-bg: var(--bg-tint-3);
+  --bs-btn-active-border-color: var(--border-accent);
+  --bs-btn-disabled-color: var(--text-secondary);
+  --bs-btn-disabled-bg: var(--bg-tint-1);
+  --bs-btn-disabled-border-color: var(--border-subtle);
+}
+
+/* Ghost: quiet actions and icon buttons such as a "more" menu */
+.btn-ghost {
+  --bs-btn-color: var(--text-secondary);
+  --bs-btn-bg: transparent;
+  --bs-btn-border-color: transparent;
+  --bs-btn-hover-color: var(--text-primary);
+  --bs-btn-hover-bg: var(--bg-tint-2);
+  --bs-btn-hover-border-color: transparent;
+  --bs-btn-active-color: var(--text-primary);
+  --bs-btn-active-bg: var(--bg-tint-3);
+  --bs-btn-active-border-color: transparent;
+  --bs-btn-disabled-color: var(--text-muted);
+  --bs-btn-disabled-bg: transparent;
+  --bs-btn-disabled-border-color: transparent;
+}
+
+.btn-danger {
+  --bs-btn-color: var(--on-danger);
+  --bs-btn-bg: var(--danger-fill);
+  --bs-btn-border-color: var(--danger-fill);
+  --bs-btn-hover-color: var(--on-danger);
+  --bs-btn-hover-bg: var(--danger-fill-hover);
+  --bs-btn-hover-border-color: var(--danger-fill-hover);
+  --bs-btn-active-color: var(--on-danger);
+  --bs-btn-active-bg: var(--danger-fill-hover);
+  --bs-btn-active-border-color: var(--danger-fill-hover);
+  --bs-btn-disabled-color: var(--on-danger);
+  --bs-btn-disabled-bg: var(--danger-fill);
+  --bs-btn-disabled-border-color: var(--danger-fill);
+}
+
+.btn-discord {
+  --bs-btn-color: var(--on-discord);
+  --bs-btn-bg: var(--discord);
+  --bs-btn-border-color: var(--discord);
+  --bs-btn-hover-color: var(--on-discord);
+  --bs-btn-hover-bg: var(--discord-hover);
+  --bs-btn-hover-border-color: var(--discord-hover);
+  --bs-btn-active-color: var(--on-discord);
+  --bs-btn-active-bg: var(--discord-hover);
+  --bs-btn-active-border-color: var(--discord-hover);
+  --bs-btn-disabled-color: var(--on-discord);
+  --bs-btn-disabled-bg: var(--discord);
+  --bs-btn-disabled-border-color: var(--discord);
+}
+
+.btn-warning {
+  --bs-btn-color: var(--on-warning);
+  --bs-btn-bg: var(--warning-fill);
+  --bs-btn-border-color: var(--warning-fill);
+  --bs-btn-hover-color: var(--on-warning);
+  --bs-btn-hover-bg: var(--warning-fill);
+  --bs-btn-hover-border-color: var(--warning-fill);
+  --bs-btn-active-color: var(--on-warning);
+  --bs-btn-active-bg: var(--warning-fill);
+  --bs-btn-active-border-color: var(--warning-fill);
+  --bs-btn-disabled-color: var(--on-warning);
+  --bs-btn-disabled-bg: var(--warning-fill);
+  --bs-btn-disabled-border-color: var(--warning-fill);
+}
+
+.btn-warning:hover {
+  filter: brightness(1.08);
+}
+
+/* Outline variants in a status colour; each sets its three tones below */
+.btn-outline-primary,
+.btn-outline-success,
+.btn-outline-warning,
+.btn-outline-danger {
+  --bs-btn-color: var(--btn-tone);
+  --bs-btn-bg: transparent;
+  --bs-btn-border-color: var(--btn-tone-border);
+  --bs-btn-hover-color: var(--btn-tone);
+  --bs-btn-hover-bg: var(--btn-tone-bg);
+  --bs-btn-hover-border-color: var(--btn-tone);
+  --bs-btn-active-color: var(--btn-tone);
+  --bs-btn-active-bg: var(--btn-tone-bg);
+  --bs-btn-active-border-color: var(--btn-tone);
+  --bs-btn-disabled-color: var(--btn-tone);
+  --bs-btn-disabled-bg: transparent;
+  --bs-btn-disabled-border-color: var(--btn-tone-border);
+}
+
+.btn-outline-primary {
+  --btn-tone: var(--accent-text);
+  --btn-tone-bg: var(--accent-tint-2);
+  --btn-tone-border: var(--border-accent);
+}
+
+.btn-outline-success {
+  --btn-tone: var(--success);
+  --btn-tone-bg: var(--success-bg);
+  --btn-tone-border: var(--success-border);
+}
+
+.btn-outline-warning {
+  --btn-tone: var(--warning);
+  --btn-tone-bg: var(--warning-bg);
+  --btn-tone-border: var(--warning-border);
+}
+
+.btn-outline-danger {
+  --btn-tone: var(--danger);
+  --btn-tone-bg: var(--danger-bg);
+  --btn-tone-border: var(--danger-border);
+}
+
+/* ═══════════════════════════════════════════ */
+/* DIALOG                                      */
+/* Bootstrap .modal markup, unchanged          */
+/* ═══════════════════════════════════════════ */
+.modal {
+  --bs-modal-bg: var(--bg-secondary);
+  --bs-modal-color: var(--text-primary);
+  --bs-modal-border-color: var(--border-strong);
+  --bs-modal-border-radius: var(--radius-lg);
+  --bs-modal-inner-border-radius: calc(var(--radius-lg) - 1px);
+  --bs-modal-header-border-color: var(--border-subtle);
+  --bs-modal-footer-border-color: var(--border-subtle);
+  --bs-modal-box-shadow: var(--shadow-lg);
+  --bs-modal-zindex: var(--z-dialog);
+}
+
+/* ═══════════════════════════════════════════ */
+/* TABS                                        */
+/* .nav.nav-pills as segments; scrolls         */
+/* sideways when the entries do not fit        */
+/* ═══════════════════════════════════════════ */
+.nav-pills {
+  --bs-nav-link-color: var(--text-secondary);
+  --bs-nav-link-hover-color: var(--text-primary);
+  --bs-nav-link-padding-x: var(--space-16);
+  --bs-nav-link-padding-y: var(--space-8);
+  --bs-nav-link-font-size: var(--font-size-sm);
+  --bs-nav-link-font-weight: 500;
+  --bs-nav-pills-border-radius: var(--radius-sm);
+  --bs-nav-pills-link-active-color: var(--text-primary);
+  --bs-nav-pills-link-active-bg: var(--accent-tint-2);
+  display: inline-flex;
+  flex-wrap: nowrap;
+  gap: var(--space-4);
+  max-width: 100%;
+  overflow-x: auto;
+  padding: var(--space-4);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius);
+  background: var(--bg-tint-1);
+}
+
+.nav-pills .nav-link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-8);
+  white-space: nowrap;
+}

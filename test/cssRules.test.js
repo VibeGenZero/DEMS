@@ -10,10 +10,22 @@ const INDEX_HTML = fs.readFileSync(path.join(REPO_ROOT, 'public', 'index.html'),
 // Stylesheets that build on the tokens and must not contain raw values
 const STYLED = ['components.css', 'style.css'].filter(name => fs.existsSync(path.join(CSS_DIR, name)));
 // Stylesheets in the order index.html must load them
-const LOAD_ORDER = ['/vendor/bootstrap/bootstrap.min.css', '/css/tokens.css?v=3', '/css/style.css?v=3'];
+const LOAD_ORDER = ['/vendor/bootstrap/bootstrap.min.css', '/css/tokens.css?v=3', '/css/components.css?v=3', '/css/style.css?v=3'];
 
 const rulesOf = (name) => parseRules(readCss(name)).map(rule => ({ ...rule, file: name }));
 const allRules = () => STYLED.flatMap(rulesOf);
+const selectorsOf = (name) => new Set(rulesOf(name).flatMap(rule => rule.selector.split(', ')));
+// Selectors that components.css must define
+const COMPONENT_SELECTORS = [
+    '[data-bs-theme="dark"]', 'a',
+    '.text-primary', '.text-success', '.text-warning', '.text-danger', '.text-info',
+    '.bg-primary', '.text-bg-primary', '.bg-success', '.text-bg-success', '.bg-warning', '.text-bg-warning', '.bg-danger', '.text-bg-danger', '.bg-info', '.text-bg-info',
+    '.btn', '.btn-primary', '.btn-accent', '.btn-secondary', '.btn-outline-light', '.btn-outline-secondary', '.btn-ghost', '.btn-danger', '.btn-discord', '.btn-warning',
+    '.btn-outline-primary', '.btn-outline-success', '.btn-outline-warning', '.btn-outline-danger', '.btn-sm', '.btn-lg', '.btn-icon',
+    '.modal', '.nav-pills', '.nav-pills .nav-link'
+];
+// Selectors that moved into components.css or were dropped; style.css must not style them again
+const MOVED = ['.btn-accent', '.btn-accent:hover', '.btn-discord', '.btn-discord:hover', '.btn-outline-light', '.btn-outline-light:hover', '.glass-modal', '.nav-link', '.nav-link.active'];
 
 test('index.html loads Bootstrap, the tokens and the DEMS styles in this order', () => {
     const hrefs = [...INDEX_HTML.matchAll(/<link[^>]+href="([^"]+\.css[^"]*)"/g)].map(match => match[1]);
@@ -46,4 +58,26 @@ test('no selector list is defined twice in the same context', () => {
         else seen.set(key, place);
     }
     assert.deepEqual(duplicates, []);
+});
+
+test('components.css defines every component selector', () => {
+    const defined = selectorsOf('components.css');
+    assert.deepEqual(COMPONENT_SELECTORS.filter(selector => !defined.has(selector)), []);
+});
+
+test('style.css does not style moved component selectors again', () => {
+    const page = selectorsOf('style.css');
+    assert.deepEqual(MOVED.filter(selector => page.has(selector)), []);
+});
+
+test('!important in components.css is limited to the colour helpers', () => {
+    const offenders = rulesOf('components.css')
+        .filter(rule => rule.declarations.some(declaration => /!important$/.test(declaration.value)))
+        .filter(rule => !rule.selector.split(', ').every(selector => /^\.(text|bg|text-bg)-[a-z]+$/.test(selector)))
+        .map(rule => rule.selector);
+    assert.deepEqual(offenders, []);
+});
+
+test('the dead class glass-modal is gone', () => {
+    for (const source of [INDEX_HTML, ...frontendSources().map(entry => entry.source)]) assert.doesNotMatch(source, /glass-modal/);
 });

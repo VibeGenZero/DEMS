@@ -33,8 +33,9 @@
   <script src="/vendor/marked/marked.min.js"></script>
   <script src="/vendor/dompurify/purify.min.js"></script>
 
-  <!-- DEMS styles: tokens -> page styles (the order matters) -->
+  <!-- DEMS styles: tokens -> components -> page styles (the order matters) -->
   <link rel="stylesheet" href="/css/tokens.css?v=3">
+  <link rel="stylesheet" href="/css/components.css?v=3">
   <link rel="stylesheet" href="/css/style.css?v=3">
   <link rel="icon" type="image/svg+xml" href="/logo.svg">
 </head>
@@ -900,7 +901,7 @@
   <!-- Import Discord Events Modal -->
   <div class="modal fade" id="importDiscordEventsModal" tabindex="-1">
     <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
-      <div class="modal-content glass-modal">
+      <div class="modal-content">
         <div class="modal-header border-0">
           <h5 class="modal-title"><i class="bi bi-discord me-2"></i>Event aus Discord importieren</h5>
           <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
@@ -923,7 +924,7 @@
   <!-- Create / Edit Event Modal (Wizard) -->
   <div class="modal fade" id="eventModal" tabindex="-1">
     <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
-      <div class="modal-content glass-modal">
+      <div class="modal-content">
 
         <div class="modal-header border-0 pb-0">
           <h5 class="modal-title" id="eventModalTitle">Neues Event erstellen</h5>
@@ -1253,7 +1254,7 @@
   <!-- System Reset Modal -->
   <div class="modal fade" id="resetModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
-      <div class="modal-content glass-modal border-danger">
+      <div class="modal-content border-danger">
         <div class="modal-header border-0">
           <h5 class="modal-title text-danger"><i class="bi bi-exclamation-triangle-fill me-2"></i>System Reset (Danger
             Zone)</h5>
@@ -1308,7 +1309,7 @@
   <!-- Maintenance Modal -->
   <div class="modal fade" id="maintenanceModal" tabindex="-1">
     <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
-      <div class="modal-content glass-modal border-warning">
+      <div class="modal-content border-warning">
         <div class="modal-header border-0">
           <h5 class="modal-title text-warning"><i class="bi bi-tools me-2"></i>Wartungsmodus</h5>
           <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
@@ -1408,7 +1409,7 @@
   <!-- Registrations Modal -->
   <div class="modal fade" id="registrationsModal" tabindex="-1">
     <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
-      <div class="modal-content glass-modal">
+      <div class="modal-content">
         <div class="modal-header border-0">
           <h5 class="modal-title">Anmeldungen — <span id="reg-event-title"></span></h5>
           <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
@@ -1442,7 +1443,7 @@
   <!-- Bot Messages Modal -->
   <div class="modal fade" id="botMessagesModal" tabindex="-1">
     <div class="modal-dialog modal-lg modal-dialog-centered">
-      <div class="modal-content glass-modal">
+      <div class="modal-content">
         <div class="modal-header border-0">
           <h5 class="modal-title"><i class="bi bi-chat-dots me-2"></i>Bot-Nachrichten bearbeiten</h5>
           <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
@@ -1478,7 +1479,7 @@
   <!-- Announce Event Modal -->
   <div class="modal fade" id="announceModal" tabindex="-1">
     <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
-      <div class="modal-content glass-modal">
+      <div class="modal-content">
         <div class="modal-header border-0">
           <h5 class="modal-title"><i class="bi bi-megaphone me-2"></i>Event ankündigen</h5>
           <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
@@ -1529,7 +1530,7 @@
   <!-- Data Privacy Modal -->
   <div class="modal fade" id="dataPrivacyModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
-      <div class="modal-content glass-modal">
+      <div class="modal-content">
         <div class="modal-header border-0">
           <h5 class="modal-title"><i class="bi bi-shield-lock me-2"></i>Daten & Datenschutz</h5>
           <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
@@ -1589,7 +1590,7 @@
   <!-- Updates Modal -->
   <div class="modal fade" id="updatesModal" tabindex="-1">
     <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
-      <div class="modal-content glass-modal">
+      <div class="modal-content">
         <div class="modal-header border-0">
           <h5 class="modal-title"><i class="bi bi-megaphone me-2"></i>Neuigkeiten & Updates <span
               id="updates-version-badge" class="badge bg-accent ms-2"></span></h5>
@@ -1618,7 +1619,7 @@
   <!-- Date poll editor -->
   <div class="modal fade" id="pollEditorModal" tabindex="-1">
     <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
-      <div class="modal-content glass-modal">
+      <div class="modal-content">
         <div class="modal-header border-0">
           <h5 class="modal-title" id="poll-editor-title">Neue Abstimmung</h5>
           <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
@@ -1687,7 +1688,7 @@
   <!-- Post a date poll to Discord -->
   <div class="modal fade" id="pollAnnounceModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
-      <div class="modal-content glass-modal">
+      <div class="modal-content">
         <div class="modal-header border-0">
           <h5 class="modal-title"><i class="bi bi-discord me-2"></i>In Discord posten</h5>
           <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
@@ -1714,7 +1715,7 @@
   <!-- Choose the date for the event -->
   <div class="modal fade" id="pollDecideModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
-      <div class="modal-content glass-modal">
+      <div class="modal-content">
         <div class="modal-header border-0">
           <h5 class="modal-title"><i class="bi bi-calendar-plus me-2"></i>Termin für das Event wählen</h5>
           <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
@@ -1734,7 +1735,7 @@
   <!-- Generic confirmation -->
   <div class="modal fade" id="confirmModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
-      <div class="modal-content glass-modal">
+      <div class="modal-content">
         <div class="modal-body pt-4">
           <p id="confirm-modal-text" class="mb-0"></p>
         </div>

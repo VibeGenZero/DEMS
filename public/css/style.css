@@ -180,20 +180,20 @@ body {
   text-shadow: 0 0 20px var(--accent-glow);
 }
 
-.nav-link {
-  color: var(--text-secondary) !important;
+#main-navbar .nav-link {
+  color: var(--text-secondary);
   font-weight: 500;
   transition: var(--transition);
   position: relative;
-  padding: 0.5rem 1rem !important;
+  padding: 0.5rem 1rem;
 }
 
-.nav-link:hover,
-.nav-link.active {
-  color: var(--accent-light) !important;
+#main-navbar .nav-link:hover,
+#main-navbar .nav-link.active {
+  color: var(--accent-light);
 }
 
-.nav-link.active::after {
+#main-navbar .nav-link.active::after {
   content: '';
   position: absolute;
   bottom: 0;
@@ -203,56 +203,6 @@ body {
   height: 2px;
   background: var(--accent);
   border-radius: 2px;
-}
-
-/* ═══════════════════════════════════════════ */
-/* BUTTONS                                     */
-/* ═══════════════════════════════════════════ */
-.btn-discord {
-  background: #5865F2;
-  color: #fff;
-  border: none;
-  font-weight: 600;
-  border-radius: var(--radius);
-  padding: 0.6rem 1.5rem;
-  transition: var(--transition);
-  display: inline-flex;
-  align-items: center;
-}
-
-.btn-discord:hover {
-  background: #4752C4;
-  color: #fff;
-  transform: translateY(-2px);
-  box-shadow: 0 8px 25px rgba(88, 101, 242, 0.35);
-}
-
-.btn-accent {
-  background: linear-gradient(135deg, var(--accent), var(--accent-dark));
-  color: #fff;
-  border: none;
-  font-weight: 600;
-  border-radius: var(--radius);
-  padding: 0.6rem 1.5rem;
-  transition: var(--transition);
-}
-
-.btn-accent:hover {
-  background: linear-gradient(135deg, var(--accent-light), var(--accent));
-  color: #fff;
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-glow);
-}
-
-.btn-outline-light {
-  border-color: var(--border-subtle) !important;
-  color: var(--text-secondary) !important;
-}
-
-.btn-outline-light:hover {
-  background: rgba(255, 255, 255, 0.05) !important;
-  color: var(--text-primary) !important;
-  border-color: var(--accent) !important;
 }
 
 /* ═══════════════════════════════════════════ */
@@ -271,12 +221,6 @@ body {
   background: var(--bg-glass-hover);
   border-color: var(--border-accent);
   box-shadow: var(--shadow-glow);
-}
-
-.glass-modal {
-  background: var(--bg-secondary) !important;
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-lg) !important;
 }
 
 /* ═══════════════════════════════════════════ */

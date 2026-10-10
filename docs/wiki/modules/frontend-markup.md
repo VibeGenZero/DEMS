@@ -3,7 +3,7 @@ id: frontend-markup
 title: public/index.html and public/css/style.css — markup and styling map
 type: module
 tags: [frontend, html, css, bootstrap, theme, modals, sections, vendor, fonts]
-sources: [public/index.html, public/css/tokens.css, public/css/style.css, public/vendor, test/vendorAssets.test.js]
+sources: [public/index.html, public/css/tokens.css, public/css/components.css, public/css/style.css, public/vendor, test/vendorAssets.test.js]
 part_of: [architecture]
 see_also: [frontend-app, security]
 ---
@@ -15,7 +15,7 @@ see_also: [frontend-app, security]
 
 | Part | Ids / notes |
 |---|---|
-| `<head>` | everything from `/vendor` (see below): `fonts/fonts.css`, FontAwesome (for EasyMDE), Bootstrap CSS + Bootstrap Icons, EasyMDE + Flatpickr, marked + DOMPurify; then `/css/tokens.css?v=3` and `/css/style.css?v=3` |
+| `<head>` | everything from `/vendor` (see below): `fonts/fonts.css`, FontAwesome (for EasyMDE), Bootstrap CSS + Bootstrap Icons, EasyMDE + Flatpickr, marked + DOMPurify; then `/css/tokens.css?v=3`, `/css/components.css?v=3` and `/css/style.css?v=3` (in this order) |
 | Loading screen | `#loading-screen`, `.loading-letter`, `.loading-status`, `#particles` |
 | Navbar | `#main-navbar`, `#nav-polls` (with `#nav-polls-badge`), `#nav-profile`, `#nav-admin`, `#nav-bot-control`, `#nav-debug`, `#login-btn-container`, `#user-info`, `#user-avatar`, `#user-name` |
 | Banners | error banner, maintenance banner, planned-maintenance banner, panic lockdown overlay |
@@ -42,7 +42,11 @@ No CDN: every library and font is a pinned copy with its license next to it.
 
 ## style.css blocks (grep the header text)
 
-`:root` variables → LOADING SCREEN → NAVBAR → BUTTONS → GLASS CARDS → SECTIONS → EVENT CARDS (+ Event Series, Rendered Markdown) → COUNTDOWN → CATEGORY PILLS → BADGES → STATS CARDS → DATE & TIME → WAITLIST → FORMS → TABLE → FORM BUILDER → ENTITY PICKER → LOGIN CARD → TOAST → ADMIN EVENT CARD → CONFETTI → SKELETON LOADING → PROFILE SECTION → RESPONSIVE → UTILITY → INFO SECTION → EASYMDE CUSTOMIZATION → Participant Warning Badges → Calendar View → Event Comments → BOT CONTROL CENTER → EVENT WIZARD STEPPER → MAINTENANCE MODE → EVENT DETAIL (banner, sidebar, capacity bar, participants) → EVENT CARD (gradient placeholder, updated layout) → LOCATION AUTOCOMPLETE → DEBUG / STYLING GUIDE → ROLE SLOTS → DATE POLLS.
+`:root` variables → LOADING SCREEN → NAVBAR → GLASS CARDS → SECTIONS → EVENT CARDS (+ Event Series, Rendered Markdown) → COUNTDOWN → CATEGORY PILLS → BADGES → STATS CARDS → DATE & TIME → WAITLIST → FORMS → TABLE → FORM BUILDER → ENTITY PICKER → LOGIN CARD → TOAST → ADMIN EVENT CARD → CONFETTI → SKELETON LOADING → PROFILE SECTION → RESPONSIVE → UTILITY → INFO SECTION → EASYMDE CUSTOMIZATION → Participant Warning Badges → Calendar View → Event Comments → BOT CONTROL CENTER → EVENT WIZARD STEPPER → MAINTENANCE MODE → EVENT DETAIL (banner, sidebar, capacity bar, participants) → EVENT CARD (gradient placeholder, updated layout) → LOCATION AUTOCOMPLETE → DEBUG / STYLING GUIDE → ROLE SLOTS → DATE POLLS.
+
+## components.css blocks
+
+BOOTSTRAP BRIDGE (Bootstrap's `--bs-*` variables and colour helpers from the tokens) → BUTTON → DIALOG → TABS.
 
 ## Theme variables (`public/css/tokens.css`)
 
