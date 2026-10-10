@@ -56,6 +56,11 @@ const describe = (rule, declaration) => `${rule.file}:${declaration.line} ${rule
 // components.css has its own rule: !important only in the colour helpers.
 const STYLE_ATTRIBUTE_BUDGET = 116;
 const IMPORTANT_BUDGET = 30;
+// Emojis in index.html and the modules. Symbols are Bootstrap Icons (bi-*);
+// lower the number when a page drops some, never raise it. Emojis that users
+// type in (slot emojis) are data, not source, and do not count.
+const EMOJI_BUDGET = 40;
+const EMOJI = /\p{Extended_Pictographic}/gu;
 
 test('index.html loads Bootstrap, the tokens and the DEMS styles in this order', () => {
     const hrefs = [...INDEX_HTML.matchAll(/<link[^>]+href="([^"]+\.css[^"]*)"/g)].map(match => match[1]);
@@ -142,6 +147,12 @@ test('the number of style attributes matches its budget', () => {
     const count = [INDEX_HTML, ...frontendSources().map(entry => entry.source)]
         .reduce((sum, source) => sum + (source.match(/style="/g) || []).length, 0);
     assert.equal(count, STYLE_ATTRIBUTE_BUDGET, `found ${count} style attributes; lower STYLE_ATTRIBUTE_BUDGET if you removed some, otherwise use a class`);
+});
+
+test('the number of emojis in the frontend matches its budget', () => {
+    const count = [INDEX_HTML, ...frontendSources().map(entry => entry.source)]
+        .reduce((sum, source) => sum + (source.match(EMOJI) || []).length, 0);
+    assert.equal(count, EMOJI_BUDGET, `found ${count} emojis; lower EMOJI_BUDGET if you removed some, otherwise use a Bootstrap icon (bi-*)`);
 });
 
 test('the number of !important in style.css matches its budget', () => {

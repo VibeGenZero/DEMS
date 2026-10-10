@@ -107,6 +107,7 @@ No inline handlers (`onclick`, `onchange`, `oninput`, `onerror`): the CSP blocks
 - Hover feedback (glow, lift) only on elements that do something when clicked.
 - The event overview card is a link (`a.glass-card.event-card`), not a `data-click` element: middle click opens a tab and the keyboard reaches it.
 - The `style` attributes in `index.html` and the modules are legacy (budget in `test/cssRules.test.js`, D-16 removes them); new markup uses classes, dynamic values go through `element.style.setProperty`.
+- Symbols are Bootstrap Icons (`<i class="bi bi-…">`), never emojis; only emojis that users type in (slot emojis, Discord names) appear. `test/cssRules.test.js` counts the emojis left in `index.html` and `public/js` (budget, D-05 to D-08 lower it).
 
 ## Gotchas
 
