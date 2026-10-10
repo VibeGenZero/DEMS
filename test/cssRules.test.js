@@ -41,6 +41,10 @@ const MOVED = ['.btn-accent', '.btn-accent:hover', '.btn-discord', '.btn-discord
     '.event-status-draft', '.event-status-active', '.event-status-archived',
     '.skeleton', '.skeleton-text', '.skeleton-title', '.skeleton-img'
 ];
+// A colour written out: hex, rgb(), hsl() or a colour name (white-space is no colour)
+const RAW_COLOR = /#[0-9a-fA-F]{3,8}\b|\brgba?\(|\bhsla?\(|(?<![-\w])(white|black)(?![-\w])/;
+const withoutImportant = (value) => value.replace(/\s*!important$/, '');
+const describe = (rule, declaration) => `${rule.file}:${declaration.line} ${rule.selector} { ${declaration.property}: ${declaration.value} }`;
 
 test('index.html loads Bootstrap, the tokens and the DEMS styles in this order', () => {
     const hrefs = [...INDEX_HTML.matchAll(/<link[^>]+href="([^"]+\.css[^"]*)"/g)].map(match => match[1]);
@@ -95,4 +99,9 @@ test('!important in components.css is limited to the colour helpers', () => {
 
 test('the dead class glass-modal is gone', () => {
     for (const source of [INDEX_HTML, ...frontendSources().map(entry => entry.source)]) assert.doesNotMatch(source, /glass-modal/);
+});
+
+test('colour values only live in tokens.css', () => {
+    const raw = allRules().flatMap(rule => rule.declarations.filter(declaration => RAW_COLOR.test(declaration.value)).map(declaration => describe(rule, declaration)));
+    assert.deepEqual(raw, []);
 });
