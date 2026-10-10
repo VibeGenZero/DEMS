@@ -3,7 +3,7 @@ id: utils
 title: utils/ — domain helpers
 type: module
 tags: [utils, registration, form-fields, waitlist, audit-log, profile, debug]
-sources: [utils/registrationService.js, utils/formFields.js, utils/eventUtils.js, utils/eventUrl.js, utils/userProfile.js, utils/avatar.js, utils/botPermissions.js, utils/csv.js, utils/template.js, utils/sessionStore.js, utils/reminders.js, utils/debugLog.js, utils/capacity.js, utils/slotService.js, utils/eventLock.js, utils/announcementRefresh.js, utils/pollService.js, utils/pollStore.js]
+sources: [utils/registrationService.js, utils/formFields.js, utils/eventUtils.js, utils/eventListing.js, utils/eventUrl.js, utils/userProfile.js, utils/avatar.js, utils/botPermissions.js, utils/csv.js, utils/template.js, utils/sessionStore.js, utils/reminders.js, utils/debugLog.js, utils/capacity.js, utils/slotService.js, utils/eventLock.js, utils/announcementRefresh.js, utils/pollService.js, utils/pollStore.js]
 part_of: [architecture]
 depends_on: [data-layer, bot]
 see_also: [registration-flow, form-fields, role-slots]
@@ -42,6 +42,14 @@ Exports `FORM_FIELD_TYPE` (`text, textarea, dropdown, checkbox, user, role, chan
 | `loadEventRegistrations(eventId)`, `findUserRegistration(eventId, userId)`, `loadEventRoster(eventId, event, { withProfiles })` | registrations with `id`; line-up via `buildRoster` |
 | `saveEventWithSlots(eventId, rawSlots, buildUpdates)` | under the event lock: `normalizeSlots` + `validateSlotChange`, then writes `buildUpdates(slots, oldEvent)` → `{ ok, oldEvent, updates }` or `{ ok: false, error }` |
 | `addAuditLog(action, adminId, details, targetId = null)` | writes `auditLogs` `{ action, adminId, details, targetId, timestamp }`; errors only logged |
+
+## utils/eventListing.js (pure)
+
+| Export | Behaviour |
+|---|---|
+| `eventEndTime(event)` | `endDate`, else start + 2 h (`DEFAULT_DURATION_MS`); `null` without a valid `startDate` (a space instead of `T` is accepted) |
+| `isEventOver(event, now)` | end before `now`; an event without a date counts as upcoming. Used by `GET /api/events?upcoming=1` and the bot's auto status; `public/js/events/cards.js` applies the same rule in the browser |
+| `myRegistrationStatus(registrations, userId)` | `myStatus` of the event list: own `accepted`/`pending`/`waitlisted`, else `guest` in an accepted or pending registration of someone else, else `null` |
 
 ## utils/capacity.js, utils/slotService.js (pure)
 
