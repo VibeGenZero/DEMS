@@ -42,11 +42,11 @@ No CDN: every library and font is a pinned copy with its license next to it.
 
 ## style.css blocks (grep the header text)
 
-`:root` variables → LOADING SCREEN → NAVBAR → GLASS CARDS → SECTIONS → EVENT CARDS (+ Event Series, Rendered Markdown) → COUNTDOWN → CATEGORY PILLS → BADGES → STATS CARDS → DATE & TIME → WAITLIST → FORMS → TABLE → FORM BUILDER → ENTITY PICKER → LOGIN CARD → TOAST → ADMIN EVENT CARD → CONFETTI → SKELETON LOADING → PROFILE SECTION → RESPONSIVE → UTILITY → INFO SECTION → EASYMDE CUSTOMIZATION → Participant Warning Badges → Calendar View → Event Comments → BOT CONTROL CENTER → EVENT WIZARD STEPPER → MAINTENANCE MODE → EVENT DETAIL (banner, sidebar, capacity bar, participants) → EVENT CARD (gradient placeholder, updated layout) → LOCATION AUTOCOMPLETE → DEBUG / STYLING GUIDE → ROLE SLOTS → DATE POLLS.
+`:root` variables → LOADING SCREEN → NAVBAR → GLASS CARDS → SECTIONS → EVENT CARDS (+ Event Series, Rendered Markdown) → COUNTDOWN → CATEGORY PILLS → BADGES → STATS CARDS → DATE & TIME → WAITLIST → FORMS → TABLE → FORM BUILDER → ENTITY PICKER → LOGIN CARD → ADMIN EVENT CARD → CONFETTI → SKELETON LOADING → PROFILE SECTION → RESPONSIVE → UTILITY → INFO SECTION → EASYMDE CUSTOMIZATION → Participant Warning Badges → Calendar View → Event Comments → BOT CONTROL CENTER → EVENT WIZARD STEPPER → MAINTENANCE MODE → EVENT DETAIL (banner, sidebar, capacity bar, participants) → EVENT CARD (gradient placeholder, updated layout) → LOCATION AUTOCOMPLETE → DEBUG / STYLING GUIDE → ROLE SLOTS → DATE POLLS.
 
 ## components.css blocks
 
-BOOTSTRAP BRIDGE (Bootstrap's `--bs-*` variables and colour helpers from the tokens) → BUTTON → DIALOG → TABS.
+BOOTSTRAP BRIDGE (Bootstrap's `--bs-*` variables and colour helpers from the tokens) → BUTTON → DIALOG → TABS → TOAST.
 
 ## Theme variables (`public/css/tokens.css`)
 

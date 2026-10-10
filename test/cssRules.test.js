@@ -22,10 +22,13 @@ const COMPONENT_SELECTORS = [
     '.bg-primary', '.text-bg-primary', '.bg-success', '.text-bg-success', '.bg-warning', '.text-bg-warning', '.bg-danger', '.text-bg-danger', '.bg-info', '.text-bg-info',
     '.btn', '.btn-primary', '.btn-accent', '.btn-secondary', '.btn-outline-light', '.btn-outline-secondary', '.btn-ghost', '.btn-danger', '.btn-discord', '.btn-warning',
     '.btn-outline-primary', '.btn-outline-success', '.btn-outline-warning', '.btn-outline-danger', '.btn-sm', '.btn-lg', '.btn-icon',
-    '.modal', '.nav-pills', '.nav-pills .nav-link'
+    '.modal', '.nav-pills', '.nav-pills .nav-link',
+    '.toast', '.toast-success', '.toast-danger', '.toast-warning', '.toast-info', '.toast-icon'
 ];
 // Selectors that moved into components.css or were dropped; style.css must not style them again
-const MOVED = ['.btn-accent', '.btn-accent:hover', '.btn-discord', '.btn-discord:hover', '.btn-outline-light', '.btn-outline-light:hover', '.glass-modal', '.nav-link', '.nav-link.active'];
+const MOVED = ['.btn-accent', '.btn-accent:hover', '.btn-discord', '.btn-discord:hover', '.btn-outline-light', '.btn-outline-light:hover', '.glass-modal', '.nav-link', '.nav-link.active',
+    '.toast'
+];
 
 test('index.html loads Bootstrap, the tokens and the DEMS styles in this order', () => {
     const hrefs = [...INDEX_HTML.matchAll(/<link[^>]+href="([^"]+\.css[^"]*)"/g)].map(match => match[1]);

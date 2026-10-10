@@ -41,19 +41,28 @@ export function showError(message) {
     }, 8000);
 }
 
+// Toast type -> Bootstrap icon; any other type is shown as "info"
+export const TOAST_ICONS = {
+    success: 'bi-check-circle-fill',
+    danger: 'bi-x-circle-fill',
+    warning: 'bi-exclamation-triangle-fill',
+    info: 'bi-info-circle-fill'
+};
+
 export function showToast(message, type = 'info') {
     const toastEl = document.getElementById('app-toast');
-    const msgEl = document.getElementById('toast-message');
+    const iconEl = document.getElementById('toast-icon');
+    const kind = Object.hasOwn(TOAST_ICONS, type) ? type : 'info';
 
-    // Remove old classes
-    toastEl.className = 'toast align-items-center border-0';
-    toastEl.classList.add(`text-bg-${type}`);
+    // Resets the classes Bootstrap added while the last toast was shown
+    toastEl.className = `toast toast-${kind}`;
+    // A page cached before D-02 has no icon element
+    if (iconEl) iconEl.className = `toast-icon bi ${TOAST_ICONS[kind]} ms-3`;
+    document.getElementById('toast-message').textContent = message;
 
-    msgEl.textContent = message;
     const toast = new bootstrap.Toast(toastEl, { delay: 4000 });
     toast.show();
 
-    // GSAP Animation
     gsap.fromTo(toastEl,
         { x: 50, opacity: 0, scale: 0.9 },
         { x: 0, opacity: 1, scale: 1, duration: 0.5, ease: "back.out(1.5)" }

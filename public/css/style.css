@@ -902,16 +902,6 @@ body {
 }
 
 /* ═══════════════════════════════════════════ */
-/* TOAST                                       */
-/* ═══════════════════════════════════════════ */
-.toast {
-  background: var(--bg-secondary) !important;
-  color: var(--text-primary) !important;
-  border-radius: var(--radius) !important;
-  border: 1px solid var(--border-accent);
-}
-
-/* ═══════════════════════════════════════════ */
 /* ADMIN EVENT CARD                            */
 /* ═══════════════════════════════════════════ */
 .admin-event-card {

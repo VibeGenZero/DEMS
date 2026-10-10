@@ -342,3 +342,44 @@ a {
   gap: var(--space-8);
   white-space: nowrap;
 }
+
+/* ═══════════════════════════════════════════ */
+/* TOAST                                       */
+/* showToast(message, type) in core/ui.js      */
+/* ═══════════════════════════════════════════ */
+.toast {
+  --bs-toast-bg: var(--bg-secondary);
+  --bs-toast-color: var(--text-primary);
+  --bs-toast-border-color: var(--border-strong);
+  --bs-toast-border-radius: var(--radius);
+  --bs-toast-box-shadow: var(--shadow-md);
+  --bs-toast-font-size: var(--font-size-sm);
+  --toast-tone: var(--info);
+  border-left: 3px solid var(--toast-tone);
+}
+
+.toast-container {
+  --bs-toast-zindex: var(--z-toast);
+}
+
+.toast-success {
+  --toast-tone: var(--success);
+}
+
+.toast-danger {
+  --toast-tone: var(--danger);
+}
+
+.toast-warning {
+  --toast-tone: var(--warning);
+}
+
+.toast-info {
+  --toast-tone: var(--info);
+}
+
+.toast-icon {
+  flex: none;
+  color: var(--toast-tone);
+  font-size: var(--font-size-lg);
+}
