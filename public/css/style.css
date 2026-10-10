@@ -1,33 +1,8 @@
 /* ═══════════════════════════════════════════ */
-/* DEMS — Dark Theme Stylesheet               */
+/* DEMS — Page styles                          */
+/* Tokens: tokens.css                          */
+/* Components: components.css                  */
 /* ═══════════════════════════════════════════ */
-
-:root {
-  --bg-primary: #0a0a0f;
-  --bg-secondary: #12121a;
-  --bg-card: #16161f;
-  --bg-glass: rgba(22, 22, 31, 0.85);
-  --bg-glass-hover: rgba(30, 30, 45, 0.9);
-  --accent: #8b5cf6;
-  --accent-glow: rgba(139, 92, 246, 0.4);
-  --accent-light: #a78bfa;
-  --accent-dark: #6d28d9;
-  --danger: #ef4444;
-  --success: #22c55e;
-  --warning: #eab308;
-  --info: #06b6d4;
-  --text-primary: #e4e4e7;
-  --text-secondary: #a1a1aa;
-  --text-muted: #71717a;
-  --border-subtle: rgba(255, 255, 255, 0.06);
-  --border-accent: rgba(139, 92, 246, 0.3);
-  --font-display: 'UnifrakturCook', cursive;
-  --font-body: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-  --radius: 12px;
-  --radius-lg: 16px;
-  --shadow-glow: 0 0 30px rgba(139, 92, 246, 0.15);
-  --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
 
 * {
   box-sizing: border-box;
@@ -94,7 +69,7 @@ body {
 }
 
 .loading-logo {
-  font-family: var(--font-display);
+  font-family: var(--font-logo);
   font-size: clamp(3rem, 8vw, 6rem);
   color: var(--accent-light);
   display: flex;
@@ -199,7 +174,7 @@ body {
 }
 
 .brand-text {
-  font-family: var(--font-display) !important;
+  font-family: var(--font-logo) !important;
   font-size: 1.6rem !important;
   color: var(--accent-light) !important;
   text-shadow: 0 0 20px var(--accent-glow);
@@ -1305,7 +1280,7 @@ body {
 }
 
 .info-title {
-  font-family: var(--font-display);
+  font-family: var(--font-body);
   font-size: 4rem;
   color: var(--text-primary);
   margin-bottom: 0.5rem;
@@ -1913,7 +1888,7 @@ body {
 }
 
 .info-title {
-  font-family: var(--font-display);
+  font-family: var(--font-body);
   font-size: clamp(2.5rem, 7vw, 4.5rem);
   color: var(--text-primary);
   position: relative;

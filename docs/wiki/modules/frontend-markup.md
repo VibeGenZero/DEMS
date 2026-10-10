@@ -3,19 +3,19 @@ id: frontend-markup
 title: public/index.html and public/css/style.css — markup and styling map
 type: module
 tags: [frontend, html, css, bootstrap, theme, modals, sections, vendor, fonts]
-sources: [public/index.html, public/css/style.css, public/vendor, test/vendorAssets.test.js]
+sources: [public/index.html, public/css/tokens.css, public/css/style.css, public/vendor, test/vendorAssets.test.js]
 part_of: [architecture]
 see_also: [frontend-app, security]
 ---
 # public/index.html and public/css/style.css — markup and styling map
 
-> TL;DR: `index.html` (~1760 lines) contains every section and modal statically; JS toggles `display`. `style.css` (~3270 lines) is a dark theme driven by CSS variables in `:root`, organised in banner-commented blocks. Find things by element id (HTML) or block header (CSS) with `grep -n`.
+> TL;DR: `index.html` (~1760 lines) contains every section and modal statically; JS toggles `display`. `style.css` (~3270 lines) is a dark theme driven by the design tokens in `tokens.css`, organised in banner-commented blocks. Find things by element id (HTML) or block header (CSS) with `grep -n`.
 
 ## index.html structure
 
 | Part | Ids / notes |
 |---|---|
-| `<head>` | everything from `/vendor` (see below): `fonts/fonts.css`, FontAwesome (for EasyMDE), Bootstrap CSS + Bootstrap Icons, EasyMDE + Flatpickr, marked + DOMPurify; then `/css/style.css?v=2` |
+| `<head>` | everything from `/vendor` (see below): `fonts/fonts.css`, FontAwesome (for EasyMDE), Bootstrap CSS + Bootstrap Icons, EasyMDE + Flatpickr, marked + DOMPurify; then `/css/tokens.css?v=3` and `/css/style.css?v=3` |
 | Loading screen | `#loading-screen`, `.loading-letter`, `.loading-status`, `#particles` |
 | Navbar | `#main-navbar`, `#nav-polls` (with `#nav-polls-badge`), `#nav-profile`, `#nav-admin`, `#nav-bot-control`, `#nav-debug`, `#login-btn-container`, `#user-info`, `#user-avatar`, `#user-name` |
 | Banners | error banner, maintenance banner, planned-maintenance banner, panic lockdown overlay |
@@ -38,15 +38,15 @@ No CDN: every library and font is a pinned copy with its license next to it.
 | `dompurify/` | DOMPurify 3.2.4 | `renderMarkdownSafe` |
 | `gsap/` | GSAP 3.12.5 | boot animation and UI animations (the boot sequence needs it to show the app) |
 | `easymde/`, `flatpickr/` | EasyMDE 2.20.0, Flatpickr 4.6.13 (+ German locale, dark theme) | event description editor, date pickers |
-| `fonts/` | Inter (variable, 300–700, 7 subsets) + UnifrakturCook 700, mirrored from Google Fonts; `fonts.css` declares the `@font-face` rules | `--font-body`, `--font-display` |
+| `fonts/` | Inter (variable, 300–700, 7 subsets) + UnifrakturCook 700, mirrored from Google Fonts; `fonts.css` declares the `@font-face` rules | `--font-body`, `--font-logo` |
 
 ## style.css blocks (grep the header text)
 
 `:root` variables → LOADING SCREEN → NAVBAR → BUTTONS → GLASS CARDS → SECTIONS → EVENT CARDS (+ Event Series, Rendered Markdown) → COUNTDOWN → CATEGORY PILLS → BADGES → STATS CARDS → PROFILE SECTION → DATE & TIME → WAITLIST → FORMS → TABLE → FORM BUILDER → ENTITY PICKER → LOGIN CARD → TOAST → ADMIN EVENT CARD → SCROLLBAR → CONFETTI → SKELETON LOADING → INFO PARTICLES → PROFILE SECTION (second block) → RESPONSIVE → UTILITY → INFO SECTION → EASYMDE CUSTOMIZATION → Participant Warning Badges → Calendar View → Event Comments → BOT CONTROL CENTER → EVENT WIZARD STEPPER → MAINTENANCE MODE → EVENT DETAIL (banner, sidebar, capacity bar, participants) → EVENT CARD (gradient placeholder, updated layout) → LOCATION AUTOCOMPLETE → DEBUG / STYLING GUIDE → ROLE SLOTS → DATE POLLS.
 
-## Theme variables (`:root`)
+## Theme variables (`public/css/tokens.css`)
 
-`--bg-primary #0a0a0f`, `--bg-secondary`, `--bg-card`, `--bg-glass`, `--accent #8b5cf6` (violet), `--accent-light`, `--accent-dark`, `--danger #ef4444`, `--success #22c55e`, `--warning #eab308`, `--info #06b6d4`, `--text-primary/secondary/muted`, `--border-subtle`, `--border-accent`, `--font-display` (UnifrakturCook), `--font-body` (Inter), `--radius 12px`, `--radius-lg 16px`, `--shadow-glow`, `--transition`. Use these instead of hard-coded colours.
+`--bg-primary #0a0a0f`, `--bg-secondary`, `--bg-card`, `--bg-glass`, `--accent #8b5cf6` (violet), `--accent-light`, `--accent-dark`, `--danger #f87171`, `--success #22c55e`, `--warning #eab308`, `--info #06b6d4`, `--text-primary/secondary/muted`, `--border-subtle`, `--border-accent`, `--font-logo` (UnifrakturCook, logo only), `--font-body` (Inter), `--radius 12px`, `--radius-lg 16px`, `--shadow-glow`, `--transition`. Use these instead of hard-coded colours.
 
 ## Actions
 
