@@ -45,6 +45,11 @@ const MOVED = ['.btn-accent', '.btn-accent:hover', '.btn-discord', '.btn-discord
 const RAW_COLOR = /#[0-9a-fA-F]{3,8}\b|\brgba?\(|\bhsla?\(|(?<![-\w])(white|black)(?![-\w])/;
 const withoutImportant = (value) => value.replace(/\s*!important$/, '');
 const describe = (rule, declaration) => `${rule.file}:${declaration.line} ${rule.selector} { ${declaration.property}: ${declaration.value} }`;
+// Upper limits that only go down: lower the number when you remove some,
+// never raise it. Before D-02 there were 132 style attributes and 57
+// !important. D-16 brings the style attributes to 0.
+const STYLE_ATTRIBUTE_BUDGET = 123;
+const IMPORTANT_BUDGET = 51;
 
 test('index.html loads Bootstrap, the tokens and the DEMS styles in this order', () => {
     const hrefs = [...INDEX_HTML.matchAll(/<link[^>]+href="([^"]+\.css[^"]*)"/g)].map(match => match[1]);
@@ -125,4 +130,15 @@ test('radii come from the radius tokens', () => {
         .filter(declaration => declaration.property.startsWith('border') && declaration.property.endsWith('radius') && /\dpx\b/.test(declaration.value))
         .map(declaration => describe(rule, declaration)));
     assert.deepEqual(raw, []);
+});
+
+test('the number of style attributes matches its budget', () => {
+    const count = [INDEX_HTML, ...frontendSources().map(entry => entry.source)]
+        .reduce((sum, source) => sum + (source.match(/style="/g) || []).length, 0);
+    assert.equal(count, STYLE_ATTRIBUTE_BUDGET, `found ${count} style attributes; lower STYLE_ATTRIBUTE_BUDGET if you removed some, otherwise use a class`);
+});
+
+test('the number of !important matches its budget', () => {
+    const count = allRules().flatMap(rule => rule.declarations).filter(declaration => /!important$/.test(declaration.value)).length;
+    assert.equal(count, IMPORTANT_BUDGET, `found ${count} !important; lower IMPORTANT_BUDGET if you removed some, otherwise fix the selector or the load order`);
 });

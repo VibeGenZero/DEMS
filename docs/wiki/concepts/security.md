@@ -36,7 +36,7 @@ see_also: [auth-session, known-issues, deployment]
 | H-01 / H-02 | OAuth `state`, session regeneration | fixed: one-time `state` per login, `startUserSession` regenerates the session (F-05) |
 | H-03 | 24 h admin cache | fixed: roles and `isAdmin` are re-read from Discord at most every 5 minutes (`createRoleRefresh`, F-15) |
 | H-04 | guest `my-registration` leaks registrant data | fixed: guests get only `{ registered, asGuest, id, status }` (F-04) |
-| H-05 | CSP `unsafe-inline` + `unsafe-eval` | **done for scripts** (D-01): `unsafe-eval` removed (F-07); `script-src 'self'`, `script-src-attr 'none'`; actions via `data-click`/`data-change`/`data-input` (`core/actions.js`); `style-src` keeps `'unsafe-inline'` until D-02 removes the `style` attributes |
+| H-05 | CSP `unsafe-inline` + `unsafe-eval` | **done for scripts** (D-01): `unsafe-eval` removed (F-07); `script-src 'self'`, `script-src-attr 'none'`; actions via `data-click`/`data-change`/`data-input` (`core/actions.js`); `style-src` keeps `'unsafe-inline'` until D-16 removes the `style` attributes (their number is pinned by a budget in `test/cssRules.test.js`) |
 | H-06 | check-in code via `Math.random`, not specifically rate-limited | fixed: `crypto.randomInt`, 10 failed check-ins / 15 min per member (F-14) |
 | M-01 | Firebase client SDK used server-side | open (depends on Firestore rules) |
 | M-02 | CDN assets without SRI | fixed: no CDN assets, libraries and fonts are vendored in `public/vendor/` (F-07) |

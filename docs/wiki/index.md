@@ -72,10 +72,11 @@ sources: [scripts/wiki-graph.js, docs/wiki/graph.json, CLAUDE.md]
 | `utils/eventUtils.js`, `utils/userProfile.js`, `utils/avatar.js`, `utils/botPermissions.js`, `utils/csv.js`, `utils/template.js`, `utils/sessionStore.js`, `utils/debugLog.js` | utils |
 | `utils/reminders.js` | utils, reminders-presence |
 | `public/js/**` | frontend-app |
-| `public/index.html`, `public/css/style.css` | frontend-markup |
+| `public/index.html`, `public/css/tokens.css`, `public/css/components.css`, `public/css/style.css` | frontend-markup |
 | `dev/*` | dev-mock-mode |
 | `test/*` | testing |
 | `e2e/*`, `playwright.config.js` | testing |
+| `scripts/style-snapshot.js` | testing |
 | `Dockerfile`, `compose*.yaml` | docker, deployment |
 | `.gitlab-ci.yml`, `ci/runner/*` | ci |
 | `.env.example` | configuration |

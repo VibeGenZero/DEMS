@@ -203,7 +203,7 @@ Name, Adresse, Titel und Text laufen durch `escapeHtml`; nur `action` wird unver
 ### Gewollte sichtbare Änderungen
 
 - Hilfetext, violetter Text, Fehlertext und Gefahr-Button in den neuen Farben; Links violett statt blau.
-- Hauptbutton flach statt Verlauf; alle Buttons 40 px hoch (klein 32, groß 48) mit einheitlichem Radius.
+- Hauptbutton flach statt Verlauf; alle Buttons 40 px hoch (klein 32, groß 48) mit einheitlichem Radius und Schriftgewicht 600.
 - Toasts mit Symbol und farbiger Kante; Dialoge einheitlich.
 - Statische Karten reagieren nicht mehr aufs Überfahren.
 - Schriftgrößen auf der Skala (kleinste 12 px statt 8,8 px), Tönungen und Radien auf weniger Stufen.
