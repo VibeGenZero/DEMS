@@ -1,7 +1,8 @@
 /* ═══════════════════════════════════════════ */
 /* DEMS — Components                           */
 /* Bootstrap bridge and the nine components.   */
-/* Every value comes from tokens.css.          */
+/* Colours, font sizes, radii and layers come  */
+/* from tokens.css.                            */
 /* Shown in the styleguide (#debug).           */
 /* ═══════════════════════════════════════════ */
 
@@ -26,6 +27,10 @@ a {
 }
 
 /* Bootstrap's colour helpers carry !important, so these need it too */
+.text-secondary {
+  color: var(--text-secondary) !important;
+}
+
 .text-primary {
   color: var(--accent-text) !important;
 }
@@ -334,6 +339,11 @@ a {
   white-space: nowrap;
 }
 
+/* A counter in the active tab sits on three stacked tints; secondary text has 4.3:1 there */
+.nav-pills .nav-link.active .chip {
+  color: var(--text-primary);
+}
+
 /* ═══════════════════════════════════════════ */
 /* TOAST                                       */
 /* showToast(message, type) in core/ui.js      */
@@ -415,14 +425,16 @@ a.glass-card:hover,
 .category-pill,
 .event-status-badge,
 .event-category-tag {
+  --chip-height: 1.75rem;
   display: inline-flex;
   align-items: center;
   gap: var(--space-4);
   min-width: 0;
   max-width: 100%;
-  min-height: 1.75rem;
   overflow: hidden;
-  padding: 0 var(--space-12);
+  /* Height = one line (1.25em) + padding + 1px border on each side, so the text stays
+     centred when a utility class such as d-inline-block overrides the display */
+  padding: calc((var(--chip-height) - 2px - 1.25em) / 2) var(--space-12);
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-pill);
   background: var(--bg-tint-2);
@@ -437,8 +449,8 @@ a.glass-card:hover,
 .chip-sm,
 .event-status-badge,
 .event-category-tag {
-  min-height: 1.375rem;
-  padding: 0 var(--space-8);
+  --chip-height: 1.375rem;
+  padding-inline: var(--space-8);
   font-size: var(--font-size-xs);
   font-weight: 600;
 }

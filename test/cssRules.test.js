@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('fs');
 const path = require('path');
 const { frontendSources, REPO_ROOT } = require('./helpers');
-const { readCss, parseRules } = require('./cssSource');
+const { readCss, parseRules, readTokens } = require('./cssSource');
 
 const CSS_DIR = path.join(REPO_ROOT, 'public', 'css');
 const INDEX_HTML = fs.readFileSync(path.join(REPO_ROOT, 'public', 'index.html'), 'utf8');
@@ -18,11 +18,11 @@ const selectorsOf = (name) => new Set(rulesOf(name).flatMap(rule => rule.selecto
 // Selectors that components.css must define
 const COMPONENT_SELECTORS = [
     '[data-bs-theme="dark"]', 'a',
-    '.text-primary', '.text-success', '.text-warning', '.text-danger', '.text-info',
+    '.text-secondary', '.text-primary', '.text-success', '.text-warning', '.text-danger', '.text-info',
     '.bg-primary', '.text-bg-primary', '.bg-success', '.text-bg-success', '.bg-warning', '.text-bg-warning', '.bg-danger', '.text-bg-danger', '.bg-info', '.text-bg-info',
     '.btn', '.btn-primary', '.btn-accent', '.btn-secondary', '.btn-outline-light', '.btn-outline-secondary', '.btn-ghost', '.btn-danger', '.btn-discord', '.btn-warning',
     '.btn-outline-primary', '.btn-outline-success', '.btn-outline-warning', '.btn-outline-danger', '.btn-sm', '.btn-lg', '.btn-icon',
-    '.modal', '.nav-pills', '.nav-pills .nav-link',
+    '.modal', '.nav-pills', '.nav-pills .nav-link', '.nav-pills .nav-link.active .chip',
     '.toast', '.toast-success', '.toast-danger', '.toast-warning', '.toast-info', '.toast-icon',
     '.glass-card', '.glass-card[data-click]:hover', 'a.glass-card:hover', '.glass-card.is-clickable:hover',
     '.chip', '.badge-pill', '.category-pill', '.event-status-badge', '.event-category-tag', '.chip-sm',
@@ -47,9 +47,10 @@ const withoutImportant = (value) => value.replace(/\s*!important$/, '');
 const describe = (rule, declaration) => `${rule.file}:${declaration.line} ${rule.selector} { ${declaration.property}: ${declaration.value} }`;
 // Upper limits that only go down: lower the number when you remove some,
 // never raise it. Before D-02 there were 132 style attributes and 57
-// !important. D-16 brings the style attributes to 0.
+// !important in style.css. D-16 brings the style attributes to 0.
+// components.css has its own rule: !important only in the colour helpers.
 const STYLE_ATTRIBUTE_BUDGET = 123;
-const IMPORTANT_BUDGET = 51;
+const IMPORTANT_BUDGET = 36;
 
 test('index.html loads Bootstrap, the tokens and the DEMS styles in this order', () => {
     const hrefs = [...INDEX_HTML.matchAll(/<link[^>]+href="([^"]+\.css[^"]*)"/g)].map(match => match[1]);
@@ -138,7 +139,20 @@ test('the number of style attributes matches its budget', () => {
     assert.equal(count, STYLE_ATTRIBUTE_BUDGET, `found ${count} style attributes; lower STYLE_ATTRIBUTE_BUDGET if you removed some, otherwise use a class`);
 });
 
-test('the number of !important matches its budget', () => {
-    const count = allRules().flatMap(rule => rule.declarations).filter(declaration => /!important$/.test(declaration.value)).length;
+test('the number of !important in style.css matches its budget', () => {
+    const count = rulesOf('style.css').flatMap(rule => rule.declarations).filter(declaration => /!important$/.test(declaration.value)).length;
     assert.equal(count, IMPORTANT_BUDGET, `found ${count} !important; lower IMPORTANT_BUDGET if you removed some, otherwise fix the selector or the load order`);
+});
+
+test('every variable a stylesheet uses is a token or defined in the stylesheets', () => {
+    const tokens = readTokens(readCss('tokens.css'));
+    const declarations = allRules().flatMap(rule => rule.declarations.map(declaration => ({ rule, declaration })));
+    // Component-level variables such as --btn-height or --toast-tone
+    const local = new Set(declarations.map(({ declaration }) => declaration.property).filter(property => property.startsWith('--')));
+    const unknown = declarations.flatMap(({ rule, declaration }) => [...declaration.value.matchAll(/var\(\s*(--[\w-]+)/g)]
+        .map(match => match[1])
+        // --bs-* belongs to Bootstrap
+        .filter(name => !tokens.has(name) && !local.has(name) && !name.startsWith('--bs-'))
+        .map(name => `${name} in ${describe(rule, declaration)}`));
+    assert.deepEqual(unknown, []);
 });

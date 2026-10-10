@@ -27,6 +27,19 @@ test('the styleguide shows the tokens and all nine components', async ({ page })
     const boxes = await sizes.evaluateAll(buttons => buttons.map(button => ({ height: button.getBoundingClientRect().height, flex: getComputedStyle(button).display.includes('flex') })));
     expect(boxes).toEqual([{ height: 32, flex: false }, { height: 40, flex: false }, { height: 48, flex: false }]);
     for (const block of BLOCKS) await expect(page.locator(`#sg-${block}`)).toBeVisible();
+    // Chips are 28 or 22 px tall with centred text, also when a utility class such as
+    // d-inline-block overrides their display (admin dashboard, bot centre)
+    await expect(page.locator('#sg-chip .event-category-tag.d-inline-block')).toHaveCount(1);
+    const chips = await page.locator('#sg-chip').evaluate(block => [...block.querySelectorAll('.chip, .badge-pill, .category-pill, .event-status-badge, .event-category-tag')].map(chip => {
+        const range = document.createRange();
+        range.selectNodeContents(chip);
+        const text = range.getBoundingClientRect();
+        const box = chip.getBoundingClientRect();
+        return { chip: chip.className, height: box.height, offCentre: Math.abs((text.top - box.top) - (box.bottom - text.bottom)) };
+    }));
+    expect(chips.filter(entry => entry.offCentre > 1.5 || ![22, 28].includes(Math.round(entry.height)))).toEqual([]);
+    // The counter inside the active tab sits on three stacked tints and needs the primary text colour
+    await expect(page.locator('#sg-tabs .nav-link.active .chip').first()).toHaveCSS('color', 'rgb(228, 228, 231)');
     // One large initials tile by design, two more from the images that fail to load
     await expect(page.locator('#sg-avatar span.avatar.avatar-lg.avatar-initials')).toHaveCount(3);
     await expect(page.locator('#sg-avatar img.avatar-lg')).toHaveCount(1);

@@ -1963,7 +1963,7 @@ body {
 
 .capacity-bar-container {
   height: 4px;
-  background: var(--bg-elevated);
+  background: var(--bg-tint-2);
   border-radius: var(--radius-pill);
   overflow: hidden;
 }

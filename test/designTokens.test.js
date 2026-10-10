@@ -109,6 +109,18 @@ test('status and accent text reach AA contrast on their own tint', async () => {
     assert.deepEqual(failures, []);
 });
 
+test('the counter in the active tab reaches AA contrast on its stacked surfaces', async () => {
+    const { parseColor, surface, ratio } = await loadPalette();
+    const { composite } = (await loadFrontendModules(CONTRAST_FILE, vm.createContext({}))).get('contrast.js');
+    const failures = [];
+    for (const base of BASE_SURFACES) {
+        // .nav-pills (tint-1) > .nav-link.active (accent-tint-2) > .chip (tint-2)
+        const stacked = ['--bg-tint-1', '--accent-tint-2', '--bg-tint-2'].reduce((below, tint) => composite(parseColor(TOKENS.get(tint)), below), surface(base));
+        failures.push(...tooLow(`--text-primary on the tab counter over ${base}`, ratio('--text-primary', stacked), AA_TEXT));
+    }
+    assert.deepEqual(failures, []);
+});
+
 test('text on solid fills reaches AA contrast', async () => {
     const { color, ratio } = await loadPalette();
     const failures = [];

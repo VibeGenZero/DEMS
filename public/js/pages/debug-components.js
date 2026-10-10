@@ -68,7 +68,8 @@ function chipBlock() {
             <span class="badge-pill status-accepted">badge-pill</span>
             <span class="category-pill">category-pill</span>
             <span class="event-status-badge event-status-active">event-status-badge</span>
-            <span class="event-category-tag">event-category-tag</span>`),
+            <span class="event-category-tag">event-category-tag</span>
+            <span class="event-category-tag d-inline-block">mit d-inline-block</span>`),
         row('Langer Text', `<span class="chip chip-info">${LONG_LABEL} ${LONG_LABEL}</span>`)
     ].join(''));
 }

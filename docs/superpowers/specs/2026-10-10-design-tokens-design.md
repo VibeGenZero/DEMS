@@ -137,7 +137,7 @@ Bootstrap 5.3.2 gestaltet seine Komponenten über eigene CSS-Variablen. Der erst
 | Toast | `--bs-toast-bg`, `-color`, `-border-color`, `-border-radius`, `-zindex` |
 | Tabs | `--bs-nav-pills-*`, `--bs-nav-link-*` |
 | Alerts | `--bs-alert-color`, `-bg`, `-border-color` je `.alert-success`, `-warning`, `-danger`, `-info` |
-| Farb-Helfer | `.text-primary`, `-success`, `-warning`, `-danger`, `-info` → Textfarben; `.bg-*` und `.text-bg-*` → Fläche und Schrift darauf |
+| Farb-Helfer | `.text-secondary`, `.text-primary`, `-success`, `-warning`, `-danger`, `-info` → Textfarben; `.bg-*` und `.text-bg-*` → Fläche und Schrift darauf |
 
 Bootstraps Farb-Helfer tragen selbst `!important`; nur dort darf `components.css` ebenfalls `!important` verwenden. `.text-muted` zeigt über `--bs-secondary-color` den Wert von `--text-secondary`; für den gedämpften Ton gibt es `.text-body-tertiary`.
 
@@ -202,7 +202,7 @@ Name, Adresse, Titel und Text laufen durch `escapeHtml`; nur `action` wird unver
 
 ### Gewollte sichtbare Änderungen
 
-- Hilfetext, violetter Text, Fehlertext und Gefahr-Button in den neuen Farben; Links violett statt blau.
+- Hilfetext, violetter Text, Fehlertext und Gefahr-Button in den neuen Farben; Links violett statt blau. Text mit `.text-secondary` wird heller (Bootstraps Grau hatte 3,6–4,2:1).
 - Hauptbutton flach statt Verlauf; alle Buttons 40 px hoch (klein 32, groß 48) mit einheitlichem Radius und Schriftgewicht 600.
 - Toasts mit Symbol und farbiger Kante; Dialoge einheitlich.
 - Statische Karten reagieren nicht mehr aufs Überfahren.
