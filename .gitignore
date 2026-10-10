@@ -34,3 +34,6 @@ Thumbs.db
 # Playwright (npm run test:e2e)
 test-results/
 playwright-report/
+
+# Superpowers working files (brainstorming mockups, plan ledgers)
+.superpowers/
