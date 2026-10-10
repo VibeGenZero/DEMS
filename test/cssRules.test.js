@@ -105,3 +105,10 @@ test('colour values only live in tokens.css', () => {
     const raw = allRules().flatMap(rule => rule.declarations.filter(declaration => RAW_COLOR.test(declaration.value)).map(declaration => describe(rule, declaration)));
     assert.deepEqual(raw, []);
 });
+
+test('font sizes in px or rem only live in tokens.css', () => {
+    const raw = allRules().flatMap(rule => rule.declarations
+        .filter(declaration => declaration.property === 'font-size' && /\d(px|rem)\b/.test(declaration.value))
+        .map(declaration => describe(rule, declaration)));
+    assert.deepEqual(raw, []);
+});
