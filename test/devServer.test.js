@@ -151,6 +151,16 @@ test('seeded events are served', async () => {
     assert.ok(!data.some(event => event.id === EVENT_ID.DRAFT));
 });
 
+test('the dummy banners are served in mock mode', async () => {
+    const member = await loginAs('member');
+    const event = await (await member.request(`/api/events/${EVENT_ID.ROLE}`)).json();
+    const { pathname } = new URL(event.bannerUrl);
+    assert.equal(pathname, '/dev-banners/raid.svg');
+    const res = await createClient(server.baseUrl).request(pathname);
+    assert.equal(res.status, 200);
+    assert.match(res.headers.get('content-type'), /^image\/svg\+xml/);
+});
+
 test('the routes read the mock Discord server', async () => {
     const admin = await loginAs('admin');
     const roles = await (await admin.request('/api/admin/roles')).json();

@@ -143,6 +143,8 @@ app.use((req, res, next) => {
 
 // ── Static files ────────────────────────────────────────────────────────
 app.use(express.static(path.join(__dirname, 'public')));
+// Dev mock mode: banners of the dummy events (dev/banners, see dev/seedData.js)
+if (IS_MOCK_MODE) app.use('/dev-banners', express.static(path.join(__dirname, 'dev', 'banners')));
 
 // Roles and admin right of logged-in users are re-read from Discord at most every
 // 5 minutes (after static files, so assets never wait for Discord)

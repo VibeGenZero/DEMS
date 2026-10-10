@@ -34,6 +34,32 @@ const POLL_ID = { OPEN: 'dev-poll-raid', DECIDED: 'dev-poll-summer' };
 /** Check-in code of the running event. */
 const CHECKIN_CODE = 'DEMO42';
 
+/**
+ * Banner file of every dummy event (dev/banners/<name>.svg, served at
+ * /dev-banners only in mock mode). The workshop's file does not exist on
+ * purpose, so the overview shows its colour fallback.
+ */
+const EVENT_BANNERS = {
+    [EVENT_ID.OPEN]: 'spieleabend',
+    [EVENT_ID.FORM]: 'turnier',
+    [EVENT_ID.FULL]: 'koop',
+    [EVENT_ID.ROLE]: 'raid',
+    [EVENT_ID.BIG_FORM]: 'workshop',
+    [EVENT_ID.RUNNING]: 'speedrun',
+    [EVENT_ID.PAST]: 'retro',
+    [EVENT_ID.ARCHIVED]: 'sommerfest',
+    [EVENT_ID.DRAFT]: 'halloween',
+    ...Object.fromEntries(SERIES_EVENT_IDS.map(id => [id, 'training']))
+};
+
+/**
+ * Absolute banner address; the mock mode sets BASE_URL to its own port.
+ *
+ * @param {string} name -> File name without .svg.
+ * @returns {string} -> URL the browser can load.
+ */
+const bannerUrl = (name) => `${process.env.BASE_URL || 'http://localhost:3000'}/dev-banners/${name}.svg`;
+
 // Everybody on the mock server, addressable by username (people.lena, ...)
 const people = Object.fromEntries([...PERSONAS, ...MEMBERS].map(person => [person.username, person]));
 
@@ -242,6 +268,7 @@ function buildEvents(clock) {
         });
     });
 
+    for (const [id, name] of Object.entries(EVENT_BANNERS)) events[id].bannerUrl = bannerUrl(name);
     return events;
 }
 
@@ -550,4 +577,4 @@ function buildSeedData(now = new Date()) {
     };
 }
 
-module.exports = { buildSeedData, EVENT_ID, SERIES_EVENT_IDS, CHECKIN_CODE, RAID_SLOT_ID, POLL_ID };
+module.exports = { buildSeedData, EVENT_ID, SERIES_EVENT_IDS, CHECKIN_CODE, RAID_SLOT_ID, POLL_ID, EVENT_BANNERS };

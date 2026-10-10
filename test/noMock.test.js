@@ -26,3 +26,9 @@ test('without DEV_MOCK the persona login does not exist', async () => {
     await client.request('/auth/dev-login/admin');
     assert.equal(await (await client.request('/auth/me')).json(), null);
 });
+
+test('without DEV_MOCK the dummy banners do not exist', async () => {
+    // The SPA fallback answers with index.html, never with the image
+    const res = await createClient(server.baseUrl).request('/dev-banners/raid.svg');
+    assert.doesNotMatch(res.headers.get('content-type') || '', /svg/);
+});
