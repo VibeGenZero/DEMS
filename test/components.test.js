@@ -79,3 +79,60 @@ test('skeleton cards use component classes, no style attributes', async () => {
     assert.match(container.innerHTML, /class="skeleton skeleton-text is-short"/);
     assert.doesNotMatch(container.innerHTML, /style=/);
 });
+
+const loadComponents = async () => (await loadFrontendModules(path.join(CORE_DIR, 'components.js'), vm.createContext({}))).get('components.js');
+
+test('initials come from the first two words', async () => {
+    const { initialsOf } = await loadComponents();
+    assert.equal(initialsOf('Lyonel Berzen'), 'LB');
+    assert.equal(initialsOf('moritz'), 'M');
+    assert.equal(initialsOf('  anna   maria  schmidt '), 'AM');
+    assert.equal(initialsOf('élan vital'), 'ÉV');
+    assert.equal(initialsOf('🦊 Fuchs'), '🦊F');
+    for (const empty of ['', '   ', undefined, null]) assert.equal(initialsOf(empty), '?');
+});
+
+test('an avatar is an image with an initials fallback, or an initials tile', async () => {
+    const { avatar } = await loadComponents();
+    assert.equal(
+        avatar({ url: 'https://cdn.example/a.png', name: 'Lyonel Berzen', size: 'lg' }),
+        '<img class="avatar avatar-lg" src="https://cdn.example/a.png" alt="Lyonel Berzen" title="Lyonel Berzen" data-fallback="initials" data-initials="LB">'
+    );
+    assert.equal(avatar({ name: 'Lyonel Berzen' }), '<span class="avatar avatar-initials" title="Lyonel Berzen">LB</span>');
+    assert.equal(avatar({ url: '   ', name: 'Mo', size: 'sm' }), '<span class="avatar avatar-sm avatar-initials" title="Mo">M</span>');
+    // An unknown size is ignored, missing arguments give the placeholder tile
+    assert.equal(avatar({ name: 'A', size: 'huge' }), '<span class="avatar avatar-initials" title="A">A</span>');
+    assert.equal(avatar(), '<span class="avatar avatar-initials" title="">?</span>');
+});
+
+test('a display name cannot break out of the avatar markup', async () => {
+    const { avatar } = await loadComponents();
+    for (const name of ['"><script>alert(1)</script>', 'x" onerror="alert(1)', "y' onload='alert(1)", '<img src=x>']) {
+        for (const html of [avatar({ name }), avatar({ url: 'https://cdn.example/a.png', name })]) {
+            assert.doesNotMatch(html, /<script|<img src=x|" onerror="|' onload='/, name);
+            // Exactly one element: the only "<" opens it (the tile also closes with "</span>")
+            assert.equal(html.match(/</g).length, html.startsWith('<span') ? 2 : 1, html);
+        }
+    }
+    assert.match(avatar({ url: 'https://cdn.example/a.png?x="><b>', name: 'A' }), /src="https:\/\/cdn\.example\/a\.png\?x=&quot;&gt;&lt;b&gt;"/);
+});
+
+test('an empty state shows icon, title, optional text and optional action', async () => {
+    const { emptyState } = await loadComponents();
+    const button = '<button type="button" class="btn btn-secondary btn-sm" data-click="hide" data-target="x">Aktualisieren</button>';
+    assert.equal(
+        emptyState({ icon: 'calendar-x', title: 'Noch keine Events', text: 'Sobald ein Event geplant ist, erscheint es hier.', action: button }),
+        '<div class="empty-state"><div class="empty-state-icon"><i class="bi bi-calendar-x"></i></div><h3 class="empty-state-title">Noch keine Events</h3><p class="empty-state-text">Sobald ein Event geplant ist, erscheint es hier.</p>' + button + '</div>'
+    );
+    assert.equal(emptyState({ title: 'Leer' }), '<div class="empty-state"><div class="empty-state-icon"><i class="bi bi-inbox"></i></div><h3 class="empty-state-title">Leer</h3></div>');
+});
+
+test('an empty state escapes its texts and ignores an odd icon name', async () => {
+    const { emptyState } = await loadComponents();
+    const html = emptyState({ icon: 'x"><script>', title: '<b>Titel</b>', text: 'A & B <i>' });
+    assert.match(html, /<i class="bi bi-inbox"><\/i>/);
+    assert.match(html, /&lt;b&gt;Titel&lt;\/b&gt;/);
+    assert.match(html, /A &amp; B &lt;i&gt;/);
+    assert.doesNotMatch(html, /<script|<b>/);
+    assert.equal(emptyState({ title: undefined }), '<div class="empty-state"><div class="empty-state-icon"><i class="bi bi-inbox"></i></div><h3 class="empty-state-title"></h3></div>');
+});

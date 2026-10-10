@@ -46,7 +46,7 @@ No CDN: every library and font is a pinned copy with its license next to it.
 
 ## components.css blocks
 
-BOOTSTRAP BRIDGE (Bootstrap's `--bs-*` variables and colour helpers from the tokens) → BUTTON → DIALOG → TABS → TOAST → CARD → CHIP → SKELETON.
+BOOTSTRAP BRIDGE (Bootstrap's `--bs-*` variables and colour helpers from the tokens) → BUTTON → DIALOG → TABS → TOAST → CARD → CHIP → SKELETON → EMPTY STATE → AVATAR.
 
 ## Theme variables (`public/css/tokens.css`)
 
@@ -60,7 +60,7 @@ No inline handlers (`onclick`, `onchange`, `oninput`, `onerror`): the CSP blocks
 |---|---|
 | `data-click="name"` / `data-change="name"` / `data-input="name"` | runs the action `name` registered with `registerActions` (see [frontend-app](frontend-app.md)); the innermost element with an action wins; links get `preventDefault` |
 | other `data-*` | parameters of the action, read via `el.dataset` (always escaped with `escapeHtml`) |
-| `data-fallback="hide\|invisible\|initials"` | broken image: hide it, keep its space, or replace it with an initials tile (`data-initials`, `title`) |
+| `data-fallback="hide\|invisible\|initials"` | broken image: hide it, keep its space, or replace it with an initials tile (`data-initials`, `title`) — an `img.avatar` keeps its size classes and becomes `.avatar.avatar-initials` |
 | `data-click="hide"` / `data-click="scrollTo"` / `data-change="toggleVisible"` + `data-target="<id>"` | built-in actions: hide, scroll to, or show/hide (checkbox) the element with that id |
 
 ## Rules

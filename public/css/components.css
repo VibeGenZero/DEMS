@@ -572,3 +572,112 @@ button.chip.active,
   justify-content: space-between;
   height: 200px;
 }
+
+/* ═══════════════════════════════════════════ */
+/* EMPTY STATE                                 */
+/* emptyState({ … }) in core/components.js     */
+/* ═══════════════════════════════════════════ */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-8);
+  padding: var(--space-32) var(--space-16);
+  text-align: center;
+}
+
+.empty-state-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 3.5rem;
+  height: 3.5rem;
+  margin-bottom: var(--space-4);
+  border-radius: 50%;
+  background: var(--accent-tint-2);
+  color: var(--accent-text);
+  font-size: var(--font-size-2xl);
+}
+
+.empty-state-title {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: var(--font-size-lg);
+  font-weight: 600;
+}
+
+.empty-state-text {
+  max-width: 34ch;
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.empty-state .btn {
+  margin-top: var(--space-8);
+}
+
+/* ═══════════════════════════════════════════ */
+/* AVATAR                                      */
+/* avatar({ url, name, size }) in              */
+/* core/components.js; sizes 24, 36, 64, 96 px */
+/* ═══════════════════════════════════════════ */
+.avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 50%;
+  object-fit: cover;
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  line-height: 1;
+}
+
+.avatar-sm {
+  width: 1.5rem;
+  height: 1.5rem;
+  font-size: var(--font-size-xs);
+}
+
+.avatar-lg {
+  width: 4rem;
+  height: 4rem;
+  font-size: var(--font-size-2xl);
+}
+
+.avatar-xl {
+  width: 6rem;
+  height: 6rem;
+  font-size: var(--font-size-3xl);
+}
+
+/* Shown instead of the image when there is none or it fails to load */
+.avatar-initials {
+  background: var(--accent-fill);
+  color: var(--on-accent);
+  user-select: none;
+}
+
+.avatar-stack {
+  display: flex;
+  align-items: center;
+}
+
+.avatar-stack .avatar {
+  margin-left: calc(-1 * var(--space-8));
+  border: 2px solid var(--bg-card);
+}
+
+.avatar-stack .avatar:first-child {
+  margin-left: 0;
+}
+
+/* "+3" at the end of a stack */
+.avatar-more {
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  font-size: var(--font-size-xs);
+}

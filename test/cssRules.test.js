@@ -29,7 +29,9 @@ const COMPONENT_SELECTORS = [
     '.chip-success', '.chip-warning', '.chip-danger', '.chip-info', '.chip-accent',
     '.badge-pill.status-accepted', '.badge-pill.status-pending', '.badge-pill.status-rejected', '.badge-pill.status-waitlisted',
     'button.chip.active', '.category-pill.active',
-    '.skeleton', '.skeleton-text', '.skeleton-title', '.skeleton-img', '.skeleton-chip', '.skeleton-avatar', '.skeleton-card-body'
+    '.skeleton', '.skeleton-text', '.skeleton-title', '.skeleton-img', '.skeleton-chip', '.skeleton-avatar', '.skeleton-card-body',
+    '.empty-state', '.empty-state-icon', '.empty-state-title', '.empty-state-text',
+    '.avatar', '.avatar-sm', '.avatar-lg', '.avatar-xl', '.avatar-initials', '.avatar-stack', '.avatar-more'
 ];
 // Selectors that moved into components.css or were dropped; style.css must not style them again
 const MOVED = ['.btn-accent', '.btn-accent:hover', '.btn-discord', '.btn-discord:hover', '.btn-outline-light', '.btn-outline-light:hover', '.glass-modal', '.nav-link', '.nav-link.active',

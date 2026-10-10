@@ -45,6 +45,8 @@ Logged-out users see `#login-section` for every route except `info`. An event ro
 | `main.js` | entry point | imports every module, registers the startup listeners |
 | `core/state.js` | shared values | `state` (see below) |
 | `core/actions.js` | event delegation | `registerActions(map)`, `initActions(root)` (called once in `main.js`), `runAction(name, element, event)`, `actionNames()`; built-in actions `toggleVisible`, `hide`, `scrollTo`; image fallbacks `hide`, `invisible`, `initials` |
+| `core/components.js` | markup helpers of the component library | `initialsOf(name)`, `avatar({ url, name, size })` (image with `data-fallback="initials"`, or an initials tile), `emptyState({ icon, title, text, action })` (`action` is ready button HTML with a literal `data-click`) |
+| `core/contrast.js` | WCAG contrast maths (styleguide and token test) | `parseColor`, `composite`, `contrastRatio` |
 | `core/boot.js` | startup | `createParticles`, `runBootAnimation`, `fetchCSRFToken`, `loadServerInfo`, `updateServerNameInUI`, `finishLoading` |
 | `core/auth.js` | login state | `logout` (`POST /auth/logout` with CSRF token, then `/`; toast on failure), `checkAuth`, `showLoggedIn`, `showLoggedOut` |
 | `core/router.js` | hash router | `handleRoute` (shows the section and marks its link among `#main-navbar .nav-link`; other `.nav-link`s, e.g. tabs, are left alone), `navigateTo`, `rememberPendingRoute`, `restorePendingRoute` |
