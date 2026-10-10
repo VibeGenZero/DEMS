@@ -223,7 +223,7 @@ test('the overview opens events and filters categories through actions', async (
 
 test('the calendar arrows move one month in each direction', async () => {
     const { app, state, element } = await loadFrontendApp({
-        '/api/events/categories': [],
+        '/api/events?limit=500': { data: [], meta: { total: 0, page: 1, limit: 500, totalPages: 0 } },
         '/api/events': { data: [], meta: { total: 0, page: 1, limit: 20, totalPages: 1 } }
     });
     state.currentUser = MEMBER;

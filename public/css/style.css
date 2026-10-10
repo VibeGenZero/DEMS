@@ -1709,6 +1709,12 @@ body {
   cursor: pointer;
 }
 
+/* "+2 mehr": not a link, quieter than the events above it */
+.calendar-day-more {
+  opacity: 0.6;
+  cursor: default;
+}
+
 .calendar-day-event:hover {
   background: var(--accent-glow);
 }

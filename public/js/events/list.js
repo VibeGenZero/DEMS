@@ -1,11 +1,12 @@
 /**
- * Event overview: cards, categories, search, grid/calendar view, countdowns,
- * series dates.
+ * Event overview: cards, categories, search, grid/calendar switch, series
+ * dates. The calendar lives in calendar.js, the countdown in detail.js.
  */
 import { state } from '../core/state.js';
 import { registerActions } from '../core/actions.js';
 import { escapeHtml, isValidBannerUrl, markdownPreview, renderSkeletonEvents } from '../core/ui.js';
-import { getEventGradient } from './detail.js';
+import { getEventGradient, startCountdown } from './detail.js';
+import { forgetCalendarEvents, showCalendar } from './calendar.js';
 
 export let activeCategory = '';
 
@@ -13,57 +14,10 @@ export let searchDebounceTimer = null;
 
 export let currentView = 'grid';
 
-export let cachedEvents = [];
-
-export function formatCountdown(targetDate) {
-    const now = new Date();
-    const target = new Date(targetDate);
-    const diff = target - now;
-
-    if (diff <= 0) return null;
-
-    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-    const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-    const mins = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-    const secs = Math.floor((diff % (1000 * 60)) / 1000);
-
-    return { days, hours, mins, secs };
-}
-
-export function renderCountdownHTML(cd) {
-    if (!cd) return '<span class="countdown-expired"><i class="bi bi-clock-history me-1"></i>Event hat bereits begonnen</span>';
-    return `
-    <div class="countdown-item"><span class="countdown-value">${cd.days}</span><span class="countdown-label">Tage</span></div>
-    <div class="countdown-item"><span class="countdown-value">${String(cd.hours).padStart(2, '0')}</span><span class="countdown-label">Std</span></div>
-    <div class="countdown-item"><span class="countdown-value">${String(cd.mins).padStart(2, '0')}</span><span class="countdown-label">Min</span></div>
-    <div class="countdown-item"><span class="countdown-value">${String(cd.secs).padStart(2, '0')}</span><span class="countdown-label">Sek</span></div>
-  `;
-}
-
-export function startCountdown(element, targetDate) {
-    let timer; // Declare first to avoid TDZ
-    const update = () => {
-        const cd = formatCountdown(targetDate);
-        element.innerHTML = renderCountdownHTML(cd);
-        if (!cd) {
-            if (timer) clearInterval(timer);
-            element.classList.remove('countdown-live');
-            return false;
-        }
-        return true;
-    };
-
-    // Run once immediately
-    if (update()) {
-        timer = setInterval(update, 1000);
-        state.countdownTimers.push(timer);
-        return timer;
-    }
-}
-
 export async function showEventsSection() {
     const section = document.getElementById('events-section');
     section.style.display = 'block';
+    forgetCalendarEvents();
 
     // Load categories
     await loadCategories();
@@ -105,8 +59,6 @@ export async function showEventsSection() {
             console.error('API response is not an array:', events);
             throw new Error('Ungültige API-Antwort');
         }
-
-        cachedEvents = events;
 
         if (!events.length) {
             grid.innerHTML = '';
@@ -385,7 +337,7 @@ export function debouncedSearch() {
     }, 300);
 }
 
-export function switchView(view) {
+export async function switchView(view) {
     currentView = view;
     const gridBtn = document.getElementById('view-grid-btn');
     const calBtn = document.getElementById('view-calendar-btn');
@@ -397,118 +349,13 @@ export function switchView(view) {
         calBtn.classList.remove('active');
         grid.style.display = '';
         calendar.style.display = 'none';
-    } else {
-        gridBtn.classList.remove('active');
-        calBtn.classList.add('active');
-        grid.style.display = 'none';
-        calendar.style.display = '';
-        renderCalendar(cachedEvents);
+        return;
     }
-}
-
-export let calendarMonth = new Date().getMonth();
-
-export let calendarYear = new Date().getFullYear();
-
-/**
- * Show the previous or next month in the calendar view.
- *
- * @param {number} delta -> -1 or 1.
- * @returns {void}
- */
-export function shiftCalendarMonth(delta) {
-    calendarMonth += delta;
-    if (calendarMonth < 0) { calendarMonth = 11; calendarYear--; }
-    if (calendarMonth > 11) { calendarMonth = 0; calendarYear++; }
-    renderCalendar(cachedEvents);
-}
-
-export function renderCalendar(events) {
-    const container = document.getElementById('events-calendar');
-    const today = new Date();
-    const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
-
-    const monthNames = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
-    const dayNames = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
-
-    // Group events by date
-    const eventsByDate = {};
-    events.forEach(ev => {
-        if (ev.startDate) {
-            const d = new Date(ev.startDate);
-            const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-            if (!eventsByDate[key]) eventsByDate[key] = [];
-            eventsByDate[key].push(ev);
-        }
-    });
-
-    // First day of month and days in month
-    const firstDay = new Date(calendarYear, calendarMonth, 1);
-    const daysInMonth = new Date(calendarYear, calendarMonth + 1, 0).getDate();
-    let startDayOfWeek = firstDay.getDay(); // 0=Sun
-    startDayOfWeek = startDayOfWeek === 0 ? 6 : startDayOfWeek - 1; // Convert to Mon=0
-
-    // Days from previous month to fill
-    const prevMonthDays = new Date(calendarYear, calendarMonth, 0).getDate();
-
-    let html = `
-    <div class="calendar-container">
-      <div class="calendar-header">
-        <button class="btn btn-sm btn-outline-light" data-click="shiftCalendarMonth" data-delta="-1">
-          <i class="bi bi-chevron-left"></i>
-        </button>
-        <h4>${monthNames[calendarMonth]} ${calendarYear}</h4>
-        <button class="btn btn-sm btn-outline-light" data-click="shiftCalendarMonth" data-delta="1">
-          <i class="bi bi-chevron-right"></i>
-        </button>
-      </div>
-      <div class="calendar-grid">
-    `;
-
-    // Day names
-    dayNames.forEach(d => {
-        html += `<div class="calendar-day-name">${d}</div>`;
-    });
-
-    // Previous month filler days
-    for (let i = startDayOfWeek - 1; i >= 0; i--) {
-        const day = prevMonthDays - i;
-        html += `<div class="calendar-day other-month"><span class="day-number">${day}</span></div>`;
-    }
-
-    // Current month days
-    for (let day = 1; day <= daysInMonth; day++) {
-        const dateKey = `${calendarYear}-${String(calendarMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-        const isToday = dateKey === todayStr;
-        const dayEvents = eventsByDate[dateKey] || [];
-
-        let eventsHtml = '';
-        if (dayEvents.length > 0) {
-            eventsHtml = '<div class="calendar-day-events">';
-            dayEvents.slice(0, 3).forEach(ev => {
-                eventsHtml += `<div class="calendar-day-event" data-click="navigateTo" data-route="event/${escapeHtml(ev.id)}">${escapeHtml(ev.title)}</div>`;
-            });
-            if (dayEvents.length > 3) {
-                eventsHtml += `<div class="calendar-day-event" style="opacity:0.6">+${dayEvents.length - 3} mehr</div>`;
-            }
-            eventsHtml += '</div>';
-        }
-
-        html += `<div class="calendar-day ${isToday ? 'today' : ''}">
-            <span class="day-number">${day}</span>
-            ${eventsHtml}
-        </div>`;
-    }
-
-    // Next month filler days
-    const totalCells = startDayOfWeek + daysInMonth;
-    const remainingCells = totalCells % 7 === 0 ? 0 : 7 - (totalCells % 7);
-    for (let i = 1; i <= remainingCells; i++) {
-        html += `<div class="calendar-day other-month"><span class="day-number">${i}</span></div>`;
-    }
-
-    html += '</div></div>';
-    container.innerHTML = html;
+    gridBtn.classList.remove('active');
+    calBtn.classList.add('active');
+    grid.style.display = 'none';
+    calendar.style.display = '';
+    await showCalendar();
 }
 
 registerActions({
@@ -516,6 +363,5 @@ registerActions({
     toggleSeriesDates: (el) => toggleSeriesDates(el.dataset.cardId),
     filterByCategory: (el) => filterByCategory(el.dataset.category),
     debouncedSearch: () => debouncedSearch(),
-    switchView: (el) => switchView(el.dataset.view),
-    shiftCalendarMonth: (el) => shiftCalendarMonth(Number(el.dataset.delta))
+    switchView: (el) => switchView(el.dataset.view)
 });

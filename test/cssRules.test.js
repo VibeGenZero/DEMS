@@ -51,7 +51,7 @@ const describe = (rule, declaration) => `${rule.file}:${declaration.line} ${rule
 // never raise it. Before D-02 there were 132 style attributes and 57
 // !important in style.css. D-16 brings the style attributes to 0.
 // components.css has its own rule: !important only in the colour helpers.
-const STYLE_ATTRIBUTE_BUDGET = 123;
+const STYLE_ATTRIBUTE_BUDGET = 122;
 const IMPORTANT_BUDGET = 36;
 
 test('index.html loads Bootstrap, the tokens and the DEMS styles in this order', () => {
