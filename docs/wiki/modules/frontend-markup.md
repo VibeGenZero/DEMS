@@ -68,7 +68,7 @@ No inline handlers (`onclick`, `onchange`, `oninput`, `onerror`): the CSP blocks
 - Do not edit `public/vendor/` (third-party builds).
 - New sections: add `<section id="<name>-section" class="app-section" style="display:none;">`, a router case in `handleRoute`, and (optionally) a nav item with `data-section="<name>-section"`.
 - No CDN links: add a library as pinned files under `public/vendor/<lib>/` (with its license), reference it as `/vendor/...` and list it in the table above. The CSP allows scripts, styles and fonts only from `'self'`; `test/vendorAssets.test.js` fails on external `<script>`/`<link>` URLs, missing files and broken `url()` references in vendored CSS.
-- When `DEBUG_MODE=true`, the `#debug` "styling guide" section shows the colour/typography/component inventory — useful before adding UI.
+- When `DEBUG_MODE=true`, the `#debug` styleguide shows every token (read from `tokens.css`; text colours with their contrast) and every component with its class names — look there before adding UI.
 
 ## Gotchas
 

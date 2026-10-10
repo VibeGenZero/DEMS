@@ -2541,40 +2541,137 @@ body {
   font-weight: 600;
 }
 
-/* Color swatches */
-.sg-color-grid {
+/* The three parts: Tokens, Komponenten, Bestand */
+.sg-part-title {
+  margin: var(--space-48) 0 var(--space-16);
+  padding-bottom: var(--space-8);
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--text-primary);
+  font-size: var(--font-size-2xl);
+  font-weight: 700;
+}
+
+/* Class names next to a component title */
+.sg-classes {
+  margin-left: var(--space-8);
+  color: var(--accent-text);
+  font-size: var(--font-size-xs);
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+/* Token tiles; the sample gets its value from pages/debug.js */
+.sg-token-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: var(--space-12);
+}
+
+.sg-token {
+  min-width: 0;
+  padding: var(--space-12);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius);
+  background: var(--bg-card);
+}
+
+.sg-token-sample {
+  height: 2.5rem;
+  margin-bottom: var(--space-8);
+}
+
+.sg-token-sample-color {
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+}
+
+.sg-token-sample-font-size {
+  overflow: hidden;
+  color: var(--text-primary);
+  line-height: 1;
+}
+
+.sg-token-sample-font-size::before {
+  content: 'Aa';
+}
+
+.sg-token-sample-space {
+  max-width: 100%;
+  height: var(--space-12);
+  border-radius: var(--radius-pill);
+  background: var(--accent-fill);
+}
+
+.sg-token-sample-radius {
+  width: 4rem;
+  border: 1px solid var(--border-accent);
+  background: var(--bg-tint-2);
+}
+
+.sg-token-sample-shadow {
+  width: 4rem;
+  border-radius: var(--radius-sm);
+  background: var(--bg-secondary);
+}
+
+.sg-token-sample-text {
+  display: none;
+}
+
+.sg-token-name {
+  color: var(--text-primary);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.sg-token-value,
+.sg-token-contrast {
+  color: var(--text-muted);
+  font-size: var(--font-size-xs);
+  overflow-wrap: anywhere;
+}
+
+/* One line of examples inside a component block */
+.sg-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.75rem;
-  margin-bottom: 1.5rem;
-}
-
-.sg-color-swatch {
-  display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 0.25rem;
-  width: 80px;
+  gap: var(--space-8) var(--space-16);
+  margin-bottom: var(--space-16);
 }
 
-.sg-color-block {
-  width: 80px;
-  height: 48px;
-  border-radius: var(--radius);
-  border: 1px solid var(--border-subtle);
+.sg-row:last-child {
+  margin-bottom: 0;
 }
 
-.sg-color-name {
-  font-size: var(--font-size-xs);
+.sg-label {
+  flex: 0 0 7rem;
   color: var(--text-muted);
-  text-align: center;
-  word-break: break-all;
+  font-size: var(--font-size-xs);
 }
 
-.sg-color-val {
-  font-size: var(--font-size-xs);
-  color: var(--text-muted);
-  opacity: 0.6;
+.sg-samples {
+  display: flex;
+  flex: 1 1 16rem;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-8);
+  min-width: 0;
+}
+
+/* A dialog shown in the page flow instead of as an overlay */
+.sg-modal-static {
+  position: static;
+  display: block;
+  height: auto;
+  overflow: visible;
+}
+
+.sg-modal-static .modal-dialog {
+  max-width: 28rem;
+  margin: 0;
 }
 
 /* Animation demo */

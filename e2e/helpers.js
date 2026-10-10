@@ -40,6 +40,25 @@ async function loginAs(page, personaId) {
 }
 
 /**
+ * Wait until a Bootstrap dialog has finished opening. Bootstrap ignores hide()
+ * while the fade-in runs (its own check is `_isTransitioning`), so a click on
+ * "close" right after the dialog became visible gets lost now and then.
+ *
+ * @param {import('@playwright/test').Page} page -> Page.
+ * @param {string} selector -> Selector of the .modal element, e.g. "#confirmModal".
+ * @returns {Promise<import('@playwright/test').Locator>} -> The open dialog.
+ */
+async function waitForDialog(page, selector) {
+    const dialog = page.locator(selector);
+    await expect(dialog).toBeVisible();
+    await page.waitForFunction((modalSelector) => {
+        const instance = window.bootstrap.Modal.getInstance(document.querySelector(modalSelector));
+        return Boolean(instance) && instance._isTransitioning === false;
+    }, selector);
+    return dialog;
+}
+
+/**
  * The first login shows a welcome dialog (shown once per user, so it may
  * already be gone when another viewport logged in first).
  *
@@ -50,6 +69,7 @@ async function closeWelcomeDialog(page) {
     const dialog = page.locator('#firstLoginModal');
     const shown = await dialog.waitFor({ state: 'visible', timeout: 3000 }).then(() => true, () => false);
     if (!shown) return;
+    await waitForDialog(page, '#firstLoginModal');
     await dialog.locator('button.btn-accent').click();
     await expect(dialog).toBeHidden();
 }
@@ -98,4 +118,4 @@ async function navigate(page, route) {
     await closeMenu(page);
 }
 
-module.exports = { watchErrors, loginAs, openMenu, closeMenu, navigate };
+module.exports = { watchErrors, loginAs, openMenu, closeMenu, navigate, waitForDialog };

@@ -72,7 +72,8 @@ Logged-out users see `#login-section` for every route except `info`. An event ro
 | `admin/discord-import.js` | Discord import | `showImportDiscordEventsModal`, `fetchDiscordEvents`, `selectDiscordEvent` |
 | `pages/profile.js` | profile & account | `showProfileSection` (registration cards link only if `canOpenEvent(event)`, else class `profile-reg-card-static`), `canOpenEvent` (mirrors `isEventVisibleTo`), `loadAccountSettings`, `saveAccountSettings`, `deleteUserAccount`, `showFirstLoginModal`, `confirmInvitationPreference`, `toggleVerboseLog` |
 | `pages/info.js` | info page | `showInfoSection`, `spawnInfoParticles`, `showUserData` (profile + registrations from `/auth/me` and `/api/user/registrations`) |
-| `pages/debug.js` | styling guide | `showDebugSection`, `sgRunAnimation` |
+| `pages/debug.js` | styleguide: tokens and remaining page styles | `showDebugSection`, `contrastLabel(value, surface)`, `contrastNote(name, valueOf)` (contrast line of a token tile: text colours on the card, `--on-*` on their fill), `sgRunAnimation` |
+| `pages/debug-components.js` | styleguide: the nine components | `renderDebugComponents(container)`; actions `sgShowDialog`, `sgShowToast` |
 
 ## State
 

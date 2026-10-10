@@ -27,7 +27,8 @@ module.exports = defineConfig({
         // Own port and a fresh database per run -> never touches data/dems.dev.sqlite
         command: 'node dev/start.js',
         url: `http://localhost:${PORT}/healthz`,
-        env: { PORT: String(PORT), DEV_SQLITE_PATH: path.join(os.tmpdir(), `dems-e2e-${Date.now()}.sqlite`) },
+        // DEBUG_MODE shows the styleguide (#debug), which e2e/styleguide.spec.js walks through
+        env: { PORT: String(PORT), DEV_SQLITE_PATH: path.join(os.tmpdir(), `dems-e2e-${Date.now()}.sqlite`), DEBUG_MODE: 'true' },
         reuseExistingServer: false,
         timeout: 60_000
     }

@@ -556,15 +556,22 @@
     <section id="debug-section" class="app-section" style="display:none;">
       <div class="container section-container">
         <div class="section-header">
-          <h2><i class="bi bi-palette me-2"></i>Styling Guide</h2>
-          <p class="text-secondary mb-0">Komponentenübersicht — nur im Debug-Modus sichtbar.</p>
+          <h2><i class="bi bi-palette me-2"></i>Styleguide</h2>
+          <p class="text-secondary mb-0">Tokens und Komponenten — nur im Debug-Modus sichtbar.</p>
         </div>
 
-        <!-- 1. Farben -->
-        <h5 class="sg-section-title">Farben</h5>
-        <div id="sg-colors" class="sg-color-grid"></div>
+        <!-- Rendered by pages/debug.js from tokens.css -->
+        <h3 class="sg-part-title">Tokens</h3>
+        <div id="sg-tokens"></div>
 
-        <!-- 2. Typographie -->
+        <!-- Rendered by pages/debug-components.js -->
+        <h3 class="sg-part-title">Komponenten</h3>
+        <div id="sg-components"></div>
+
+        <h3 class="sg-part-title">Bestand</h3>
+        <div id="sg-legacy">
+
+        <!-- Typographie -->
         <h5 class="sg-section-title">Typographie</h5>
         <div class="glass-card p-4 mb-4" id="sg-typography">
           <h1>H1 — Überschrift</h1>
@@ -580,20 +587,14 @@
           <p class="text-muted">text-muted — Abgedämpfter Hilfetext</p>
         </div>
 
-        <!-- 3. Buttons -->
-        <h5 class="sg-section-title">Buttons</h5>
+        <!-- Weitere Button-Varianten -->
+        <h5 class="sg-section-title">Weitere Button-Varianten</h5>
         <div class="glass-card p-4 mb-4">
           <div id="sg-buttons" class="d-flex flex-wrap gap-2"></div>
         </div>
 
-        <!-- 4. Badges & Pills -->
-        <h5 class="sg-section-title">Badges &amp; Status-Pills</h5>
-        <div class="glass-card p-4 mb-4">
-          <div id="sg-badges" class="d-flex flex-wrap gap-2 align-items-center"></div>
-        </div>
-
-        <!-- 5. Cards -->
-        <h5 class="sg-section-title">Cards</h5>
+        <!-- Seitenkarten -->
+        <h5 class="sg-section-title">Seitenkarten</h5>
         <div id="sg-cards" class="mb-4"></div>
 
         <!-- 6. Formulare -->
@@ -639,10 +640,7 @@
         <h5 class="sg-section-title">Feedback</h5>
         <div class="glass-card p-4 mb-4">
           <div class="d-flex flex-wrap gap-3 align-items-center mb-3" id="sg-spinners"></div>
-          <div id="sg-alerts" class="mb-3"></div>
-          <button class="btn btn-outline-secondary btn-sm" data-click="showTestToast">
-            <i class="bi bi-bell me-1"></i>Toast testen
-          </button>
+          <div id="sg-alerts"></div>
         </div>
 
         <!-- 8. Animationen -->
@@ -662,6 +660,7 @@
           <div id="sg-icons" class="sg-icon-grid"></div>
         </div>
 
+        </div>
       </div>
     </section>
 

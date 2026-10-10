@@ -109,46 +109,37 @@ a {
 /* .btn + one variant; sizes .btn-sm, .btn-lg  */
 /* ═══════════════════════════════════════════ */
 .btn {
+  --btn-height: 2.5rem;
   --bs-btn-padding-x: var(--space-16);
-  --bs-btn-padding-y: var(--space-4);
+  /* Height = one line (1.5em) + padding + 1px border on each side. The button stays an
+     inline block: as a flex box it would drop the space between an icon and its label. */
+  --bs-btn-padding-y: calc((var(--btn-height) - 2px - 1.5em) / 2);
   --bs-btn-font-size: var(--font-size-md);
   --bs-btn-font-weight: 600;
   --bs-btn-border-radius: var(--radius);
   --bs-btn-disabled-opacity: 0.5;
   --bs-btn-focus-box-shadow: var(--shadow-ring);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 2.5rem;
   transition: background-color var(--duration-fast) var(--ease-standard), border-color var(--duration-fast) var(--ease-standard), color var(--duration-fast) var(--ease-standard);
 }
 
 .btn-sm {
+  --btn-height: 2rem;
   --bs-btn-padding-x: var(--space-12);
   --bs-btn-font-size: var(--font-size-sm);
   --bs-btn-border-radius: var(--radius-sm);
-  min-height: 2rem;
 }
 
 .btn-lg {
+  --btn-height: 3rem;
   --bs-btn-padding-x: var(--space-24);
   --bs-btn-font-size: var(--font-size-lg);
   --bs-btn-border-radius: var(--radius);
-  min-height: 3rem;
 }
 
 /* Square button for a single icon */
 .btn-icon {
   --bs-btn-padding-x: 0;
-  width: 2.5rem;
-}
-
-.btn-icon.btn-sm {
-  width: 2rem;
-}
-
-.btn-icon.btn-lg {
-  width: 3rem;
+  width: var(--btn-height);
 }
 
 /* Primary: the one main action of a view. .btn-accent is the old name. */
