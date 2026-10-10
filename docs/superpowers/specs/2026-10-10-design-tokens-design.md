@@ -3,7 +3,7 @@
 
 ## Überblick
 
-`public/css/style.css` hat 3680 Zeilen und 25 CSS-Variablen, die nur Farben, Schrift und Radius abdecken. Daneben stehen 182 fest verdrahtete Farbwerte (139 `rgba()`, 43 Hex), 28 verschiedene Schriftgrößen an 130 Stellen, 9 verschiedene `z-index`-Werte und 57 `!important`-Überschreibungen gegen Bootstrap. 55 Selektoren sind doppelt definiert (Profil-, Info- und Badge-Block; known-issues #18 nennt nur den ersten). Mehrere Farbpaare liegen unter dem AA-Kontrast von 4,5:1: Hilfetext auf Karten 3,72, Weiß auf dem Akzent-Violett 4,23, Weiß auf Rot 3,76, weiße Schrift am hellen Ende der Wartungs-Banner 2,16 und 2,65. Zehn Avatar-Klassen, vier Chip-Klassen und rund ein Dutzend lose Leer-Hinweise zeigen dasselbe in unterschiedlichem Markup.
+`public/css/style.css` hat 3680 Zeilen und 24 CSS-Variablen, die nur Farben, Schrift und Radius abdecken. Daneben stehen 182 fest verdrahtete Farbwerte (139 `rgba()`, 43 Hex), 28 verschiedene Schriftgrößen an 130 Stellen, 9 verschiedene `z-index`-Werte und 57 `!important`-Überschreibungen gegen Bootstrap. 55 Selektoren sind doppelt definiert (Profil-, Info- und Badge-Block; known-issues #18 nennt nur den ersten). Mehrere Farbpaare liegen unter dem AA-Kontrast von 4,5:1: Hilfetext auf Karten 3,72, Weiß auf dem Akzent-Violett 4,23, Weiß auf Rot 3,76, weiße Schrift am hellen Ende der Wartungs-Banner 2,16 und 2,65. Zehn Avatar-Klassen, vier Chip-Klassen und rund ein Dutzend lose Leer-Hinweise zeigen dasselbe in unterschiedlichem Markup.
 
 D-02 legt einen vollständigen Satz Tokens und neun Komponenten an, zeigt beides im Styleguide `#debug` und stellt das bestehende CSS darauf um. Die Seiten selbst werden nicht umgebaut.
 
@@ -53,7 +53,7 @@ Grundlage ist die D-02-Zeile des Prio-Plans; der Tickettext auf GitLab war beim 
 
 `index.html` lädt die drei Stylesheets nacheinander über `<link>`, ohne `@import`, alle mit `?v=3`.
 
-Die 25 bestehenden Variablennamen bleiben (496 Verwendungen). Einzige Umbenennung: `--font-display` → `--font-logo`.
+Die 24 bestehenden Variablennamen bleiben (496 Verwendungen). Einzige Umbenennung: `--font-display` → `--font-logo`.
 
 ---
 
@@ -69,6 +69,7 @@ Werte gelten für das dunkle Schema. „neu“ = bisher nicht vorhanden, „geä
 | | `--bg-glass` / `--bg-glass-hover` | `rgba(22, 22, 31, 0.85)` / `rgba(30, 30, 45, 0.9)` | |
 | | `--bg-tint-1` / `-2` / `-3` | Weiß mit 4 % / 8 % / 12 % | neu |
 | | `--bg-inset` | `rgba(0, 0, 0, 0.25)` | neu |
+| | `--bg-scrim` | `rgba(10, 10, 15, 0.9)` (Navbar, Notfall-Sperre, Banner-Schleier) | neu |
 | Text | `--text-primary` / `--text-secondary` | `#e4e4e7` / `#a1a1aa` | |
 | | `--text-muted` | `#8f8f9a` | geändert (`#71717a`) |
 | Rahmen | `--border-subtle` / `--border-accent` | Weiß 6 % / Violett 30 % | |
@@ -160,7 +161,7 @@ Alte Klassennamen bleiben als Zweitnamen in derselben Selektorliste gültig (`.c
 | 8 | Skeleton | `.skeleton`, `-text`, `-title`, `-img`; neu `-chip`, `-avatar` | – |
 | 9 | Avatar | `.avatar` 36 px, `.avatar-sm` 24, `.avatar-lg` 64, `.avatar-xl` 96; `.avatar-initials`; `.avatar-stack`, `.avatar-more` | – (Rollout in D-09) |
 
-**Button.** Einheitlicher Radius (`--radius`, klein `--radius-sm`). Übrige Bootstrap-Varianten im Bestand (`.btn-outline-danger`, `-success`, `-warning`, `-primary`, `.btn-success`, `.btn-warning`, `.btn-link`) bekommen ihre Farben aus den Tokens und stehen im Styleguide unter „Bestand“.
+**Button.** Einheitlicher Radius (`--radius`, klein `--radius-sm`). Die übrigen Varianten im Bestand (`.btn-outline-primary`, `-success`, `-warning`, `-danger` und `.btn-warning`) bekommen ihre Farben aus den Tokens und stehen im Styleguide unter „Bestand“; `.btn-link` bleibt bei Bootstraps Werten.
 
 **Karte.** Rahmen, Leuchten und Anheben beim Überfahren gelten nur für `.glass-card[data-click]`, `a.glass-card` und `.glass-card.is-clickable`. Dieselbe Regel gilt für Seitenkarten: `.stat-card` und `.info-card` sind statisch und verlieren ihre Hover-Regel; `.profile-reg-card` (Link) und `.event-card` behalten sie.
 
@@ -178,9 +179,9 @@ Alte Klassennamen bleiben als Zweitnamen in derselben Selektorliste gültig (`.c
 |---|---|
 | `initialsOf(name)` | Anfangsbuchstaben der ersten zwei Wörter, groß; ein Wort → ein Buchstabe; leer → `?` |
 | `avatar({ url, name, size })` | Mit `url`: `<img class="avatar …" alt title data-fallback="initials" data-initials>`; ohne: `<span class="avatar avatar-initials …" title>`. `size` ist `sm`, `lg`, `xl` oder fehlt. |
-| `emptyState({ icon, title, text, action })` | Block mit Symbol (`bi-<icon>`), Titel, optionalem Text und optionalem Button; `action` = `{ label, click, data }` wird zu `data-click` und `data-*` |
+| `emptyState({ icon, title, text, action })` | Block mit Symbol (`bi-<icon>`), Titel, optionalem Text und optionalem Button; `action` ist fertiges Button-Markup des Aufrufers, weil Aktionsnamen wörtlich im Markup stehen müssen (Regel aus D-01) |
 
-Alle eingesetzten Werte laufen durch `escapeHtml`. Der Bild-Fallback `initials` in `core/actions.js` erzeugt für `.avatar`-Bilder ein `.avatar.avatar-initials` mit denselben Größenklassen; für Bilder ohne `.avatar` bleibt er, wie er ist.
+Name, Adresse, Titel und Text laufen durch `escapeHtml`; nur `action` wird unverändert eingesetzt. Der Bild-Fallback `initials` in `core/actions.js` erzeugt für `.avatar`-Bilder ein `.avatar.avatar-initials` mit denselben Größenklassen; für Bilder ohne `.avatar` bleibt er, wie er ist.
 
 ---
 
@@ -231,8 +232,9 @@ Alle Tests entstehen vor dem jeweiligen Code (`node:test`).
 | Datei | Prüft |
 |---|---|
 | `test/designTokens.test.js` | Pflicht-Tokens aus Teil 2 vorhanden; Kontrastregeln; `contrast.js` (Hex, `rgb()`, `rgba()`, Überlagerung) |
-| `test/cssRules.test.js` | Außerhalb von `tokens.css`: kein Farbwert, keine Schriftgröße in px/rem, kein `z-index` ab 10 als Zahl. Kein doppelter Selektor. `--font-logo` nur in den Logo-Regeln. Ladereihenfolge und `?v=` in `index.html`. Obergrenzen für `style`-Attribute (`index.html` und `public/js`) und `!important`. |
-| `test/cssSource.js` | Kleiner CSS-Leser für die beiden Tests (Kommentare entfernen, Regeln und Media-Kontext trennen), ohne Abhängigkeit |
+| `test/cssRules.test.js` | Außerhalb von `tokens.css`: kein Farbwert, keine Schriftgröße in px/rem, kein `z-index` ab 10 als Zahl, kein Radius in px. Kein doppelter Selektor. Komponenten-Selektoren stehen in `components.css` und nicht noch einmal in `style.css`. `--font-logo` nur in den Logo-Regeln. Ladereihenfolge und `?v=` in `index.html`. Obergrenzen für `style`-Attribute (`index.html` und `public/js`) und `!important`. |
+| `test/cssSource.js` (+ `cssSource.test.js`) | Kleiner CSS-Leser für die beiden Tests (Kommentare entfernen, Regeln und Media-Kontext trennen), ohne Abhängigkeit |
+| `test/contrast.test.js`, `test/styleSnapshot.test.js` | Kontrastrechnung; Vergleichslogik des Snapshot-Skripts |
 | `test/components.test.js` | `initialsOf`, `avatar`, `emptyState`: Escaping, Größen, Fallback-Attribute; `showToast` setzt Typklasse und Symbol |
 | `test/styleguide.test.js` | Die neun Block-Ids kommen im Styleguide-Code vor |
 | `e2e/styleguide.spec.js` | `#debug` auf Desktop und 390 px: alle neun Blöcke sichtbar, kein horizontales Scrollen, kein Konsolen- oder CSP-Fehler, Toast-Typen unterscheidbar |
@@ -243,7 +245,7 @@ Die Obergrenzen stehen als Konstante im Test und entsprechen dem Stand nach dem 
 
 `playwright.config.js` startet den Test-Server zusätzlich mit `DEBUG_MODE=true`. Die bestehende Tour muss damit grün bleiben.
 
-**Vorher-Nachher-Vergleich.** `node scripts/style-snapshot.js --out <datei>` startet den Mock-Server auf eigenem Port mit frischer Datenbank, meldet sich als Admin an, besucht Login, Events, eine Event-Seite, Abstimmungen, Profil, Admin, Bot-Zentrale, Info und `#debug` bei 1440 und 390 px und schreibt je Element die berechneten Werte für Farbe, Hintergrund, Rahmen, Schrift, Radius, Abstand, Schatten und Ebene. `--compare <vorher> <nachher>` listet die Abweichungen nach Eigenschaft und Selektor. Ein Lauf vor dem Umbau, einer danach; die Liste kommt in die Merge-Request-Beschreibung. Kein Teil von `npm test`.
+**Vorher-Nachher-Vergleich.** `node scripts/style-snapshot.js --out <datei>` startet den Mock-Server auf eigenem Port mit frischer Datenbank, meldet sich als Admin an, besucht Events, eine Event-Seite, Abstimmungen, Profil, Admin, Bot-Zentrale und Info bei 1440 und 390 px und schreibt danach je Element des ganzen Dokuments (auch der verborgenen Dialoge) die berechneten Werte für Farbe, Hintergrund, Rahmen, Schrift, Radius, Abstand, Schatten und Ebene. `#debug` bleibt außen vor, weil der Styleguide komplett neu entsteht. `--compare <vorher> <nachher>` listet die Abweichungen nach Eigenschaft und Selektor. Ein Lauf vor dem Umbau, einer danach; die Liste kommt in die Merge-Request-Beschreibung. Kein Teil von `npm test`.
 
 ---
 
