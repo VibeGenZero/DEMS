@@ -234,6 +234,37 @@ test('a guest sees only status and id of the registration that invited them', as
     assert.deepEqual(await res.json(), { registered: true, asGuest: true, id: 'dev-reg-bigform-chiara', status: 'pending' });
 });
 
+test('the overview gets only events that are not over, each with the own status', async () => {
+    const upcomingFor = async (personaId) => {
+        const res = await (await loginAs(personaId)).request('/api/events?upcoming=1&limit=100');
+        assert.equal(res.status, 200);
+        return (await res.json()).data;
+    };
+    const statusById = (events) => Object.fromEntries(events.map(event => [event.id, event.myStatus]));
+
+    const raiderEvents = await upcomingFor('raider');
+    const raider = statusById(raiderEvents);
+    assert.ok(!(EVENT_ID.PAST in raider), 'the past event is left out');
+    assert.equal(raider[EVENT_ID.RUNNING], 'accepted', 'the running event stays');
+    assert.equal(raider[EVENT_ID.OPEN], 'accepted');
+    assert.equal(raider[EVENT_ID.ROLE], null);
+    assert.equal(raider[SERIES_EVENT_IDS[0]], 'accepted', 'a series carries the status of its next date');
+    const series = raiderEvents.find(event => event.id === SERIES_EVENT_IDS[0]);
+    assert.deepEqual(series.seriesDates.map(date => date.id), SERIES_EVENT_IDS);
+
+    const member = statusById(await upcomingFor('member'));
+    assert.equal(member[EVENT_ID.FULL], 'waitlisted');
+    assert.equal(member[EVENT_ID.FORM], 'pending');
+    assert.equal(member[EVENT_ID.OPEN], null);
+
+    assert.equal(statusById(await upcomingFor('newbie'))[EVENT_ID.BIG_FORM], 'guest');
+
+    // Without the parameter the list stays as before, past events included
+    const { data: all } = await (await (await loginAs('member')).request('/api/events?limit=500')).json();
+    assert.ok(all.some(event => event.id === EVENT_ID.PAST));
+    assert.ok(all.every(event => !('checkinCode' in event)));
+});
+
 test('the event API answers only logged-in users', async () => {
     const admin = await loginAs('admin');
     const { seriesId } = await (await admin.request(`/api/events/${SERIES_EVENT_IDS[0]}`)).json();

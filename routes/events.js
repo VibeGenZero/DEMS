@@ -6,6 +6,7 @@ const { requireAuth } = require('../middleware/auth');
 const { checkRegistrationAllowed } = require('../middleware/maintenance');
 const { getGuildRoles, getPublicGuildChannels } = require('../bot');
 const { loadEventRoster, toPublicEvent, isEventVisibleTo } = require('../utils/eventUtils');
+const { isEventOver, myRegistrationStatus } = require('../utils/eventListing');
 const { registerUserForEvent, switchOwnSlot, unregisterUserFromEvent, REGISTRATION_SOURCE } = require('../utils/registrationService');
 const { hasSlots, withSlotSummary } = require('../utils/slotService');
 const { debugLog } = require('../utils/debugLog');
@@ -34,7 +35,9 @@ router.param('id', async (req, res, next, id) => {
 
 /**
  * GET /api/events — List all events (paginated)
- * Query params: ?status=active&category=tournament&page=1&limit=20
+ * Query params: ?status=active&category=tournament&search=raid&page=1&limit=20
+ * ?upcoming=1 leaves out events that are over (the overview); every event
+ * carries myStatus, the signed-in member's status (utils/eventListing.js).
  */
 router.get('/', async (req, res) => {
     try {
@@ -66,6 +69,13 @@ router.get('/', async (req, res) => {
             events = events.filter(e => !e.status || e.status === 'active');
         }
 
+        // Overview: leave out events that are over, before series are grouped,
+        // so seriesDates only lists the dates still to come
+        if (req.query.upcoming === '1') {
+            const now = new Date();
+            events = events.filter(e => !isEventOver(e, now));
+        }
+
         // Filter by category
         if (req.query.category) {
             events = events.filter(e => e.category === req.query.category);
@@ -95,10 +105,12 @@ router.get('/', async (req, res) => {
             }
         });
 
-        // Attach participant counts to events
+        // Attach participant counts and the member's own status to events
+        const userId = req.session.user.id;
         events = events.map(e => withSlotSummary({
             ...e,
-            currentParticipants: participantCounts[e.id] || 0
+            currentParticipants: participantCounts[e.id] || 0,
+            myStatus: myRegistrationStatus(registrationsByEvent[e.id] || [], userId)
         }, registrationsByEvent[e.id] || []));
 
         // Group series events: replace multiple events with same seriesId by one representative

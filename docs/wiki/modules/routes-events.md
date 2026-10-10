@@ -3,7 +3,7 @@ id: routes-events
 title: routes/events.js — event endpoints for logged-in members
 type: module
 tags: [api, events, registration, checkin, comments, series, participants]
-sources: [routes/events.js, utils/registrationService.js, utils/eventUtils.js]
+sources: [routes/events.js, utils/registrationService.js, utils/eventUtils.js, utils/eventListing.js]
 part_of: [architecture]
 depends_on: [middleware, utils, data-layer, bot]
 see_also: [registration-flow, event-lifecycle, api-index]
@@ -16,7 +16,7 @@ see_also: [registration-flow, event-lifecycle, api-index]
 
 | Method | Path | Auth | Behaviour |
 |---|---|---|---|
-| GET | `/` | user | active events (`?status=` other than `active` needs admin → 403), `?category=`, `?search=` (title/description), `?page`/`?limit` (default 20); adds `currentParticipants` (and `slotSummary` for slot events); series collapsed to one representative with `seriesDates[]`; sorted by `startDate` |
+| GET | `/` | user | active events (`?status=` other than `active` needs admin → 403), `?upcoming=1` (overview: drops events whose end — `endDate`, else start + 2 h, `isEventOver` — has passed, before series are grouped), `?category=`, `?search=` (title/description), `?page`/`?limit` (default 20); adds `currentParticipants`, `myStatus` (`myRegistrationStatus`: own `accepted`/`pending`/`waitlisted`, `guest` in an accepted or pending registration of someone else, else `null`) and `slotSummary` for slot events; series collapsed to one representative with `seriesDates[]`; sorted by `startDate` |
 | GET | `/series/:seriesId` | user | all events of a series visible to the user (no `draft`/`archived` for non-admins) with `currentParticipants` (+ `slotSummary`), sorted by start |
 | GET | `/categories` | user | sorted unique `category` values of ALL events |
 | GET | `/form-options` | user | `{ roles (non-managed), channels (public only) }` for form pickers; cached 60 s in memory |

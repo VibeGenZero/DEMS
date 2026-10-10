@@ -18,7 +18,7 @@ const { db, collection, doc, getDoc, getDocs, setDoc } = require('../firebaseAdm
 const EXPECTED_COUNTS = {
     events: 12,
     users: 12,
-    registrations: 32,
+    registrations: 34,
     comments: 6,
     auditLogs: 10,
     polls: 2,
@@ -83,6 +83,12 @@ test('the seed covers the scenarios of the spec', async () => {
     assert.ok(registrations.some(registration => registration.guests.length > 0));
     assert.ok(registrations.some(registration => registration.pendingGuests.length > 0));
     assert.ok(registrations.some(registration => registration.checkedIn));
+
+    // The member persona waits for a place and for an approval (overview markers)
+    const member = PERSONAS.find(persona => persona.id === 'member');
+    const ofMember = (eventId) => registrations.find(registration => registration.eventId === eventId && registration.userId === member.userId);
+    assert.equal(ofMember(EVENT_ID.FULL).status, 'waitlisted');
+    assert.equal(ofMember(EVENT_ID.FORM).status, 'pending');
 });
 
 test('the seed has an open poll for the raiders and a decided one', async () => {

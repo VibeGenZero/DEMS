@@ -309,6 +309,8 @@ function buildRegistrations(clock) {
         }),
         entry('form-ben', EVENT_ID.FORM, ben, { source: 'discord', formAnswers: tournamentAnswers('BenTheTank', 'Tank'), createdAt: clock.offset(-4 * DAY) }),
         entry('form-felix', EVENT_ID.FORM, felix, { status: 'rejected', formAnswers: tournamentAnswers('Felix99', 'Schaden'), createdAt: clock.offset(-6 * DAY) }),
+        // ... and waits for the tournament's approval ("Ausstehend")
+        entry('form-tom', EVENT_ID.FORM, tom, { status: 'pending', formAnswers: tournamentAnswers('TomTom', 'Schaden'), createdAt: clock.offset(-1 * DAY) }),
 
         // Full event -> five accepted, two on the waitlist
         entry('full-lena', EVENT_ID.FULL, lena, { createdAt: clock.offset(-6 * DAY) }),
@@ -318,6 +320,8 @@ function buildRegistrations(clock) {
         entry('full-dennis', EVENT_ID.FULL, dennis, { createdAt: clock.offset(-3 * DAY) }),
         entry('full-elif', EVENT_ID.FULL, elif, { status: 'waitlisted', createdAt: clock.offset(-1 * DAY) }),
         entry('full-greta', EVENT_ID.FULL, greta, { status: 'waitlisted', createdAt: clock.offset(-12 * HOUR) }),
+        // Tom (member persona) waits for a place, so the overview shows him "Warteliste"
+        entry('full-tom', EVENT_ID.FULL, tom, { status: 'waitlisted', createdAt: clock.offset(-6 * HOUR) }),
 
         // Raid with role slots -> the tank slot is full, Kira plays her fallback role,
         // Felix waits for the tank slot; Lena (raider persona) can still pick a role
