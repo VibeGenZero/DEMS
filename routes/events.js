@@ -6,7 +6,7 @@ const { requireAuth } = require('../middleware/auth');
 const { checkRegistrationAllowed } = require('../middleware/maintenance');
 const { getGuildRoles, getPublicGuildChannels } = require('../bot');
 const { loadEventRoster, toPublicEvent, isEventVisibleTo } = require('../utils/eventUtils');
-const { isEventOver, myRegistrationStatus } = require('../utils/eventListing');
+const { isEventOver, pickSeriesRepresentative, myRegistrationStatus } = require('../utils/eventListing');
 const { registerUserForEvent, switchOwnSlot, unregisterUserFromEvent, REGISTRATION_SOURCE } = require('../utils/registrationService');
 const { hasSlots, withSlotSummary } = require('../utils/slotService');
 const { debugLog } = require('../utils/debugLog');
@@ -127,14 +127,15 @@ router.get('/', async (req, res) => {
             }
         }
 
-        // For each series, pick the next upcoming event as representative and attach seriesDates
-        const now = new Date().toISOString();
+        // For each series, pick the date that is not over yet (a running one included) as
+        // representative and attach seriesDates
+        const now = new Date();
         for (const [seriesId, seriesEvents] of Object.entries(seriesGroups)) {
             // Sort by startDate ascending
             seriesEvents.sort((a, b) => (a.startDate || '').localeCompare(b.startDate || ''));
 
-            // Pick the next upcoming event, or the last one if all are past
-            const representative = seriesEvents.find(e => e.startDate >= now) || seriesEvents[seriesEvents.length - 1];
+            // A running date stays the representative, so the overview shows "Läuft gerade"
+            const representative = pickSeriesRepresentative(seriesEvents, now);
 
             representative.seriesDates = seriesEvents.map(e => ({
                 id: e.id,

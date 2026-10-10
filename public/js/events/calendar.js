@@ -15,6 +15,9 @@ const MAX_EVENTS_PER_DAY = 3;
 // null = not loaded since the overview was last opened
 export let calendarEvents = null;
 
+// Search and category of the overview, as a function over the events (list.js sets it)
+export let calendarFilter = (events) => events;
+
 export let calendarMonth = new Date().getMonth();
 
 export let calendarYear = new Date().getFullYear();
@@ -32,9 +35,11 @@ export function forgetCalendarEvents() {
 /**
  * Load the events once and render the current month.
  *
+ * @param {Function} [filter] -> `(events) => events` that pass search and category; kept for the month arrows.
  * @returns {Promise<void>}
  */
-export async function showCalendar() {
+export async function showCalendar(filter = calendarFilter) {
+    calendarFilter = filter;
     if (calendarEvents === null) {
         try {
             const res = await fetch(CALENDAR_EVENTS_URL);
@@ -47,7 +52,7 @@ export async function showCalendar() {
             return;
         }
     }
-    renderCalendar(calendarEvents);
+    renderCalendar(calendarFilter(calendarEvents));
 }
 
 /**
@@ -60,7 +65,7 @@ export function shiftCalendarMonth(delta) {
     calendarMonth += delta;
     if (calendarMonth < 0) { calendarMonth = 11; calendarYear--; }
     if (calendarMonth > 11) { calendarMonth = 0; calendarYear++; }
-    renderCalendar(calendarEvents || []);
+    renderCalendar(calendarFilter(calendarEvents || []));
 }
 
 /**

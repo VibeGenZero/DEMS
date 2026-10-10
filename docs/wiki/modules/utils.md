@@ -49,6 +49,7 @@ Exports `FORM_FIELD_TYPE` (`text, textarea, dropdown, checkbox, user, role, chan
 |---|---|
 | `eventEndTime(event)` | `endDate`, else start + 2 h (`DEFAULT_DURATION_MS`); `null` without a valid `startDate` (a space instead of `T` is accepted) |
 | `isEventOver(event, now)` | end before `now`; an event without a date counts as upcoming. Used by `GET /api/events?upcoming=1` and the bot's auto status; `public/js/events/cards.js` applies the same rule in the browser |
+| `pickSeriesRepresentative(seriesEvents, now)` | the date that stands for a series in `GET /api/events`: the first one that is not over (a running date included, so the overview shows "Läuft gerade"), else the last |
 | `myRegistrationStatus(registrations, userId)` | `myStatus` of the event list: own `accepted`/`pending`/`waitlisted`, else `guest` in an accepted or pending registration of someone else, else `null` |
 
 ## utils/capacity.js, utils/slotService.js (pure)

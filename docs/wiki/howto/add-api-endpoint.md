@@ -44,7 +44,7 @@ see_also: [api-index, testing, security]
 
 3. **Validate input** in a middleware in `middleware/validators.js` if the body is non-trivial (German messages, 400).
 4. **Admin mutation?** `await addAuditLog('<ACTION>', req.session.user.id, '<details>', targetId)` and document the action in [data-model](../concepts/data-model.md).
-5. **Route order:** static segments (`/categories`, `/series/:x`) above `/:id`.
+5. **Route order:** static segments (`/form-options`, `/series/:x`) above `/:id`.
 6. **Do not leak secrets:** return event documents through `toPublicEvent(id, data)` from `utils/eventUtils.js`; it drops `checkinCode` and every other field in `PRIVATE_EVENT_FIELDS`.
 7. **Frontend call** (the module of the area under `public/js/`, see [frontend-app](../modules/frontend-app.md); CSRF token from `state` in `core/state.js`): `fetch('/api/...', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': state.csrfToken }, body: JSON.stringify(payload) })`, then `showToast(...)`. CSRF is enforced globally for mutating `/api/*`.
 8. **Test** in `test/devServer.test.js`: `const admin = await loginAs('admin'); const res = await admin.send('POST', '/api/...', body);`.

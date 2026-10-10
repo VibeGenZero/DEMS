@@ -49,6 +49,17 @@ function isEventOver(event, now = new Date()) {
 }
 
 /**
+ * The date that stands for a series in the event list.
+ *
+ * @param {Array<Object>} seriesEvents -> Events of one series, sorted by start.
+ * @param {Date} [now] -> Reference time.
+ * @returns {Object} -> The first date that is not over (a running one included), else the last date.
+ */
+function pickSeriesRepresentative(seriesEvents, now = new Date()) {
+    return seriesEvents.find(event => !isEventOver(event, now)) || seriesEvents[seriesEvents.length - 1];
+}
+
+/**
  * Status of a member for one event, as the overview marks it.
  *
  * @param {Array<Object>} registrations -> Registrations of the event (`userId`, `status`, `guests`).
@@ -64,4 +75,4 @@ function myRegistrationStatus(registrations, userId) {
     return host ? 'guest' : null;
 }
 
-module.exports = { DEFAULT_DURATION_MS, eventEndTime, isEventOver, myRegistrationStatus };
+module.exports = { DEFAULT_DURATION_MS, eventEndTime, isEventOver, pickSeriesRepresentative, myRegistrationStatus };

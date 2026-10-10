@@ -28,6 +28,40 @@ test('the calendar loads every event once and shows each series date', async () 
     assert.equal(requests.filter(request => request.url === CALENDAR_URL).length, 2, 'loaded again after forgetting');
 });
 
+test('the calendar follows search and category, without the empty state of the cards', async () => {
+    const events = [
+        { id: 'raid', title: 'Raid-Abend', category: 'Raid', startDate: inThisMonth(12) },
+        { id: 'games', title: 'Spieleabend', category: 'Gaming', startDate: inThisMonth(14) }
+    ];
+    const { app, state, element } = await loadFrontendApp({
+        '/api/events?upcoming=1&limit=100': { data: events, meta: {} },
+        [CALENDAR_URL]: { data: events, meta: {} }
+    });
+    state.currentUser = MEMBER;
+    await app.showEventsSection();
+    await app.runAction('switchView', { dataset: { view: 'calendar' } });
+    const routes = () => [...element('events-calendar').innerHTML.matchAll(/data-route="event\/([^"]+)"/g)].map(match => match[1]);
+    assert.deepEqual(routes(), ['raid', 'games']);
+
+    await app.runAction('filterByCategory', { dataset: { category: 'Raid' } });
+    assert.deepEqual(routes(), ['raid'], 'category');
+
+    await app.runAction('filterByCategory', { dataset: { category: '' } });
+    element('events-search').value = 'spiele';
+    await app.runAction('searchEvents', element('events-search'));
+    assert.deepEqual(routes(), ['games'], 'search');
+
+    element('events-search').value = 'nichts';
+    await app.runAction('searchEvents', element('events-search'));
+    assert.deepEqual(routes(), []);
+    assert.notEqual(element('events-empty').style.display, 'block', 'no "Keine Treffer" under the calendar');
+
+    // Back to the cards: the empty state of the filter shows there
+    await app.runAction('switchView', { dataset: { view: 'grid' } });
+    assert.equal(element('events-empty').style.display, 'block');
+    assert.match(element('events-empty').innerHTML, /Keine Treffer/);
+});
+
 test('a day with many events shows three and how many more', async () => {
     const events = [1, 2, 3, 4, 5].map(n => ({ id: `e${n}`, title: `Event ${n}`, startDate: inThisMonth(10, 10 + n) }));
     const { app, state, element } = await loadFrontendApp({ [CALENDAR_URL]: { data: events, meta: {} } });

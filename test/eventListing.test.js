@@ -1,6 +1,6 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { eventEndTime, isEventOver, myRegistrationStatus } = require('../utils/eventListing');
+const { eventEndTime, isEventOver, myRegistrationStatus, pickSeriesRepresentative } = require('../utils/eventListing');
 
 const HOUR = 60 * 60 * 1000;
 const NOW = new Date('2026-10-10T15:00:00.000Z');
@@ -23,6 +23,18 @@ test('an event is over once its end has passed', () => {
     assert.equal(isEventOver({ startDate: '2026-10-03T19:00:00.000Z', endDate: '2026-10-03T22:00:00.000Z' }, NOW), true, 'last week');
     assert.equal(isEventOver({ startDate: '2026-10-11T19:00:00.000Z' }, NOW), false, 'tomorrow');
     assert.equal(isEventOver({}, NOW), false, 'without a date it counts as upcoming');
+});
+
+test('a series is represented by its first date that is not over, a running one included', () => {
+    const series = [
+        { id: 'last-week', startDate: '2026-10-03T19:00:00.000Z', endDate: '2026-10-03T21:00:00.000Z' },
+        { id: 'running', startDate: '2026-10-10T14:30:00.000Z', endDate: '2026-10-10T17:00:00.000Z' },
+        { id: 'next-week', startDate: '2026-10-17T14:30:00.000Z' }
+    ];
+    assert.equal(pickSeriesRepresentative(series, NOW).id, 'running');
+    assert.equal(pickSeriesRepresentative(series.slice(2), NOW).id, 'next-week');
+    // All dates over: the last one stands for the series (calendar, admin lists)
+    assert.equal(pickSeriesRepresentative(series.slice(0, 1), NOW).id, 'last-week');
 });
 
 test('the own status comes from the own registration, else from being a guest', () => {

@@ -52,6 +52,12 @@ function searchText() {
     return document.getElementById('events-search')?.value?.trim() || '';
 }
 
+// Search and category for the calendar, which filters its own (all) events
+function currentFilter() {
+    const filter = { category: activeCategory, search: searchText() };
+    return (events) => filterEvents(events, filter);
+}
+
 function renderCategoryBar() {
     const bar = document.getElementById('category-filter-bar');
     const counts = categoryCounts(upcomingEvents);
@@ -77,15 +83,20 @@ function applyBannerColors(grid) {
 }
 
 /**
- * Render category bar and cards from the loaded events.
+ * Render category bar and cards (or the calendar) from the loaded events.
  *
  * @param {Date} [now] -> Reference time for "Heute" and "Läuft gerade".
- * @returns {void}
+ * @returns {Promise<void>|void} -> In calendar view: resolves once the calendar is rendered.
  */
 export function renderOverview(now = new Date()) {
     const grid = document.getElementById('events-grid');
     const empty = document.getElementById('events-empty');
     renderCategoryBar();
+    if (currentView === 'calendar') {
+        // The empty state belongs to the cards; the calendar shows an empty month instead
+        empty.style.display = 'none';
+        return showCalendar(currentFilter());
+    }
     const visible = filterEvents(upcomingEvents, { category: activeCategory, search: searchText() });
     if (visible.length === 0) {
         grid.innerHTML = '';
@@ -136,32 +147,31 @@ export async function showEventsSection() {
         return;
     }
 
-    renderOverview();
-    gsap.fromTo('#events-grid .event-card', { y: 12, opacity: 0 }, { y: 0, opacity: 1, duration: 0.25, stagger: 0.04, ease: 'power2.out' });
-    if (currentView === 'calendar') await showCalendar();
+    await renderOverview();
+    if (currentView === 'grid') gsap.fromTo('#events-grid .event-card', { y: 12, opacity: 0 }, { y: 0, opacity: 1, duration: 0.25, stagger: 0.04, ease: 'power2.out' });
 }
 
 /**
  * Show only one category ('' = all).
  *
  * @param {string} category -> Category text.
- * @returns {void}
+ * @returns {Promise<void>|void} -> See renderOverview().
  */
 export function filterByCategory(category) {
     activeCategory = category;
-    renderOverview();
+    return renderOverview();
 }
 
 /**
  * Clear search and category.
  *
- * @returns {void}
+ * @returns {Promise<void>|void} -> See renderOverview().
  */
 export function resetEventFilters() {
     activeCategory = '';
     const search = document.getElementById('events-search');
     if (search) search.value = '';
-    renderOverview();
+    return renderOverview();
 }
 
 /**
@@ -182,13 +192,14 @@ export async function switchView(view) {
         calBtn.classList.remove('active');
         grid.style.display = '';
         calendar.style.display = 'none';
-        return;
+    } else {
+        gridBtn.classList.remove('active');
+        calBtn.classList.add('active');
+        grid.style.display = 'none';
+        calendar.style.display = '';
     }
-    gridBtn.classList.remove('active');
-    calBtn.classList.add('active');
-    grid.style.display = 'none';
-    calendar.style.display = '';
-    await showCalendar();
+    // Cards or calendar with the current search and category
+    await renderOverview();
 }
 
 registerActions({
