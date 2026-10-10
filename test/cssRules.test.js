@@ -41,7 +41,10 @@ const MOVED = ['.btn-accent', '.btn-accent:hover', '.btn-discord', '.btn-discord
     '.glass-card', '.glass-card:hover', '.stat-card:hover', '.info-card:hover',
     '.badge-pill', '.badge-pill.status-accepted', '.category-pill', '.category-pill:hover', '.category-pill.active',
     '.event-status-draft', '.event-status-active', '.event-status-archived',
-    '.skeleton', '.skeleton-text', '.skeleton-title', '.skeleton-img'
+    '.skeleton', '.skeleton-text', '.skeleton-title', '.skeleton-img',
+    // Old overview cards, dropped by D-04
+    '.event-banner-placeholder', '.event-card-header-row', '.event-card-mini-progress', '.event-card-capacity-label',
+    '.series-card', '.slot-chips', '.slot-chip', '.spots-warning', '.spots-full'
 ];
 // A colour written out: hex, rgb(), hsl() or a colour name (white-space is no colour)
 const RAW_COLOR = /#[0-9a-fA-F]{3,8}\b|\brgba?\(|\bhsla?\(|(?<![-\w])(white|black)(?![-\w])/;
@@ -51,8 +54,8 @@ const describe = (rule, declaration) => `${rule.file}:${declaration.line} ${rule
 // never raise it. Before D-02 there were 132 style attributes and 57
 // !important in style.css. D-16 brings the style attributes to 0.
 // components.css has its own rule: !important only in the colour helpers.
-const STYLE_ATTRIBUTE_BUDGET = 122;
-const IMPORTANT_BUDGET = 36;
+const STYLE_ATTRIBUTE_BUDGET = 116;
+const IMPORTANT_BUDGET = 30;
 
 test('index.html loads Bootstrap, the tokens and the DEMS styles in this order', () => {
     const hrefs = [...INDEX_HTML.matchAll(/<link[^>]+href="([^"]+\.css[^"]*)"/g)].map(match => match[1]);

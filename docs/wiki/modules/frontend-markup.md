@@ -48,7 +48,7 @@ No CDN: every library and font is a pinned copy with its license next to it.
 | `components.css` | BOOTSTRAP BRIDGE → BUTTON → DIALOG → TABS → TOAST → CARD → CHIP → SKELETON → EMPTY STATE → AVATAR → DATE TILE → CAPACITY | colours, px/rem font sizes, radii and layers ≥ 10 only from tokens (enforced by `npm test`); spacing from the `--space-*` tokens by convention; `!important` only in the colour helpers |
 | `style.css` | page-specific blocks, see below | colours, px/rem font sizes, px radii and layers ≥ 10 only from tokens (enforced by `npm test`); spacing keeps its old raw values until a page is rebuilt; one rule per selector list |
 
-`style.css` blocks (grep the header text): LOADING SCREEN → NAVBAR → SECTIONS → EVENT CARDS (+ Event Series, Rendered Markdown) → COUNTDOWN → CATEGORY PILLS (filter bar) → BADGES (upper-case rule of the event chips) → STATS CARDS → DATE & TIME → WAITLIST → FORMS → TABLE → FORM BUILDER → ENTITY PICKER → LOGIN CARD → ADMIN EVENT CARD → CONFETTI → PROFILE SECTION → RESPONSIVE → UTILITY → INFO SECTION → EASYMDE CUSTOMIZATION → Participant Warning Badges → Calendar View → Event Comments → BOT CONTROL CENTER → EVENT WIZARD STEPPER → MAINTENANCE MODE → EVENT DETAIL (banner, sidebar, capacity bar, participants) → LOCATION AUTOCOMPLETE → EVENT CARD (gradient placeholder, updated layout) → DEBUG / STYLING GUIDE → ROLE SLOTS → DATE POLLS.
+`style.css` blocks (grep the header text): LOADING SCREEN → NAVBAR → SECTIONS → EVENT CARDS (overview: toolbar, grid, card; + Event Series, Rendered Markdown) → COUNTDOWN (event page) → CATEGORY PILLS (filter chips, one line on phones) → BADGES (upper-case rule of the event chips) → STATS CARDS → DATE & TIME → WAITLIST → FORMS → TABLE → FORM BUILDER → ENTITY PICKER → LOGIN CARD → ADMIN EVENT CARD → CONFETTI → PROFILE SECTION → RESPONSIVE → UTILITY → INFO SECTION → EASYMDE CUSTOMIZATION → Calendar View → Event Comments → BOT CONTROL CENTER → EVENT WIZARD STEPPER → MAINTENANCE MODE → EVENT DETAIL (banner, sidebar, capacity bar, participants) → LOCATION AUTOCOMPLETE → DEBUG / STYLING GUIDE → ROLE SLOTS → DATE POLLS.
 
 ## Tokens (`tokens.css`)
 
@@ -105,6 +105,7 @@ No inline handlers (`onclick`, `onchange`, `oninput`, `onerror`): the CSP blocks
 - New CSS uses tokens only; a missing value becomes a new token in `tokens.css` (the contrast test must stay green). `test/cssRules.test.js` fails on a raw colour, a px/rem font size, a z-index ≥ 10, a px radius, a `var(--x)` that nothing defines, a selector list defined twice, and on more `style` attributes (markup) or `!important` (in `style.css`) than its budgets allow. Spacing and shadow geometry are not checked.
 - Build UI from the components above; add a variant to `components.css` and to the styleguide (`pages/debug-components.js`) instead of a page-specific copy.
 - Hover feedback (glow, lift) only on elements that do something when clicked.
+- The event overview card is a link (`a.glass-card.event-card`), not a `data-click` element: middle click opens a tab and the keyboard reaches it.
 - The `style` attributes in `index.html` and the modules are legacy (budget in `test/cssRules.test.js`, D-16 removes them); new markup uses classes, dynamic values go through `element.style.setProperty`.
 
 ## Gotchas

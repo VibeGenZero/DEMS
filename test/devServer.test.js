@@ -280,10 +280,16 @@ test('the event API answers only logged-in users', async () => {
     const { seriesId } = await (await admin.request(`/api/events/${SERIES_EVENT_IDS[0]}`)).json();
     const anonymous = createClient(server.baseUrl);
 
-    for (const url of ['/api/events', '/api/events/categories', `/api/events/series/${seriesId}`, `/api/events/${EVENT_ID.OPEN}`]) {
+    for (const url of ['/api/events', `/api/events/series/${seriesId}`, `/api/events/${EVENT_ID.OPEN}`]) {
         const res = await anonymous.request(url);
         assert.equal(res.status, 401, url);
     }
+});
+
+test('the category list of all events is gone', async () => {
+    // It also showed the categories of drafts and archived events to members
+    const res = await (await loginAs('member')).request('/api/events/categories');
+    assert.equal(res.status, 404);
 });
 
 test('draft and archived events exist only for admins', async () => {

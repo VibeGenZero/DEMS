@@ -225,46 +225,190 @@ body {
 
 /* ═══════════════════════════════════════════ */
 /* EVENT CARDS                                 */
+/* Overview (#events), renderEventCard() in    */
+/* events/cards.js: a row on phones, a tile    */
+/* with the banner on top from 768 px          */
 /* ═══════════════════════════════════════════ */
-.event-card {
-  cursor: pointer;
+.events-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-12);
+  margin-bottom: var(--space-12);
+}
+
+.events-search {
   position: relative;
-  overflow: hidden;
+  flex: 1 1 14rem;
 }
 
-.event-card::before {
-  content: '';
+.events-search-icon {
   position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 3px;
-  background: linear-gradient(90deg, var(--accent), var(--accent-light));
-  opacity: 0;
-  transition: var(--transition);
+  top: 50%;
+  left: var(--space-12);
+  transform: translateY(-50%);
+  color: var(--text-secondary);
+  pointer-events: none;
 }
 
-.event-card:hover::before {
-  opacity: 1;
+.events-search .form-control {
+  padding-left: 2.25rem;
 }
 
-.event-card .card-body {
-  padding: 1.5rem;
+.event-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-8);
 }
 
-.event-card h5 {
-  font-weight: 700;
-  margin-bottom: 0.75rem;
+.event-card {
+  /* Behind the banner and instead of a broken one; list.js sets the event's own colour */
+  --event-banner-bg: linear-gradient(135deg, var(--accent-dark), var(--accent));
+  display: grid;
+  grid-template-areas: "date body media";
+  grid-template-columns: auto minmax(0, 1fr) 6.5rem;
+  gap: var(--space-12);
+  align-items: start;
+  padding: var(--space-12);
+  color: var(--text-primary);
+  text-decoration: none;
 }
 
-.event-card p {
+/* The link colour of the Bootstrap bridge must not tint the whole card */
+.event-card:hover {
+  color: var(--text-primary);
+}
+
+.event-card > .date-tile,
+.event-card-skeleton-date {
+  grid-area: date;
+}
+
+.event-card-media,
+.event-card-skeleton-media {
+  grid-area: media;
+  position: relative;
+  align-self: stretch;
+  min-height: 3.75rem;
+  overflow: hidden;
+  border-radius: var(--radius-sm);
+}
+
+.event-card-media {
+  background: var(--event-banner-bg);
+}
+
+.event-card-banner {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* Category on the banner: dark scrim, so it reads on every image */
+.event-card-category {
+  position: absolute;
+  bottom: var(--space-4);
+  left: var(--space-4);
+  max-width: calc(100% - var(--space-8));
+  border-color: var(--border-strong);
+  background: var(--bg-scrim);
+  color: var(--text-primary);
+}
+
+.event-card-category span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.event-card-body {
+  grid-area: body;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.event-card-title {
+  display: -webkit-box;
+  margin: 0;
+  overflow: hidden;
+  color: var(--text-primary);
+  font-size: var(--font-size-md);
+  font-weight: 600;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+
+.event-card-when {
+  margin: 0;
+  overflow: hidden;
   color: var(--text-secondary);
   font-size: var(--font-size-sm);
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  line-clamp: 3;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.event-card-when strong {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.event-card-when.is-live strong {
+  color: var(--danger);
+}
+
+.event-card-facts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-4) var(--space-8);
+  margin-top: var(--space-4);
+}
+
+.event-card-facts .capacity {
+  flex: 1 1 7rem;
+}
+
+.event-card-skeleton-date {
+  width: 3.25rem;
+  height: 3.75rem;
+  border-radius: var(--radius-sm);
+}
+
+@media (min-width: 768px) {
+  .event-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-16);
+  }
+
+  .event-card {
+    grid-template-areas:
+      "media media"
+      "date body";
+    grid-template-columns: auto minmax(0, 1fr);
+    padding: 0 var(--space-12) var(--space-12);
+    overflow: hidden;
+  }
+
+  .event-card-media,
+  .event-card-skeleton-media {
+    height: 7.5rem;
+    margin: 0 calc(-1 * var(--space-12));
+    border-radius: 0;
+  }
+}
+
+@media (min-width: 1200px) {
+  .event-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
 }
 
 /* Event Banner */
@@ -285,10 +429,6 @@ body {
 }
 
 /* ─── Event Series ────────────────────────────── */
-.series-card {
-  cursor: default;
-}
-
 .series-badge {
   background: var(--accent-fill);
   color: var(--on-accent);
@@ -583,12 +723,36 @@ body {
 
 /* ═══════════════════════════════════════════ */
 /* CATEGORY PILLS                              */
+/* Filter chips of the overview: one line that */
+/* scrolls sideways on phones, wraps from 768  */
 /* ═══════════════════════════════════════════ */
 .category-filter-bar {
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  margin-bottom: 1.5rem;
+  gap: var(--space-8);
+  margin-bottom: var(--space-16);
+  padding-bottom: var(--space-4);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.category-filter-bar::-webkit-scrollbar {
+  display: none;
+}
+
+.category-filter-bar .chip {
+  flex: none;
+}
+
+.chip-count {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+@media (min-width: 768px) {
+  .category-filter-bar {
+    flex-wrap: wrap;
+    overflow-x: visible;
+  }
 }
 
 /* ═══════════════════════════════════════════ */
@@ -1131,10 +1295,6 @@ body {
     grid-template-columns: 1fr 1fr;
   }
 
-  .category-filter-bar {
-    gap: 0.3rem;
-  }
-
   .countdown {
     gap: 0.3rem;
   }
@@ -1587,32 +1747,6 @@ body {
 .editor-statusbar {
   display: none !important;
   /* Hide status bar if not needed, or style it */
-}
-
-/* ─── Participant Warning Badges ─────────────── */
-.spots-warning {
-  background: var(--warning-bg) !important;
-  color: var(--warning) !important;
-  border: 1px solid var(--warning-border) !important;
-  animation: pulse-warning 2s ease-in-out infinite;
-}
-
-.spots-full {
-  background: var(--danger-bg) !important;
-  color: var(--danger) !important;
-  border: 1px solid var(--danger-border) !important;
-}
-
-@keyframes pulse-warning {
-
-  0%,
-  100% {
-    opacity: 1;
-  }
-
-  50% {
-    opacity: 0.7;
-  }
 }
 
 /* ─── Calendar View ──────────────────────────── */
@@ -2455,66 +2589,6 @@ body {
 }
 
 /* ═══════════════════════════════════════════ */
-/* EVENT CARD — GRADIENT PLACEHOLDER          */
-/* ═══════════════════════════════════════════ */
-.event-banner-placeholder {
-  width: 100%;
-  height: 160px;
-  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
-  display: block;
-  flex-shrink: 0;
-}
-
-/* ═══════════════════════════════════════════ */
-/* EVENT CARD — UPDATED LAYOUT                */
-/* ═══════════════════════════════════════════ */
-.event-card-header-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 0.5rem;
-}
-
-.event-card-date-row {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  font-size: var(--font-size-sm);
-  color: var(--text-secondary);
-  margin-bottom: 0.5rem;
-  font-weight: 500;
-}
-
-.event-card-date-row i {
-  color: var(--accent-light);
-  font-size: var(--font-size-sm);
-}
-
-.event-card-mini-progress {
-  height: 4px;
-  border-radius: var(--radius-pill);
-  background: var(--bg-tint-2);
-  overflow: hidden;
-  margin-bottom: 0.3rem;
-}
-
-.event-card-mini-progress-bar {
-  height: 100%;
-  border-radius: var(--radius-pill);
-  background: var(--accent);
-}
-
-.event-card-mini-progress-bar.danger {
-  background: var(--danger);
-}
-
-.event-card-capacity-label {
-  font-size: var(--font-size-xs);
-  color: var(--text-muted);
-  margin-bottom: 0.75rem;
-}
-
-/* ═══════════════════════════════════════════ */
 /* DEBUG / STYLING GUIDE                       */
 /* ═══════════════════════════════════════════ */
 
@@ -2762,30 +2836,6 @@ body {
   .slot-editor-row {
     grid-template-columns: 3.5rem 1fr 4.5rem auto;
   }
-}
-
-.slot-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.35rem;
-  width: 100%;
-  margin-top: 0.35rem;
-}
-
-.slot-chip {
-  font-size: var(--font-size-xs);
-  padding: 0.15rem 0.55rem;
-  border-radius: var(--radius-pill);
-  background: var(--accent-tint-2);
-  border: 1px solid var(--border-accent);
-  color: var(--text-primary);
-  white-space: nowrap;
-}
-
-.slot-chip.full {
-  background: var(--danger-bg);
-  border-color: var(--danger-border);
-  color: var(--text-secondary);
 }
 
 .slot-picker {

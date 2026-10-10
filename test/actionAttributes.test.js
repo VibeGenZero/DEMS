@@ -195,12 +195,11 @@ test('accepting a registration sends the status and reloads with the exact title
     assert.equal(element('reg-event-title').textContent, TRICKY_TEXT);
 });
 
-test('the overview opens events and filters categories through actions', async () => {
-    const solo = adminEvent('solo', { title: 'Solo' });
-    const series = adminEvent('s1', { title: 'Serie', seriesId: 'series-1', seriesDates: [{ id: 's1', startDate: '2026-10-20T18:00:00.000Z' }, { id: 's2', startDate: '2026-10-27T18:00:00.000Z' }] });
-    const { app, state, element, location, requests } = await loadFrontendApp({
-        '/api/events/categories': [TRICKY_TEXT],
-        '/api/events': { data: [solo, series], meta: { total: 2, page: 1, limit: 20, totalPages: 1 } }
+test('the overview links events and filters categories through actions', async () => {
+    const solo = adminEvent('solo', { title: 'Solo', category: TRICKY_TEXT });
+    const series = adminEvent('s1', { title: 'Serie', category: 'Training', seriesId: 'series-1', seriesDates: [{ id: 's1', startDate: '2026-10-20T18:00:00.000Z' }, { id: 's2', startDate: '2026-10-27T18:00:00.000Z' }] });
+    const { app, state, element, requests } = await loadFrontendApp({
+        '/api/events?upcoming=1&limit=100': { data: [solo, series], meta: { total: 2, page: 1, limit: 100, totalPages: 1 } }
     });
     state.currentUser = MEMBER;
     await app.showEventsSection();
@@ -208,23 +207,17 @@ test('the overview opens events and filters categories through actions', async (
     const bar = element('category-filter-bar').innerHTML;
     assertNoInlineHandlers(grid);
     assertNoInlineHandlers(bar);
-
-    const card = actionTargets(grid, 'navigateTo').find(target => target.attributes['data-route'] === 'event/solo');
-    await app.runAction('navigateTo', actionElement(card));
-    assert.equal(location.hash, '#event/solo');
-    const routes = actionTargets(grid, 'navigateTo').map(target => target.attributes['data-route']);
-    assert.ok(routes.includes('event/s2'), 'series dates open their event');
+    assert.deepEqual(elementsWith(grid, 'href').map(link => link.attributes.href), ['#event/solo', '#event/s1']);
 
     const pill = actionTargets(bar, 'filterByCategory').find(target => target.attributes['data-category'] === TRICKY_TEXT);
     await app.runAction('filterByCategory', actionElement(pill));
-    await settle();   // filterByCategory starts showEventsSection without awaiting it
-    assert.ok(requests.some(r => r.url.includes(`category=${encodeURIComponent(TRICKY_TEXT)}`)), 'filters by the exact category');
+    assert.deepEqual(elementsWith(element('events-grid').innerHTML, 'href').map(link => link.attributes.href), ['#event/solo'], 'filters by the exact category');
+    assert.equal(requests.length, 1, 'filtering asks the server nothing');
 });
 
 test('the calendar arrows move one month in each direction', async () => {
     const { app, state, element } = await loadFrontendApp({
-        '/api/events?limit=500': { data: [], meta: { total: 0, page: 1, limit: 500, totalPages: 0 } },
-        '/api/events': { data: [], meta: { total: 0, page: 1, limit: 20, totalPages: 1 } }
+        '/api/events?limit=500': { data: [], meta: { total: 0, page: 1, limit: 500, totalPages: 0 } }
     });
     state.currentUser = MEMBER;
     const [calendarButton] = elementsWith(INDEX_HTML, 'data-click').filter(e => e.attributes['data-view'] === 'calendar');

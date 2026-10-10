@@ -35,24 +35,26 @@ test('a long preview is cut on a word with an ellipsis', async () => {
     assert.match(preview, /^Wort( Wort)*…$/);
 });
 
-test('event cards in the overview show the preview, no Markdown', async () => {
-    const { app, element, toasts, state } = await loadFrontendApp({
-        '/api/events/categories': [],
-        '/api/events': {
-            data: [
-                event('game-night', GAME_NIGHT),
-                event('raid', RAID, { seriesId: 'series-1', seriesDates: [{ id: 'raid', startDate: '2026-10-20T18:00:00.000Z' }, { id: 'raid-2', startDate: '2026-10-27T18:00:00.000Z' }] })
-            ],
-            meta: { total: 2, page: 1, limit: 20, totalPages: 1 }
-        }
+const UPCOMING = '/api/events?upcoming=1&limit=100';
+const page = (data) => ({ data, meta: { total: data.length, page: 1, limit: 100, totalPages: 1 } });
+
+test('the overview shows cards that link to the event, without the description', async () => {
+    const { app, element, toasts, state, requests } = await loadFrontendApp({
+        [UPCOMING]: page([
+            event('game-night', GAME_NIGHT, { category: 'Gaming' }),
+            event('raid', RAID, { category: 'Raid', seriesId: 'series-1', seriesDates: [{ id: 'raid', startDate: '2026-10-20T18:00:00.000Z' }, { id: 'raid-2', startDate: '2026-10-27T18:00:00.000Z' }] })
+        ])
     });
     state.currentUser = ADMIN;
     await app.showEventsSection();
 
     const html = element('events-grid').innerHTML;
-    assert.ok(html.includes(GAME_NIGHT_PREVIEW), 'standard card');
-    assert.ok(html.includes(RAID_PREVIEW), 'series card');
-    assert.doesNotMatch(html, RAW_MARKDOWN);
+    assert.ok(html.includes('href="#event/game-night"'));
+    assert.ok(html.includes('href="#event/raid"'));
+    assert.ok(html.includes('Serie · 2 Termine'));
+    assert.ok(!html.includes(GAME_NIGHT_PREVIEW), 'no description on the card');
+    assert.deepEqual(requests.map(request => request.url), [UPCOMING]);
+    assert.equal(element('events-empty').style.display, 'none');
     assert.deepEqual(toasts, []);
 });
 
@@ -242,4 +244,94 @@ test('cards and skeletons contain no emoji', async () => {
     assert.equal(skeletons.match(/event-card-skeleton-media/g).length, 3);
     assert.match(skeletons, /aria-hidden="true"/);
     assert.doesNotMatch(skeletons, EMOJI);
+});
+
+const overviewEvents = () => [
+    event('a', 'Party-Games', { title: 'Spieleabend', category: 'Gaming' }),
+    event('b', 'Koop', { title: 'Koop-Abend', category: 'Gaming' }),
+    event('c', 'Bosse', { title: 'Schattenfestung', category: 'Raid' }),
+    event('d', 'OBS', { title: 'Workshop', category: '' })
+];
+const links = (html) => [...html.matchAll(/href="#event\/([^"]+)"/g)].map(match => match[1]);
+
+test('the category bar counts the upcoming events per category', async () => {
+    const { app, element, state } = await loadFrontendApp({ [UPCOMING]: page(overviewEvents()) });
+    state.currentUser = ADMIN;
+    await app.showEventsSection();
+    const bar = element('category-filter-bar').innerHTML;
+    const chips = [...bar.matchAll(/data-category="([^"]*)">([^<]*) <span class="chip-count">(\d+)<\/span>/g)].map(match => [match[1], match[2], Number(match[3])]);
+    assert.deepEqual(chips, [['', 'Alle', 4], ['Gaming', 'Gaming', 2], ['Raid', 'Raid', 1]]);
+    assert.match(bar, /class="chip active" data-click="filterByCategory" data-category=""/);
+});
+
+test('search and category filter in the browser, without a new request', async () => {
+    const { app, element, state, requests } = await loadFrontendApp({ [UPCOMING]: page(overviewEvents()) });
+    state.currentUser = ADMIN;
+    await app.showEventsSection();
+
+    await app.runAction('filterByCategory', { dataset: { category: 'Gaming' } });
+    assert.deepEqual(links(element('events-grid').innerHTML), ['a', 'b']);
+
+    element('events-search').value = 'KOOP';
+    await app.runAction('searchEvents', element('events-search'));
+    assert.deepEqual(links(element('events-grid').innerHTML), ['b'], 'title, case-insensitive');
+
+    element('events-search').value = 'obs';
+    await app.runAction('filterByCategory', { dataset: { category: '' } });
+    assert.deepEqual(links(element('events-grid').innerHTML), ['d'], 'description');
+
+    element('events-search').value = 'raid';
+    await app.runAction('searchEvents', element('events-search'));
+    assert.deepEqual(links(element('events-grid').innerHTML), ['c'], 'category');
+
+    assert.deepEqual(requests.map(request => request.url), [UPCOMING]);
+});
+
+test('no match offers to reset search and category', async () => {
+    const { app, element, state } = await loadFrontendApp({ [UPCOMING]: page(overviewEvents()) });
+    state.currentUser = ADMIN;
+    await app.showEventsSection();
+    await app.runAction('filterByCategory', { dataset: { category: 'Raid' } });
+    element('events-search').value = 'nichts';
+    await app.runAction('searchEvents', element('events-search'));
+
+    assert.equal(element('events-grid').innerHTML, '');
+    assert.equal(element('events-empty').style.display, 'block');
+    assert.match(element('events-empty').innerHTML, /Keine Treffer/);
+    assert.match(element('events-empty').innerHTML, /data-click="resetEventFilters"/);
+
+    await app.runAction('resetEventFilters', {});
+    assert.equal(element('events-search').value, '');
+    assert.deepEqual(links(element('events-grid').innerHTML), ['a', 'b', 'c', 'd']);
+    assert.equal(element('events-empty').style.display, 'none');
+});
+
+test('a chosen category without events any more falls back to all', async () => {
+    let data = overviewEvents();
+    const { app, element, state } = await loadFrontendApp({ [UPCOMING]: () => page(data) });
+    state.currentUser = ADMIN;
+    await app.showEventsSection();
+    await app.runAction('filterByCategory', { dataset: { category: 'Raid' } });
+    assert.deepEqual(links(element('events-grid').innerHTML), ['c']);
+
+    data = overviewEvents().filter(entry => entry.category !== 'Raid');
+    await app.showEventsSection();
+    assert.deepEqual(links(element('events-grid').innerHTML), ['a', 'b', 'd']);
+    assert.match(element('category-filter-bar').innerHTML, /class="chip active" data-click="filterByCategory" data-category=""/);
+});
+
+test('the overview says when there is nothing or when loading failed', async () => {
+    const empty = await loadFrontendApp({ [UPCOMING]: page([]) });
+    empty.state.currentUser = ADMIN;
+    await empty.app.showEventsSection();
+    assert.match(empty.element('events-empty').innerHTML, /Keine anstehenden Events/);
+    assert.equal(empty.element('category-filter-bar').innerHTML, '');
+
+    // Unknown URL -> 404 in the test harness
+    const failed = await loadFrontendApp({});
+    failed.state.currentUser = ADMIN;
+    await failed.app.showEventsSection();
+    assert.match(failed.element('events-empty').innerHTML, /Events konnten nicht geladen werden/);
+    assert.match(failed.element('events-empty').innerHTML, /data-click="showEventsSection"/);
+    assert.doesNotMatch(failed.element('events-empty').innerHTML, /Console/);
 });

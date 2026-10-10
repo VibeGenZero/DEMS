@@ -18,7 +18,6 @@ see_also: [registration-flow, event-lifecycle, api-index]
 |---|---|---|---|
 | GET | `/` | user | active events (`?status=` other than `active` needs admin → 403), `?upcoming=1` (overview: drops events whose end — `endDate`, else start + 2 h, `isEventOver` — has passed, before series are grouped), `?category=`, `?search=` (title/description), `?page`/`?limit` (default 20); adds `currentParticipants`, `myStatus` (`myRegistrationStatus`: own `accepted`/`pending`/`waitlisted`, `guest` in an accepted or pending registration of someone else, else `null`) and `slotSummary` for slot events; series collapsed to one representative with `seriesDates[]`; sorted by `startDate` |
 | GET | `/series/:seriesId` | user | all events of a series visible to the user (no `draft`/`archived` for non-admins) with `currentParticipants` (+ `slotSummary`), sorted by start |
-| GET | `/categories` | user | sorted unique `category` values of ALL events |
 | GET | `/form-options` | user | `{ roles (non-managed), channels (public only) }` for form pickers; cached 60 s in memory |
 | GET | `/:id` | user | event via `toPublicEvent` (no `checkinCode`), plus `checkinEnabled`, `currentParticipants`, `waitlistCount`, `createdByName`, `slotSummary` (slot events) |
 | POST | `/:id/register` | user + `checkRegistrationAllowed` | body `{ formAnswers, guests, slotId, altSlotIds }` → `registerUserForEvent` → `{ id, status, message, slotId, isAlt }` or `{ error }` with mapped HTTP status |
@@ -37,7 +36,7 @@ grep `router.(get|post|put|delete)\('` in `routes/events.js`; handler order matt
 
 ## Gotchas
 
-- **Route order:** `/series/:seriesId`, `/categories` and `/form-options` are declared BEFORE `/:id`; new static paths must also go above `/:id`, otherwise `/:id` swallows them.
+- **Route order:** `/series/:seriesId` and `/form-options` are declared BEFORE `/:id`; new static paths must also go above `/:id`, otherwise `/:id` swallows them.
 - Every handler builds event answers with `toPublicEvent` (`utils/eventUtils.js`), which drops `checkinCode`.
 - `router.param('id')` loads the event once more before each `/:id` handler; unknown ids pass through, so handlers keep their own "not found" answers. `cancelled` events stay readable by id. The frontend's `?status=all` query is ignored by `GET /:id`.
 - Comment avatars: `session.user.avatar` is already a complete URL → `POST /:id/comments` stores it as is (`avatarUrlOf`); `GET /:id/comments` unwraps URLs that older versions stored wrapped into a second one (`repairAvatarUrl`, `utils/avatar.js`). The stored documents are not rewritten.

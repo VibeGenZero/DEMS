@@ -223,40 +223,32 @@
           <p class="text-secondary">Entdecke Events und registriere dich!</p>
         </div>
 
-        <!-- Search & View Toggle -->
-        <div class="d-flex flex-wrap gap-3 align-items-center mb-3">
-          <div class="flex-grow-1 position-relative">
-            <i class="bi bi-search position-absolute"
-              style="left:12px;top:50%;transform:translateY(-50%);color:var(--text-secondary);"></i>
-            <input type="search" class="form-control" id="events-search" placeholder="Events durchsuchen..."
-              style="padding-left:36px;" data-input="debouncedSearch">
+        <!-- Search and view switch -->
+        <div class="events-toolbar">
+          <div class="events-search">
+            <i class="bi bi-search events-search-icon" aria-hidden="true"></i>
+            <input type="search" class="form-control" id="events-search" placeholder="Events durchsuchen …"
+              aria-label="Events durchsuchen" data-input="searchEvents">
           </div>
-          <div class="btn-group" role="group">
+          <div class="btn-group" role="group" aria-label="Ansicht">
             <button type="button" class="btn btn-outline-light btn-sm active" id="view-grid-btn"
-              data-click="switchView" data-view="grid">
+              data-click="switchView" data-view="grid" title="Karten">
               <i class="bi bi-grid-3x3-gap"></i>
             </button>
             <button type="button" class="btn btn-outline-light btn-sm" id="view-calendar-btn"
-              data-click="switchView" data-view="calendar">
+              data-click="switchView" data-view="calendar" title="Kalender">
               <i class="bi bi-calendar3"></i>
             </button>
           </div>
         </div>
 
-        <!-- Category Filter -->
-        <div class="category-filter-bar" id="category-filter-bar">
-          <!-- Dynamically populated -->
-        </div>
-        <div class="row g-4" id="events-grid">
-          <!-- Events render here -->
-        </div>
-        <div id="events-calendar" style="display:none;">
-          <!-- Calendar renders here -->
-        </div>
-        <div id="events-empty" class="text-center py-5" style="display:none;">
-          <i class="bi bi-calendar-x" style="font-size:3rem;color:var(--accent);"></i>
-          <p class="text-secondary mt-3">Aktuell keine Events vorhanden.</p>
-        </div>
+        <!-- Category chips with counts (events/list.js); one line, scrolls sideways on phones -->
+        <div class="category-filter-bar" id="category-filter-bar" role="group" aria-label="Kategorien"></div>
+        <!-- Cards (events/cards.js) -->
+        <div class="event-grid" id="events-grid"></div>
+        <div id="events-calendar" style="display:none;"></div>
+        <!-- Empty, no match or load error (emptyState) -->
+        <div id="events-empty" style="display:none;"></div>
       </div>
     </section>
 

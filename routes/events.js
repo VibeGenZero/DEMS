@@ -226,24 +226,6 @@ router.get('/series/:seriesId', async (req, res) => {
 });
 
 /**
- * GET /api/events/categories — Get all unique categories
- */
-router.get('/categories', async (req, res) => {
-    try {
-        const q = query(collection(db, 'events'));
-        const snapshot = await getDocs(q);
-        const categories = new Set();
-        snapshot.forEach(docSnap => {
-            const cat = docSnap.data().category;
-            if (cat) categories.add(cat);
-        });
-        res.json([...categories].sort());
-    } catch (err) {
-        res.status(500).json({ error: 'Fehler' });
-    }
-});
-
-/**
  * Cached roles and channels for the form pickers.
  * Discord is only asked again once the cache has expired.
  */
