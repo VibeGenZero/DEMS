@@ -42,7 +42,7 @@ No CDN: every library and font is a pinned copy with its license next to it.
 
 ## style.css blocks (grep the header text)
 
-`:root` variables → LOADING SCREEN → NAVBAR → BUTTONS → GLASS CARDS → SECTIONS → EVENT CARDS (+ Event Series, Rendered Markdown) → COUNTDOWN → CATEGORY PILLS → BADGES → STATS CARDS → PROFILE SECTION → DATE & TIME → WAITLIST → FORMS → TABLE → FORM BUILDER → ENTITY PICKER → LOGIN CARD → TOAST → ADMIN EVENT CARD → SCROLLBAR → CONFETTI → SKELETON LOADING → INFO PARTICLES → PROFILE SECTION (second block) → RESPONSIVE → UTILITY → INFO SECTION → EASYMDE CUSTOMIZATION → Participant Warning Badges → Calendar View → Event Comments → BOT CONTROL CENTER → EVENT WIZARD STEPPER → MAINTENANCE MODE → EVENT DETAIL (banner, sidebar, capacity bar, participants) → EVENT CARD (gradient placeholder, updated layout) → LOCATION AUTOCOMPLETE → DEBUG / STYLING GUIDE → ROLE SLOTS → DATE POLLS.
+`:root` variables → LOADING SCREEN → NAVBAR → BUTTONS → GLASS CARDS → SECTIONS → EVENT CARDS (+ Event Series, Rendered Markdown) → COUNTDOWN → CATEGORY PILLS → BADGES → STATS CARDS → DATE & TIME → WAITLIST → FORMS → TABLE → FORM BUILDER → ENTITY PICKER → LOGIN CARD → TOAST → ADMIN EVENT CARD → CONFETTI → SKELETON LOADING → PROFILE SECTION → RESPONSIVE → UTILITY → INFO SECTION → EASYMDE CUSTOMIZATION → Participant Warning Badges → Calendar View → Event Comments → BOT CONTROL CENTER → EVENT WIZARD STEPPER → MAINTENANCE MODE → EVENT DETAIL (banner, sidebar, capacity bar, participants) → EVENT CARD (gradient placeholder, updated layout) → LOCATION AUTOCOMPLETE → DEBUG / STYLING GUIDE → ROLE SLOTS → DATE POLLS.
 
 ## Theme variables (`public/css/tokens.css`)
 
@@ -68,5 +68,4 @@ No inline handlers (`onclick`, `onchange`, `oninput`, `onerror`): the CSP blocks
 
 ## Gotchas
 
-- "PROFILE SECTION" exists twice in `style.css`; later rules win.
 - Source maps are not vendored: with DevTools open, the browser reports missing `.map` files for Bootstrap and DOMPurify (harmless).

@@ -33,3 +33,17 @@ test('the logo font is only used by the logo', () => {
     const sources = [INDEX_HTML, ...STYLED.map(readCss), ...frontendSources().map(entry => entry.source)];
     for (const source of sources) assert.doesNotMatch(source, /--font-display/);
 });
+
+test('no selector list is defined twice in the same context', () => {
+    const seen = new Map();
+    const duplicates = [];
+    for (const rule of allRules()) {
+        // Steps like "0%, 100%" repeat in every animation by design
+        if (rule.context.includes('@keyframes')) continue;
+        const key = `${rule.context} | ${rule.selector}`;
+        const place = `${rule.file}:${rule.line}`;
+        if (seen.has(key)) duplicates.push(`${rule.selector} (${seen.get(key)} and ${place})`);
+        else seen.set(key, place);
+    }
+    assert.deepEqual(duplicates, []);
+});
