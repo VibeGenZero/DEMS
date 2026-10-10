@@ -38,7 +38,7 @@ Node ≥ 22. No build step, no TypeScript, no linter config.
 
 ## Save tokens
 
-- **Never read these files whole:** `public/css/style.css` (~3130), `public/css/components.css` (~670), `bot.js` (~2200), `public/index.html` (~1920), `routes/admin.js` (~1180). For CSS, `docs/wiki/modules/frontend-markup.md` lists tokens, components and blocks. The wiki nodes list their functions/sections — `grep -n "function <name>" <file>` and read ~80 lines from there.
+- **Never read these files whole:** `public/css/style.css` (~3190), `public/css/components.css` (~810), `bot.js` (~2200), `public/index.html` (~1920), `routes/admin.js` (~1180). For CSS, `docs/wiki/modules/frontend-markup.md` lists tokens, components and blocks. The wiki nodes list their functions/sections — `grep -n "function <name>" <file>` and read ~80 lines from there.
 - The frontend is ES modules under `public/js/` (one per area, ≤ ~500 lines); open only the module from the map in `docs/wiki/modules/frontend-app.md`.
 - Ignore `node_modules/`, `public/vendor/`, `landing/`, `package-lock.json`, `data/`.
 - `docs/wiki/graph.json` has one node per line: `grep '"waitlist"' docs/wiki/graph.json` (or a file name like `"bot.js"`) returns complete nodes with summary, sources and neighbours — cheaper than opening pages or reading the whole file.
