@@ -30,7 +30,7 @@ body {
 #loading-screen {
   position: fixed;
   inset: 0;
-  z-index: 10000;
+  z-index: calc(var(--z-overlay) + 1);
   background: var(--bg-primary);
   display: flex;
   align-items: center;
@@ -123,7 +123,7 @@ body {
   width: 220px;
   height: 3px;
   background: var(--bg-tint-2);
-  border-radius: 3px;
+  border-radius: var(--radius-pill);
   margin: 0 auto 1rem;
   overflow: hidden;
   opacity: 0;
@@ -133,7 +133,7 @@ body {
   width: 0%;
   height: 100%;
   background: linear-gradient(90deg, var(--accent), var(--accent-light));
-  border-radius: 3px;
+  border-radius: var(--radius-pill);
   box-shadow: 0 0 10px var(--accent-glow);
 }
 
@@ -166,7 +166,7 @@ body {
 /* NAVBAR                                      */
 /* ═══════════════════════════════════════════ */
 #main-navbar {
-  background: var(--bg-scrim) !important;
+  background: var(--bg-scrim);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   border-bottom: 1px solid var(--border-subtle);
@@ -202,7 +202,7 @@ body {
   width: 30px;
   height: 2px;
   background: var(--accent);
-  border-radius: 2px;
+  border-radius: var(--radius-pill);
 }
 
 /* ═══════════════════════════════════════════ */
@@ -295,7 +295,7 @@ body {
   font-size: var(--font-size-xs);
   font-weight: 600;
   padding: 0.2rem 0.6rem;
-  border-radius: 20px;
+  border-radius: var(--radius-lg);
   white-space: nowrap;
 }
 
@@ -326,7 +326,7 @@ body {
   color: var(--text-primary);
   text-decoration: none;
   border-bottom: 1px solid var(--border-subtle);
-  transition: background 0.2s;
+  transition: background var(--duration-fast);
 }
 
 .series-date-item:last-child {
@@ -359,7 +359,7 @@ body {
   color: var(--accent-light);
   text-decoration: none;
   border-top: 1px solid var(--border-subtle);
-  transition: background 0.2s;
+  transition: background var(--duration-fast);
 }
 
 .series-dates-toggle:hover {
@@ -456,7 +456,7 @@ body {
   background: var(--bg-tint-2);
   color: var(--accent-light);
   padding: 0.15em 0.4em;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   font-size: 0.88em;
   font-family: 'Cascadia Code', 'Fira Code', monospace;
 }
@@ -541,7 +541,7 @@ body {
   align-items: center;
   background: var(--accent-tint-1);
   border: 1px solid var(--border-accent);
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   padding: 0.4rem 0.6rem;
   min-width: 48px;
 }
@@ -679,7 +679,7 @@ body {
   background: var(--info-bg);
   color: var(--info);
   border: 1px solid var(--info-border);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   padding: 0.35rem 0.9rem;
   font-size: var(--font-size-sm);
   font-weight: 500;
@@ -691,11 +691,21 @@ body {
 /* ═══════════════════════════════════════════ */
 /* FORMS                                       */
 /* ═══════════════════════════════════════════ */
+/* Surface and text in every state; Bootstrap sets its own for :focus and :disabled */
+.form-control,
+.form-select,
+.form-control:focus,
+.form-select:focus,
+.form-control:disabled,
+.form-select:disabled {
+  background: var(--bg-tint-1);
+  color: var(--text-primary);
+}
+
 .form-control,
 .form-select {
-  background: var(--bg-tint-1) !important;
-  border: 1px solid var(--border-subtle) !important;
-  color: var(--text-primary) !important;
+  border: 1px solid var(--border-subtle);
+  /* !important keeps all four corners round inside Bootstrap's .input-group, as before */
   border-radius: var(--radius) !important;
   padding: 0.7rem 1rem;
   transition: var(--transition);
@@ -703,8 +713,8 @@ body {
 
 .form-control:focus,
 .form-select:focus {
-  border-color: var(--accent) !important;
-  box-shadow: 0 0 0 3px var(--accent-glow) !important;
+  border-color: var(--accent);
+  box-shadow: var(--shadow-ring);
 }
 
 .form-label {
@@ -718,8 +728,8 @@ body {
 /* TABLE                                       */
 /* ═══════════════════════════════════════════ */
 .table-dark {
-  --bs-table-bg: transparent !important;
-  --bs-table-border-color: var(--border-subtle) !important;
+  --bs-table-bg: transparent;
+  --bs-table-border-color: var(--border-subtle);
 }
 
 .table-dark th {
@@ -984,15 +994,15 @@ body {
   width: 100%;
   height: 4px;
   background: var(--bg-tint-2);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   overflow: hidden;
   margin-top: 0.5rem;
 }
 
 .profile-badge-progress-bar {
   height: 100%;
-  border-radius: 999px;
-  transition: width 0.6s ease;
+  border-radius: var(--radius-pill);
+  transition: width var(--duration-slow) ease;
 }
 
 .profile-badge-card.unlocked:hover {
@@ -1258,7 +1268,7 @@ body {
 .info-version-badge {
   display: inline-block;
   padding: 0.25rem 0.8rem;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   font-size: var(--font-size-xs);
   font-weight: 600;
   color: var(--accent-light);
@@ -1343,7 +1353,7 @@ body {
   display: inline-flex;
   align-items: center;
   padding: 0.35rem 0.9rem;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   font-size: var(--font-size-sm);
   font-weight: 500;
   background: var(--accent-tint-1);
@@ -1479,7 +1489,7 @@ body {
   width: 100%;
   height: 100%;
   background: linear-gradient(90deg, transparent, var(--bg-tint-3), transparent);
-  transition: left 0.6s ease;
+  transition: left var(--duration-slow) ease;
 }
 
 .info-data-btn:hover::before {
@@ -1649,7 +1659,7 @@ body {
 .calendar-day {
   min-height: 70px;
   padding: 4px 6px;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   background: var(--bg-tint-1);
   border: 1px solid transparent;
   cursor: pointer;
@@ -1689,7 +1699,7 @@ body {
 .calendar-day-event {
   font-size: var(--font-size-xs);
   padding: 1px 4px;
-  border-radius: 3px;
+  border-radius: var(--radius-sm);
   background: var(--accent-tint-2);
   color: var(--accent-light);
   white-space: nowrap;
@@ -1767,7 +1777,7 @@ body {
   background: var(--accent-fill);
   color: var(--on-accent);
   padding: 1px 6px;
-  border-radius: 10px;
+  border-radius: var(--radius-sm);
   font-weight: 600;
 }
 
@@ -1792,7 +1802,7 @@ body {
 .comment-actions button {
   font-size: var(--font-size-xs);
   padding: 2px 8px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   background: transparent;
   border: 1px solid var(--border-subtle);
   color: var(--text-muted);
@@ -1858,7 +1868,7 @@ body {
 .bot-ping-badge {
   font-size: var(--font-size-xs);
   padding: 2px 6px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   background: var(--accent-tint-2);
   color: var(--accent-light);
   border: 1px solid var(--border-accent);
@@ -1954,15 +1964,15 @@ body {
 .capacity-bar-container {
   height: 4px;
   background: var(--bg-elevated);
-  border-radius: 2px;
+  border-radius: var(--radius-pill);
   overflow: hidden;
 }
 
 .capacity-bar {
   height: 100%;
   background: linear-gradient(90deg, var(--accent), var(--accent-light));
-  border-radius: 2px;
-  transition: width 0.5s ease;
+  border-radius: var(--radius-pill);
+  transition: width var(--duration-slow) ease;
 }
 
 .running-event-stats {
@@ -2027,7 +2037,7 @@ body {
   background: var(--accent-tint-2);
   color: var(--accent-light);
   padding: 1px 5px;
-  border-radius: 3px;
+  border-radius: var(--radius-sm);
   font-size: var(--font-size-xs);
   margin-right: 0.4rem;
 }
@@ -2035,7 +2045,7 @@ body {
 .variable-ref-example {
   padding: 0.5rem;
   background: var(--accent-tint-1);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   border-left: 3px solid var(--accent);
 }
 
@@ -2043,7 +2053,7 @@ body {
   background: var(--accent-tint-2);
   color: var(--accent-light);
   padding: 1px 5px;
-  border-radius: 3px;
+  border-radius: var(--radius-sm);
   font-size: var(--font-size-xs);
 }
 
@@ -2126,7 +2136,7 @@ body {
   background: var(--border-subtle);
   margin: 0 6px;
   margin-bottom: 22px;
-  border-radius: 2px;
+  border-radius: var(--radius-pill);
   transition: var(--transition);
 }
 
@@ -2167,7 +2177,7 @@ body {
   top: 56px;
   left: 0;
   right: 0;
-  z-index: 1040;
+  z-index: var(--z-banner);
   animation: maintenance-pulse 3s ease-in-out infinite;
 }
 
@@ -2180,7 +2190,7 @@ body {
   top: 56px;
   left: 0;
   right: 0;
-  z-index: 1039;
+  z-index: calc(var(--z-banner) - 1);
 }
 
 .maintenance-banner + .planned-maintenance-banner,
@@ -2200,7 +2210,7 @@ body {
   right: 0;
   bottom: 0;
   background: var(--bg-scrim);
-  z-index: 9999;
+  z-index: var(--z-overlay);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2313,7 +2323,7 @@ body {
 /* ═══════════════════════════════════════════ */
 .capacity-progress {
   height: 6px;
-  border-radius: 3px;
+  border-radius: var(--radius-pill);
   background: var(--bg-tint-2);
   overflow: hidden;
   margin: 0.5rem 0 0.4rem;
@@ -2321,9 +2331,9 @@ body {
 
 .capacity-progress-bar {
   height: 100%;
-  border-radius: 3px;
+  border-radius: var(--radius-pill);
   background: var(--accent);
-  transition: width 0.4s ease;
+  transition: width var(--duration-base) ease;
 }
 
 .capacity-progress-bar.danger {
@@ -2367,7 +2377,7 @@ body {
   border: 2px solid var(--bg-card);
   object-fit: cover;
   cursor: default;
-  transition: transform 0.15s;
+  transition: transform var(--duration-fast);
 }
 
 .participant-avatar:hover {
@@ -2413,7 +2423,7 @@ body {
   top: 100%;
   left: 0;
   right: 0;
-  z-index: 1050;
+  z-index: var(--z-dropdown);
   background: var(--bg-secondary);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius);
@@ -2428,7 +2438,7 @@ body {
   cursor: pointer;
   font-size: var(--font-size-sm);
   color: var(--text-secondary);
-  transition: background 0.15s;
+  transition: background var(--duration-fast);
   display: flex;
   align-items: center;
 }
@@ -2476,7 +2486,7 @@ body {
 
 .event-card-mini-progress {
   height: 4px;
-  border-radius: 2px;
+  border-radius: var(--radius-pill);
   background: var(--bg-tint-2);
   overflow: hidden;
   margin-bottom: 0.3rem;
@@ -2484,7 +2494,7 @@ body {
 
 .event-card-mini-progress-bar {
   height: 100%;
-  border-radius: 2px;
+  border-radius: var(--radius-pill);
   background: var(--accent);
 }
 
@@ -2517,7 +2527,7 @@ body {
 
 /* Chevron transition */
 #debug-chevron {
-  transition: transform 0.25s ease;
+  transition: transform var(--duration-base) ease;
 }
 
 /* Styling Guide section titles */
@@ -2656,7 +2666,7 @@ body {
 .slot-chip {
   font-size: var(--font-size-xs);
   padding: 0.15rem 0.55rem;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--accent-tint-2);
   border: 1px solid var(--border-accent);
   color: var(--text-primary);
@@ -2724,7 +2734,7 @@ body {
 
 .slot-alt-chip {
   padding: 0.25rem 0.75rem;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   border: 1px solid var(--border-subtle);
   background: transparent;
   color: var(--text-secondary);
@@ -2814,7 +2824,7 @@ body {
 
 .roster-tag-alt {
   padding: 0.05rem 0.4rem;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--warning-bg);
   color: var(--warning);
 }
@@ -2904,7 +2914,7 @@ body {
 .poll-bar {
   display: flex;
   height: 8px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   overflow: hidden;
   background: var(--bg-tint-2);
 }

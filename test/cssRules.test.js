@@ -112,3 +112,17 @@ test('font sizes in px or rem only live in tokens.css', () => {
         .map(declaration => describe(rule, declaration)));
     assert.deepEqual(raw, []);
 });
+
+test('layers above local stacking use the z tokens', () => {
+    const raw = allRules().flatMap(rule => rule.declarations
+        .filter(declaration => declaration.property === 'z-index' && /^-?\d+$/.test(withoutImportant(declaration.value)) && Math.abs(Number(withoutImportant(declaration.value))) >= 10)
+        .map(declaration => describe(rule, declaration)));
+    assert.deepEqual(raw, []);
+});
+
+test('radii come from the radius tokens', () => {
+    const raw = allRules().flatMap(rule => rule.declarations
+        .filter(declaration => declaration.property.startsWith('border') && declaration.property.endsWith('radius') && /\dpx\b/.test(declaration.value))
+        .map(declaration => describe(rule, declaration)));
+    assert.deepEqual(raw, []);
+});
