@@ -33,8 +33,10 @@
   <script src="/vendor/marked/marked.min.js"></script>
   <script src="/vendor/dompurify/purify.min.js"></script>
 
-  <!-- Custom CSS -->
-  <link rel="stylesheet" href="/css/style.css?v=2">
+  <!-- DEMS styles: tokens -> components -> page styles (the order matters) -->
+  <link rel="stylesheet" href="/css/tokens.css?v=3">
+  <link rel="stylesheet" href="/css/components.css?v=3">
+  <link rel="stylesheet" href="/css/style.css?v=3">
   <link rel="icon" type="image/svg+xml" href="/logo.svg">
 </head>
 
@@ -554,15 +556,22 @@
     <section id="debug-section" class="app-section" style="display:none;">
       <div class="container section-container">
         <div class="section-header">
-          <h2><i class="bi bi-palette me-2"></i>Styling Guide</h2>
-          <p class="text-secondary mb-0">Komponentenübersicht — nur im Debug-Modus sichtbar.</p>
+          <h2><i class="bi bi-palette me-2"></i>Styleguide</h2>
+          <p class="text-secondary mb-0">Tokens und Komponenten — nur im Debug-Modus sichtbar.</p>
         </div>
 
-        <!-- 1. Farben -->
-        <h5 class="sg-section-title">Farben</h5>
-        <div id="sg-colors" class="sg-color-grid"></div>
+        <!-- Rendered by pages/debug.js from tokens.css -->
+        <h3 class="sg-part-title">Tokens</h3>
+        <div id="sg-tokens"></div>
 
-        <!-- 2. Typographie -->
+        <!-- Rendered by pages/debug-components.js -->
+        <h3 class="sg-part-title">Komponenten</h3>
+        <div id="sg-components"></div>
+
+        <h3 class="sg-part-title">Bestand</h3>
+        <div id="sg-legacy">
+
+        <!-- Typographie -->
         <h5 class="sg-section-title">Typographie</h5>
         <div class="glass-card p-4 mb-4" id="sg-typography">
           <h1>H1 — Überschrift</h1>
@@ -578,20 +587,14 @@
           <p class="text-muted">text-muted — Abgedämpfter Hilfetext</p>
         </div>
 
-        <!-- 3. Buttons -->
-        <h5 class="sg-section-title">Buttons</h5>
+        <!-- Weitere Button-Varianten -->
+        <h5 class="sg-section-title">Weitere Button-Varianten</h5>
         <div class="glass-card p-4 mb-4">
           <div id="sg-buttons" class="d-flex flex-wrap gap-2"></div>
         </div>
 
-        <!-- 4. Badges & Pills -->
-        <h5 class="sg-section-title">Badges &amp; Status-Pills</h5>
-        <div class="glass-card p-4 mb-4">
-          <div id="sg-badges" class="d-flex flex-wrap gap-2 align-items-center"></div>
-        </div>
-
-        <!-- 5. Cards -->
-        <h5 class="sg-section-title">Cards</h5>
+        <!-- Seitenkarten -->
+        <h5 class="sg-section-title">Seitenkarten</h5>
         <div id="sg-cards" class="mb-4"></div>
 
         <!-- 6. Formulare -->
@@ -637,10 +640,7 @@
         <h5 class="sg-section-title">Feedback</h5>
         <div class="glass-card p-4 mb-4">
           <div class="d-flex flex-wrap gap-3 align-items-center mb-3" id="sg-spinners"></div>
-          <div id="sg-alerts" class="mb-3"></div>
-          <button class="btn btn-outline-secondary btn-sm" data-click="showTestToast">
-            <i class="bi bi-bell me-1"></i>Toast testen
-          </button>
+          <div id="sg-alerts"></div>
         </div>
 
         <!-- 8. Animationen -->
@@ -660,6 +660,7 @@
           <div id="sg-icons" class="sg-icon-grid"></div>
         </div>
 
+        </div>
       </div>
     </section>
 
@@ -899,7 +900,7 @@
   <!-- Import Discord Events Modal -->
   <div class="modal fade" id="importDiscordEventsModal" tabindex="-1">
     <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
-      <div class="modal-content glass-modal">
+      <div class="modal-content">
         <div class="modal-header border-0">
           <h5 class="modal-title"><i class="bi bi-discord me-2"></i>Event aus Discord importieren</h5>
           <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
@@ -922,7 +923,7 @@
   <!-- Create / Edit Event Modal (Wizard) -->
   <div class="modal fade" id="eventModal" tabindex="-1">
     <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
-      <div class="modal-content glass-modal">
+      <div class="modal-content">
 
         <div class="modal-header border-0 pb-0">
           <h5 class="modal-title" id="eventModalTitle">Neues Event erstellen</h5>
@@ -1252,7 +1253,7 @@
   <!-- System Reset Modal -->
   <div class="modal fade" id="resetModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
-      <div class="modal-content glass-modal border-danger">
+      <div class="modal-content border-danger">
         <div class="modal-header border-0">
           <h5 class="modal-title text-danger"><i class="bi bi-exclamation-triangle-fill me-2"></i>System Reset (Danger
             Zone)</h5>
@@ -1307,7 +1308,7 @@
   <!-- Maintenance Modal -->
   <div class="modal fade" id="maintenanceModal" tabindex="-1">
     <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
-      <div class="modal-content glass-modal border-warning">
+      <div class="modal-content border-warning">
         <div class="modal-header border-0">
           <h5 class="modal-title text-warning"><i class="bi bi-tools me-2"></i>Wartungsmodus</h5>
           <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
@@ -1407,7 +1408,7 @@
   <!-- Registrations Modal -->
   <div class="modal fade" id="registrationsModal" tabindex="-1">
     <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
-      <div class="modal-content glass-modal">
+      <div class="modal-content">
         <div class="modal-header border-0">
           <h5 class="modal-title">Anmeldungen — <span id="reg-event-title"></span></h5>
           <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
@@ -1441,7 +1442,7 @@
   <!-- Bot Messages Modal -->
   <div class="modal fade" id="botMessagesModal" tabindex="-1">
     <div class="modal-dialog modal-lg modal-dialog-centered">
-      <div class="modal-content glass-modal">
+      <div class="modal-content">
         <div class="modal-header border-0">
           <h5 class="modal-title"><i class="bi bi-chat-dots me-2"></i>Bot-Nachrichten bearbeiten</h5>
           <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
@@ -1477,7 +1478,7 @@
   <!-- Announce Event Modal -->
   <div class="modal fade" id="announceModal" tabindex="-1">
     <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
-      <div class="modal-content glass-modal">
+      <div class="modal-content">
         <div class="modal-header border-0">
           <h5 class="modal-title"><i class="bi bi-megaphone me-2"></i>Event ankündigen</h5>
           <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
@@ -1528,7 +1529,7 @@
   <!-- Data Privacy Modal -->
   <div class="modal fade" id="dataPrivacyModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
-      <div class="modal-content glass-modal">
+      <div class="modal-content">
         <div class="modal-header border-0">
           <h5 class="modal-title"><i class="bi bi-shield-lock me-2"></i>Daten & Datenschutz</h5>
           <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
@@ -1588,7 +1589,7 @@
   <!-- Updates Modal -->
   <div class="modal fade" id="updatesModal" tabindex="-1">
     <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
-      <div class="modal-content glass-modal">
+      <div class="modal-content">
         <div class="modal-header border-0">
           <h5 class="modal-title"><i class="bi bi-megaphone me-2"></i>Neuigkeiten & Updates <span
               id="updates-version-badge" class="badge bg-accent ms-2"></span></h5>
@@ -1617,7 +1618,7 @@
   <!-- Date poll editor -->
   <div class="modal fade" id="pollEditorModal" tabindex="-1">
     <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
-      <div class="modal-content glass-modal">
+      <div class="modal-content">
         <div class="modal-header border-0">
           <h5 class="modal-title" id="poll-editor-title">Neue Abstimmung</h5>
           <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
@@ -1686,7 +1687,7 @@
   <!-- Post a date poll to Discord -->
   <div class="modal fade" id="pollAnnounceModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
-      <div class="modal-content glass-modal">
+      <div class="modal-content">
         <div class="modal-header border-0">
           <h5 class="modal-title"><i class="bi bi-discord me-2"></i>In Discord posten</h5>
           <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
@@ -1713,7 +1714,7 @@
   <!-- Choose the date for the event -->
   <div class="modal fade" id="pollDecideModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
-      <div class="modal-content glass-modal">
+      <div class="modal-content">
         <div class="modal-header border-0">
           <h5 class="modal-title"><i class="bi bi-calendar-plus me-2"></i>Termin für das Event wählen</h5>
           <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
@@ -1733,7 +1734,7 @@
   <!-- Generic confirmation -->
   <div class="modal fade" id="confirmModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
-      <div class="modal-content glass-modal">
+      <div class="modal-content">
         <div class="modal-body pt-4">
           <p id="confirm-modal-text" class="mb-0"></p>
         </div>
@@ -1879,8 +1880,9 @@
 
   <!-- ── TOAST ── -->
   <div class="toast-container position-fixed bottom-0 end-0 p-3">
-    <div id="app-toast" class="toast align-items-center border-0" role="alert">
-      <div class="d-flex">
+    <div id="app-toast" class="toast toast-info" role="alert">
+      <div class="d-flex align-items-center">
+        <i id="toast-icon" class="toast-icon bi bi-info-circle-fill ms-3"></i>
         <div class="toast-body" id="toast-message"></div>
         <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
       </div>

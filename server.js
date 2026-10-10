@@ -47,7 +47,7 @@ app.use(helmet({
             defaultSrc: ["'self'"],
             // Libraries and fonts are vendored in public/vendor/, so no CDN host is allowed.
             // No inline scripts or handlers: actions run through data-click (public/js/core/actions.js);
-            // styles keep 'unsafe-inline' until D-02 removes the style attributes.
+            // styles keep 'unsafe-inline' until D-16 removes the style attributes (budget: test/cssRules.test.js).
             scriptSrc: ["'self'"],
             scriptSrcAttr: ["'none'"],
             styleSrc: ["'self'", "'unsafe-inline'"],

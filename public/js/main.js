@@ -22,6 +22,7 @@ import './events/list.js';
 import './events/registration-form.js';
 import './events/slots.js';
 import './pages/debug.js';
+import './pages/debug-components.js';
 import './pages/profile.js';
 import './polls/admin.js';
 import './polls/polls.js';

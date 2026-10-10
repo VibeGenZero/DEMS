@@ -16,8 +16,10 @@ const FALLBACKS = {
     hide: (img) => { img.style.display = 'none'; },
     invisible: (img) => { img.style.visibility = 'hidden'; },
     initials: (img) => {
-        const placeholder = document.createElement('div');
-        placeholder.className = 'participant-avatar-placeholder';
+        // Library avatars keep their size classes; older images get the participant tile
+        const isAvatar = /(^|\s)avatar(\s|$)/.test(img.className || '');
+        const placeholder = document.createElement(isAvatar ? 'span' : 'div');
+        placeholder.className = isAvatar ? `${img.className} avatar-initials` : 'participant-avatar-placeholder';
         placeholder.title = img.title;
         placeholder.textContent = img.dataset.initials || '?';
         img.replaceWith(placeholder);

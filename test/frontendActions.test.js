@@ -150,6 +150,23 @@ test('broken images fall back: hide, invisible, initials', async () => {
     assert.deepEqual({ ...initials.replacement }, { tagName: 'DIV', className: 'participant-avatar-placeholder', title: "X'+(globalThis.pwned=1)+'", textContent: 'X' });
 });
 
+test('a broken avatar image becomes an initials tile of the same size', async () => {
+    const { actions, document, listeners } = await loadActions();
+    actions.initActions(document);
+    const onError = listeners.find(l => l.type === 'error');
+    for (const classes of ['avatar', 'avatar avatar-lg', 'me-2 avatar avatar-sm']) {
+        const image = fakeElement('img', { 'data-fallback': 'initials', 'data-initials': 'LB', title: 'Lyonel Berzen' });
+        image.className = classes;
+        onError.listener({ type: 'error', target: image });
+        assert.deepEqual({ ...image.replacement }, { tagName: 'SPAN', className: `${classes} avatar-initials`, title: 'Lyonel Berzen', textContent: 'LB' });
+    }
+    // A class that only contains the word is no avatar
+    const legacy = fakeElement('img', { 'data-fallback': 'initials', 'data-initials': 'X', title: 'X' });
+    legacy.className = 'participant-avatar';
+    onError.listener({ type: 'error', target: legacy });
+    assert.equal(legacy.replacement.className, 'participant-avatar-placeholder');
+});
+
 test('images that failed before the modules ran get their fallback at start', async () => {
     const failed = fakeElement('img', { 'data-fallback': 'hide', src: '' });
     failed.complete = true;

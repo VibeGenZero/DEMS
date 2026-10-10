@@ -4,7 +4,7 @@
  */
 const { test, expect } = require('@playwright/test');
 const { PERSONAS } = require('../dev/mockGuild');
-const { watchErrors, loginAs, openMenu, navigate } = require('./helpers');
+const { watchErrors, loginAs, openMenu, navigate, waitForDialog } = require('./helpers');
 
 for (const persona of PERSONAS) {
     test(`tour as ${persona.id}`, async ({ page }) => {
@@ -121,8 +121,7 @@ test('the news dialog closes through its action', async ({ page }) => {
     // Skip only the boot animation, so the news dialog shows
     await page.addInitScript(() => localStorage.setItem('dems_boot_ts', String(Date.now())));
     await page.goto('/auth/dev-login/member');
-    const dialog = page.locator('#updatesModal');
-    await expect(dialog).toBeVisible();
+    const dialog = await waitForDialog(page, '#updatesModal');
     await dialog.locator('[data-click="closeUpdatesModal"]').click();
     await expect(dialog).toBeHidden();
     expect(errors).toEqual([]);

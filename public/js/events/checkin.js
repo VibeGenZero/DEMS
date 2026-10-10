@@ -131,7 +131,7 @@ export async function submitCheckin(eventId) {
                 messageModal.setAttribute('tabindex', '-1');
                 messageModal.innerHTML = `
                     <div class="modal-dialog modal-dialog-centered">
-                        <div class="modal-content glass-modal">
+                        <div class="modal-content">
                             <div class="modal-header border-0">
                                 <h5 class="modal-title"><i class="bi bi-info-circle me-2"></i>Event-Information</h5>
                                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>

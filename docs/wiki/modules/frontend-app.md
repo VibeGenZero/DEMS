@@ -45,10 +45,12 @@ Logged-out users see `#login-section` for every route except `info`. An event ro
 | `main.js` | entry point | imports every module, registers the startup listeners |
 | `core/state.js` | shared values | `state` (see below) |
 | `core/actions.js` | event delegation | `registerActions(map)`, `initActions(root)` (called once in `main.js`), `runAction(name, element, event)`, `actionNames()`; built-in actions `toggleVisible`, `hide`, `scrollTo`; image fallbacks `hide`, `invisible`, `initials` |
+| `core/components.js` | markup helpers of the component library | `initialsOf(name)`, `avatar({ url, name, size })` (image with `data-fallback="initials"`, or an initials tile), `emptyState({ icon, title, text, action })` (`action` is ready button HTML with a literal `data-click`) |
+| `core/contrast.js` | WCAG contrast maths (styleguide and token test) | `parseColor`, `composite`, `contrastRatio` |
 | `core/boot.js` | startup | `createParticles`, `runBootAnimation`, `fetchCSRFToken`, `loadServerInfo`, `updateServerNameInUI`, `finishLoading` |
 | `core/auth.js` | login state | `logout` (`POST /auth/logout` with CSRF token, then `/`; toast on failure), `checkAuth`, `showLoggedIn`, `showLoggedOut` |
-| `core/router.js` | hash router | `handleRoute`, `navigateTo`, `rememberPendingRoute`, `restorePendingRoute` |
-| `core/ui.js` | shared UI helpers | `escapeHtml`, `renderMarkdownSafe` (marked + DOMPurify), `markdownPreview(text, maxLength = 120)` (one line of plain text for card previews: Markdown characters removed, cut on a word with "…"), `showToast(message, type)`, `showError`, `showConfirmDialog`, `getErrorMessage`, `renderSkeletonEvents`, `isValidBannerUrl` |
+| `core/router.js` | hash router | `handleRoute` (shows the section and marks its link among `#main-navbar .nav-link`; other `.nav-link`s, e.g. tabs, are left alone), `navigateTo`, `rememberPendingRoute`, `restorePendingRoute` |
+| `core/ui.js` | shared UI helpers | `escapeHtml`, `renderMarkdownSafe` (marked + DOMPurify), `markdownPreview(text, maxLength = 120)` (one line of plain text for card previews: Markdown characters removed, cut on a word with "…"), `showToast(message, type)` (type `success`, `danger`, `warning` or `info` sets the class `toast-<type>` and the icon from `TOAST_ICONS`; anything else is `info`), `showError`, `showConfirmDialog`, `getErrorMessage`, `renderSkeletonEvents`, `isValidBannerUrl` |
 | `core/updates.js` | "Neuigkeiten & Updates" | `checkUpdates`, `closeUpdatesModal` |
 | `events/list.js` | overview | `showEventsSection`, `loadCategories`, `filterByCategory`, `debouncedSearch`, `switchView`, `renderCalendar`, `shiftCalendarMonth(delta)`, `toggleSeriesDates`, `getParticipantWarningBadge`, `renderSlotChips`, `formatCountdown`, `renderCountdownHTML`, `startCountdown` |
 | `events/detail.js` | event page | `showEventDetail` (first calls `resetEventDetailAreas`, then sets `state.detailEventId`), `resetEventDetailAreas` (hides/empties register/registered/no-access/waitlist areas, participants, `#comments-section`, `#checkin-section`), `getEventGradient`, `renderDetailBanner`, `setSidebarRow`, `renderSidebarDetails`, `renderSidebarAction`, `renderSidebarCapacity`, `loadDetailParticipants`, `toggleDetailSeriesDates` |
@@ -70,7 +72,8 @@ Logged-out users see `#login-section` for every route except `info`. An event ro
 | `admin/discord-import.js` | Discord import | `showImportDiscordEventsModal`, `fetchDiscordEvents`, `selectDiscordEvent` |
 | `pages/profile.js` | profile & account | `showProfileSection` (registration cards link only if `canOpenEvent(event)`, else class `profile-reg-card-static`), `canOpenEvent` (mirrors `isEventVisibleTo`), `loadAccountSettings`, `saveAccountSettings`, `deleteUserAccount`, `showFirstLoginModal`, `confirmInvitationPreference`, `toggleVerboseLog` |
 | `pages/info.js` | info page | `showInfoSection`, `spawnInfoParticles`, `showUserData` (profile + registrations from `/auth/me` and `/api/user/registrations`) |
-| `pages/debug.js` | styling guide | `showDebugSection`, `sgRunAnimation` |
+| `pages/debug.js` | styleguide: tokens and remaining page styles | `showDebugSection`, `contrastLabel(value, surface)`, `contrastNote(name, valueOf)` (contrast line of a token tile: text colours on the card, `--on-*` on their fill), `sgRunAnimation` |
+| `pages/debug-components.js` | styleguide: the nine components | `renderDebugComponents(container)`; actions `sgShowDialog`, `sgShowToast` |
 
 ## State
 
