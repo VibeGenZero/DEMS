@@ -1,6 +1,6 @@
 /* ═══════════════════════════════════════════ */
 /* DEMS — Components                           */
-/* Bootstrap bridge and the nine components.   */
+/* Bootstrap bridge and the components.        */
 /* Colours, font sizes, radii and layers come  */
 /* from tokens.css.                            */
 /* Shown in the styleguide (#debug).           */
@@ -683,4 +683,125 @@ button.chip.active,
   background: var(--bg-secondary);
   color: var(--text-secondary);
   font-size: var(--font-size-xs);
+}
+
+/* ═══════════════════════════════════════════ */
+/* DATE TILE                                   */
+/* renderDateTile(event, now) in               */
+/* events/cards.js; .is-live while it runs     */
+/* ═══════════════════════════════════════════ */
+.date-tile {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 3.25rem;
+  min-height: 3.75rem;
+  padding: var(--space-4) 0;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--bg-tint-1);
+  line-height: 1.15;
+  text-align: center;
+}
+
+.date-tile-weekday,
+.date-tile-month {
+  font-size: var(--font-size-xs);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.date-tile-weekday {
+  color: var(--text-muted);
+}
+
+.date-tile-month {
+  color: var(--text-secondary);
+}
+
+.date-tile-day {
+  color: var(--text-primary);
+  font-size: var(--font-size-xl);
+  font-weight: 700;
+}
+
+.date-tile.is-live {
+  border-color: var(--danger-border);
+  background: var(--danger-bg);
+}
+
+/* Muted text has too little contrast on the red tint */
+.date-tile.is-live .date-tile-weekday {
+  color: var(--text-secondary);
+}
+
+.date-tile.is-live .date-tile-day {
+  color: var(--danger);
+  font-size: var(--font-size-sm);
+  letter-spacing: 0.06em;
+}
+
+/* ═══════════════════════════════════════════ */
+/* CAPACITY                                    */
+/* renderCapacity(event) in events/cards.js:   */
+/* <progress> + label; .is-low from 80 %,      */
+/* .is-full when no place is left              */
+/* ═══════════════════════════════════════════ */
+.capacity {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  min-width: 0;
+  color: var(--text-muted);
+  font-size: var(--font-size-xs);
+}
+
+.capacity-meter {
+  flex: 1 1 auto;
+  min-width: 3rem;
+  height: 0.25rem;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--bg-tint-2);
+  overflow: hidden;
+  appearance: none;
+}
+
+.capacity-meter::-webkit-progress-bar {
+  background: var(--bg-tint-2);
+}
+
+.capacity-meter::-webkit-progress-value {
+  border-radius: var(--radius-pill);
+  background: var(--accent-fill);
+}
+
+.capacity-meter::-moz-progress-bar {
+  border-radius: var(--radius-pill);
+  background: var(--accent-fill);
+}
+
+.capacity-text {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.capacity.is-low .capacity-text {
+  color: var(--warning);
+  font-weight: 600;
+}
+
+.capacity.is-full .capacity-text {
+  color: var(--danger);
+  font-weight: 600;
+}
+
+.capacity.is-full .capacity-meter::-webkit-progress-value {
+  background: var(--danger);
+}
+
+.capacity.is-full .capacity-meter::-moz-progress-bar {
+  background: var(--danger);
 }

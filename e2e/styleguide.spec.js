@@ -1,11 +1,11 @@
 /**
- * Styleguide (#debug): tokens and the nine components render on desktop and
+ * Styleguide (#debug): tokens and the components render on desktop and
  * phone. The test server runs with DEBUG_MODE=true (playwright.config.js).
  */
 const { test, expect } = require('@playwright/test');
 const { watchErrors, loginAs, waitForDialog } = require('./helpers');
 
-const BLOCKS = ['button', 'card', 'chip', 'tabs', 'dialog', 'toast', 'empty-state', 'skeleton', 'avatar'];
+const BLOCKS = ['button', 'card', 'chip', 'tabs', 'dialog', 'toast', 'empty-state', 'skeleton', 'avatar', 'date-tile', 'capacity'];
 
 async function openStyleguide(page) {
     await loginAs(page, 'admin');
@@ -13,7 +13,7 @@ async function openStyleguide(page) {
     await expect(page.locator('#debug-section')).toBeVisible();
 }
 
-test('the styleguide shows the tokens and all nine components', async ({ page }) => {
+test('the styleguide shows the tokens and all components', async ({ page }) => {
     const errors = watchErrors(page);
     await openStyleguide(page);
     await expect(page.locator('#sg-tokens .sg-token').first()).toBeVisible();

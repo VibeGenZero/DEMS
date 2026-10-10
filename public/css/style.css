@@ -2661,6 +2661,12 @@ body {
   min-width: 0;
 }
 
+/* The capacity bar fills its row; a sample gets a fixed width */
+.sg-capacity-sample {
+  width: 100%;
+  max-width: 16rem;
+}
+
 /* A dialog shown in the page flow instead of as an overlay */
 .sg-modal-static {
   position: static;

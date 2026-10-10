@@ -385,7 +385,8 @@ async function loadFrontendApp(routes, { storage = {} } = {}) {
         addEventListener: noop,
         localStorage: createStorage(storage),
         sessionStorage: createStorage({}),
-        URLSearchParams,
+        // isValidBannerUrl() parses with URL, as the browser does
+        URL, URLSearchParams,
         setTimeout: noop, clearTimeout: noop, setInterval: () => 0, clearInterval: noop,
         gsap: { from: noop, to: noop, fromTo: noop, set: noop },
         marked: { parse: (text) => text },

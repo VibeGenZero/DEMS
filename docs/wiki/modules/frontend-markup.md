@@ -45,7 +45,7 @@ No CDN: every library and font is a pinned copy with its license next to it.
 | File | Content | Rule |
 |---|---|---|
 | `tokens.css` | one `:root` block with all design tokens (dark scheme) | the only file with colour values, font sizes in px/rem and layer numbers |
-| `components.css` | BOOTSTRAP BRIDGE → BUTTON → DIALOG → TABS → TOAST → CARD → CHIP → SKELETON → EMPTY STATE → AVATAR | colours, px/rem font sizes, radii and layers ≥ 10 only from tokens (enforced by `npm test`); spacing from the `--space-*` tokens by convention; `!important` only in the colour helpers |
+| `components.css` | BOOTSTRAP BRIDGE → BUTTON → DIALOG → TABS → TOAST → CARD → CHIP → SKELETON → EMPTY STATE → AVATAR → DATE TILE → CAPACITY | colours, px/rem font sizes, radii and layers ≥ 10 only from tokens (enforced by `npm test`); spacing from the `--space-*` tokens by convention; `!important` only in the colour helpers |
 | `style.css` | page-specific blocks, see below | colours, px/rem font sizes, px radii and layers ≥ 10 only from tokens (enforced by `npm test`); spacing keeps its old raw values until a page is rebuilt; one rule per selector list |
 
 `style.css` blocks (grep the header text): LOADING SCREEN → NAVBAR → SECTIONS → EVENT CARDS (+ Event Series, Rendered Markdown) → COUNTDOWN → CATEGORY PILLS (filter bar) → BADGES (upper-case rule of the event chips) → STATS CARDS → DATE & TIME → WAITLIST → FORMS → TABLE → FORM BUILDER → ENTITY PICKER → LOGIN CARD → ADMIN EVENT CARD → CONFETTI → PROFILE SECTION → RESPONSIVE → UTILITY → INFO SECTION → EASYMDE CUSTOMIZATION → Participant Warning Badges → Calendar View → Event Comments → BOT CONTROL CENTER → EVENT WIZARD STEPPER → MAINTENANCE MODE → EVENT DETAIL (banner, sidebar, capacity bar, participants) → LOCATION AUTOCOMPLETE → EVENT CARD (gradient placeholder, updated layout) → DEBUG / STYLING GUIDE → ROLE SLOTS → DATE POLLS.
@@ -80,6 +80,8 @@ Contrast rules, enforced by `test/designTokens.test.js` (WCAG AA): every text co
 | Empty state | `emptyState({ icon, title, text, action })` → `.empty-state` | – |
 | Skeleton | `.skeleton` + `.skeleton-text` (`.is-short`), `-title`, `-img`, `-chip`, `-avatar`, `-card-body` | – |
 | Avatar | `avatar({ url, name, size })` → `.avatar` (36 px), `.avatar-sm` 24, `.avatar-lg` 64, `.avatar-xl` 96, `.avatar-initials`; `.avatar-stack`, `.avatar-more` | the ten page-specific avatar classes stay until D-09 |
+| Date tile | `renderDateTile(event, now)` (`events/cards.js`) → `.date-tile` with `.date-tile-weekday`, `-day`, `-month`; `.is-live` shows "LIVE" in red while the event runs | – |
+| Capacity | `renderCapacity(event)` → `.capacity` with a `<progress class="capacity-meter">` and `.capacity-text` ("5/20"); `.is-low` from 80 % ("Noch 2 Plätze"), `.is-full` ("Ausgebucht"); "Unbegrenzt" without a limit. The older `.capacity-bar`/`.capacity-label` of the bot centre and the event page are separate | – |
 
 The Bootstrap bridge sets Bootstrap's own variables from the tokens (`--bs-body-*`, `--bs-btn-*`, `--bs-modal-*`, `--bs-toast-*`, `--bs-nav-pills-*`, `--bs-alert-*`) and overrides the colour helpers `.text-*`, `.bg-*`, `.text-bg-*` for primary, success, warning, danger and info, plus `.text-secondary` (Bootstrap's own grey has only 3.6–4.2:1 on the dark surfaces). `.text-muted` renders `--text-secondary` (Bootstrap ties it to its "secondary" colour); use `.text-body-tertiary` for `--text-muted`.
 
