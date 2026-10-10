@@ -298,6 +298,9 @@ function collectStyles(properties) {
         const classes = typeof element.className === 'string' && element.className.trim() ? `.${element.className.trim().split(/\s+/).join('.')}` : '';
         return `${element.tagName.toLowerCase()}${element.id ? `#${element.id}` : ''}${classes}`;
     };
+    // A running CSS animation (e.g. a pulsing shadow) would give every run other values;
+    // cancelled, each element shows its resting style
+    for (const animation of document.getAnimations()) animation.cancel();
     const result = {};
     for (const element of document.body.querySelectorAll('*')) {
         if (['SCRIPT', 'STYLE', 'LINK'].includes(element.tagName) || element.closest('#debug-section')) continue;
