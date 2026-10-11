@@ -9,6 +9,8 @@ const TRICKY_TEXT = 'Bob\'s "Raid" & <mehr>';
 const HOUR = 60 * 60 * 1000;
 const DAY = 24 * HOUR;
 const EMOJI = /\p{Extended_Pictographic}/u;
+// setImmediate runs after the microtask queue is drained, so a reload an action starts has settled
+const settle = () => new Promise(resolve => setImmediate(resolve));
 // The page renders with the real clock, so these events are placed around it
 const iso = (offsetMs) => new Date(Date.now() + offsetMs).toISOString();
 const places = (fields = {}) => ({ taken: 2, capacity: 10, guests: 0, pending: 0, waitlist: 0, text: '2 von 10 Plätzen belegt', waitlistText: '', ...fields });
@@ -299,4 +301,26 @@ test('the table markup carries no emojis and no style attributes', async () => {
         assert.doesNotMatch(html, EMOJI);
         assert.doesNotMatch(html, /style="/);
     }
+});
+
+test('handling a request in the dialog updates the row it was opened from', async () => {
+    let list = EVENTS;
+    const { app, table, requests } = await openTable(EVENTS, {
+        '/api/admin/all-events': () => list,
+        '/api/admin/registrations/r1/status': { id: 'r1', status: 'accepted' },
+        '/api/admin/events/requests/registrations': { data: [], slots: [] }
+    });
+    assert.deepEqual(mainButtons(rowOf(table(), '>Turnier<')), [{ style: 'btn-primary', label: 'Anmeldungen · 2 offen' }]);
+
+    // The server accepts one of the two requests
+    list = EVENTS.map(event => (event.id === 'requests'
+        ? { ...event, places: places({ taken: 3, pending: 1, text: '3 von 10 Plätzen belegt (1 Anfrage offen)' }) }
+        : event));
+    await app.runAction('updateRegStatus', { dataset: { regId: 'r1', status: 'accepted', eventId: 'requests', eventTitle: 'Turnier' } });
+    await settle();
+    const row = rowOf(table(), '>Turnier<');
+    assert.deepEqual(mainButtons(row), [{ style: 'btn-primary', label: 'Anmeldungen · 1 offen' }]);
+    assert.match(row, /3 von 10 Plätzen belegt \(1 Anfrage offen\)/);
+    assert.equal(requests.filter(request => request.url === '/api/admin/all-events').length, 2);
+    assert.ok(requests.some(request => request.url === '/api/admin/stats'));
 });

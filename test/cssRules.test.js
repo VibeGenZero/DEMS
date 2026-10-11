@@ -36,6 +36,7 @@ const COMPONENT_SELECTORS = [
     '.capacity', '.capacity-meter', '.capacity-text', '.capacity.is-low .capacity-text', '.capacity.is-full .capacity-text',
     '.data-table', '.data-table th', '.data-table td', '.data-table-sort', '.data-table-title', '.data-table-meta',
     '.data-table-actions', '.data-table-buttons', '.data-table tr.is-sub td', '.data-table tr.is-muted .data-table-title',
+    '.data-table tr.is-sub.is-muted td:first-child',
     '.dropdown-menu', '.dropdown-item', '.dropdown-header', '.dropdown-item.is-danger'
 ];
 // Selectors that moved into components.css or were dropped; style.css must not style them again
@@ -51,7 +52,8 @@ const MOVED = ['.btn-accent', '.btn-accent:hover', '.btn-discord', '.btn-discord
     // Replaced by the menu component (D-07)
     '.status-dropdown .dropdown-menu', '.status-dropdown .dropdown-item', '.status-dropdown .dropdown-item:hover',
     // Admin cards, replaced by the table (D-07)
-    '.admin-event-card', '.admin-event-card .admin-actions', '.series-admin-date-item', '.series-admin-card', '.series-badge'
+    '.admin-event-card', '.admin-event-card .admin-actions', '.series-admin-date-item', '.series-admin-card', '.series-badge',
+    '.event-banner', '.series-dates-header', '.event-date-info', '.event-date-info i'
 ];
 // A colour written out: hex, rgb(), hsl() or a colour name (white-space is no colour)
 const RAW_COLOR = /#[0-9a-fA-F]{3,8}\b|\brgba?\(|\bhsla?\(|(?<![-\w])(white|black)(?![-\w])/;

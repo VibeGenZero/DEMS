@@ -34,9 +34,22 @@ export function showConfirmDialog(message, confirmLabel = 'Bestätigen', { dange
         confirmBtn.classList.toggle('btn-danger', danger);
         confirmBtn.classList.toggle('btn-primary', !danger);
         const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+        // Bootstrap ignores hide() while the dialog fades in. The answer is therefore taken when
+        // the dialog really starts to close, never from the click alone: a click that was
+        // ignored must not turn a later "Abbrechen" into a yes.
+        let confirming = false;
         let confirmed = false;
-        confirmBtn.onclick = () => { confirmed = true; modal.hide(); };
-        modalEl.addEventListener('hidden.bs.modal', () => resolve(confirmed), { once: true });
+        const onHide = () => { confirmed = confirming; };
+        confirmBtn.onclick = () => {
+            confirming = true;
+            modal.hide();
+            confirming = false;
+        };
+        modalEl.addEventListener('hide.bs.modal', onHide);
+        modalEl.addEventListener('hidden.bs.modal', () => {
+            modalEl.removeEventListener('hide.bs.modal', onHide);
+            resolve(confirmed);
+        }, { once: true });
         modal.show();
     });
 }

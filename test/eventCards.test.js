@@ -9,9 +9,6 @@ const GAME_NIGHT_PREVIEW = 'Gemütlicher Abend — jeder ist willkommen! Ablauf 
 const RAID = 'Nur für Mitglieder mit der Rolle **Raid-Team**.';
 const RAID_PREVIEW = 'Nur für Mitglieder mit der Rolle Raid-Team.';
 
-// Characters that only appear when Markdown is shown raw
-const RAW_MARKDOWN = /\*\*|\]\(|^\s*[-#>] /m;
-
 const event = (id, description, fields = {}) => ({
     id, title: `Event ${id}`, description, status: 'active', accessMode: 'open', approvalMode: 'instant',
     startDate: '2026-10-20T18:00:00.000Z', maxParticipants: 0, currentParticipants: 0, formFields: [], ...fields

@@ -159,6 +159,29 @@ test('a cancelled event shows in the archive', async ({ page }, testInfo) => {
     await adminRequest(page, 'DELETE', `/api/admin/events/${id}`);
 });
 
+test('a click on the confirm button during the fade-in does not delete after "Abbrechen"', async ({ page }, testInfo) => {
+    await loginAs(page, 'admin');
+    const { id, title } = await createEvent(page, testInfo);
+    await navigate(page, 'admin');
+    await tab(page, 'Entwürfe').click();
+    await expect(row(page, title)).toBeVisible();
+    const deletes = [];
+    page.on('request', request => { if (request.method() === 'DELETE') deletes.push(request.url()); });
+    // Both clicks in one task: the second lands while Bootstrap fades the dialog in and ignores hide()
+    await row(page, title).locator('.dropdown-item.is-danger').evaluate(item => {
+        item.click();
+        document.getElementById('confirm-modal-ok').click();
+    });
+    const dialog = await waitForDialog(page, '#confirmModal');
+    await dialog.locator('[data-bs-dismiss="modal"]').click();
+    await expect(dialog).toBeHidden();
+    // A wrong yes would send the request as soon as the dialog has closed
+    await page.waitForTimeout(500);
+    expect(deletes).toEqual([]);
+    await expect(row(page, title)).toBeVisible();
+    await adminRequest(page, 'DELETE', `/api/admin/events/${id}`);
+});
+
 test('the desktop shows compact rows with one main action', async ({ page }, testInfo) => {
     test.skip(testInfo.project.name !== 'desktop', 'desktop layout');
     await openAdmin(page);

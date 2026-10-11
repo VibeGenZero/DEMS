@@ -901,6 +901,11 @@ button.chip.active,
   color: var(--text-secondary);
 }
 
+/* A sub-row has no title; its first cell names it */
+.data-table tr.is-sub.is-muted td:first-child {
+  color: var(--text-secondary);
+}
+
 @media (max-width: 767.98px) {
   /* The heads stay for screen readers */
   .data-table thead {

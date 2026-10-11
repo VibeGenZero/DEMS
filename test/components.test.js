@@ -142,3 +142,10 @@ test('a dismissed confirm dialog answers no', async () => {
     assert.equal(await app.showConfirmDialog('Löschen?', 'Löschen'), false);
     assert.equal(dialogs.length, 1);
 });
+
+test('a confirm click that Bootstrap ignores does not turn a later dismissal into a yes', async () => {
+    // Bootstrap ignores hide() while the dialog fades in: the click is lost, the dialog stays open
+    const { app, dialogs } = await loadFrontendApp({}, { confirm: 'too-early' });
+    assert.equal(await app.showConfirmDialog('Löschen?', 'Löschen'), false);
+    assert.equal(dialogs.length, 1);
+});

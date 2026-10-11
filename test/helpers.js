@@ -353,7 +353,7 @@ async function loadFrontendModules(entryFile, context) {
  * @param {Object<string, *>} routes -> URL → JSON body or () => body.
  * @param {Object} [options] -> Harness options.
  * @param {Object<string, string>} [options.storage] -> Initial localStorage entries.
- * @param {boolean} [options.confirm] -> Answer of the confirm dialog (default: confirmed).
+ * @param {boolean|string} [options.confirm] -> Answer of the confirm dialog: true (default) confirms, false dismisses, 'too-early' clicks the confirm button while the dialog still fades in and dismisses it afterwards.
  * @returns {Promise<Object>} -> `{ app, state, element, toasts, dialogs, requests, location, fire }`: app holds every export of every module, state is core/state.js (`state.currentUser = persona` logs a user in), element(id) returns the fake element or null, toasts lists the shown messages, dialogs lists the confirm dialogs shown (`{ text, label, danger }`; the dialog answers at once), requests the fetch calls `{ url, method, headers, body }`, location is window.location, fire(type) runs the recorded document listeners.
  */
 async function loadFrontendApp(routes, { storage = {}, confirm = true } = {}) {
@@ -410,8 +410,14 @@ async function loadFrontendApp(routes, { storage = {}, confirm = true } = {}) {
                 hide() {}
                 static getOrCreateInstance(element) {
                     if (element !== registry.get('confirmModal')) return { show: noop, hide: noop };
-                    // The confirm dialog answers at once, like an admin who clicks one of its buttons
-                    const close = () => element.dispatch('hidden.bs.modal');
+                    // The confirm dialog answers at once, like an admin who clicks one of its buttons.
+                    // Like Bootstrap, it ignores hide() while it fades in and tells "hide" before "hidden".
+                    let fading = false;
+                    const close = () => {
+                        if (fading) return;
+                        element.dispatch('hide.bs.modal');
+                        element.dispatch('hidden.bs.modal');
+                    };
                     return {
                         show() {
                             const button = registry.get('confirm-modal-ok');
@@ -420,7 +426,13 @@ async function loadFrontendApp(routes, { storage = {}, confirm = true } = {}) {
                                 label: button.textContent,
                                 danger: button.classList.contains('btn-danger')
                             });
-                            if (confirm) button.onclick();
+                            if (confirm === 'too-early') {
+                                // The admin clicks the confirm button during the fade-in and dismisses the dialog afterwards
+                                fading = true;
+                                button.onclick();
+                                fading = false;
+                                close();
+                            } else if (confirm) button.onclick();
                             else close();
                         },
                         hide: close
