@@ -225,7 +225,7 @@ Tabs, Chips, Buttons, Leerzustand, Skeleton und Plätze-Balken kommen unverände
 | `admin/dashboard.js` | Lädt die Events, hält Tab, Suche, Sortierung und aufgeklappte Serien, rendert in `#admin-events-tabs` und `#admin-events-table`; Aktionen `switchAdminTab`, `searchAdminEvents`, `sortAdminEvents`, `toggleAdminSeries`, `resetAdminSearch`. Statistik, Audit-Log und Reset bleiben. |
 | `admin/event-actions.js` | Rückfragen über `showConfirmDialog`, Meldungen aus Teil 2, Prüfung der Server-Antwort beim Löschen, Tab-Wechsel nach dem Duplizieren. `startEvent` bleibt für „Jetzt starten“. |
 | `core/ui.js` | Option `danger` (Teil 4) |
-| `events/cards.js` | unverändert; liefert `eventEnd`, `isRunning`, `relativeDay` |
+| `events/cards.js` | neuer Export `eventStart(event)` (Start als `Date` oder `null`); liefert außerdem `eventEnd`, `isRunning`, `relativeDay` |
 
 `event-rows.js` kennt kein HTML, `event-table.js` keine Regeln: Die Tabelle fragt für jede Zeile die Aktionen bei `event-rows.js` ab und setzt sie in Buttons um.
 
@@ -255,7 +255,7 @@ Alle Tests entstehen vor dem Code (`node:test`).
 
 | Stelle | Änderung |
 |---|---|
-| `docs/wiki/modules/routes-admin.md`, `docs/wiki/reference/api-index.md` | `places` in `all-events` |
+| `docs/wiki/modules/routes-admin.md` | `places` in `all-events` |
 | `docs/wiki/modules/utils.md` | `describePlaces` |
 | `docs/wiki/concepts/event-lifecycle.md` | welche Aktion der Tabelle welchen Übergang auslöst |
 | `docs/wiki/modules/frontend-app.md` | `admin/event-rows.js`, `admin/event-table.js`, geänderte `dashboard.js` und `event-actions.js`, `showConfirmDialog` |
