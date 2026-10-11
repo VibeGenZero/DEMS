@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('fs');
 const path = require('path');
 const { loadFrontendApp, REPO_ROOT } = require('./helpers');
+const { elementsWith, actionTargets, actionElement, assertNoInlineHandlers } = require('./htmlSource');
 
 // setImmediate runs after the microtask queue is drained, so every
 // fire-and-forget fetch chain inside app.js has settled by then.
@@ -18,62 +19,7 @@ const ENTITY_NAME = '&quot;});globalThis.pwned=1;//';
 // Admin-set texts: quotes, entities, backslash
 const TRICKY_TEXT = 'Bob\'s "Raid" & <mehr> &#039; \\ ende';
 
-const ENTITIES = { quot: '"', amp: '&', lt: '<', gt: '>' };
-
-/**
- * Decode an attribute value the way the browser does when it reads it.
- *
- * @param {string} value -> Raw attribute value from the HTML string.
- * @returns {string} -> Attribute value as the page sees it.
- */
-function decodeAttribute(value) {
-    return value.replace(/&(quot|amp|lt|gt|#0*39);/g, (match, name) => ENTITIES[name] || "'");
-}
-
 const INDEX_HTML = fs.readFileSync(path.join(REPO_ROOT, 'public', 'index.html'), 'utf8');
-
-/**
- * Elements in rendered HTML that carry `attribute`, with every attribute decoded.
- *
- * @param {string} html -> Rendered HTML.
- * @param {string} attribute -> e.g. "data-click".
- * @returns {Array<{ tag: string, attributes: Object<string, string> }>}
- */
-function elementsWith(html, attribute) {
-    const found = [];
-    for (const tag of html.matchAll(/<([a-z][a-z0-9-]*)\b([^>]*)>/gi)) {
-        const attributes = {};
-        for (const attr of tag[2].matchAll(/([\w-]+)\s*=\s*(?:"([^"]*)"|'([^']*)')/g)) {
-            attributes[attr[1]] = decodeAttribute(attr[2] ?? attr[3]);
-        }
-        if (attribute in attributes) found.push({ tag: tag[1].toLowerCase(), attributes });
-    }
-    return found;
-}
-
-/**
- * Elements whose data-click/change/input names `action`; at least one must exist.
- */
-function actionTargets(html, action, type = 'click') {
-    const targets = elementsWith(html, `data-${type}`).filter(element => element.attributes[`data-${type}`] === action);
-    assert.ok(targets.length > 0, `no element with data-${type}="${action}"`);
-    return targets;
-}
-
-/**
- * Element double for app.runAction(): dataset from the data-* attributes.
- */
-function actionElement({ tag, attributes }, extra = {}) {
-    const dataset = {};
-    for (const [name, value] of Object.entries(attributes)) {
-        if (name.startsWith('data-')) dataset[name.slice(5).replace(/-([a-z])/g, (m, c) => c.toUpperCase())] = value;
-    }
-    return { tagName: tag.toUpperCase(), dataset, value: attributes.value, getAttribute: (name) => attributes[name] ?? null, ...extra };
-}
-
-function assertNoInlineHandlers(html) {
-    assert.doesNotMatch(html, /\son[a-z]+\s*=\s*["']/i);
-}
 
 /**
  * Routes for one open event with the given participants and comments.
@@ -150,30 +96,6 @@ test('guests are added and removed through actions with their exact data', async
     const [remove] = actionTargets(selected, 'removeGuestFromList');
     await app.runAction('removeGuestFromList', actionElement(remove));
     assert.equal(state.selectedGuests.length, 0);
-});
-
-test('admin cards name every action with the event it belongs to', async () => {
-    const { app, state, element, requests } = await loadFrontendApp({
-        '/api/admin/all-events': [
-            adminEvent('single'),
-            adminEvent('s1', { seriesId: 'series', startDate: '2026-10-21T18:00:00.000Z' }),
-            adminEvent('s2', { seriesId: 'series', startDate: '2026-10-28T18:00:00.000Z' })
-        ],
-        '/api/admin/events/single/registrations': { data: [], slots: [] }
-    });
-    state.currentUser = { ...MEMBER, isAdmin: true };
-    await app.loadAdminEvents();
-    const html = element('admin-events-grid').innerHTML;
-    assertNoInlineHandlers(html);
-    for (const target of elementsWith(html, 'data-click')) {
-        const { attributes } = target;
-        assert.ok(['single', 's1', 's2'].includes(attributes['data-event-id']) || attributes['data-series-id'] === 'series',
-            `${attributes['data-click']} without its event`);
-    }
-    const open = actionTargets(html, 'showRegistrations').find(t => t.attributes['data-event-id'] === 'single');
-    await app.runAction('showRegistrations', actionElement(open));
-    assert.equal(element('reg-event-title').textContent, TRICKY_TEXT);
-    assert.ok(requests.some(r => r.url === '/api/admin/events/single/registrations'));
 });
 
 test('accepting a registration sends the status and reloads with the exact title', async () => {

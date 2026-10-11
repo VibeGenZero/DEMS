@@ -1,6 +1,5 @@
 /**
- * Shared UI helpers: escaping, Markdown, toasts, error banner, confirm dialog,
- * skeletons.
+ * Shared UI helpers: escaping, Markdown, toasts, error banner, confirm dialog.
  */
 import { state } from './state.js';
 
@@ -77,27 +76,6 @@ export function showToast(message, type = 'info') {
         { x: 50, opacity: 0, scale: 0.9 },
         { x: 0, opacity: 1, scale: 1, duration: 0.5, ease: "back.out(1.5)" }
     );
-}
-
-export function renderSkeletonEvents(container, count, isAdmin = false) {
-    container.innerHTML = Array(count).fill(0).map(() => `
-        <div class="col-md-6">
-            <div class="glass-card skeleton-card p-0">
-                <div class="skeleton skeleton-img"></div>
-                <div class="skeleton-card-body p-4">
-                    <div>
-                        <div class="skeleton skeleton-title mb-3"></div>
-                        <div class="skeleton skeleton-text"></div>
-                        <div class="skeleton skeleton-text is-short"></div>
-                    </div>
-                    <div class="d-flex gap-2 mt-3">
-                        <div class="skeleton skeleton-chip"></div>
-                        <div class="skeleton skeleton-chip"></div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    `).join('');
 }
 
 export function escapeHtml(str) {

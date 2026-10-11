@@ -816,6 +816,8 @@ button.chip.active,
   width: 100%;
   border-collapse: collapse;
   color: var(--text-primary);
+  /* Heads inherit it, so .data-table-actions can turn its head to the right */
+  text-align: left;
 }
 
 .data-table th {
@@ -825,7 +827,6 @@ button.chip.active,
   font-size: var(--font-size-xs);
   font-weight: 600;
   letter-spacing: 0.05em;
-  text-align: left;
   text-transform: uppercase;
   white-space: nowrap;
 }

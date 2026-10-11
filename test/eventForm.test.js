@@ -50,12 +50,3 @@ test('the reminder field accepts several hours', async () => {
     assert.doesNotMatch(field, /type="number"/);
 });
 
-test('the admin card shows every reminder', async () => {
-    const { app, element, toasts, state } = await loadFrontendApp({
-        '/api/admin/all-events': [storedEvent([{ hours: 24, sent: true }, { hours: 1, sent: false }])]
-    });
-    state.currentUser = ADMIN;
-    await app.loadAdminEvents();
-    assert.match(element('admin-events-grid').innerHTML, /bi-bell"><\/i>24h · 1h</);
-    assert.deepEqual(toasts, []);
-});

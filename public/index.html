@@ -704,9 +704,15 @@
           <!-- Rendered dynamically -->
         </div>
 
-        <div class="row g-4" id="admin-events-grid">
-          <!-- Admin event cards render here -->
+        <div class="admin-events-toolbar">
+          <ul class="nav nav-pills" id="admin-events-tabs" role="tablist" aria-label="Events nach Status"></ul>
+          <div class="events-search">
+            <i class="bi bi-search events-search-icon" aria-hidden="true"></i>
+            <input type="search" class="form-control" id="admin-events-search" placeholder="Titel oder Kategorie suchen …"
+              aria-label="Events durchsuchen" data-input="searchAdminEvents">
+          </div>
         </div>
+        <div id="admin-events-table"></div>
 
         <!-- Audit Log -->
         <div id="audit-log-container" class="mt-4" style="display:none;">

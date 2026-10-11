@@ -8,6 +8,7 @@ import './admin/dashboard.js';
 import './admin/discord-import.js';
 import './admin/event-actions.js';
 import './admin/event-rows.js';
+import './admin/event-table.js';
 import './admin/maintenance.js';
 import './admin/registrations.js';
 import './admin/wizard-builders.js';

@@ -40,7 +40,7 @@ for (const persona of PERSONAS) {
         const isAdmin = persona.id === 'admin';
         if (isAdmin) {
             await navigate(page, 'admin');
-            await expect(page.locator('#admin-events-grid .admin-event-card').first()).toBeVisible();
+            await expect(page.locator('#admin-events-table .data-table tbody tr').first()).toBeVisible();
             // Audit log opens and closes through actions
             await page.locator('[data-click="loadAuditLog"]').click();
             await expect(page.locator('#audit-log-container')).toBeVisible();
