@@ -18,12 +18,22 @@ export function getErrorMessage(code) {
     return messages[code] || 'Ein unbekannter Fehler ist aufgetreten.';
 }
 
-export function showConfirmDialog(message, confirmLabel = 'Bestätigen') {
+/**
+ * Ask before an action that cannot be undone or that others will notice.
+ *
+ * @param {string} message -> Question (plain text).
+ * @param {string} [confirmLabel] -> Label of the confirming button.
+ * @param {Object} [options] -> `{ danger }`: false shows a primary button instead of the red one, for actions that destroy nothing.
+ * @returns {Promise<boolean>} -> true when confirmed, false when dismissed.
+ */
+export function showConfirmDialog(message, confirmLabel = 'Bestätigen', { danger = true } = {}) {
     return new Promise(resolve => {
         const modalEl = document.getElementById('confirmModal');
         const confirmBtn = document.getElementById('confirm-modal-ok');
         document.getElementById('confirm-modal-text').textContent = message;
         confirmBtn.textContent = confirmLabel;
+        confirmBtn.classList.toggle('btn-danger', danger);
+        confirmBtn.classList.toggle('btn-primary', !danger);
         const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
         let confirmed = false;
         confirmBtn.onclick = () => { confirmed = true; modal.hide(); };

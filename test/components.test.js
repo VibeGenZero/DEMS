@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
-const { loadFrontendModules, REPO_ROOT } = require('./helpers');
+const { loadFrontendApp, loadFrontendModules, REPO_ROOT } = require('./helpers');
 
 const CORE_DIR = path.join(REPO_ROOT, 'public', 'js', 'core');
 const INDEX_HTML = fs.readFileSync(path.join(REPO_ROOT, 'public', 'index.html'), 'utf8');
@@ -135,4 +135,20 @@ test('an empty state escapes its texts and ignores an odd icon name', async () =
     assert.match(html, /A &amp; B &lt;i&gt;/);
     assert.doesNotMatch(html, /<script|<b>/);
     assert.equal(emptyState({ title: undefined }), '<div class="empty-state"><div class="empty-state-icon"><i class="bi bi-inbox"></i></div><h3 class="empty-state-title"></h3></div>');
+});
+
+test('the confirm dialog shows a red button unless told otherwise', async () => {
+    const { app, dialogs } = await loadFrontendApp({});
+    assert.equal(await app.showConfirmDialog('Eintragen?', 'Eintragen', { danger: false }), true);
+    assert.equal(await app.showConfirmDialog('Löschen?', 'Löschen'), true);
+    assert.deepEqual(dialogs, [
+        { text: 'Eintragen?', label: 'Eintragen', danger: false },
+        { text: 'Löschen?', label: 'Löschen', danger: true }
+    ]);
+});
+
+test('a dismissed confirm dialog answers no', async () => {
+    const { app, dialogs } = await loadFrontendApp({}, { confirm: false });
+    assert.equal(await app.showConfirmDialog('Löschen?', 'Löschen'), false);
+    assert.equal(dialogs.length, 1);
 });

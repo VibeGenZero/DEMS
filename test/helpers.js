@@ -267,6 +267,7 @@ function registerHtmlIds(registry, html) {
 function createFakeElement(registry, id = '', display = '') {
     const classes = new Set();
     const register = (child) => { if (child.id) registry.set(child.id, child); return child; };
+    const listeners = new Map();
     let html = '';
     return {
         id, textContent: '', className: '', value: '', disabled: false,
@@ -279,8 +280,14 @@ function createFakeElement(registry, id = '', display = '') {
             toggle: (name, force = !classes.has(name)) => (force ? classes.add(name) : classes.delete(name), force),
             contains: (name) => classes.has(name)
         },
-        addEventListener() {},
+        addEventListener(type, listener) { listeners.set(type, [...(listeners.get(type) || []), listener]); },
         removeEventListener() {},
+        /** Run the listeners of `type` once and forget them, like { once: true }. */
+        dispatch(type) {
+            const waiting = listeners.get(type) || [];
+            listeners.delete(type);
+            for (const listener of waiting) listener({ type });
+        },
         focus() {},
         setAttribute() {},
         getAttribute: () => null,
@@ -346,12 +353,14 @@ async function loadFrontendModules(entryFile, context) {
  * @param {Object<string, *>} routes -> URL → JSON body or () => body.
  * @param {Object} [options] -> Harness options.
  * @param {Object<string, string>} [options.storage] -> Initial localStorage entries.
- * @returns {Promise<Object>} -> `{ app, state, element, toasts, requests, location, fire }`: app holds every export of every module, state is core/state.js (`state.currentUser = persona` logs a user in), element(id) returns the fake element or null, toasts lists the shown messages, requests the fetch calls `{ url, method, headers, body }`, location is window.location, fire(type) runs the recorded document listeners.
+ * @param {boolean} [options.confirm] -> Answer of the confirm dialog (default: confirmed).
+ * @returns {Promise<Object>} -> `{ app, state, element, toasts, dialogs, requests, location, fire }`: app holds every export of every module, state is core/state.js (`state.currentUser = persona` logs a user in), element(id) returns the fake element or null, toasts lists the shown messages, dialogs lists the confirm dialogs shown (`{ text, label, danger }`; the dialog answers at once), requests the fetch calls `{ url, method, headers, body }`, location is window.location, fire(type) runs the recorded document listeners.
  */
-async function loadFrontendApp(routes, { storage = {} } = {}) {
+async function loadFrontendApp(routes, { storage = {}, confirm = true } = {}) {
     const registry = new Map();
     registerHtmlIds(registry, fs.readFileSync(path.join(REPO_ROOT, 'public', 'index.html'), 'utf8'));
     const toasts = [];
+    const dialogs = [];
     const requests = [];
     const container = createFakeElement(registry);
     const listeners = [];
@@ -399,7 +408,24 @@ async function loadFrontendApp(routes, { storage = {} } = {}) {
             Modal: class {
                 show() {}
                 hide() {}
-                static getOrCreateInstance() { return { show: noop, hide: noop }; }
+                static getOrCreateInstance(element) {
+                    if (element !== registry.get('confirmModal')) return { show: noop, hide: noop };
+                    // The confirm dialog answers at once, like an admin who clicks one of its buttons
+                    const close = () => element.dispatch('hidden.bs.modal');
+                    return {
+                        show() {
+                            const button = registry.get('confirm-modal-ok');
+                            dialogs.push({
+                                text: registry.get('confirm-modal-text').textContent,
+                                label: button.textContent,
+                                danger: button.classList.contains('btn-danger')
+                            });
+                            if (confirm) button.onclick();
+                            else close();
+                        },
+                        hide: close
+                    };
+                }
                 static getInstance() { return null; }
             }
         },
@@ -419,7 +445,7 @@ async function loadFrontendApp(routes, { storage = {} } = {}) {
         }
     }
     const fire = (type) => listeners.filter(entry => entry.type === type).forEach(entry => entry.listener({ type }));
-    return { app, state: app.state, element: (id) => registry.get(id) || null, toasts, requests, location: context.location, fire };
+    return { app, state: app.state, element: (id) => registry.get(id) || null, toasts, dialogs, requests, location: context.location, fire };
 }
 
 module.exports = {

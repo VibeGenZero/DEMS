@@ -1004,22 +1004,6 @@ body {
   margin-top: 1rem;
 }
 
-/* Admin status toggle */
-.status-dropdown .dropdown-menu {
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-subtle);
-}
-
-.status-dropdown .dropdown-item {
-  color: var(--text-secondary);
-  font-size: var(--font-size-sm);
-}
-
-.status-dropdown .dropdown-item:hover {
-  background: var(--accent-tint-1);
-  color: var(--accent-light);
-}
-
 /* ═══════════════════════════════════════════ */
 /* CONFETTI                                    */
 /* ═══════════════════════════════════════════ */

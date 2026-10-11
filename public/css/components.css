@@ -805,3 +805,187 @@ button.chip.active,
 .capacity.is-full .capacity-meter::-moz-progress-bar {
   background: var(--danger);
 }
+
+/* ═══════════════════════════════════════════ */
+/* DATA TABLE                                  */
+/* A real <table>: sortable heads, cells with  */
+/* a second line, sub-rows. Below 768 px every */
+/* row is a block                              */
+/* ═══════════════════════════════════════════ */
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  color: var(--text-primary);
+}
+
+.data-table th {
+  padding: var(--space-8) var(--space-12);
+  border-bottom: 1px solid var(--border-strong);
+  color: var(--text-muted);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-align: left;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.data-table td {
+  padding: var(--space-12);
+  border-bottom: 1px solid var(--border-subtle);
+  vertical-align: middle;
+}
+
+.data-table-sort {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+}
+
+.data-table-sort:hover,
+.data-table th[aria-sort="ascending"] .data-table-sort,
+.data-table th[aria-sort="descending"] .data-table-sort {
+  color: var(--text-primary);
+}
+
+/* Name of the row; a button, because it opens the row's main view */
+.data-table-title {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text-primary);
+  font-size: var(--font-size-md);
+  font-weight: 600;
+  text-align: left;
+}
+
+.data-table-title:hover {
+  color: var(--accent-text);
+  text-decoration: underline;
+}
+
+.data-table-meta {
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.data-table-actions {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.data-table-buttons {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.data-table tr.is-sub td {
+  background: var(--bg-tint-1);
+}
+
+.data-table tr.is-sub td:first-child {
+  padding-left: var(--space-48);
+}
+
+/* Muted by colour, never by opacity: opacity would put the row's menu behind the rows below */
+.data-table tr.is-muted .data-table-title {
+  color: var(--text-secondary);
+}
+
+@media (max-width: 767.98px) {
+  /* The heads stay for screen readers */
+  .data-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .data-table,
+  .data-table tbody,
+  .data-table tr,
+  .data-table td {
+    display: block;
+  }
+
+  .data-table tr {
+    padding: var(--space-12) 0;
+    border-bottom: 1px solid var(--border-subtle);
+  }
+
+  .data-table td {
+    padding: var(--space-4) 0;
+    border-bottom: 0;
+  }
+
+  .data-table-actions {
+    text-align: left;
+  }
+
+  /* As blocks the cells no longer line up, so the whole row is tinted and indented */
+  .data-table tr.is-sub {
+    padding-left: var(--space-16);
+    background: var(--bg-tint-1);
+  }
+
+  .data-table tr.is-sub td {
+    background: none;
+  }
+
+  .data-table tr.is-sub td:first-child {
+    padding-left: 0;
+  }
+}
+
+/* ═══════════════════════════════════════════ */
+/* MENU                                        */
+/* Bootstrap .dropdown-menu markup with        */
+/* .dropdown-item, -header and -divider        */
+/* ═══════════════════════════════════════════ */
+.dropdown-menu {
+  --bs-dropdown-bg: var(--bg-secondary);
+  --bs-dropdown-border-color: var(--border-strong);
+  --bs-dropdown-border-radius: var(--radius);
+  --bs-dropdown-padding-x: var(--space-4);
+  --bs-dropdown-padding-y: var(--space-4);
+  --bs-dropdown-font-size: var(--font-size-sm);
+  --bs-dropdown-link-color: var(--text-primary);
+  --bs-dropdown-link-hover-color: var(--text-primary);
+  --bs-dropdown-link-hover-bg: var(--bg-tint-2);
+  --bs-dropdown-link-active-color: var(--text-primary);
+  --bs-dropdown-link-active-bg: var(--accent-tint-2);
+  --bs-dropdown-header-color: var(--text-muted);
+  --bs-dropdown-divider-bg: var(--border-subtle);
+  box-shadow: var(--shadow-lg);
+}
+
+.dropdown-item {
+  border-radius: var(--radius-sm);
+}
+
+.dropdown-header {
+  font-size: var(--font-size-xs);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+/* The one entry that destroys something; it stands last, below a divider */
+.dropdown-item.is-danger {
+  color: var(--danger);
+}
+
+.dropdown-item.is-danger:hover,
+.dropdown-item.is-danger:focus {
+  background: var(--danger-bg);
+  color: var(--danger);
+}
