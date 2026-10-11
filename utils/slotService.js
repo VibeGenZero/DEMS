@@ -7,7 +7,7 @@
  * `altSlotIds`, `userId`, `userName` and `createdAt`.
  */
 const crypto = require('crypto');
-const { OCCUPYING_STATUSES, countOccupiedPlaces, byCreatedAt } = require('./capacity');
+const { OCCUPYING_STATUSES, countOccupiedPlaces, summarizePlaces, byCreatedAt } = require('./capacity');
 
 /** Limits of the slot editor. */
 const MAX_SLOTS = 10;
@@ -294,7 +294,7 @@ function withSlotSummary(event, registrations) {
  * @param {Object} event -> The event document data.
  * @param {Array<Object>} registrations -> All registrations of the event.
  * @param {Object} [usersById] -> User profiles keyed by user ID, for names and avatars.
- * @returns {Object} -> `{ taken, capacity, waitlistCount, slots, waitlist }`.
+ * @returns {Object} -> `{ taken, capacity, waitlistCount, places, slots, waitlist }`; `places` are the numbers of summarizePlaces() behind the places sentence.
  */
 function buildRoster(event, registrations, usersById = {}) {
     const slots = getSlots(event);
@@ -316,6 +316,7 @@ function buildRoster(event, registrations, usersById = {}) {
         taken: countOccupiedPlaces(registrations),
         capacity: event.maxParticipants > 0 ? event.maxParticipants : 0,
         waitlistCount: waitlisted.length,
+        places: summarizePlaces(registrations, event.maxParticipants),
         slots: slots.map(slot => {
             const members = occupying
                 .filter(registration => registration.slotId === slot.id)

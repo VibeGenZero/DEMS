@@ -275,6 +275,28 @@ test('the overview gets only events that are not over, each with the own status'
     assert.ok(all.every(event => !('checkinCode' in event)));
 });
 
+test('list and event page tell the places of an event with the same sentence', async () => {
+    const member = await loginAs('member');
+    const { data } = await (await member.request('/api/events?upcoming=1&limit=100')).json();
+    const expected = {
+        // Jonas brought a guest, Aylin's invitation is still open: both reserve a place
+        [EVENT_ID.OPEN]: { taken: 6, capacity: 20, guests: 2, pending: 0, waitlist: 0, text: '6 von 20 Plätzen belegt (inkl. 2 Gäste)', waitlistText: '' },
+        [EVENT_ID.FORM]: { taken: 3, capacity: 16, guests: 0, pending: 2, waitlist: 0, text: '3 von 16 Plätzen belegt (2 Anfragen offen)', waitlistText: '' },
+        [EVENT_ID.FULL]: { taken: 5, capacity: 5, guests: 0, pending: 0, waitlist: 3, text: '5 von 5 Plätzen belegt', waitlistText: '3 auf der Warteliste' },
+        [EVENT_ID.BIG_FORM]: { taken: 2, capacity: 0, guests: 1, pending: 1, waitlist: 0, text: '2 Plätze belegt (inkl. 1 Gast, 1 Anfrage offen)', waitlistText: '' }
+    };
+    for (const [id, places] of Object.entries(expected)) {
+        const listed = data.find(event => event.id === id);
+        assert.deepEqual(listed.places, places, `list: ${id}`);
+        assert.equal(listed.currentParticipants, places.taken, `list count: ${id}`);
+
+        const single = await (await member.request(`/api/events/${id}`)).json();
+        assert.deepEqual(single.places, places, `event page: ${id}`);
+        assert.equal(single.currentParticipants, places.taken, `event page count: ${id}`);
+        assert.equal(single.waitlistCount, places.waitlist, `waitlist: ${id}`);
+    }
+});
+
 test('the event API answers only logged-in users', async () => {
     const admin = await loginAs('admin');
     const { seriesId } = await (await admin.request(`/api/events/${SERIES_EVENT_IDS[0]}`)).json();

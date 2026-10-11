@@ -113,16 +113,23 @@ export function renderEventWhen(event, now) {
 /**
  * Capacity bar with its label.
  *
- * @param {Object} event -> Event with `maxParticipants` and `currentParticipants`.
- * @returns {string} -> HTML of a .capacity; "Unbegrenzt" without a limit.
+ * @param {Object} event -> Event with `maxParticipants` and `places` of GET /api/events (numbers, `text`, `waitlistText`); without `places` the older `currentParticipants` counts.
+ * @returns {string} -> HTML of a .capacity: short label ("5 von 20 belegt", "Noch 2 Plätze", "Ausgebucht · 3 warten"); the full places sentence is the tooltip and the bar's label. Without a limit "5 Plätze belegt" and no bar.
  */
 export function renderCapacity(event) {
+    const places = event.places || {};
     const max = Math.max(0, Math.floor(Number(event.maxParticipants) || 0));
-    if (max === 0) return '<div class="capacity"><span class="capacity-text">Unbegrenzt</span></div>';
-    const taken = Math.max(0, Math.floor(Number(event.currentParticipants) || 0));
+    const taken = Math.max(0, Math.floor(Number(places.taken ?? event.currentParticipants) || 0));
+    const waiting = Math.max(0, Math.floor(Number(places.waitlist) || 0));
+    const sentence = typeof places.text === 'string' ? places.text : '';
+    // Guests and open requests do not fit on a card; the tooltip tells the whole sentence
+    const title = sentence ? ` title="${escapeHtml([sentence, places.waitlistText].filter(Boolean).join(' · '))}"` : '';
+
+    if (max === 0) return `<div class="capacity"${title}><span class="capacity-text">${taken} ${taken === 1 ? 'Platz' : 'Plätze'} belegt</span></div>`;
+
     const free = max - taken;
     let state = '';
-    let label = `${taken}/${max}`;
+    let label = `${taken} von ${max} belegt`;
     if (free <= 0) {
         state = ' is-full';
         label = 'Ausgebucht';
@@ -130,7 +137,9 @@ export function renderCapacity(event) {
         state = ' is-low';
         label = `Noch ${free} ${free === 1 ? 'Platz' : 'Plätze'}`;
     }
-    return `<div class="capacity${state}"><progress class="capacity-meter" max="${max}" value="${Math.min(taken, max)}" aria-label="${taken} von ${max} Plätzen belegt"></progress><span class="capacity-text">${label}</span></div>`;
+    if (waiting > 0) label += ` · ${waiting} ${waiting === 1 ? 'wartet' : 'warten'}`;
+    const barLabel = escapeHtml(sentence || `${taken} von ${max} ${max === 1 ? 'Platz' : 'Plätzen'} belegt`);
+    return `<div class="capacity${state}"${title}><progress class="capacity-meter" max="${max}" value="${Math.min(taken, max)}" aria-label="${barLabel}"></progress><span class="capacity-text">${label}</span></div>`;
 }
 
 /**

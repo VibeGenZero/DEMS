@@ -5,12 +5,31 @@ const { db, collection, doc, getDoc, getDocs, addDoc, deleteDoc, updateDoc, quer
 const { requireAuth } = require('../middleware/auth');
 const { checkRegistrationAllowed } = require('../middleware/maintenance');
 const { getGuildRoles, getPublicGuildChannels } = require('../bot');
-const { loadEventRoster, toPublicEvent, isEventVisibleTo } = require('../utils/eventUtils');
+const { loadEventRoster, loadEventRegistrations, toPublicEvent, isEventVisibleTo } = require('../utils/eventUtils');
 const { isEventOver, pickSeriesRepresentative, myRegistrationStatus } = require('../utils/eventListing');
 const { registerUserForEvent, switchOwnSlot, unregisterUserFromEvent, REGISTRATION_SOURCE } = require('../utils/registrationService');
 const { hasSlots, withSlotSummary } = require('../utils/slotService');
+const { summarizePlaces, formatPlaces, formatWaitlist } = require('../utils/capacity');
 const { debugLog } = require('../utils/debugLog');
 const { avatarUrlOf, repairAvatarUrl } = require('../utils/avatar');
+
+/**
+ * Event with its places: the numbers and the one sentence every view shows
+ * (utils/capacity.js). currentParticipants stays for older readers and
+ * equals the taken places, as the registration counts them.
+ *
+ * @param {Object} event -> Public event data.
+ * @param {Array<Object>} registrations -> All registrations of the event.
+ * @returns {Object} -> The event with `currentParticipants` and `places` (`taken`, `capacity`, `guests`, `pending`, `waitlist`, `text`, `waitlistText`).
+ */
+function withPlaces(event, registrations) {
+    const places = summarizePlaces(registrations, event.maxParticipants);
+    return {
+        ...event,
+        currentParticipants: places.taken,
+        places: { ...places, text: formatPlaces(places), waitlistText: formatWaitlist(places.waitlist) }
+    };
+}
 
 // No public preview: every event endpoint needs a login. Runs before router.param
 // below, so anonymous requests get 401 and learn nothing about an event id
@@ -92,26 +111,20 @@ router.get('/', async (req, res) => {
             }
         }
 
-        // Get participant counts for all events in a single query
+        // Get the registrations of all events in a single query
         const regSnapshot = await getDocs(collection(db, 'registrations'));
-        const participantCounts = {};
         const registrationsByEvent = {};
         regSnapshot.forEach(regDoc => {
             const data = regDoc.data();
             (registrationsByEvent[data.eventId] ||= []).push(data);
-            if (data.status === 'accepted' || data.status === 'pending') {
-                const guestCount = Array.isArray(data.guests) ? data.guests.length : 0;
-                participantCounts[data.eventId] = (participantCounts[data.eventId] || 0) + 1 + guestCount;
-            }
         });
 
-        // Attach participant counts and the member's own status to events
+        // Attach the places and the member's own status to events
         const userId = req.session.user.id;
-        events = events.map(e => withSlotSummary({
-            ...e,
-            currentParticipants: participantCounts[e.id] || 0,
-            myStatus: myRegistrationStatus(registrationsByEvent[e.id] || [], userId)
-        }, registrationsByEvent[e.id] || []));
+        events = events.map(e => {
+            const registrations = registrationsByEvent[e.id] || [];
+            return withSlotSummary({ ...withPlaces(e, registrations), myStatus: myRegistrationStatus(registrations, userId) }, registrations);
+        });
 
         // Group series events: replace multiple events with same seriesId by one representative
         const seriesGroups = {};
@@ -201,23 +214,15 @@ router.get('/series/:seriesId', async (req, res) => {
         // Sort by startDate ascending
         seriesEvents.sort((a, b) => (a.startDate || '').localeCompare(b.startDate || ''));
 
-        // Get participant counts
+        // Get the registrations of the series' events
         const regSnapshot = await getDocs(collection(db, 'registrations'));
-        const participantCounts = {};
         const registrationsByEvent = {};
         regSnapshot.forEach(regDoc => {
             const data = regDoc.data();
             (registrationsByEvent[data.eventId] ||= []).push(data);
-            if (data.status === 'accepted' || data.status === 'pending') {
-                const guestCount = Array.isArray(data.guests) ? data.guests.length : 0;
-                participantCounts[data.eventId] = (participantCounts[data.eventId] || 0) + 1 + guestCount;
-            }
         });
 
-        const result = seriesEvents.map(e => withSlotSummary({
-            ...e,
-            currentParticipants: participantCounts[e.id] || 0
-        }, registrationsByEvent[e.id] || []));
+        const result = seriesEvents.map(e => withSlotSummary(withPlaces(e, registrationsByEvent[e.id] || []), registrationsByEvent[e.id] || []));
 
         res.json(result);
     } catch (err) {
@@ -273,29 +278,7 @@ router.get('/:id', async (req, res) => {
         if (!docSnap.exists()) {
             return res.status(404).json({ error: 'Event nicht gefunden' });
         }
-        // Get registration count (accepted + pending)
-        const regQ = query(
-            collection(db, 'registrations'),
-            where('eventId', '==', req.params.id),
-            where('status', 'in', ['pending', 'accepted'])
-        );
-        const regSnap = await getDocs(regQ);
-
-        let currentParticipants = 0;
-        const occupyingRegistrations = [];
-        regSnap.forEach(regDoc => {
-            const r = regDoc.data();
-            occupyingRegistrations.push(r);
-            currentParticipants += 1 + (Array.isArray(r.guests) ? r.guests.length : 0);
-        });
-
-        // Get waitlist count
-        const waitQ = query(
-            collection(db, 'registrations'),
-            where('eventId', '==', req.params.id),
-            where('status', '==', 'waitlisted')
-        );
-        const waitSnap = await getDocs(waitQ);
+        const registrations = await loadEventRegistrations(req.params.id);
 
         // Look up creator display name
         let createdByName = '';
@@ -310,14 +293,13 @@ router.get('/:id', async (req, res) => {
             } catch { /* non-fatal */ }
         }
 
-        const event = toPublicEvent(docSnap.id, docSnap.data());
+        const event = withPlaces(toPublicEvent(docSnap.id, docSnap.data()), registrations);
         res.json(withSlotSummary({
             ...event,
             checkinEnabled: !!event.checkinEnabled,
-            currentParticipants,
-            waitlistCount: waitSnap.size,
+            waitlistCount: event.places.waitlist,
             createdByName
-        }, occupyingRegistrations));
+        }, registrations));
     } catch (err) {
         console.error('Error fetching event:', err);
         res.status(500).json({ error: 'Fehler beim Laden des Events' });

@@ -61,6 +61,26 @@ for (const [persona, title, marker] of MARKERS) {
     });
 }
 
+test('card and event page tell the places with the same sentence', async ({ page }) => {
+    const errors = watchErrors(page);
+    await loginAs(page, 'raider');
+    // The full event: five places taken, three members wait
+    const full = card(page, 'Koop-Abend (5 Plätze)');
+    await expect(full.locator('.capacity-text')).toHaveText('Ausgebucht · 3 warten');
+    await expect(full.locator('.capacity')).toHaveAttribute('title', '5 von 5 Plätzen belegt · 3 auf der Warteliste');
+
+    await full.click();
+    await expect(page.locator('#sidebar-capacity-content .capacity-label')).toHaveText('5 von 5 Plätzen belegt');
+    await expect(page.locator('#sidebar-capacity-content .capacity-sublabel')).toHaveText('Ausgebucht · 3 auf der Warteliste');
+
+    // Guests count and the sentence says so: one confirmed guest, one open invitation
+    await page.goto('/#event/dev-event-open');
+    await expect(page.locator('#sidebar-capacity-content .capacity-label')).toHaveText('6 von 20 Plätzen belegt (inkl. 2 Gäste)');
+    await expect(page.locator('#sidebar-capacity-content .capacity-sublabel')).toHaveText('14 Plätze frei');
+    await expect(page.locator('#detail-participants-title')).toHaveText('TEILNEHMER');
+    expect(errors).toEqual([]);
+});
+
 test('banners load, a broken one gives way to the event colour', async ({ page }) => {
     await loginAs(page, 'raider');
     const banner = card(page, 'Community-Spieleabend').locator('img.event-card-banner');

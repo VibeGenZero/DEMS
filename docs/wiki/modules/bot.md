@@ -18,7 +18,7 @@ see_also: [discord-integration, reminders-presence, form-fields]
 |---|---|
 | Setup | constants (`MODAL_*_MAX_LENGTH`, `REGISTER_BUTTON_PREFIX`, `REGISTER_MODAL_PREFIX`, `SELECTABLE_CHANNEL_TYPES`), `client` (intents: Guilds, GuildMembers, GuildMessages, DirectMessages, GuildScheduledEvents), `client.once(Events.ClientReady)` → `registerSlashCommands`, `logBotInviteUrl`, `applyBotSettings` |
 | Interaction dispatcher | `client.on('interactionCreate', ...)`: autocomplete → modal submit → buttons → slash commands |
-| Messaging | `sendDM`, `sendChannelMessage`, `buildEventEmbed` (+ `formatParticipantCount`, `formatRosterSlotTitle`, `formatRosterMembers`), `buildEventComponents` (+ `buildSlotButton`), `parseTemplate` (from `utils/template.js`, re-exported), `sendGuestInvitation`, `refreshEventAnnouncements`, `isGoneDiscordError`, `editStoredMessages` |
+| Messaging | `sendDM`, `sendChannelMessage`, `buildEventEmbed` (field "👥 Plätze" with the places sentence of `utils/capacity.js` via `formatParticipantCount`, "⏳ Warteliste" whenever somebody waits; + `formatRosterSlotTitle`, `formatRosterMembers`), `buildEventComponents` (+ `buildSlotButton`), `parseTemplate` (from `utils/template.js`, re-exported), `sendGuestInvitation`, `refreshEventAnnouncements`, `isGoneDiscordError`, `editStoredMessages` |
 | Date polls | `buildPollEmbed` (+ `formatPollVoters`), `buildPollComponents`, `buildPollVoteReply`, `refreshPollMessages`, `markPollMessagesDeleted`, `handlePollVoteButton`, `handlePollVoteSelect` |
 | Registration via Discord | `canRegisterViaDiscord`, `buildRegistrationModal` (+ `buildModalIntro`, `buildFieldDescription`, `applySelectConstraints`, `applyFieldComponent`, `buildFieldCustomId`), `readModalField`, `parseModalAnswers`, `resolveSelectedUserName`, `resolveInteractionRoles`, `ensureUserProfile`, `checkRegistrationConditions`, `completeDiscordRegistration`, `handleEventRegisterButton`, `handleEventRegisterModal`; slots: `addFormFieldLabels`, `buildSlotModal`, `readAltSlotIds`, `buildRegisteredSlotReply`, `handleEventSlotButton`, `handleEventSlotModal`, `handleSlotSwitchButton`, `handleSlotLeaveButton`, `replyWithFailure` |
 | Guild data | `getGuildName`, `getGuildRoles`, `getGuildChannels`, `getPublicGuildChannels`, `getUserRoles`, `fetchMemberRoleIds` (`{ isMember, roleIds }` or `null` when Discord cannot answer; for `createRoleRefresh`), `isGuildMember`, `assignRole`, `removeRole` |
@@ -42,7 +42,7 @@ see_also: [discord-integration, reminders-presence, form-fields]
 | `poll_vote:<pollId>` | "Abstimmen" below a poll message | `handlePollVoteButton` |
 | `poll_yes:<pollId>` / `poll_maybe:<pollId>` | vote selects in the ephemeral answer (handled before the button branch via `isStringSelectMenu`) | `handlePollVoteSelect` |
 
-Slash commands (guild-scoped, registered on ready): `/events` (list active events, public reply), `/register event:<autocomplete>` (replies with the website link), `/unregister event:<autocomplete>` (deletes the registration, removes role, promotes waitlist).
+Slash commands (guild-scoped, registered on ready): `/events` (list active events with the places sentence, public reply), `/register event:<autocomplete>` (replies with the website link), `/unregister event:<autocomplete>` (deletes the registration, removes role, promotes waitlist).
 
 ## Exports
 

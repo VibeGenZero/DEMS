@@ -190,21 +190,21 @@ export function renderSidebarCapacity(event) {
     if (!panel || !content) return;
 
     panel.style.display = 'block';
-    if (event.maxParticipants > 0) {
-        const current = event.currentParticipants || 0;
-        const max = event.maxParticipants;
-        const pct = Math.min(100, Math.round((current / max) * 100));
-        const isDanger = pct >= 90;
-        const available = max - current;
-        content.innerHTML = `
-            <div class="capacity-label">${current} Anmeldungen / ${max} max.</div>
-            <div class="capacity-progress">
-                <div class="capacity-progress-bar${isDanger ? ' danger' : ''}" style="width:${pct}%"></div>
-            </div>
-            <div class="capacity-sublabel">${available > 0 ? `${available} Plätze verfügbar` : 'Ausgebucht'}</div>`;
-    } else {
-        content.innerHTML = `<div class="capacity-label">Unbegrenzte Kapazität</div>`;
-    }
+    // The sentence comes from the API (utils/capacity.js), the same one cards and Discord show
+    const places = event.places || {};
+    const taken = Math.max(0, Number(places.taken ?? event.currentParticipants) || 0);
+    const max = event.maxParticipants > 0 ? event.maxParticipants : 0;
+    const sentence = escapeHtml(typeof places.text === 'string' ? places.text : '');
+    const free = max - taken;
+    const freeText = max === 0 ? 'Unbegrenzt' : (free > 0 ? `${free} ${free === 1 ? 'Platz' : 'Plätze'} frei` : 'Ausgebucht');
+    const sublabel = escapeHtml([freeText, places.waitlistText].filter(Boolean).join(' · '));
+    const bar = max > 0
+        ? `<div class="capacity${free <= 0 ? ' is-full' : ''}"><progress class="capacity-meter" max="${max}" value="${Math.min(taken, max)}" aria-label="${sentence}"></progress></div>`
+        : '';
+    content.innerHTML = `
+        <div class="capacity-label">${sentence}</div>
+        ${bar}
+        <div class="capacity-sublabel">${sublabel}</div>`;
 }
 
 export async function loadDetailParticipants(eventId) {
@@ -216,7 +216,6 @@ export async function loadDetailParticipants(eventId) {
         if (state.detailEventId !== eventId) return;
         const section = document.getElementById('detail-participants-section');
         const avatarsEl = document.getElementById('detail-participants-avatars');
-        const countEl = document.getElementById('detail-participants-count');
         if (!section || !avatarsEl) return;
 
         section.style.display = 'block';
@@ -227,7 +226,6 @@ export async function loadDetailParticipants(eventId) {
             avatarsEl.style.display = 'none';
             rosterEl.style.display = 'block';
             rosterEl.innerHTML = renderRoster(data);
-            if (countEl) countEl.textContent = `(${data.slots.reduce((sum, slot) => sum + slot.taken, 0)})`;
             return;
         }
         if (titleEl) titleEl.textContent = 'TEILNEHMER';
@@ -236,7 +234,6 @@ export async function loadDetailParticipants(eventId) {
             rosterEl.style.display = 'none';
             rosterEl.innerHTML = '';
         }
-        if (countEl) countEl.textContent = `(${data.total})`;
 
         if (!data.participants.length) {
             avatarsEl.innerHTML = '<span class="text-muted small">Noch keine bestätigten Teilnehmer.</span>';
@@ -263,7 +260,7 @@ export function resetEventDetailAreas() {
         const el = document.getElementById(id);
         if (el) el.style.display = 'none';
     });
-    ['detail-participants-avatars', 'detail-roster', 'detail-participants-count', 'detail-reg-slot',
+    ['detail-participants-avatars', 'detail-roster', 'detail-reg-slot',
         'comments-section', 'checkin-section'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.innerHTML = '';
