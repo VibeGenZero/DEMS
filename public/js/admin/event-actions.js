@@ -1,85 +1,94 @@
 /**
  * Admin actions on one event: status, delete, announce, start/end, export,
- * duplicate, Discord sync.
+ * duplicate, Discord entry. Actions that destroy something or show up in
+ * Discord ask first, in the DEMS confirm dialog.
  */
 import { state } from '../core/state.js';
-import { loadAdminEvents, loadAdminStats } from './dashboard.js';
+import { loadAdminEvents, loadAdminStats, switchAdminTab } from './dashboard.js';
 import { registerActions } from '../core/actions.js';
-import { escapeHtml, showToast } from '../core/ui.js';
+import { escapeHtml, showConfirmDialog, showToast } from '../core/ui.js';
 import { DISCORD_MODAL_MAX_FIELDS } from '../events/registration-form.js';
 
-export async function duplicateEvent(eventId) {
-    if (!confirm('Event duplizieren?')) return;
+// Toast after a status change, by the status the event has now
+const STATUS_TOASTS = {
+    active: 'Event ist jetzt aktiv.',
+    draft: 'Event liegt jetzt in den Entwürfen.',
+    archived: 'Event archiviert.'
+};
+
+/**
+ * Send one admin request; an error ends in a toast with the server's reason.
+ *
+ * @param {string} method -> HTTP method.
+ * @param {string} url -> API path.
+ * @param {string} fallbackError -> Shown when the server names no reason.
+ * @param {Object} [body] -> JSON body.
+ * @returns {Promise<Object|null>} -> The answer, or null after an error.
+ */
+async function sendAdminAction(method, url, fallbackError, body) {
     try {
-        const res = await fetch(`/api/admin/events/${eventId}/duplicate`, {
-            method: 'POST',
-            headers: { 'X-CSRF-TOKEN': state.csrfToken }
+        const res = await fetch(url, {
+            method,
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': state.csrfToken },
+            body: body === undefined ? undefined : JSON.stringify(body)
         });
-        const data = await res.json();
-        if (res.ok) {
-            showToast(`Event dupliziert: ${data.title}`, 'success');
-            loadAdminEvents();
-        } else {
-            showToast(data.error || 'Fehler beim Duplizieren.', 'danger');
-        }
+        const data = await res.json().catch(() => ({}));
+        if (res.ok) return data || {};
+        showToast(data.error || fallbackError, 'danger');
     } catch {
         showToast('Netzwerkfehler.', 'danger');
     }
+    return null;
 }
 
-export async function deleteEvent(eventId) {
-    if (!confirm('Event wirklich löschen? Alle Anmeldungen werden ebenfalls gelöscht.')) return;
-    try {
-        await fetch(`/api/admin/events/${eventId}`, {
-            method: 'DELETE',
-            headers: { 'X-CSRF-TOKEN': state.csrfToken }
-        });
-        showToast('Event gelöscht.', 'success');
-        loadAdminEvents();
-        loadAdminStats();
-    } catch {
-        showToast('Fehler beim Löschen.', 'danger');
-    }
+function refreshAdminEvents() {
+    loadAdminEvents();
+    loadAdminStats();
 }
 
-export async function deleteEventSeries(seriesId) {
-    if (!confirm('Ganze Serie wirklich löschen? Alle Termine und Anmeldungen werden gelöscht.')) return;
-    try {
-        const res = await fetch(`/api/admin/events/series/${seriesId}`, {
-            method: 'DELETE',
-            headers: { 'X-CSRF-TOKEN': state.csrfToken }
-        });
-        const data = await res.json();
-        showToast(`Serie gelöscht (${data.deletedCount || 0} Events).`, 'success');
-        loadAdminEvents();
-        loadAdminStats();
-    } catch {
-        showToast('Fehler beim Löschen der Serie.', 'danger');
-    }
+const quoted = (title) => `„${title || 'Event'}“`;
+
+export async function duplicateEvent(eventId) {
+    const data = await sendAdminAction('POST', `/api/admin/events/${eventId}/duplicate`, 'Fehler beim Duplizieren.');
+    if (!data) return;
+    showToast(`Kopie liegt in den Entwürfen: ${data.title}`, 'success');
+    // The copy is a draft, so the table shows that tab
+    switchAdminTab('drafts');
+    refreshAdminEvents();
+}
+
+export async function deleteEvent(eventId, title) {
+    if (!await showConfirmDialog(`${quoted(title)} löschen? Alle Anmeldungen werden mitgelöscht.`, 'Löschen')) return;
+    if (!await sendAdminAction('DELETE', `/api/admin/events/${eventId}`, 'Fehler beim Löschen.')) return;
+    showToast('Event gelöscht.', 'success');
+    refreshAdminEvents();
+}
+
+/**
+ * Delete all dates of a series.
+ *
+ * @param {string} seriesId -> Id of the series.
+ * @param {string} title -> Title of the series, for the question.
+ * @param {string|number} count -> Number of its dates over all tabs; unknown values leave the number out.
+ * @returns {Promise<void>}
+ */
+export async function deleteEventSeries(seriesId, title, count) {
+    const total = Number(count) || 0;
+    let scope = 'Alle Termine und ihre Anmeldungen werden gelöscht.';
+    if (total === 1) scope = 'Ihr Termin und seine Anmeldungen werden gelöscht.';
+    else if (total > 1) scope = `Alle ${total} Termine und ihre Anmeldungen werden gelöscht.`;
+    if (!await showConfirmDialog(`Ganze Serie ${quoted(title)} löschen? ${scope}`, 'Serie löschen')) return;
+    const data = await sendAdminAction('DELETE', `/api/admin/events/series/${seriesId}`, 'Fehler beim Löschen der Serie.');
+    if (!data) return;
+    const deleted = Number(data.deletedCount) || 0;
+    showToast(`Serie gelöscht (${deleted} ${deleted === 1 ? 'Termin' : 'Termine'}).`, 'success');
+    refreshAdminEvents();
 }
 
 export async function changeEventStatus(eventId, status) {
-    try {
-        const res = await fetch(`/api/admin/events/${eventId}/status`, {
-            method: 'PUT',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRF-TOKEN': state.csrfToken
-            },
-            body: JSON.stringify({ status })
-        });
-        if (res.ok) {
-            const statusNames = { active: 'Aktiv', draft: 'Entwurf', archived: 'Archiviert' };
-            showToast(`Status geändert: ${statusNames[status]}`, 'success');
-            loadAdminEvents();
-            loadAdminStats();
-        } else {
-            const err = await res.json();
-            showToast(err.error, 'danger');
-        }
-    } catch {
-        showToast('Fehler.', 'danger');
-    }
+    if (!await sendAdminAction('PUT', `/api/admin/events/${eventId}/status`, 'Fehler beim Ändern des Status.', { status })) return;
+    showToast(Object.hasOwn(STATUS_TOASTS, status) ? STATUS_TOASTS[status] : 'Status geändert.', 'success');
+    refreshAdminEvents();
 }
 
 // Renders a preview of the buttons that will be attached to the announcement
@@ -204,81 +213,51 @@ export async function sendAnnouncement() {
     }
 }
 
-export async function startEvent(eventId) {
-    if (!confirm('Event jetzt starten? Status wird auf "Aktiv" gesetzt und Startzeit aktualisiert (falls leer).')) return;
-    try {
-        const res = await fetch(`/api/admin/events/${eventId}/start`, {
-            method: 'POST',
-            headers: { 'X-CSRF-TOKEN': state.csrfToken }
-        });
-        if (res.ok) {
-            showToast('Event gestartet!', 'success');
-            loadAdminEvents();
-            loadAdminStats();
-        } else {
-            showToast('Fehler beim Starten.', 'danger');
-        }
-    } catch {
-        showToast('Netzwerkfehler.', 'danger');
-    }
+export async function startEvent(eventId, title) {
+    const question = `${quoted(title)} jetzt starten? Das Event wird veröffentlicht, als Start wird jetzt eingetragen.`;
+    if (!await showConfirmDialog(question, 'Starten', { danger: false })) return;
+    if (!await sendAdminAction('POST', `/api/admin/events/${eventId}/start`, 'Fehler beim Starten.')) return;
+    showToast('Event gestartet.', 'success');
+    refreshAdminEvents();
 }
 
-export async function endEvent(eventId) {
-    if (!confirm('Event jetzt beenden? Status wird auf "Archiviert" gesetzt und Endzeit aktualisiert.')) return;
-    try {
-        const res = await fetch(`/api/admin/events/${eventId}/end`, {
-            method: 'POST',
-            headers: { 'X-CSRF-TOKEN': state.csrfToken }
-        });
-        if (res.ok) {
-            showToast('Event beendet!', 'success');
-            loadAdminEvents();
-            loadAdminStats();
-        } else {
-            showToast('Fehler beim Beenden.', 'danger');
-        }
-    } catch {
-        showToast('Netzwerkfehler.', 'danger');
-    }
+/**
+ * End a running event now.
+ *
+ * @param {string} eventId -> Event id.
+ * @param {string} title -> Title, for the question.
+ * @param {boolean} [hasChannels] -> The event has its own Discord channels, which ending deletes.
+ * @returns {Promise<void>}
+ */
+export async function endEvent(eventId, title, hasChannels = false) {
+    const channels = hasChannels ? ' Die Event-Channels werden gelöscht.' : '';
+    const question = `${quoted(title)} jetzt beenden? Das Event wird archiviert, als Ende wird jetzt eingetragen.${channels}`;
+    if (!await showConfirmDialog(question, 'Beenden')) return;
+    if (!await sendAdminAction('POST', `/api/admin/events/${eventId}/end`, 'Fehler beim Beenden.')) return;
+    showToast('Event beendet.', 'success');
+    refreshAdminEvents();
 }
 
 export function exportRegistrations(eventId) {
     window.open(`/api/admin/events/${eventId}/registrations/export`, '_blank');
 }
 
-export async function syncDiscordEvent(eventId) {
-    if (!confirm('Dieses Event jetzt als geplantes Event in Discord erstellen?')) return;
-
-    try {
-        const res = await fetch(`/api/admin/events/${eventId}/sync-discord`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRF-TOKEN': state.csrfToken
-            }
-        });
-
-        if (res.ok) {
-            showToast('Event erfolgreich in Discord erstellt!', 'success');
-            loadAdminEvents(); // Refresh view
-        } else {
-            const err = await res.json();
-            showToast(err.error || 'Fehler beim Synchronisieren.', 'danger');
-        }
-    } catch (err) {
-        showToast('Netzwerkfehler.', 'danger');
-    }
+export async function syncDiscordEvent(eventId, title) {
+    if (!await showConfirmDialog(`${quoted(title)} als geplantes Event in Discord eintragen?`, 'Eintragen', { danger: false })) return;
+    if (!await sendAdminAction('POST', `/api/admin/events/${eventId}/sync-discord`, 'Fehler beim Eintragen in Discord.')) return;
+    showToast('Event in Discord eingetragen.', 'success');
+    loadAdminEvents();
 }
 
 registerActions({
-    deleteEvent: (el) => deleteEvent(el.dataset.eventId),
-    deleteEventSeries: (el) => deleteEventSeries(el.dataset.seriesId),
+    deleteEvent: (el) => deleteEvent(el.dataset.eventId, el.dataset.eventTitle),
+    deleteEventSeries: (el) => deleteEventSeries(el.dataset.seriesId, el.dataset.eventTitle, el.dataset.count),
     changeEventStatus: (el) => changeEventStatus(el.dataset.eventId, el.dataset.status),
     announceEvent: (el) => announceEvent(el.dataset.eventId),
     sendAnnouncement: () => sendAnnouncement(),
-    startEvent: (el) => startEvent(el.dataset.eventId),
-    endEvent: (el) => endEvent(el.dataset.eventId),
+    startEvent: (el) => startEvent(el.dataset.eventId, el.dataset.eventTitle),
+    endEvent: (el) => endEvent(el.dataset.eventId, el.dataset.eventTitle, el.dataset.channels === '1'),
     exportRegistrations: (el) => exportRegistrations(el.dataset.eventId),
     duplicateEvent: (el) => duplicateEvent(el.dataset.eventId),
-    syncDiscordEvent: (el) => syncDiscordEvent(el.dataset.eventId)
+    syncDiscordEvent: (el) => syncDiscordEvent(el.dataset.eventId, el.dataset.eventTitle)
 });

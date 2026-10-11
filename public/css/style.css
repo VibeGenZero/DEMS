@@ -412,14 +412,6 @@ body {
 }
 
 /* Event Banner */
-.event-banner {
-  width: 100%;
-  height: 160px;
-  object-fit: cover;
-  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
-  display: block;
-}
-
 .event-banner-detail {
   width: 100%;
   max-height: 300px;
@@ -429,32 +421,12 @@ body {
 }
 
 /* ─── Event Series ────────────────────────────── */
-.series-badge {
-  background: var(--accent-fill);
-  color: var(--on-accent);
-  font-size: var(--font-size-xs);
-  font-weight: 600;
-  padding: 0.2rem 0.6rem;
-  border-radius: var(--radius-lg);
-  white-space: nowrap;
-}
-
 .series-dates-list {
   margin-top: 0.75rem;
   border-radius: var(--radius);
   background: var(--bg-tint-1);
   border: 1px solid var(--border-subtle);
   overflow: hidden;
-}
-
-.series-dates-header {
-  padding: 0.5rem 0.75rem;
-  font-size: var(--font-size-xs);
-  font-weight: 600;
-  color: var(--text-secondary);
-  border-bottom: 1px solid var(--border-subtle);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
 }
 
 .series-date-item {
@@ -517,21 +489,6 @@ body {
 .series-detail-section h6 {
   color: var(--accent-light);
   font-weight: 700;
-}
-
-.series-admin-date-item {
-  padding: 0.4rem 0.75rem;
-  font-size: var(--font-size-sm);
-  color: var(--text-primary);
-  border-bottom: 1px solid var(--border-subtle);
-}
-
-.series-admin-date-item:last-child {
-  border-bottom: none;
-}
-
-.series-admin-card {
-  border: 1px solid var(--border-accent);
 }
 
 /* Rendered Markdown Content */
@@ -821,22 +778,6 @@ body {
 }
 
 /* ═══════════════════════════════════════════ */
-/* DATE & TIME                                 */
-/* ═══════════════════════════════════════════ */
-.event-date-info {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  color: var(--text-secondary);
-  font-size: var(--font-size-sm);
-  margin-top: 0.5rem;
-}
-
-.event-date-info i {
-  color: var(--accent-light);
-}
-
-/* ═══════════════════════════════════════════ */
 /* WAITLIST                                    */
 /* ═══════════════════════════════════════════ */
 .waitlist-badge {
@@ -991,33 +932,68 @@ body {
 }
 
 /* ═══════════════════════════════════════════ */
-/* ADMIN EVENT CARD                            */
+/* ADMIN EVENTS                                */
+/* Table of #admin: tabs and search above,     */
+/* renderAdminTable() in admin/event-table.js. */
+/* Table and menu come from components.css     */
 /* ═══════════════════════════════════════════ */
-.admin-event-card {
-  position: relative;
-}
-
-.admin-event-card .admin-actions {
+.admin-events-toolbar {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5rem;
-  margin-top: 1rem;
+  align-items: center;
+  gap: var(--space-12);
+  margin: var(--space-24) 0 var(--space-12);
 }
 
-/* Admin status toggle */
-.status-dropdown .dropdown-menu {
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-subtle);
+.admin-events-toolbar .events-search {
+  max-width: 24rem;
+  margin-left: auto;
 }
 
-.status-dropdown .dropdown-item {
-  color: var(--text-secondary);
+.admin-events-table th:nth-child(1) {
+  width: 38%;
+}
+
+.admin-events-table th:nth-child(2) {
+  width: 20%;
+}
+
+.admin-events-table th:nth-child(3) {
+  width: 24%;
+}
+
+/* Toggle of a series and the text beside it */
+.admin-events-event {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-4);
+}
+
+.admin-events-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-4) var(--space-8);
+}
+
+.admin-events-places {
   font-size: var(--font-size-sm);
 }
 
-.status-dropdown .dropdown-item:hover {
-  background: var(--accent-tint-1);
-  color: var(--accent-light);
+.admin-events-places .capacity {
+  margin-bottom: var(--space-4);
+}
+
+.admin-events-pending {
+  color: var(--warning);
+  font-weight: 600;
+}
+
+@media (max-width: 767.98px) {
+  .admin-events-toolbar .events-search {
+    max-width: none;
+    margin-left: 0;
+  }
 }
 
 /* ═══════════════════════════════════════════ */

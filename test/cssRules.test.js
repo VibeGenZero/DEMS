@@ -33,7 +33,11 @@ const COMPONENT_SELECTORS = [
     '.empty-state', '.empty-state-icon', '.empty-state-title', '.empty-state-text',
     '.avatar', '.avatar-sm', '.avatar-lg', '.avatar-xl', '.avatar-initials', '.avatar-stack', '.avatar-more',
     '.date-tile', '.date-tile-weekday', '.date-tile-month', '.date-tile-day', '.date-tile.is-live',
-    '.capacity', '.capacity-meter', '.capacity-text', '.capacity.is-low .capacity-text', '.capacity.is-full .capacity-text'
+    '.capacity', '.capacity-meter', '.capacity-text', '.capacity.is-low .capacity-text', '.capacity.is-full .capacity-text',
+    '.data-table', '.data-table th', '.data-table td', '.data-table-sort', '.data-table-title', '.data-table-meta',
+    '.data-table-actions', '.data-table-buttons', '.data-table tr.is-sub td', '.data-table tr.is-muted .data-table-title',
+    '.data-table tr.is-sub.is-muted td:first-child',
+    '.dropdown-menu', '.dropdown-item', '.dropdown-header', '.dropdown-item.is-danger'
 ];
 // Selectors that moved into components.css or were dropped; style.css must not style them again
 const MOVED = ['.btn-accent', '.btn-accent:hover', '.btn-discord', '.btn-discord:hover', '.btn-outline-light', '.btn-outline-light:hover', '.glass-modal', '.nav-link', '.nav-link.active',
@@ -44,7 +48,12 @@ const MOVED = ['.btn-accent', '.btn-accent:hover', '.btn-discord', '.btn-discord
     '.skeleton', '.skeleton-text', '.skeleton-title', '.skeleton-img',
     // Old overview cards, dropped by D-04
     '.event-banner-placeholder', '.event-card-header-row', '.event-card-mini-progress', '.event-card-capacity-label',
-    '.series-card', '.slot-chips', '.slot-chip', '.spots-warning', '.spots-full'
+    '.series-card', '.slot-chips', '.slot-chip', '.spots-warning', '.spots-full',
+    // Replaced by the menu component (D-07)
+    '.status-dropdown .dropdown-menu', '.status-dropdown .dropdown-item', '.status-dropdown .dropdown-item:hover',
+    // Admin cards, replaced by the table (D-07)
+    '.admin-event-card', '.admin-event-card .admin-actions', '.series-admin-date-item', '.series-admin-card', '.series-badge',
+    '.event-banner', '.series-dates-header', '.event-date-info', '.event-date-info i'
 ];
 // A colour written out: hex, rgb(), hsl() or a colour name (white-space is no colour)
 const RAW_COLOR = /#[0-9a-fA-F]{3,8}\b|\brgba?\(|\bhsla?\(|(?<![-\w])(white|black)(?![-\w])/;
@@ -54,12 +63,12 @@ const describe = (rule, declaration) => `${rule.file}:${declaration.line} ${rule
 // never raise it. Before D-02 there were 132 style attributes and 57
 // !important in style.css. D-16 brings the style attributes to 0.
 // components.css has its own rule: !important only in the colour helpers.
-const STYLE_ATTRIBUTE_BUDGET = 115;
+const STYLE_ATTRIBUTE_BUDGET = 113;
 const IMPORTANT_BUDGET = 30;
 // Emojis in index.html and the modules. Symbols are Bootstrap Icons (bi-*);
 // lower the number when a page drops some, never raise it. Emojis that users
 // type in (slot emojis) are data, not source, and do not count.
-const EMOJI_BUDGET = 40;
+const EMOJI_BUDGET = 37;
 const EMOJI = /\p{Extended_Pictographic}/gu;
 
 test('index.html loads Bootstrap, the tokens and the DEMS styles in this order', () => {

@@ -1,6 +1,6 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { placesOf, countOccupiedPlaces, pickCapacityPromotions, summarizePlaces, formatPlaces, formatWaitlist } = require('../utils/capacity');
+const { placesOf, countOccupiedPlaces, pickCapacityPromotions, summarizePlaces, formatPlaces, formatWaitlist, describePlaces } = require('../utils/capacity');
 
 /** Registration with the fields the capacity rules read. */
 function registration(id, status, createdAt, fields = {}) {
@@ -87,4 +87,21 @@ test('the waitlist note is empty without anybody waiting', () => {
     assert.equal(formatWaitlist(1), '1 auf der Warteliste');
     assert.equal(formatWaitlist(3), '3 auf der Warteliste');
     assert.equal(formatWaitlist(undefined), '');
+});
+
+test('describePlaces adds the sentence and the waitlist note to the numbers', () => {
+    const registrations = [
+        registration('a', 'accepted', '1', { guests: ['g1'] }),
+        registration('b', 'pending', '2'),
+        registration('c', 'waitlisted', '3'),
+        registration('d', 'rejected', '4')
+    ];
+    assert.deepEqual(describePlaces(registrations, 20), {
+        taken: 3, capacity: 20, guests: 1, pending: 1, waitlist: 1,
+        text: '3 von 20 Plätzen belegt (inkl. 1 Gast, 1 Anfrage offen)',
+        waitlistText: '1 auf der Warteliste'
+    });
+    assert.deepEqual(describePlaces([], 0), {
+        taken: 0, capacity: 0, guests: 0, pending: 0, waitlist: 0, text: '0 Plätze belegt', waitlistText: ''
+    });
 });

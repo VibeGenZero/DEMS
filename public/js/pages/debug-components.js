@@ -197,6 +197,35 @@ function capacityBlock() {
     ].join(''));
 }
 
+function dataTableBlock() {
+    const head = (label, sort, icon) => `<th scope="col" aria-sort="${sort}"><button type="button" class="data-table-sort">${label}<i class="bi bi-${icon}" aria-hidden="true"></i></button></th>`;
+    const actions = (label, className = 'btn-secondary') => `<td class="data-table-actions"><div class="data-table-buttons"><button type="button" class="btn btn-sm ${className}">${label}</button><button type="button" class="btn btn-sm btn-ghost btn-icon" aria-label="Weitere Aktionen"><i class="bi bi-three-dots"></i></button></div></td>`;
+    return block('data-table', 'Tabelle', '.data-table mit .data-table-sort, -title, -meta, -actions, -buttons; Zeilen .is-sub, .is-muted', `
+        <table class="data-table">
+            <thead><tr>${head('Event', 'none', 'arrow-down-up')}${head('Termin', 'ascending', 'arrow-up')}<th scope="col" class="data-table-actions">Aktionen</th></tr></thead>
+            <tbody>
+                <tr><td><button type="button" class="data-table-title">${LONG_LABEL}</button><div class="data-table-meta">Raid · Rolle nötig · Sofort bestätigt</div></td><td>Mi., 14. Okt. · 20:00<div class="data-table-meta">in 4 Tagen</div></td>${actions('Anmeldungen · 2 offen', 'btn-primary')}</tr>
+                <tr class="is-sub"><td>Termin 2 von 3</td><td>Mi., 21. Okt. · 20:00<div class="data-table-meta">in 11 Tagen</div></td>${actions('Anmeldungen')}</tr>
+                <tr class="is-muted"><td><button type="button" class="data-table-title">Retro-Spieleabend</button> <span class="chip chip-sm">Vorbei</span><div class="data-table-meta">Gaming · Offen · Sofort bestätigt</div></td><td>So., 4. Okt. · 19:00<div class="data-table-meta">vor 6 Tagen</div></td>${actions('Archivieren')}</tr>
+            </tbody>
+        </table>`);
+}
+
+function menuBlock() {
+    const item = (icon, label, className = '') => `<li><button type="button" class="dropdown-item${className}"><i class="bi bi-${icon} me-2" aria-hidden="true"></i>${label}</button></li>`;
+    // Shown open and in the flow of the page; a real menu opens from a button with data-bs-toggle="dropdown"
+    return block('menu', 'Menü', '.dropdown-menu mit .dropdown-item, .dropdown-header, .dropdown-divider; .dropdown-item.is-danger', `
+        <ul class="dropdown-menu show position-static d-inline-block">
+            ${item('pencil', 'Bearbeiten')}
+            ${item('copy', 'Duplizieren')}
+            <li><hr class="dropdown-divider"></li>
+            <li><h6 class="dropdown-header">Status</h6></li>
+            ${item('archive', 'Archivieren')}
+            <li><hr class="dropdown-divider"></li>
+            ${item('trash', 'Löschen …', ' is-danger')}
+        </ul>`);
+}
+
 /**
  * Render one block per component.
  *
@@ -206,7 +235,8 @@ function capacityBlock() {
 export function renderDebugComponents(container) {
     container.innerHTML = [
         buttonBlock(), cardBlock(), chipBlock(), tabsBlock(), dialogBlock(),
-        toastBlock(), emptyStateBlock(), skeletonBlock(), avatarBlock(), dateTileBlock(), capacityBlock()
+        toastBlock(), emptyStateBlock(), skeletonBlock(), avatarBlock(), dateTileBlock(), capacityBlock(),
+        dataTableBlock(), menuBlock()
     ].join('');
 }
 

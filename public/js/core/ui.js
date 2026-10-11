@@ -1,6 +1,5 @@
 /**
- * Shared UI helpers: escaping, Markdown, toasts, error banner, confirm dialog,
- * skeletons.
+ * Shared UI helpers: escaping, Markdown, toasts, error banner, confirm dialog.
  */
 import { state } from './state.js';
 
@@ -18,16 +17,39 @@ export function getErrorMessage(code) {
     return messages[code] || 'Ein unbekannter Fehler ist aufgetreten.';
 }
 
-export function showConfirmDialog(message, confirmLabel = 'Bestätigen') {
+/**
+ * Ask before an action that cannot be undone or that others will notice.
+ *
+ * @param {string} message -> Question (plain text).
+ * @param {string} [confirmLabel] -> Label of the confirming button.
+ * @param {Object} [options] -> `{ danger }`: false shows a primary button instead of the red one, for actions that destroy nothing.
+ * @returns {Promise<boolean>} -> true when confirmed, false when dismissed.
+ */
+export function showConfirmDialog(message, confirmLabel = 'Bestätigen', { danger = true } = {}) {
     return new Promise(resolve => {
         const modalEl = document.getElementById('confirmModal');
         const confirmBtn = document.getElementById('confirm-modal-ok');
         document.getElementById('confirm-modal-text').textContent = message;
         confirmBtn.textContent = confirmLabel;
+        confirmBtn.classList.toggle('btn-danger', danger);
+        confirmBtn.classList.toggle('btn-primary', !danger);
         const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+        // Bootstrap ignores hide() while the dialog fades in. The answer is therefore taken when
+        // the dialog really starts to close, never from the click alone: a click that was
+        // ignored must not turn a later "Abbrechen" into a yes.
+        let confirming = false;
         let confirmed = false;
-        confirmBtn.onclick = () => { confirmed = true; modal.hide(); };
-        modalEl.addEventListener('hidden.bs.modal', () => resolve(confirmed), { once: true });
+        const onHide = () => { confirmed = confirming; };
+        confirmBtn.onclick = () => {
+            confirming = true;
+            modal.hide();
+            confirming = false;
+        };
+        modalEl.addEventListener('hide.bs.modal', onHide);
+        modalEl.addEventListener('hidden.bs.modal', () => {
+            modalEl.removeEventListener('hide.bs.modal', onHide);
+            resolve(confirmed);
+        }, { once: true });
         modal.show();
     });
 }
@@ -67,27 +89,6 @@ export function showToast(message, type = 'info') {
         { x: 50, opacity: 0, scale: 0.9 },
         { x: 0, opacity: 1, scale: 1, duration: 0.5, ease: "back.out(1.5)" }
     );
-}
-
-export function renderSkeletonEvents(container, count, isAdmin = false) {
-    container.innerHTML = Array(count).fill(0).map(() => `
-        <div class="col-md-6">
-            <div class="glass-card skeleton-card p-0">
-                <div class="skeleton skeleton-img"></div>
-                <div class="skeleton-card-body p-4">
-                    <div>
-                        <div class="skeleton skeleton-title mb-3"></div>
-                        <div class="skeleton skeleton-text"></div>
-                        <div class="skeleton skeleton-text is-short"></div>
-                    </div>
-                    <div class="d-flex gap-2 mt-3">
-                        <div class="skeleton skeleton-chip"></div>
-                        <div class="skeleton skeleton-chip"></div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    `).join('');
 }
 
 export function escapeHtml(str) {

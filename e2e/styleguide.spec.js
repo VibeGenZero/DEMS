@@ -5,7 +5,7 @@
 const { test, expect } = require('@playwright/test');
 const { watchErrors, loginAs, waitForDialog } = require('./helpers');
 
-const BLOCKS = ['button', 'card', 'chip', 'tabs', 'dialog', 'toast', 'empty-state', 'skeleton', 'avatar', 'date-tile', 'capacity'];
+const BLOCKS = ['button', 'card', 'chip', 'tabs', 'dialog', 'toast', 'empty-state', 'skeleton', 'avatar', 'date-tile', 'capacity', 'data-table', 'menu'];
 
 async function openStyleguide(page) {
     await loginAs(page, 'admin');

@@ -1,10 +1,29 @@
 /**
- * Admin area: stats, event cards, audit log, system reset.
+ * Admin area: stats, event table, audit log, system reset.
  */
 import { state } from '../core/state.js';
-import { reminderHoursOf } from './wizard.js';
 import { registerActions } from '../core/actions.js';
-import { escapeHtml, isValidBannerUrl, markdownPreview, renderSkeletonEvents, showToast } from '../core/ui.js';
+import { escapeHtml, showToast } from '../core/ui.js';
+import { ADMIN_SORT_KEYS, ADMIN_TABS, DEFAULT_ADMIN_SORT, adminTabCounts, buildAdminRows } from './event-rows.js';
+import { renderAdminEmpty, renderAdminLoadError, renderAdminTable, renderAdminTableSkeleton, renderAdminTabs } from './event-table.js';
+
+/**
+ * What the admin looks at in the event table. It lives as long as the page:
+ * reloading the list after an action keeps tab, search, sorting and the
+ * opened series.
+ */
+export const adminView = {
+    // null until GET /api/admin/all-events has answered once
+    events: null,
+    tab: 'active',
+    search: '',
+    // Sorting per tab; a tab without an entry uses DEFAULT_ADMIN_SORT
+    sorts: {},
+    // Ids of the opened series
+    expanded: []
+};
+
+const sortOfTab = (tab) => adminView.sorts[tab] || DEFAULT_ADMIN_SORT[tab];
 
 export async function showAdminSection() {
     const section = document.getElementById('admin-section');
@@ -60,176 +79,77 @@ export async function loadAdminStats() {
     }
 }
 
-export async function loadAdminEvents() {
-    const grid = document.getElementById('admin-events-grid');
-    renderSkeletonEvents(grid, 4, true);
+/**
+ * Render tabs and table from adminView. Does nothing before the first answer.
+ *
+ * @param {Date} [now] -> Reference time for "Läuft gerade", "Vorbei" and the distance of a date.
+ * @returns {void}
+ */
+export function renderAdminEvents(now = new Date()) {
+    if (!adminView.events) return;
+    const { events, tab, search, expanded } = adminView;
+    const counts = adminTabCounts(events, search, now);
+    const sort = sortOfTab(tab);
+    const rows = buildAdminRows(events, { tab, search, sort, now });
+    document.getElementById('admin-events-tabs').innerHTML = renderAdminTabs(counts, tab);
+    document.getElementById('admin-events-table').innerHTML = rows.length
+        ? renderAdminTable(rows, { sort, expanded, now })
+        : renderAdminEmpty({ tab, search, counts });
+}
 
+export async function loadAdminEvents() {
+    const table = document.getElementById('admin-events-table');
+    // Placeholders only before the first answer: after an action the old table stays until the new one is there
+    if (!adminView.events) {
+        document.getElementById('admin-events-tabs').innerHTML = renderAdminTabs(null, adminView.tab);
+        table.innerHTML = renderAdminTableSkeleton();
+    }
     try {
         const res = await fetch('/api/admin/all-events');
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const events = await res.json();
-
-        if (!events.length) {
-            grid.innerHTML = '<div class="col-12 text-center py-5"><p class="text-muted">Noch keine Events erstellt.</p></div>';
-            return;
-        }
-
-        const statusMap = { active: 'Aktiv', draft: 'Entwurf', archived: 'Archiviert' };
-
-        // Group events by seriesId for admin view
-        const seriesGroups = {};
-        const standaloneEvents = [];
-        for (const event of events) {
-            if (event.seriesId) {
-                if (!seriesGroups[event.seriesId]) seriesGroups[event.seriesId] = [];
-                seriesGroups[event.seriesId].push(event);
-            } else {
-                standaloneEvents.push(event);
-            }
-        }
-
-        // Convert series groups to grouped entries
-        const groupedEvents = [...standaloneEvents];
-        for (const [seriesId, seriesEvents] of Object.entries(seriesGroups)) {
-            seriesEvents.sort((a, b) => (a.startDate || '').localeCompare(b.startDate || ''));
-            // Use first event as representative, attach all events
-            const rep = { ...seriesEvents[0], _seriesEvents: seriesEvents, _seriesId: seriesId };
-            groupedEvents.push(rep);
-        }
-        // Sort by createdAt desc (admin view)
-        groupedEvents.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
-
-        grid.innerHTML = groupedEvents.map(event => {
-            const status = event.status || 'active';
-            const bannerHtml = isValidBannerUrl(event.bannerUrl)
-                ? `<img src="${escapeHtml(event.bannerUrl)}" class="event-banner" alt="Banner" style="border-radius: var(--radius-lg) var(--radius-lg) 0 0;">`
-                : '';
-
-            // Series group card
-            if (event._seriesEvents) {
-                const seriesEvents = event._seriesEvents;
-                const datesHtml = seriesEvents.map(se => {
-                    const dateStr = se.startDate ? new Date(se.startDate).toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
-                    const seStatus = se.status || 'active';
-                    return `
-                      <div class="series-admin-date-item d-flex justify-content-between align-items-center">
-                        <span><i class="bi bi-calendar-event me-2"></i>${dateStr}</span>
-                        <div class="d-flex gap-1">
-                          <span class="event-status-badge event-status-${seStatus}" style="font-size:0.7rem;">${statusMap[seStatus] || seStatus}</span>
-                          <button class="btn btn-sm btn-outline-light py-0 px-1" data-click="editEvent" data-event-id="${escapeHtml(se.id)}" title="Bearbeiten"><i class="bi bi-pencil"></i></button>
-                          <button class="btn btn-sm btn-outline-light py-0 px-1" data-click="showRegistrations" data-event-id="${escapeHtml(se.id)}" data-event-title="${escapeHtml(se.title)}"><i class="bi bi-list-check"></i></button>
-                        </div>
-                      </div>`;
-                }).join('');
-
-                return `
-            <div class="col-md-6">
-              <div class="glass-card admin-event-card series-admin-card">
-                ${bannerHtml}
-                <div class="p-4">
-                  <div class="d-flex justify-content-between align-items-start mb-2">
-                    <h5 class="mb-0">${escapeHtml(event.title)}</h5>
-                    <div class="d-flex gap-2 align-items-center">
-                      <span class="series-badge"><i class="bi bi-arrow-repeat me-1"></i>Serie (${seriesEvents.length})</span>
-                    </div>
-                  </div>
-                  <p class="text-secondary small mb-2">${escapeHtml(markdownPreview(event.description))}</p>
-                  ${event.category ? `<span class="event-category-tag mb-2 d-inline-block">${escapeHtml(event.category)}</span>` : ''}
-                  <div class="series-dates-list mt-2 mb-3">
-                    <div class="series-dates-header"><i class="bi bi-list-ul me-1"></i>Termine</div>
-                    ${datesHtml}
-                  </div>
-                  <div class="admin-actions">
-                    <button class="btn btn-sm btn-outline-danger" data-click="deleteEventSeries" data-series-id="${escapeHtml(event._seriesId)}">
-                      <i class="bi bi-trash me-1"></i>Ganze Serie löschen
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>`;
-            }
-
-            return `
-        <div class="col-md-6">
-          <div class="glass-card admin-event-card">
-            ${bannerHtml}
-            <div class="p-4">
-              <div class="d-flex justify-content-between align-items-start mb-2">
-                <h5 class="mb-0">${escapeHtml(event.title)}</h5>
-                <span class="event-status-badge event-status-${status}">${statusMap[status] || status}</span>
-              </div>
-              <p class="text-secondary small mb-2">${escapeHtml(markdownPreview(event.description))}</p>
-              ${event.category ? `<span class="event-category-tag mb-2 d-inline-block">${escapeHtml(event.category)}</span>` : ''}
-              ${event.startDate ? `<div class="event-date-info mb-2"><i class="bi bi-calendar3"></i>${new Date(event.startDate).toLocaleDateString('de-DE', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</div>` : ''}
-              <div class="d-flex flex-wrap gap-2 mb-3">
-                <span class="badge-pill"><i class="bi bi-${event.accessMode === 'open' ? 'unlock' : 'lock'}"></i>${event.accessMode === 'open' ? 'Offen' : 'Rollen'}</span>
-                <span class="badge-pill"><i class="bi bi-${event.approvalMode === 'instant' ? 'lightning' : 'hourglass-split'}"></i>${event.approvalMode === 'instant' ? 'Instant' : 'Manuell'}</span>
-                ${event.maxParticipants > 0 ? `<span class="badge-pill"><i class="bi bi-people"></i>Max ${event.maxParticipants}</span>` : ''}
-                <span class="badge-pill"><i class="bi bi-ui-checks"></i>${(event.formFields || []).length} Felder</span>
-                ${reminderHoursOf(event.reminderHours).length ? `<span class="badge-pill"><i class="bi bi-bell"></i>${reminderHoursOf(event.reminderHours).map(hours => `${hours}h`).join(' · ')}</span>` : ''}
-              </div>
-              <div class="admin-actions">
-                <button class="btn btn-sm btn-outline-light" data-click="showRegistrations" data-event-id="${escapeHtml(event.id)}" data-event-title="${escapeHtml(event.title)}">
-                  <i class="bi bi-list-check me-1"></i>Anmeldungen
-                </button>
-                <button class="btn btn-sm btn-outline-light" data-click="exportRegistrations" data-event-id="${escapeHtml(event.id)}">
-                  <i class="bi bi-download me-1"></i>CSV
-                </button>
-                <button class="btn btn-sm btn-outline-light" data-click="announceEvent" data-event-id="${escapeHtml(event.id)}">
-                  <i class="bi bi-megaphone me-1"></i>Ankündigen
-                </button>
-                <button class="btn btn-sm btn-outline-light" data-click="duplicateEvent" data-event-id="${escapeHtml(event.id)}">
-                  <i class="bi bi-copy me-1"></i>Duplizieren
-                </button>
-                <button class="btn btn-sm btn-outline-light" data-click="editEvent" data-event-id="${escapeHtml(event.id)}">
-                  <i class="bi bi-pencil me-1"></i>Bearbeiten
-                </button>
-                ${!event.discordScheduledEventId ? `
-                <button class="btn btn-sm btn-outline-primary" data-click="syncDiscordEvent" data-event-id="${escapeHtml(event.id)}" title="Als geplantes Event in Discord erstellen">
-                  <i class="bi bi-discord me-1"></i>Sync
-                </button>
-                ` : ''}
-                <div class="dropdown d-inline-block status-dropdown">
-                  <button class="btn btn-sm btn-outline-light dropdown-toggle" data-bs-toggle="dropdown">
-                    <i class="bi bi-toggle-on me-1"></i>Status
-                  </button>
-                  <ul class="dropdown-menu">
-                    <li><a class="dropdown-item" href="#" data-click="changeEventStatus" data-event-id="${escapeHtml(event.id)}" data-status="active">✅ Aktiv</a></li>
-                    <li><a class="dropdown-item" href="#" data-click="changeEventStatus" data-event-id="${escapeHtml(event.id)}" data-status="draft">📝 Entwurf</a></li>
-                    <li><a class="dropdown-item" href="#" data-click="changeEventStatus" data-event-id="${escapeHtml(event.id)}" data-status="archived">📦 Archiviert</a></li>
-                  </ul>
-                </div>
-                ${event.status === 'draft' ? `
-                <button class="btn btn-sm btn-outline-success" data-click="startEvent" data-event-id="${escapeHtml(event.id)}" title="Event starten (Status Aktiv + Startzeit jetzt)">
-                  <i class="bi bi-play-fill"></i>
-                </button>
-                ` : ''}
-                ${event.status === 'active' ? `
-                <button class="btn btn-sm btn-outline-warning" data-click="endEvent" data-event-id="${escapeHtml(event.id)}" title="Event beenden (Status Archiviert + Endzeit jetzt)">
-                  <i class="bi bi-stop-fill"></i>
-                </button>
-                ` : ''}
-                <button class="btn btn-sm btn-outline-danger" data-click="deleteEvent" data-event-id="${escapeHtml(event.id)}">
-                  <i class="bi bi-trash me-1"></i>Löschen
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      `;
-        }).join('');
-
-        // Handle image error fallbacks for admin cards
-        grid.querySelectorAll('.event-banner').forEach(img => {
-            img.addEventListener('error', () => { img.style.display = 'none'; });
-        });
-
-        gsap.fromTo('.admin-event-card',
-            { y: 20, opacity: 0 },
-            { y: 0, opacity: 1, duration: 0.3, stagger: 0.06, ease: 'power3.out' }
-        );
+        adminView.events = Array.isArray(events) ? events : [];
+        renderAdminEvents();
     } catch {
-        grid.innerHTML = '<div class="col-12"><div class="alert alert-danger">Fehler beim Laden.</div></div>';
+        adminView.events = null;
+        table.innerHTML = renderAdminLoadError();
     }
+}
+
+export function switchAdminTab(tab) {
+    if (!ADMIN_TABS.some(entry => entry.id === tab)) return;
+    adminView.tab = tab;
+    renderAdminEvents();
+}
+
+export function searchAdminEvents(text) {
+    adminView.search = String(text ?? '');
+    renderAdminEvents();
+}
+
+export function resetAdminSearch() {
+    document.getElementById('admin-events-search').value = '';
+    searchAdminEvents('');
+}
+
+/**
+ * Sort the open tab by a column; the same column again turns the direction.
+ *
+ * @param {string} key -> One of ADMIN_SORT_KEYS; anything else is ignored.
+ * @returns {void}
+ */
+export function sortAdminEvents(key) {
+    if (!ADMIN_SORT_KEYS.includes(key)) return;
+    const current = sortOfTab(adminView.tab);
+    adminView.sorts[adminView.tab] = { key, direction: current.key === key && current.direction === 'asc' ? 'desc' : 'asc' };
+    renderAdminEvents();
+}
+
+export function toggleAdminSeries(seriesId) {
+    adminView.expanded = adminView.expanded.includes(seriesId)
+        ? adminView.expanded.filter(id => id !== seriesId)
+        : [...adminView.expanded, seriesId];
+    renderAdminEvents();
 }
 
 export async function loadAuditLog() {
@@ -342,5 +262,11 @@ export async function performSystemReset() {
 registerActions({
     loadAuditLog: () => loadAuditLog(),
     showResetModal: () => showResetModal(),
-    performSystemReset: () => performSystemReset()
+    performSystemReset: () => performSystemReset(),
+    reloadAdminEvents: () => loadAdminEvents(),
+    switchAdminTab: (el) => switchAdminTab(el.dataset.tab),
+    searchAdminEvents: (el) => searchAdminEvents(el.value),
+    resetAdminSearch: () => resetAdminSearch(),
+    sortAdminEvents: (el) => sortAdminEvents(el.dataset.sort),
+    toggleAdminSeries: (el) => toggleAdminSeries(el.dataset.seriesId)
 });

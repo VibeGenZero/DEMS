@@ -9,9 +9,6 @@ const GAME_NIGHT_PREVIEW = 'Gemütlicher Abend — jeder ist willkommen! Ablauf 
 const RAID = 'Nur für Mitglieder mit der Rolle **Raid-Team**.';
 const RAID_PREVIEW = 'Nur für Mitglieder mit der Rolle Raid-Team.';
 
-// Characters that only appear when Markdown is shown raw
-const RAW_MARKDOWN = /\*\*|\]\(|^\s*[-#>] /m;
-
 const event = (id, description, fields = {}) => ({
     id, title: `Event ${id}`, description, status: 'active', accessMode: 'open', approvalMode: 'instant',
     startDate: '2026-10-20T18:00:00.000Z', maxParticipants: 0, currentParticipants: 0, formFields: [], ...fields
@@ -58,30 +55,10 @@ test('the overview shows cards that link to the event, without the description',
     assert.deepEqual(toasts, []);
 });
 
-test('admin cards show the preview, no Markdown', async () => {
-    const { app, element, toasts, state } = await loadFrontendApp({
-        '/api/admin/all-events': [
-            event('game-night', GAME_NIGHT),
-            event('raid-1', RAID, { seriesId: 'series-1' }),
-            event('raid-2', RAID, { seriesId: 'series-1', startDate: '2026-10-27T18:00:00.000Z' })
-        ]
-    });
-    state.currentUser = ADMIN;
-    await app.loadAdminEvents();
-
-    const html = element('admin-events-grid').innerHTML;
-    assert.ok(html.includes(GAME_NIGHT_PREVIEW), 'standard card');
-    assert.ok(html.includes(RAID_PREVIEW), 'series card');
-    assert.doesNotMatch(html, RAW_MARKDOWN);
-    assert.deepEqual(toasts, []);
-});
-
 test('a cut preview never splits an HTML entity', async () => {
+    const { app } = await loadFrontendApp({});
     // 116 letters, then "&": escaping before cutting left a half "&am" at character 120
-    const { app, element, state } = await loadFrontendApp({ '/api/admin/all-events': [event('amp', `${'a'.repeat(116)} & mehr Text danach`)] });
-    state.currentUser = ADMIN;
-    await app.loadAdminEvents();
-    assert.doesNotMatch(element('admin-events-grid').innerHTML, /&am(?!p;)/);
+    assert.doesNotMatch(app.escapeHtml(app.markdownPreview(`${'a'.repeat(116)} & mehr Text danach`)), /&am(?!p;)/);
 });
 
 test('the Discord import list shows the preview, no Markdown', async () => {

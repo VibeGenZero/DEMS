@@ -11,6 +11,7 @@ const { validateEvent, validateRegStatus, validateBotMessages } = require('../mi
 const { sendDM, assignRole, parseTemplate, getGuildRoles, sendChannelMessage, buildEventEmbed, buildEventComponents, getGuildScheduledEvents, createEventChannels, deleteEventChannels, createScheduledEvent, getBotStatus, getBotSettings, saveBotSettings, getRunningEvents, getGuildChannels, buildPollEmbed, buildPollComponents } = require('../bot');
 const { promoteFromWaitlist, addAuditLog, loadEventRoster, loadEventRegistrations, saveEventWithSlots } = require('../utils/eventUtils');
 const { mergeReminderHours } = require('../utils/reminders');
+const { describePlaces } = require('../utils/capacity');
 const { getSlots, findSlot, formatSlotLabel, normalizeSlots, sumCapacity, resolveAcceptanceSlot } = require('../utils/slotService');
 const { normalizePollInput, tallyPoll } = require('../utils/pollService');
 const {
@@ -101,15 +102,29 @@ router.get('/stats', async (req, res) => {
 });
 
 /**
- * GET /api/admin/all-events — Get ALL events (including draft/archived)
+ * GET /api/admin/all-events — Get ALL events (including draft/archived) with their places
  */
 router.get('/all-events', async (req, res) => {
     try {
-        const q = query(collection(db, 'events'), orderBy('createdAt', 'desc'));
-        const snapshot = await getDocs(q);
+        const [eventsSnap, registrationsSnap] = await Promise.all([
+            getDocs(query(collection(db, 'events'), orderBy('createdAt', 'desc'))),
+            getDocs(collection(db, 'registrations'))
+        ]);
+        // One read for all events, grouped in memory instead of one query per event
+        const registrationsByEvent = new Map();
+        registrationsSnap.forEach(docSnap => {
+            const registration = docSnap.data();
+            if (!registrationsByEvent.has(registration.eventId)) registrationsByEvent.set(registration.eventId, []);
+            registrationsByEvent.get(registration.eventId).push(registration);
+        });
         const events = [];
-        snapshot.forEach(docSnap => {
-            events.push({ id: docSnap.id, ...docSnap.data() });
+        eventsSnap.forEach(docSnap => {
+            const event = docSnap.data();
+            events.push({
+                id: docSnap.id,
+                ...event,
+                places: describePlaces(registrationsByEvent.get(docSnap.id) || [], event.maxParticipants)
+            });
         });
         res.json(events);
     } catch (err) {

@@ -2,6 +2,7 @@
  * Registrations dialog: list, accept/reject, move slot.
  */
 import { state } from '../core/state.js';
+import { loadAdminEvents, loadAdminStats } from './dashboard.js';
 import { registerActions } from '../core/actions.js';
 import { escapeHtml, showToast } from '../core/ui.js';
 import { formatSlotLabel } from '../events/slots.js';
@@ -98,6 +99,9 @@ export async function updateRegStatus(regId, status, eventId, eventTitle) {
             showToast(status === 'accepted' ? 'Angenommen!' : 'Abgelehnt.', status === 'accepted' ? 'success' : 'warning');
             if (result.warning) showToast(result.warning, 'warning');
             showRegistrations(eventId, eventTitle);
+            // The table behind the dialog shows the open requests and places of this event
+            loadAdminEvents();
+            loadAdminStats();
         } else {
             const err = await res.json();
             showToast(err.error, 'danger');

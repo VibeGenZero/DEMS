@@ -683,7 +683,7 @@
               <button class="btn btn-danger dropdown-toggle" type="button" data-bs-toggle="dropdown">
                 <i class="bi bi-exclamation-triangle-fill me-1"></i>Danger Zone
               </button>
-              <ul class="dropdown-menu dropdown-menu-dark dropdown-menu-end">
+              <ul class="dropdown-menu dropdown-menu-end">
                 <li><a class="dropdown-item" href="#" data-click="showMaintenanceModal">
                   <i class="bi bi-tools me-2"></i>Wartungsmodus
                 </a></li>
@@ -691,7 +691,7 @@
                   <i class="bi bi-trash3 me-2"></i>System Reset
                 </a></li>
                 <li><hr class="dropdown-divider"></li>
-                <li><a class="dropdown-item text-danger" href="#" data-click="activatePanicMode">
+                <li><a class="dropdown-item is-danger" href="#" data-click="activatePanicMode">
                   <i class="bi bi-shield-exclamation me-2"></i>PANIC BUTTON
                 </a></li>
               </ul>
@@ -704,9 +704,15 @@
           <!-- Rendered dynamically -->
         </div>
 
-        <div class="row g-4" id="admin-events-grid">
-          <!-- Admin event cards render here -->
+        <div class="admin-events-toolbar">
+          <ul class="nav nav-pills" id="admin-events-tabs" role="tablist" aria-label="Events nach Status"></ul>
+          <div class="events-search">
+            <i class="bi bi-search events-search-icon" aria-hidden="true"></i>
+            <input type="search" class="form-control" id="admin-events-search" placeholder="Titel oder Kategorie suchen …"
+              aria-label="Events durchsuchen" data-input="searchAdminEvents">
+          </div>
         </div>
+        <div id="admin-events-table"></div>
 
         <!-- Audit Log -->
         <div id="audit-log-container" class="mt-4" style="display:none;">
