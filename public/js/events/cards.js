@@ -39,6 +39,16 @@ const formatTime = (date) => date.toLocaleTimeString('de-DE', { hour: '2-digit',
 const shortName = (date, part) => date.toLocaleDateString('de-DE', { [part]: 'short' }).replace('.', '');
 
 /**
+ * Start of an event.
+ *
+ * @param {Object} event -> Event with `startDate`.
+ * @returns {Date|null} -> The start, or null without a valid date.
+ */
+export function eventStart(event) {
+    return parseDate(event.startDate);
+}
+
+/**
  * End of an event.
  *
  * @param {Object} event -> Event with `startDate` and optional `endDate`.
