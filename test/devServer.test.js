@@ -297,6 +297,25 @@ test('list and event page tell the places of an event with the same sentence', a
     }
 });
 
+test('the admin list tells the places of every event like the event page', async () => {
+    const admin = await loginAs('admin');
+    const events = await (await admin.request('/api/admin/all-events')).json();
+    assert.ok(events.length >= 10);
+    for (const event of events) {
+        assert.equal(typeof event.places.text, 'string', event.title);
+        assert.equal(typeof event.places.waitlistText, 'string', event.title);
+        for (const key of ['taken', 'capacity', 'guests', 'pending', 'waitlist']) {
+            assert.equal(typeof event.places[key], 'number', `${event.title}: ${key}`);
+        }
+    }
+    for (const id of [EVENT_ID.OPEN, EVENT_ID.FORM, EVENT_ID.FULL, EVENT_ID.BIG_FORM]) {
+        const single = await (await admin.request(`/api/events/${id}`)).json();
+        assert.deepEqual(events.find(event => event.id === id).places, single.places, id);
+    }
+    // Members never see the archive; the admin list counts it all the same
+    assert.equal(events.find(event => event.id === EVENT_ID.ARCHIVED).places.text, '3 von 50 Plätzen belegt');
+});
+
 test('the event API answers only logged-in users', async () => {
     const admin = await loginAs('admin');
     const { seriesId } = await (await admin.request(`/api/events/${SERIES_EVENT_IDS[0]}`)).json();

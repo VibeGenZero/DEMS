@@ -3,7 +3,7 @@ id: routes-admin
 title: routes/admin.js — admin API
 type: module
 tags: [api, admin, events, registrations, discord, bot-control, maintenance, audit-log, csv]
-sources: [routes/admin.js, middleware/validators.js, utils/eventUtils.js]
+sources: [routes/admin.js, middleware/validators.js, utils/eventUtils.js, utils/capacity.js]
 part_of: [architecture]
 depends_on: [middleware, utils, data-layer, bot]
 see_also: [event-lifecycle, maintenance-mode, discord-integration, api-index]
@@ -19,7 +19,7 @@ see_also: [event-lifecycle, maintenance-mode, discord-integration, api-index]
 | GET | `/roles` | guild roles (`getGuildRoles`) | — |
 | GET | `/channels` | guild channels for location autocomplete | — |
 | GET | `/stats` | counts of events by status and registrations by status (guests counted) | — |
-| GET | `/all-events` | all events incl. draft/archived, `orderBy('createdAt','desc')` | — |
+| GET | `/all-events` | all events incl. draft/archived, `orderBy('createdAt','desc')`; each with `places` (`describePlaces`: `taken`, `capacity`, `guests`, `pending`, `waitlist`, `text`, `waitlistText`), built from one read of `registrations` grouped by `eventId` | — |
 | GET | `/import/discord-events` | Discord scheduled events (`getGuildScheduledEvents`) | — |
 | POST | `/events` | `validateEvent`; creates one event or, with `recurring` + `recurringUntil`, a series (`seriesId`, weekly/biweekly/monthly); may `createEventChannels`; `slots` via `normalizeSlots` (slot events: `maxParticipants = Σ capacity`, `allowGuests = false`); optional `fromPoll: { pollId, optionId }` (only with status `active`) → `decidePollWithEvent` checks, creates (first instance of a series decides) and decides under the poll lock, event gets `sourcePollId` | `CREATE_EVENT`, `DECIDE_POLL` |
 | PUT | `/events/:id` | `validateEvent`; full update; creates/deletes channels when `autoCreateChannels`/status changes; slots validated and written by `saveEventWithSlots` under the event lock; afterwards promotes the waitlist and refreshes announcements; `reminderHours` via `mergeReminderHours` (sent reminders stay sent while `startDate` is unchanged) | `UPDATE_EVENT` |

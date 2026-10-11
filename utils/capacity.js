@@ -83,6 +83,18 @@ function formatWaitlist(waitlist) {
 }
 
 /**
+ * Places of an event as every view shows them: the numbers plus the sentence.
+ *
+ * @param {Array<Object>} registrations -> All registrations of the event.
+ * @param {number} maxParticipants -> Capacity of the event, 0 = unlimited.
+ * @returns {Object} -> `{ taken, capacity, guests, pending, waitlist, text, waitlistText }`.
+ */
+function describePlaces(registrations, maxParticipants) {
+    const places = summarizePlaces(registrations, maxParticipants);
+    return { ...places, text: formatPlaces(places), waitlistText: formatWaitlist(places.waitlist) };
+}
+
+/**
  * Sort comparator -> oldest registration first.
  *
  * @param {Object} a -> Registration.
@@ -130,6 +142,7 @@ module.exports = {
     summarizePlaces,
     formatPlaces,
     formatWaitlist,
+    describePlaces,
     byCreatedAt,
     pickCapacityPromotions
 };

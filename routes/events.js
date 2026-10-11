@@ -9,7 +9,7 @@ const { loadEventRoster, loadEventRegistrations, toPublicEvent, isEventVisibleTo
 const { isEventOver, pickSeriesRepresentative, myRegistrationStatus } = require('../utils/eventListing');
 const { registerUserForEvent, switchOwnSlot, unregisterUserFromEvent, REGISTRATION_SOURCE } = require('../utils/registrationService');
 const { hasSlots, withSlotSummary } = require('../utils/slotService');
-const { summarizePlaces, formatPlaces, formatWaitlist } = require('../utils/capacity');
+const { describePlaces } = require('../utils/capacity');
 const { debugLog } = require('../utils/debugLog');
 const { avatarUrlOf, repairAvatarUrl } = require('../utils/avatar');
 
@@ -23,12 +23,8 @@ const { avatarUrlOf, repairAvatarUrl } = require('../utils/avatar');
  * @returns {Object} -> The event with `currentParticipants` and `places` (`taken`, `capacity`, `guests`, `pending`, `waitlist`, `text`, `waitlistText`).
  */
 function withPlaces(event, registrations) {
-    const places = summarizePlaces(registrations, event.maxParticipants);
-    return {
-        ...event,
-        currentParticipants: places.taken,
-        places: { ...places, text: formatPlaces(places), waitlistText: formatWaitlist(places.waitlist) }
-    };
+    const places = describePlaces(registrations, event.maxParticipants);
+    return { ...event, currentParticipants: places.taken, places };
 }
 
 // No public preview: every event endpoint needs a login. Runs before router.param
