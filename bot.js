@@ -16,6 +16,7 @@ const { buildBotInviteUrl } = require('./utils/botPermissions');
 const { parseTemplate } = require('./utils/template');
 const { normalizeReminderHours, findDueReminders } = require('./utils/reminders');
 const { isEventOver } = require('./utils/eventListing');
+const { summarizePlaces, formatPlaces } = require('./utils/capacity');
 const { isRegistrationBlocked } = require('./middleware/maintenance');
 const {
     FORM_FIELD_TYPE, MODAL_MAX_FIELDS, getFormFields, getFieldType,
@@ -415,6 +416,13 @@ client.on('interactionCreate', async (interaction) => {
                 return dateA.localeCompare(dateB);
             });
 
+            // Registrations of all events in one query, for the places sentence
+            const registrationsByEvent = {};
+            (await getDocs(collection(db, 'registrations'))).forEach(regDoc => {
+                const registration = regDoc.data();
+                (registrationsByEvent[registration.eventId] ||= []).push(registration);
+            });
+
             const embeds = [];
             const maxEmbeds = Math.min(events.length, 10); // Max 10 embeds per message
 
@@ -423,10 +431,11 @@ client.on('interactionCreate', async (interaction) => {
                 const embed = new EmbedBuilder()
                     .setTitle(ev.title)
                     .setColor(0x8b5cf6)
-                    .setDescription((ev.description || '').substring(0, 200))
+                    // Discord refuses an empty description; one event without a text broke the whole list
+                    .setDescription((ev.description || 'Keine Beschreibung.').substring(0, 200))
                     .addFields(
                         { name: '📅 Datum', value: ev.startDate ? new Date(ev.startDate).toLocaleString('de-DE', { timeZone: TIMEZONE }) : 'TBD', inline: true },
-                        { name: '👥 Plätze', value: ev.maxParticipants > 0 ? `${ev.currentParticipants || 0}/${ev.maxParticipants}` : 'Unbegrenzt', inline: true },
+                        { name: '👥 Plätze', value: formatPlaces(summarizePlaces(registrationsByEvent[ev.id] || [], ev.maxParticipants)), inline: true },
                         { name: '🔗 Link', value: `[Zur Anmeldung](${buildEventUrl(ev.id)})`, inline: true }
                     );
                 if (ev.category) embed.setFooter({ text: ev.category });
@@ -598,8 +607,8 @@ async function sendChannelMessage(channelId, embed, options = {}) {
 /**
  * Build an event announcement embed.
  *
- * With a roster the embed shows live numbers: the participant count and,
- * for slot events, one field per slot with the first names.
+ * With a roster the embed shows live numbers: the places sentence, the
+ * waitlist and, for slot events, one field per slot with the first names.
  *
  * @param {Object} event -> Event data.
  * @param {string} [registrationLink] -> Link to the event page.
@@ -613,7 +622,7 @@ function buildEventEmbed(event, registrationLink, roster) {
         .setDescription(event.description || 'Keine Beschreibung.')
         .addFields(
             { name: '🗓️ Datum', value: event.startDate ? new Date(event.startDate).toLocaleString('de-DE', { timeZone: TIMEZONE }) : 'TBA', inline: true },
-            { name: '👥 Teilnehmer', value: formatParticipantCount(event, roster), inline: true },
+            { name: '👥 Plätze', value: formatParticipantCount(event, roster), inline: true },
             { name: '🔓 Zugang', value: event.accessMode === 'open' ? 'Offen für alle' : 'Rollen-Requirement', inline: true }
         )
         .setFooter({ text: 'DEMS — Event Management' })
@@ -623,9 +632,9 @@ function buildEventEmbed(event, registrationLink, roster) {
         roster.slots.forEach(slot => {
             embed.addFields({ name: formatRosterSlotTitle(slot), value: formatRosterMembers(slot), inline: true });
         });
-        if (roster.waitlistCount > 0) {
-            embed.addFields({ name: '⏳ Warteliste', value: String(roster.waitlistCount), inline: true });
-        }
+    }
+    if (roster && roster.waitlistCount > 0) {
+        embed.addFields({ name: '⏳ Warteliste', value: String(roster.waitlistCount), inline: true });
     }
 
     if (event.bannerUrl) {
@@ -648,11 +657,11 @@ function buildEventEmbed(event, registrationLink, roster) {
  *
  * @param {Object} event -> Event data.
  * @param {Object} [roster] -> Line-up with live numbers.
- * @returns {string} -> "3/10", "3 (unbegrenzt)" or the static capacity.
+ * @returns {string} -> The places sentence of utils/capacity.js ("3 von 10 Plätzen belegt (inkl. 1 Gast)"), without a roster the static capacity.
  */
 function formatParticipantCount(event, roster) {
     if (!roster) return event.maxParticipants > 0 ? `Max. ${event.maxParticipants}` : 'Unbegrenzt';
-    return roster.capacity > 0 ? `${roster.taken}/${roster.capacity}` : `${roster.taken} (unbegrenzt)`;
+    return formatPlaces(roster.places);
 }
 
 /**

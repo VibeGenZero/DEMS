@@ -54,7 +54,7 @@ const describe = (rule, declaration) => `${rule.file}:${declaration.line} ${rule
 // never raise it. Before D-02 there were 132 style attributes and 57
 // !important in style.css. D-16 brings the style attributes to 0.
 // components.css has its own rule: !important only in the colour helpers.
-const STYLE_ATTRIBUTE_BUDGET = 116;
+const STYLE_ATTRIBUTE_BUDGET = 115;
 const IMPORTANT_BUDGET = 30;
 // Emojis in index.html and the modules. Symbols are Bootstrap Icons (bi-*);
 // lower the number when a page drops some, never raise it. Emojis that users

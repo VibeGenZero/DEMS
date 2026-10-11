@@ -97,22 +97,41 @@ test('the embed shows the line-up per slot', () => {
     const fields = bot.buildEventEmbed(event, 'https://dems.example/#event/evt1', buildRoster(event, registrations)).toJSON().fields;
     const byName = Object.fromEntries(fields.map(field => [field.name, field.value]));
 
-    assert.equal(byName['👥 Teilnehmer'], '8/7');
+    assert.equal(byName['👥 Plätze'], '8 von 7 Plätzen belegt');
     assert.equal(byName['🛡️ Tank 2/2 ✅'], 'Ana, \\*Star\\*');
     assert.equal(byName['💚 Heiler 0/2'], '— frei —');
     assert.equal(byName['⚔️ Schaden 6/3 ⚠️'], 'C1, C2, C3, C4, C5, +1');
     assert.equal(byName['⏳ Warteliste'], '1');
 });
 
-test('normal events show the live participant count', () => {
+test('normal events show the places sentence with live numbers', () => {
     const registrations = [member(undefined, 'A'), member(undefined, 'B'), member(undefined, 'C')];
     const limited = { title: 'Abend', status: 'active', maxParticipants: 10 };
     const unlimited = { title: 'Abend', status: 'active', maxParticipants: 0 };
-    const valueOf = (embed) => embed.toJSON().fields.find(field => field.name === '👥 Teilnehmer').value;
+    const valueOf = (embed) => embed.toJSON().fields.find(field => field.name === '👥 Plätze').value;
 
-    assert.equal(valueOf(bot.buildEventEmbed(limited, '', buildRoster(limited, registrations))), '3/10');
-    assert.equal(valueOf(bot.buildEventEmbed(unlimited, '', buildRoster(unlimited, registrations))), '3 (unbegrenzt)');
+    assert.equal(valueOf(bot.buildEventEmbed(limited, '', buildRoster(limited, registrations))), '3 von 10 Plätzen belegt');
+    assert.equal(valueOf(bot.buildEventEmbed(unlimited, '', buildRoster(unlimited, registrations))), '3 Plätze belegt');
     assert.equal(valueOf(bot.buildEventEmbed(limited)), 'Max. 10');
+    assert.equal(valueOf(bot.buildEventEmbed(unlimited)), 'Unbegrenzt');
+});
+
+test('the embed says that guests and open requests count, and how many wait', () => {
+    const event = { title: 'Abend', status: 'active', maxParticipants: 10 };
+    const registrations = [
+        { ...member(undefined, 'Mit Gast'), guests: ['g1'] },
+        member(undefined, 'Anfrage', 'pending'),
+        member(undefined, 'Wartend 1', 'waitlisted'),
+        member(undefined, 'Wartend 2', 'waitlisted')
+    ];
+    const fields = bot.buildEventEmbed(event, '', buildRoster(event, registrations)).toJSON().fields;
+    const byName = Object.fromEntries(fields.map(field => [field.name, field.value]));
+    assert.equal(byName['👥 Plätze'], '3 von 10 Plätzen belegt (inkl. 1 Gast, 1 Anfrage offen)');
+    assert.equal(byName['⏳ Warteliste'], '2');
+
+    // Nobody waits: no waitlist field
+    const quiet = bot.buildEventEmbed(event, '', buildRoster(event, registrations.slice(0, 2))).toJSON().fields;
+    assert.ok(!quiet.some(field => field.name === '⏳ Warteliste'));
 });
 
 const COMPONENT_TYPE = { TEXT_DISPLAY: 10, LABEL: 18 };

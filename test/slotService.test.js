@@ -194,7 +194,7 @@ test('the roster lists members per slot and the waitlist in order', () => {
 test('the roster of a normal event counts guests and has no slots', () => {
     const registrations = [slotReg('a', 'accepted', undefined, '1', { guests: ['g1'] }), slotReg('w', 'waitlisted', undefined, '2')];
     const roster = buildRoster({ maxParticipants: 10 }, registrations);
-    assert.deepEqual(roster, { taken: 2, capacity: 10, waitlistCount: 1, slots: [], waitlist: [] });
+    assert.deepEqual(roster, { taken: 2, capacity: 10, waitlistCount: 1, places: { taken: 2, capacity: 10, guests: 1, pending: 0, waitlist: 1 }, slots: [], waitlist: [] });
     assert.equal(buildRoster({ maxParticipants: 0 }, []).capacity, 0);
 });
 

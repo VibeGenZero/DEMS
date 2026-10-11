@@ -151,15 +151,35 @@ test('the time line says when the event starts', async () => {
 test('the capacity shows taken places, warns from 80 % and says when it is full', async () => {
     const { app } = await loadFrontendApp({});
     const capacity = (currentParticipants, maxParticipants) => app.renderCapacity({ currentParticipants, maxParticipants });
-    assert.equal(capacity(3, 0), '<div class="capacity"><span class="capacity-text">Unbegrenzt</span></div>');
-    assert.match(capacity(5, 20), /^<div class="capacity"><progress class="capacity-meter" max="20" value="5" aria-label="5 von 20 Plätzen belegt"><\/progress><span class="capacity-text">5\/20<\/span><\/div>$/);
-    assert.match(capacity(7, 10), /class="capacity"[^]*7\/10/);
+    assert.equal(capacity(3, 0), '<div class="capacity"><span class="capacity-text">3 Plätze belegt</span></div>');
+    assert.equal(capacity(1, 0), '<div class="capacity"><span class="capacity-text">1 Platz belegt</span></div>');
+    assert.match(capacity(5, 20), /^<div class="capacity"><progress class="capacity-meter" max="20" value="5" aria-label="5 von 20 Plätzen belegt"><\/progress><span class="capacity-text">5 von 20 belegt<\/span><\/div>$/);
+    assert.match(capacity(7, 10), /class="capacity"[^]*7 von 10 belegt/);
     assert.match(capacity(8, 10), /class="capacity is-low"[^]*Noch 2 Plätze/);
     assert.match(capacity(4, 5), /class="capacity is-low"[^]*Noch 1 Platz</);
     assert.match(capacity(5, 5), /class="capacity is-full"[^]*Ausgebucht/);
     // Overbooked by an admin: the bar stays at its end
     assert.match(capacity(7, 5), /class="capacity is-full"[^]*max="5" value="5"/);
-    assert.match(capacity(undefined, 4), /value="0"[^]*0\/4/);
+    assert.match(capacity(undefined, 4), /value="0"[^]*0 von 4 belegt/);
+});
+
+test('the capacity of a card carries the places sentence and the waitlist', async () => {
+    const { app } = await loadFrontendApp({});
+    const places = (fields) => ({ taken: 5, capacity: 20, guests: 1, pending: 1, waitlist: 0, text: '5 von 20 Plätzen belegt (inkl. 1 Gast, 1 Anfrage offen)', waitlistText: '', ...fields });
+    // The API's numbers win over the older count fields
+    const html = app.renderCapacity({ currentParticipants: 4, maxParticipants: 20, places: places() });
+    assert.match(html, /^<div class="capacity" title="5 von 20 Plätzen belegt \(inkl\. 1 Gast, 1 Anfrage offen\)">/);
+    assert.match(html, /value="5" aria-label="5 von 20 Plätzen belegt \(inkl\. 1 Gast, 1 Anfrage offen\)"/);
+    assert.match(html, /<span class="capacity-text">5 von 20 belegt<\/span>/);
+
+    const full = app.renderCapacity({ maxParticipants: 5, places: places({ taken: 5, capacity: 5, guests: 0, pending: 0, waitlist: 3, text: '5 von 5 Plätzen belegt', waitlistText: '3 auf der Warteliste' }) });
+    assert.match(full, /title="5 von 5 Plätzen belegt · 3 auf der Warteliste"/);
+    assert.match(full, /<span class="capacity-text">Ausgebucht · 3 warten<\/span>/);
+    const oneWaiting = app.renderCapacity({ maxParticipants: 5, places: places({ taken: 5, capacity: 5, waitlist: 1, text: 'x', waitlistText: '1 auf der Warteliste' }) });
+    assert.match(oneWaiting, /Ausgebucht · 1 wartet</);
+
+    const escaped = app.renderCapacity({ maxParticipants: 20, places: places({ text: '"><b>x</b>' }) });
+    assert.doesNotMatch(escaped, /<b>/);
 });
 
 test('the own status becomes a chip with an icon, anything else none', async () => {
@@ -202,7 +222,7 @@ test('an event card links to the event and shows banner, date, time and facts', 
     assert.match(html, /<strong>in 5 Tagen<\/strong> · 20:00/);
     assert.match(html, /Warteliste/);
     assert.match(html, /bi-lock"><\/i>Rolle nötig/);
-    assert.match(html, /2\/6/);
+    assert.match(html, /2 von 6 belegt/);
     assert.doesNotMatch(html, /Nur für das Raid-Team/, 'no description on the card');
     assert.doesNotMatch(html, /Serie/);
 });

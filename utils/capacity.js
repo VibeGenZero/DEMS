@@ -36,6 +36,53 @@ function countOccupiedPlaces(registrations) {
 }
 
 /**
+ * Numbers behind the places sentence of an event.
+ *
+ * @param {Array<Object>} registrations -> All registrations of the event.
+ * @param {number} maxParticipants -> Capacity of the event, 0 = unlimited.
+ * @returns {Object} -> `{ taken, capacity, guests, pending, waitlist }`: taken places as the registration counts them (guests and open invitations included), how many of them are guests, how many requests wait for approval and how many registrations are on the waitlist.
+ */
+function summarizePlaces(registrations, maxParticipants) {
+    const occupying = registrations.filter(registration => OCCUPYING_STATUSES.includes(registration.status));
+    return {
+        taken: occupying.reduce((sum, registration) => sum + placesOf(registration), 0),
+        capacity: maxParticipants > 0 ? maxParticipants : 0,
+        guests: occupying.reduce((sum, registration) => sum + placesOf(registration) - 1, 0),
+        pending: occupying.filter(registration => registration.status === 'pending').length,
+        waitlist: registrations.filter(registration => registration.status === 'waitlisted').length
+    };
+}
+
+const countOf = (count, one, many) => `${count} ${count === 1 ? one : many}`;
+
+/**
+ * The one sentence every place shows for the places of an event (website
+ * and Discord), so nobody has to guess whether guests count.
+ *
+ * @param {Object} places -> Result of summarizePlaces().
+ * @returns {string} -> e.g. "5 von 20 Plätzen belegt (inkl. 1 Gast, 1 Anfrage offen)"; without a limit "5 Plätze belegt".
+ */
+function formatPlaces(places) {
+    const sentence = places.capacity > 0
+        ? `${places.taken} von ${countOf(places.capacity, 'Platz', 'Plätzen')} belegt`
+        : `${countOf(places.taken, 'Platz', 'Plätze')} belegt`;
+    const details = [];
+    if (places.guests > 0) details.push(`inkl. ${countOf(places.guests, 'Gast', 'Gäste')}`);
+    if (places.pending > 0) details.push(`${countOf(places.pending, 'Anfrage', 'Anfragen')} offen`);
+    return details.length > 0 ? `${sentence} (${details.join(', ')})` : sentence;
+}
+
+/**
+ * Note about the waitlist that stands beside the places sentence.
+ *
+ * @param {number} waitlist -> Registrations on the waitlist.
+ * @returns {string} -> "3 auf der Warteliste", empty when nobody waits.
+ */
+function formatWaitlist(waitlist) {
+    return waitlist > 0 ? `${waitlist} auf der Warteliste` : '';
+}
+
+/**
  * Sort comparator -> oldest registration first.
  *
  * @param {Object} a -> Registration.
@@ -80,6 +127,9 @@ module.exports = {
     OCCUPYING_STATUSES,
     placesOf,
     countOccupiedPlaces,
+    summarizePlaces,
+    formatPlaces,
+    formatWaitlist,
     byCreatedAt,
     pickCapacityPromotions
 };

@@ -88,3 +88,16 @@ test('a declined guest invitation lets the waitlist move up', async () => {
     }
     assert.equal(status, 'accepted');
 });
+
+test('/events tells the places of an event with the sentence of the website', async () => {
+    await setDoc(doc(db, 'events', 'int-list'), { title: 'Listen-Abend', status: 'active', approvalMode: 'manual', maxParticipants: 10, startDate: '2026-10-20T18:00:00.000Z' });
+    await seedRegistration('int-list-a', 'int-list', 'int-list-1', { status: 'accepted', guests: ['int-list-guest'] });
+    await seedRegistration('int-list-b', 'int-list', 'int-list-2', { status: 'pending' });
+
+    const interaction = createFakeInteraction({ kind: 'command', commandName: 'events', userId: 'int-list-1' });
+    await dispatchInteraction(bot.client, interaction);
+
+    const [, payload] = interaction.calls.find(([name]) => name === 'reply');
+    const embed = payload.embeds.map(entry => entry.toJSON()).find(entry => entry.title === 'Listen-Abend');
+    assert.equal(embed.fields.find(field => field.name === '👥 Plätze').value, '3 von 10 Plätzen belegt (inkl. 1 Gast, 1 Anfrage offen)');
+});
