@@ -4,7 +4,7 @@
 import { state } from '../core/state.js';
 import { navigateTo } from '../core/router.js';
 import { registerActions } from '../core/actions.js';
-import { escapeHtml, isValidBannerUrl, renderMarkdownSafe, showToast } from '../core/ui.js';
+import { applyStyleData, escapeHtml, isValidBannerUrl, renderMarkdownSafe, showElement, showToast } from '../core/ui.js';
 import { renderCheckinSection } from './checkin.js';
 import { loadComments } from './comments.js';
 import { resetGuestSelection } from './guests.js';
@@ -226,10 +226,11 @@ export async function loadDetailParticipants(eventId) {
             avatarsEl.style.display = 'none';
             rosterEl.style.display = 'block';
             rosterEl.innerHTML = renderRoster(data);
+            applyStyleData(rosterEl);
             return;
         }
         if (titleEl) titleEl.textContent = 'TEILNEHMER';
-        avatarsEl.style.display = '';
+        showElement(avatarsEl);
         if (rosterEl) {
             rosterEl.style.display = 'none';
             rosterEl.innerHTML = '';
@@ -347,7 +348,7 @@ export async function showEventDetail(eventId) {
                             <div class="series-dates-list">
                                 ${visibleSeries.map(renderSeriesItem).join('')}
                                 ${hiddenCount > 0 ? `
-                                    <div id="detail-series-hidden" style="display:none;">
+                                    <div id="detail-series-hidden" class="is-hidden">
                                         ${hiddenSeries.map(renderSeriesItem).join('')}
                                     </div>
                                     <a class="series-dates-toggle" href="#" data-click="toggleDetailSeriesDates">
@@ -486,8 +487,8 @@ export function toggleDetailSeriesDates() {
     const icon = document.getElementById('detail-series-icon');
     const text = document.getElementById('detail-series-toggle-text');
     if (!hidden) return;
-    const isOpen = hidden.style.display !== 'none';
-    hidden.style.display = isOpen ? 'none' : 'block';
+    const isOpen = !hidden.classList.contains('is-hidden');
+    hidden.classList.toggle('is-hidden', isOpen);
     icon.className = isOpen ? 'bi bi-chevron-down me-1' : 'bi bi-chevron-up me-1';
     const count = hidden.querySelectorAll('.series-date-item').length;
     text.textContent = isOpen ? `${count} weitere Termine anzeigen` : 'Weniger anzeigen';

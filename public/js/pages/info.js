@@ -2,7 +2,7 @@
  * Info page and "Meine Daten".
  */
 import { state } from '../core/state.js';
-import { escapeHtml } from '../core/ui.js';
+import { escapeHtml, showElement } from '../core/ui.js';
 
 export function showInfoSection() {
     document.getElementById('info-section').style.display = 'block';
@@ -10,7 +10,7 @@ export function showInfoSection() {
     // Show data button only if logged in
     const mydataArea = document.getElementById('info-mydata-area');
     if (state.currentUser) {
-        mydataArea.style.display = '';
+        showElement(mydataArea);
     } else {
         mydataArea.style.display = 'none';
     }
@@ -136,16 +136,16 @@ export async function showUserData() {
 
         container.innerHTML = `
             <div class="glass-card p-4 text-start" id="info-data-card">
-                <h4 class="mb-3"><i class="bi bi-database me-2" style="color:var(--accent-light);"></i>Deine gespeicherten Daten</h4>
+                <h4 class="mb-3"><i class="bi bi-database me-2 text-accent"></i>Deine gespeicherten Daten</h4>
 
                 <div class="info-data-group">
                     <h6><i class="bi bi-person-fill me-1"></i>Profildaten</h6>
                     <table class="table table-dark table-sm">
                         <tbody>
-                            <tr><td class="text-muted" style="width:35%;">Discord ID</td><td><code>${escapeHtml(profile.id)}</code></td></tr>
+                            <tr><td class="text-muted info-data-key">Discord ID</td><td><code>${escapeHtml(profile.id)}</code></td></tr>
                             <tr><td class="text-muted">Username</td><td>${escapeHtml(profile.username)}</td></tr>
                             <tr><td class="text-muted">Anzeigename</td><td>${escapeHtml(profile.displayName)}</td></tr>
-                            <tr><td class="text-muted">Avatar-URL</td><td style="word-break:break-all;"><small>${escapeHtml(profile.avatar)}</small></td></tr>
+                            <tr><td class="text-muted">Avatar-URL</td><td class="info-data-long"><small>${escapeHtml(profile.avatar)}</small></td></tr>
                             <tr><td class="text-muted">Rollen</td><td><code>${profile.roles ? profile.roles.length + ' Rollen' : '0'}</code></td></tr>
                             <tr><td class="text-muted">Admin</td><td>${profile.isAdmin ? '<span class="text-success">Ja</span>' : '<span class="text-muted">Nein</span>'}</td></tr>
                         </tbody>

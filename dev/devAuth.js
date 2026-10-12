@@ -5,6 +5,7 @@
  * Discord OAuth2 round trip with a page listing the mock personas and creates
  * exactly the session the real OAuth2 callback creates.
  */
+const path = require('path');
 const express = require('express');
 const { getLoginBlockReason } = require('../middleware/maintenance');
 const { startUserSession } = require('../middleware/auth');
@@ -49,17 +50,7 @@ function renderPersonaPage() {
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>DEMS Dev-Login</title>
-<style>
-    body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #0f0f1a; color: #e5e7eb; font-family: system-ui, sans-serif; }
-    main { width: min(420px, calc(100% - 32px)); }
-    h1 { font-size: 1.4rem; margin: 0 0 4px; }
-    p { margin: 0 0 20px; color: #9ca3af; }
-    .persona { display: flex; gap: 14px; align-items: center; padding: 12px 14px; margin-bottom: 10px; border-radius: 12px; background: #1c1c2e; border: 1px solid #2e2e48; color: inherit; text-decoration: none; }
-    .persona:hover { border-color: #8b5cf6; }
-    .persona img { border-radius: 50%; }
-    .persona span { display: grid; gap: 2px; }
-    small { color: #9ca3af; }
-</style>
+<link rel="stylesheet" href="/auth/dev-login.css">
 </head>
 <body>
 <main>
@@ -70,6 +61,14 @@ function renderPersonaPage() {
 </body>
 </html>`;
 }
+
+/**
+ * GET /auth/dev-login.css — look of the persona page. A file, because the
+ * content security policy allows neither a style element nor style attributes.
+ */
+router.get('/dev-login.css', (req, res) => {
+    res.sendFile(path.join(__dirname, 'dev-login.css'));
+});
 
 /**
  * GET /auth/discord — the existing login buttons land on the persona page

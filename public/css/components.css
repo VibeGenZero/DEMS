@@ -995,3 +995,47 @@ button.chip.active,
   background: var(--danger-bg);
   color: var(--danger);
 }
+
+/* ═══════════════════════════════════════════ */
+/* START STATE                                 */
+/* Markup carries no style attributes: the CSP */
+/* forbids them (style-src-attr 'none')        */
+/* ═══════════════════════════════════════════ */
+/* Hidden until JS shows the element. Like the style attribute it replaces, the start
+   state beats every rule that gives a component its display (.countdown, .sidebar-detail-row …)
+   and loses to an inline style: element.style.display = 'block' still shows the element,
+   showElement() in core/ui.js shows it in its own display type. :not() with an id that no
+   element has lends the selector the weight of an id; an !important would also beat the
+   inline style. Bootstrap's d-flex carries !important and beats this class: leave it out
+   of the markup and let the script set the display. */
+.is-hidden:not(#no-such-id) {
+  display: none;
+}
+
+/* ═══════════════════════════════════════════ */
+/* HELPERS                                     */
+/* Small classes for what a style attribute    */
+/* used to do                                  */
+/* ═══════════════════════════════════════════ */
+/* Icons that stand alone, larger than the text around them */
+.icon-lg {
+  font-size: var(--font-size-2xl);
+}
+
+.icon-xl {
+  font-size: var(--font-size-3xl);
+}
+
+.icon-2xl {
+  font-size: var(--font-size-4xl);
+}
+
+/* An element that is no button or link but reacts to a click */
+.cursor-pointer {
+  cursor: pointer;
+}
+
+/* Card on a hint of the accent colour: option groups of the event wizard, check-in */
+.glass-card.is-tinted {
+  background: var(--accent-tint-1);
+}

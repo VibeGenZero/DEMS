@@ -9,7 +9,7 @@ see_also: [auth-session, known-issues, deployment]
 ---
 # Security model and open audit findings
 
-> TL;DR: Defenses: helmet CSP (scripts, styles and fonts only from `'self'`; no inline scripts or event handlers; styles still allow `unsafe-inline`), CORS to `BASE_URL`, rate limits, double-submit CSRF on `/api` and `/auth`, httpOnly session cookie, server-side admin guards, `escapeHtml` + DOMPurify in the SPA. The 2026-04-22 audit lists 28 findings; most are still open — check the table before touching auth, events or exports. Serve DEMS over HTTPS: helmet's default `upgrade-insecure-requests` breaks plain-HTTP access from anything but localhost.
+> TL;DR: Defenses: helmet CSP (scripts, styles and fonts only from `'self'`; no inline scripts, event handlers or styles), CORS to `BASE_URL`, rate limits, double-submit CSRF on `/api` and `/auth`, httpOnly session cookie, server-side admin guards, `escapeHtml` + DOMPurify in the SPA. The 2026-04-22 audit lists 28 findings; most are still open — check the table before touching auth, events or exports. Serve DEMS over HTTPS: helmet's default `upgrade-insecure-requests` breaks plain-HTTP access from anything but localhost.
 
 ## Defenses in place
 
@@ -36,7 +36,7 @@ see_also: [auth-session, known-issues, deployment]
 | H-01 / H-02 | OAuth `state`, session regeneration | fixed: one-time `state` per login, `startUserSession` regenerates the session (F-05) |
 | H-03 | 24 h admin cache | fixed: roles and `isAdmin` are re-read from Discord at most every 5 minutes (`createRoleRefresh`, F-15) |
 | H-04 | guest `my-registration` leaks registrant data | fixed: guests get only `{ registered, asGuest, id, status }` (F-04) |
-| H-05 | CSP `unsafe-inline` + `unsafe-eval` | **done for scripts** (D-01): `unsafe-eval` removed (F-07); `script-src 'self'`, `script-src-attr 'none'`; actions via `data-click`/`data-change`/`data-input` (`core/actions.js`); `style-src` keeps `'unsafe-inline'` until D-16 removes the `style` attributes (their number is pinned by a budget in `test/cssRules.test.js`) |
+| H-05 | CSP `unsafe-inline` + `unsafe-eval` | **done**. Scripts (D-01): `unsafe-eval` removed (F-07); `script-src 'self'`, `script-src-attr 'none'`; actions via `data-click`/`data-change`/`data-input` (`core/actions.js`). Styles (D-16): `style-src 'self'`, `style-src-attr 'none'`; markup carries no `style` attribute and no `<style>` element (guard in `test/cssRules.test.js`), start states use the class `.is-hidden`, runtime values go through `data-style-*` + `applyStyleData` (`core/ui.js`); Markdown of users loses `style` attributes and `<style>` tags (`renderMarkdownSafe`), so it can neither style nor overlay the page. Styles that scripts set through the CSSOM (`element.style.…`) are not affected by the policy |
 | H-06 | check-in code via `Math.random`, not specifically rate-limited | fixed: `crypto.randomInt`, 10 failed check-ins / 15 min per member (F-14) |
 | M-01 | Firebase client SDK used server-side | open (depends on Firestore rules) |
 | M-02 | CDN assets without SRI | fixed: no CDN assets, libraries and fonts are vendored in `public/vendor/` (F-07) |

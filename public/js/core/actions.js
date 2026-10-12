@@ -6,6 +6,7 @@
  * Replaces inline onclick/onchange/oninput/onerror handlers, so the CSP can
  * forbid them. Broken images use data-fallback="hide|invisible|initials".
  */
+import { toggleElement } from './ui.js';
 
 const actions = new Map();
 
@@ -110,7 +111,7 @@ function applyFallback(img) {
 registerActions({
     toggleVisible: (el) => {
         const target = document.getElementById(el.dataset.target);
-        if (target) target.style.display = el.checked ? '' : 'none';
+        if (target) toggleElement(target, el.checked);
     },
     hide: (el) => {
         const target = document.getElementById(el.dataset.target);

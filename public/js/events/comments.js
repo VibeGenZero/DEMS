@@ -3,7 +3,7 @@
  */
 import { state } from '../core/state.js';
 import { registerActions } from '../core/actions.js';
-import { escapeHtml, showToast } from '../core/ui.js';
+import { escapeHtml, showElement, showToast } from '../core/ui.js';
 
 export async function loadComments(eventId) {
     // Check if comment area exists, if not create it
@@ -17,7 +17,7 @@ export async function loadComments(eventId) {
     if (!commentSection) return;
 
     // Clear previous comments and show loading state
-    commentSection.style.display = '';
+    showElement(commentSection);
     commentSection.innerHTML = '<div class="text-center py-4"><div class="spinner-border text-accent" role="status"><span class="visually-hidden">Laden...</span></div></div>';
 
     const isLoggedIn = !!state.currentUser;

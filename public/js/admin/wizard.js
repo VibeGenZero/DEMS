@@ -6,7 +6,7 @@ import { loadAdminEvents, loadAdminStats } from './dashboard.js';
 import { addFormField, getFormFieldsFromBuilder, getSlotsFromEditor, renderSlotEditor } from './wizard-builders.js';
 import { navigateTo } from '../core/router.js';
 import { registerActions } from '../core/actions.js';
-import { escapeHtml, showToast } from '../core/ui.js';
+import { applyStyleData, escapeHtml, hexColor, showElement, showToast, toggleElement } from '../core/ui.js';
 import { showPollDetail } from '../polls/polls.js';
 
 export let _cachedChannels = null;
@@ -77,7 +77,7 @@ export function wizardGoTo(step) {
 
     // Show new page
     const page = document.getElementById(`wizard-page-${step}`);
-    page.style.display = '';
+    showElement(page);
 
     // Update step indicators
     for (let i = 1; i <= WIZARD_TOTAL_STEPS; i++) {
@@ -88,9 +88,9 @@ export function wizardGoTo(step) {
     }
 
     // Navigation buttons
-    document.getElementById('wizard-btn-back').style.display = step > 1 ? '' : 'none';
-    document.getElementById('wizard-btn-next').style.display = step < WIZARD_TOTAL_STEPS ? '' : 'none';
-    document.getElementById('wizard-btn-save').style.display = step === WIZARD_TOTAL_STEPS ? '' : 'none';
+    toggleElement(document.getElementById('wizard-btn-back'), step > 1);
+    toggleElement(document.getElementById('wizard-btn-next'), step < WIZARD_TOTAL_STEPS);
+    toggleElement(document.getElementById('wizard-btn-save'), step === WIZARD_TOTAL_STEPS);
     document.getElementById('wizard-step-counter').textContent = `Schritt ${step} von ${WIZARD_TOTAL_STEPS}`;
 
     // Refresh EasyMDE when returning to step 1
@@ -285,7 +285,7 @@ export async function editEvent(eventId) {
         document.getElementById('event-checkin-message').value = event.checkinMessage || '';
         document.getElementById('event-auto-create-channels').checked = !!event.autoCreateChannels;
 
-        document.getElementById('channel-config-options').style.display = event.autoCreateChannels ? '' : 'none';
+        toggleElement(document.getElementById('channel-config-options'), event.autoCreateChannels);
         const cConfig = event.channelConfig || {};
         document.getElementById('event-channel-type').value = cConfig.type || 'voice';
         document.getElementById('event-voice-name').value = cConfig.voiceName || '';
@@ -298,7 +298,7 @@ export async function editEvent(eventId) {
         // Recurring fields
         const recurringCb = document.getElementById('event-recurring');
         recurringCb.checked = !!event.recurring;
-        document.getElementById('recurring-options').style.display = event.recurring ? '' : 'none';
+        toggleElement(document.getElementById('recurring-options'), event.recurring);
         document.getElementById('event-recurring-interval').value = event.recurringInterval || 'weekly';
         document.getElementById('event-recurring-until').value = event.recurringUntil || '';
 
@@ -446,10 +446,11 @@ export async function loadRoles() {
 export function populateRoles(roles) {
     const container = document.getElementById('role-checkboxes');
     container.innerHTML = roles.map(r => `
-    <label class="badge-pill" style="cursor:pointer;border-color:${r.color}">
-      <input type="checkbox" value="${r.id}" style="margin-right:4px;"> ${escapeHtml(r.name)}
+    <label class="badge-pill role-chip" data-style-border-color="${hexColor(r.color)}">
+      <input type="checkbox" class="me-1" value="${r.id}"> ${escapeHtml(r.name)}
     </label>
   `).join('');
+    applyStyleData(container);
 
     const select = document.getElementById('event-assign-role');
     const currentVal = select.value;

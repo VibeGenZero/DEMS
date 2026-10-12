@@ -3,7 +3,7 @@
  */
 import { state } from '../core/state.js';
 import { registerActions } from '../core/actions.js';
-import { escapeHtml, showToast } from '../core/ui.js';
+import { applyStyleData, escapeHtml, showToast } from '../core/ui.js';
 
 
 export async function showBotControlSection() {
@@ -44,8 +44,6 @@ export async function loadBotStatus() {
         const res = await fetch('/api/admin/bot/status');
         const status = await res.json();
 
-        const statusColors = { online: '#22c55e', idle: '#eab308', dnd: '#ef4444', invisible: '#6b7280' };
-        const statusColor = status.online ? (statusColors.online) : '#ef4444';
         const statusText = status.online ? 'Online' : 'Offline';
 
         panel.innerHTML = `
@@ -55,7 +53,7 @@ export async function loadBotStatus() {
                     <div>
                         <h4 class="mb-0">${escapeHtml(status.username || 'Bot')}</h4>
                         <div class="d-flex align-items-center gap-2 mt-1">
-                            <span class="bot-status-dot" style="background:${statusColor};"></span>
+                            <span class="bot-status-dot ${status.online ? 'is-online' : 'is-offline'}"></span>
                             <span class="text-secondary">${statusText}</span>
                             ${status.ping > 0 ? `<span class="bot-ping-badge">${status.ping}ms</span>` : ''}
                         </div>
@@ -142,7 +140,7 @@ export async function loadBotRunningEvents() {
                 : 0;
             const capacityBar = event.maxParticipants > 0
                 ? `<div class="capacity-bar-container mt-2">
-                     <div class="capacity-bar" style="width:${Math.min(capacityPercent, 100)}%"></div>
+                     <div class="capacity-bar" data-style-width="${capacityPercent}"></div>
                    </div>
                    <small class="text-muted">${stats.accepted}/${event.maxParticipants} Plätze belegt (${capacityPercent}%)</small>`
                 : `<small class="text-muted">${stats.accepted} Teilnehmer (unbegrenzt)</small>`;
@@ -171,6 +169,7 @@ export async function loadBotRunningEvents() {
                 </div>
             `;
         }).join('');
+        applyStyleData(container);
 
         gsap.fromTo('.running-event-card',
             { y: 15, opacity: 0 },

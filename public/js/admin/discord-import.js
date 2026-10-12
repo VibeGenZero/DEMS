@@ -21,13 +21,13 @@ export async function fetchDiscordEvents() {
         const events = await res.json();
 
         if (!events || events.length === 0) {
-            list.innerHTML = '<div class="text-center py-5"><i class="bi bi-calendar-x" style="font-size: 2rem; color: var(--text-muted);"></i><p class="mt-2 text-muted">Keine geplanten Events im Discord gefunden.</p></div>';
+            list.innerHTML = '<div class="text-center py-5"><i class="bi bi-calendar-x icon-xl text-body-tertiary"></i><p class="mt-2 text-muted">Keine geplanten Events im Discord gefunden.</p></div>';
             return;
         }
 
         list.innerHTML = events.map(ev => `
             <a href="#" class="list-group-item list-group-item-action d-flex gap-3 py-3" data-click="selectDiscordEvent" data-event="${escapeHtml(JSON.stringify(ev))}">
-                ${ev.image ? `<img src="${escapeHtml(ev.image)}" alt="Event Image" width="48" height="48" class="rounded-circle flex-shrink-0" style="object-fit:cover;">` : '<div class="rounded-circle bg-secondary d-flex align-items-center justify-content-center flex-shrink-0" style="width:48px;height:48px;"><i class="bi bi-discord"></i></div>'}
+                ${ev.image ? `<img src="${escapeHtml(ev.image)}" alt="Event Image" width="48" height="48" class="rounded-circle flex-shrink-0 object-fit-cover">` : '<div class="rounded-circle bg-secondary d-flex align-items-center justify-content-center flex-shrink-0 discord-event-thumb"><i class="bi bi-discord"></i></div>'}
                 <div class="d-flex gap-2 w-100 justify-content-between">
                     <div>
                         <h6 class="mb-0 text-white">${escapeHtml(ev.name)}</h6>
