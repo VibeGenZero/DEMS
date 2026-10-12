@@ -77,10 +77,10 @@ export function renderSelectedGuests() {
         return;
     }
     container.innerHTML = state.selectedGuests.map(g => `
-        <div class="badge d-flex align-items-center gap-1 p-2" style="background:rgba(139,92,246,0.2);border:1px solid rgba(139,92,246,0.4);font-size:0.85rem;">
+        <div class="badge guest-chip d-flex align-items-center gap-1 p-2">
             <img src="${escapeHtml(g.avatar)}" width="18" height="18" class="rounded-circle" data-fallback="hide">
             <span>${escapeHtml(g.displayName)}</span>
-            <button type="button" class="btn-close btn-close-white ms-1" style="font-size:0.6rem;"
+            <button type="button" class="btn-close btn-close-white ms-1"
                 data-click="removeGuestFromList" data-user-id="${escapeHtml(g.id)}"></button>
         </div>
     `).join('');

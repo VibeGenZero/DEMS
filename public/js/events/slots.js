@@ -42,7 +42,7 @@ export function renderSlotPicker(event) {
                 </button>`;
             }).join('')}
         </div>
-        <div id="slot-alt-area" class="mt-3" style="display:none;">
+        <div id="slot-alt-area" class="mt-3 is-hidden">
             <label class="form-label mb-1">Ausweichrollen <small class="text-muted">(optional – falls deine Rolle voll ist)</small></label>
             <div class="d-flex flex-wrap gap-2" id="slot-alt-chips"></div>
         </div>`;
@@ -113,7 +113,7 @@ export function renderRoster(data) {
                     <span>${escapeHtml(formatSlotLabel(slot))}</span>
                     <span class="roster-slot-count">${slot.taken}/${slot.capacity}</span>
                 </div>
-                <div class="capacity-progress"><div class="capacity-progress-bar${pct >= 100 ? ' danger' : ''}" style="width:${pct}%"></div></div>
+                <div class="capacity-progress"><div class="capacity-progress-bar${pct >= 100 ? ' danger' : ''}" data-style-width="${pct}"></div></div>
                 <div class="roster-members">${members}${seats}${moreFree}</div>
             </div>`;
     }).join('');

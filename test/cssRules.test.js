@@ -37,7 +37,8 @@ const COMPONENT_SELECTORS = [
     '.data-table', '.data-table th', '.data-table td', '.data-table-sort', '.data-table-title', '.data-table-meta',
     '.data-table-actions', '.data-table-buttons', '.data-table tr.is-sub td', '.data-table tr.is-muted .data-table-title',
     '.data-table tr.is-sub.is-muted td:first-child',
-    '.dropdown-menu', '.dropdown-item', '.dropdown-header', '.dropdown-item.is-danger'
+    '.dropdown-menu', '.dropdown-item', '.dropdown-header', '.dropdown-item.is-danger',
+    '.is-hidden:not(#no-such-id)', '.icon-lg', '.icon-xl', '.icon-2xl', '.cursor-pointer', '.glass-card.is-tinted'
 ];
 // Selectors that moved into components.css or were dropped; style.css must not style them again
 const MOVED = ['.btn-accent', '.btn-accent:hover', '.btn-discord', '.btn-discord:hover', '.btn-outline-light', '.btn-outline-light:hover', '.glass-modal', '.nav-link', '.nav-link.active',
@@ -60,10 +61,11 @@ const RAW_COLOR = /#[0-9a-fA-F]{3,8}\b|\brgba?\(|\bhsla?\(|(?<![-\w])(white|blac
 const withoutImportant = (value) => value.replace(/\s*!important$/, '');
 const describe = (rule, declaration) => `${rule.file}:${declaration.line} ${rule.selector} { ${declaration.property}: ${declaration.value} }`;
 // Upper limits that only go down: lower the number when you remove some,
-// never raise it. Before D-02 there were 132 style attributes and 57
-// !important in style.css. D-16 brings the style attributes to 0.
+// never raise it. Before D-02 there were 57 !important in style.css.
 // components.css has its own rule: !important only in the colour helpers.
-const STYLE_ATTRIBUTE_BUDGET = 113;
+// Inline styles in markup: a style attribute (also set through setAttribute) or a style element.
+// The CSP forbids them (style-src 'self', style-src-attr 'none'), so the browser drops them silently.
+const INLINE_STYLE = /\sstyle\s*=\s*["'`]|<style[\s>]|setAttribute\(\s*['"]style['"]/;
 const IMPORTANT_BUDGET = 30;
 // Emojis in index.html and the modules. Symbols are Bootstrap Icons (bi-*);
 // lower the number when a page drops some, never raise it. Emojis that users
@@ -152,10 +154,18 @@ test('radii come from the radius tokens', () => {
     assert.deepEqual(raw, []);
 });
 
-test('the number of style attributes matches its budget', () => {
-    const count = [INDEX_HTML, ...frontendSources().map(entry => entry.source)]
-        .reduce((sum, source) => sum + (source.match(/style="/g) || []).length, 0);
-    assert.equal(count, STYLE_ATTRIBUTE_BUDGET, `found ${count} style attributes; lower STYLE_ATTRIBUTE_BUDGET if you removed some, otherwise use a class`);
+test('no markup carries an inline style', () => {
+    const sources = [
+        { file: 'public/index.html', source: INDEX_HTML },
+        ...frontendSources().map(entry => ({ file: `public/js/${entry.file}`, source: entry.source })),
+        // The persona page of the dev mock mode is served under the same policy
+        { file: 'dev/devAuth.js', source: fs.readFileSync(path.join(REPO_ROOT, 'dev', 'devAuth.js'), 'utf8') }
+    ];
+    const offenders = sources.flatMap(({ file, source }) => source.split('\n')
+        .map((line, index) => ({ line, place: `${file}:${index + 1}` }))
+        .filter(({ line }) => INLINE_STYLE.test(line))
+        .map(({ place }) => place));
+    assert.deepEqual(offenders, [], 'use a class; a value that is only known at runtime goes into a data attribute and is set with element.style.setProperty (core/ui.js applyStyleData)');
 });
 
 test('the number of emojis in the frontend matches its budget', () => {

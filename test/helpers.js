@@ -251,8 +251,20 @@ async function dispatchInteraction(client, interaction, timeoutMs = 3000) {
  */
 function registerHtmlIds(registry, html) {
     for (const [tag, id] of html.matchAll(/<[^>]*\bid="([^"]+)"[^>]*>/g)) {
-        registry.set(id, createFakeElement(registry, id, /display:\s*none/.test(tag) ? 'none' : ''));
+        const classNames = (tag.match(/\bclass="([^"]*)"/) || ['', ''])[1].split(/\s+/).filter(Boolean);
+        registry.set(id, createFakeElement(registry, id, classNames));
     }
+}
+
+/**
+ * Whether a fake element is hidden, the way the page decides it: an inline
+ * display of none, or the start state .is-hidden that no inline display overrides.
+ *
+ * @param {Object} element -> Fake element of loadFrontendApp().
+ * @returns {boolean}
+ */
+function isHidden(element) {
+    return element.style.display === 'none' || (element.style.display === '' && element.classList.contains('is-hidden'));
 }
 
 /**
@@ -261,17 +273,17 @@ function registerHtmlIds(registry, html) {
  *
  * @param {Map<string, Object>} registry -> Elements reachable through getElementById.
  * @param {string} [id] -> Element id.
- * @param {string} [display] -> Initial style.display.
+ * @param {string[]} [classNames] -> Classes of the element in the markup, e.g. the start state `is-hidden`.
  * @returns {Object} -> The fake element.
  */
-function createFakeElement(registry, id = '', display = '') {
-    const classes = new Set();
+function createFakeElement(registry, id = '', classNames = []) {
+    const classes = new Set(classNames);
     const register = (child) => { if (child.id) registry.set(child.id, child); return child; };
     const listeners = new Map();
     let html = '';
     return {
         id, textContent: '', className: '', value: '', disabled: false,
-        style: { display }, dataset: {},
+        style: { display: '' }, dataset: {},
         get innerHTML() { return html; },
         set innerHTML(value) { html = String(value); registerHtmlIds(registry, html); },
         classList: {
@@ -473,5 +485,6 @@ module.exports = {
     dispatchInteraction,
     loadFrontendApp,
     loadFrontendModules,
-    frontendSources
+    frontendSources,
+    isHidden
 };

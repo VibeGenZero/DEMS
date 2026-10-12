@@ -149,3 +149,101 @@ test('a confirm click that Bootstrap ignores does not turn a later dismissal int
     assert.equal(await app.showConfirmDialog('Löschen?', 'Löschen'), false);
     assert.equal(dialogs.length, 1);
 });
+
+/** Element double with a class list and an inline display, as showElement() needs it. */
+function hiddenElement(display = '') {
+    const classes = new Set(['row', 'is-hidden']);
+    return {
+        classes,
+        style: { display },
+        classList: { remove: (name) => classes.delete(name), contains: (name) => classes.has(name) }
+    };
+}
+
+test('showElement shows an element that started hidden, in its own display type', async () => {
+    const { ui } = await loadUi();
+    const element = hiddenElement();
+    ui.showElement(element);
+    // Clearing the inline value alone would leave the start state .is-hidden in charge
+    assert.deepEqual([...element.classes], ['row']);
+    assert.equal(element.style.display, '');
+
+    const hiddenAgain = hiddenElement('none');
+    ui.showElement(hiddenAgain);
+    assert.equal(hiddenAgain.style.display, '');
+});
+
+test('toggleElement hides with an inline display and shows through showElement', async () => {
+    const { ui } = await loadUi();
+    const element = hiddenElement();
+    ui.toggleElement(element, false);
+    assert.equal(element.style.display, 'none');
+    ui.toggleElement(element, true);
+    assert.equal(element.style.display, '');
+    assert.equal(element.classes.has('is-hidden'), false);
+    // Anything truthy or falsy decides, like the conditions at the call sites
+    ui.toggleElement(element, 0);
+    assert.equal(element.style.display, 'none');
+});
+
+test('applyStyleData sets runtime values through the CSSOM and ignores what is no colour or number', async () => {
+    const { ui } = await loadUi();
+    const element = (dataset) => ({ dataset, style: {} });
+    const elements = [
+        element({ styleColor: '#22c55e', styleGlow: '#22c55e' }),
+        element({ styleBorderColor: '#abc', styleBackground: '#A1B2C3', styleWidth: '42' }),
+        // Nothing here is a hex colour; a glow needs six digits, because it appends an alpha value
+        element({ styleColor: 'red; background:url(x)', styleBorderColor: 'var(--x)', styleBackground: '#12', styleGlow: '#abc', styleWidth: '150' }),
+        element({ styleWidth: '-5' }),
+        element({ styleWidth: 'viel' })
+    ];
+    let selector = '';
+    ui.applyStyleData({ querySelectorAll: (query) => { selector = query; return elements; } });
+    for (const name of ['color', 'border-color', 'background', 'glow', 'width']) assert.ok(selector.includes(`[data-style-${name}]`), name);
+    assert.deepEqual(elements.map(entry => ({ ...entry.style })), [
+        { color: '#22c55e', textShadow: '0 0 20px #22c55e40' },
+        { borderColor: '#abc', backgroundColor: '#A1B2C3', width: '42%' },
+        { width: '100%' },
+        { width: '0%' },
+        { width: '0%' }
+    ]);
+});
+
+test('hexColor reads a Discord role colour as number or as text', async () => {
+    const { ui } = await loadUi();
+    assert.equal(ui.hexColor(0xef4444), '#ef4444');
+    assert.equal(ui.hexColor(0x00ff00), '#00ff00');
+    assert.equal(ui.hexColor('#A855F7'), '#A855F7');
+    assert.equal(ui.hexColor('#abc'), '#abc');
+    // 0 is Discord's "no colour"; everything else that is no colour gives none either
+    for (const value of [0, '', null, undefined, 'red', '#12', '##ef4444', -1, 0x1000000, 1.5, {}]) {
+        assert.equal(ui.hexColor(value), '', String(value));
+    }
+});
+
+test('rendered Markdown loses style attributes and style elements before the browser parses it', async () => {
+    const sanitizerOptions = [];
+    const context = vm.createContext({
+        console,
+        // Like marked: every token passes walkTokens, raw HTML arrives as type "html"
+        marked: {
+            parse: (text, options) => {
+                const tokens = [
+                    { type: 'html', text: '<span class="x" style="color:red" title=\'a\'>' },
+                    { type: 'text', text: 'schreibe style="color:red" in den Text' },
+                    { type: 'html', text: '</span><style media="all">' },
+                    { type: 'html', text: "<p STYLE='position:fixed' id=a style=color:blue>" }
+                ];
+                tokens.forEach(options.walkTokens);
+                return tokens.map(token => token.text).join('|');
+            }
+        },
+        DOMPurify: { sanitize: (html, options) => { sanitizerOptions.push(options); return html; } }
+    });
+    const ui = (await loadFrontendModules(path.join(CORE_DIR, 'ui.js'), context)).get('ui.js');
+    // DOMPurify parses before it filters, and the browser reports each style it meets while
+    // parsing: so the HTML tokens lose their styles first. Text that only mentions style="…" stays.
+    assert.equal(ui.renderMarkdownSafe('x'), '<span class="x" title=\'a\'>|schreibe style="color:red" in den Text|</span>|<p id=a>');
+    // The sanitizer stays the filter that decides; copied, because the options belong to the vm context
+    assert.deepEqual(JSON.parse(JSON.stringify(sanitizerOptions)), [{ FORBID_ATTR: ['style'], FORBID_TAGS: ['style'] }]);
+});

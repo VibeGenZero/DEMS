@@ -5,7 +5,7 @@
  */
 import { registerActions } from '../core/actions.js';
 import { emptyState } from '../core/components.js';
-import { escapeHtml } from '../core/ui.js';
+import { escapeHtml, showElement } from '../core/ui.js';
 import { forgetCalendarEvents, showCalendar } from './calendar.js';
 import { renderEventCard, renderEventCardSkeletons } from './cards.js';
 
@@ -190,13 +190,13 @@ export async function switchView(view) {
     if (view === 'grid') {
         gridBtn.classList.add('active');
         calBtn.classList.remove('active');
-        grid.style.display = '';
+        showElement(grid);
         calendar.style.display = 'none';
     } else {
         gridBtn.classList.remove('active');
         calBtn.classList.add('active');
         grid.style.display = 'none';
-        calendar.style.display = '';
+        showElement(calendar);
     }
     // Cards or calendar with the current search and category
     await renderOverview();

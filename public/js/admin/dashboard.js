@@ -25,6 +25,14 @@ export const adminView = {
 
 const sortOfTab = (tab) => adminView.sorts[tab] || DEFAULT_ADMIN_SORT[tab];
 
+// Chip of an audit log action: created green, changed blue, removed red; any other action stays plain
+const AUDIT_CHIPS = {
+    CREATE_EVENT: 'chip-success', UPDATE_EVENT: 'chip-info', DELETE_EVENT: 'chip-danger',
+    CANCEL_EVENT: 'chip-warning', DUPLICATE_EVENT: 'chip-accent', GENERATE_CHECKIN: 'chip-info',
+    UPDATE_REGISTRATION_STATUS: 'chip-accent', ANNOUNCE_EVENT: 'chip-accent',
+    UPDATE_EVENT_STATUS: 'chip-warning', UPDATE_TEMPLATES: 'chip-info'
+};
+
 export async function showAdminSection() {
     const section = document.getElementById('admin-section');
     section.style.display = 'block';
@@ -167,15 +175,7 @@ export async function loadAuditLog() {
             return;
         }
 
-        const actionColors = {
-            CREATE_EVENT: '#22c55e', UPDATE_EVENT: '#3b82f6', DELETE_EVENT: '#ef4444',
-            CANCEL_EVENT: '#f59e0b', DUPLICATE_EVENT: '#8b5cf6', GENERATE_CHECKIN: '#06b6d4',
-            UPDATE_REGISTRATION_STATUS: '#6366f1', ANNOUNCE_EVENT: '#ec4899',
-            UPDATE_EVENT_STATUS: '#f97316', UPDATE_TEMPLATES: '#14b8a6',
-            EXPORT_REGISTRATIONS: '#6b7280'
-        };
-
-        let html = `<div class="table-responsive"><table class="table table-sm table-dark table-hover" style="background:transparent;">
+        let html = `<div class="table-responsive"><table class="table table-sm table-dark table-hover">
             <thead><tr>
                 <th>Zeitpunkt</th>
                 <th>Aktion</th>
@@ -187,10 +187,10 @@ export async function loadAuditLog() {
             const date = new Date(log.timestamp).toLocaleString('de-DE', {
                 day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit'
             });
-            const color = actionColors[log.action] || '#9ca3af';
+            const chip = Object.hasOwn(AUDIT_CHIPS, log.action) ? ` ${AUDIT_CHIPS[log.action]}` : '';
             html += `<tr>
                 <td class="text-muted small">${date}</td>
-                <td><span class="badge" style="background:${color};font-size:0.7rem;">${log.action}</span></td>
+                <td><span class="chip chip-sm${chip}">${escapeHtml(String(log.action ?? ''))}</span></td>
                 <td class="small">${escapeHtml(log.details || '')}</td>
                 <td class="text-muted small font-monospace">${(log.adminId || '').substring(0, 8)}…</td>
             </tr>`;

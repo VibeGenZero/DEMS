@@ -223,6 +223,11 @@ body {
   color: var(--text-primary);
 }
 
+/* Error banner: sits right below the fixed navbar */
+.error-banner {
+  margin: 56px 0 0;
+}
+
 /* ═══════════════════════════════════════════ */
 /* EVENT CARDS                                 */
 /* Overview (#events), renderEventCard() in    */
@@ -829,6 +834,37 @@ body {
   margin-bottom: 0.4rem;
 }
 
+/* Event wizard: preview of the banner and the colour field */
+.banner-preview {
+  max-width: 100%;
+  max-height: 200px;
+  border-radius: var(--radius);
+  object-fit: cover;
+}
+
+.accent-color-input {
+  width: 48px;
+  height: 36px;
+  padding: 2px;
+}
+
+/* Role of the event wizard and of a poll; its border takes the Discord colour (applyStyleData) */
+.role-chip {
+  cursor: pointer;
+}
+
+/* Role in the announce dialog; a role with a Discord colour shows it (applyStyleData) */
+.announce-role-label {
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+/* Discord import: placeholder of an event without a picture */
+.discord-event-thumb {
+  width: 48px;
+  height: 48px;
+}
+
 /* ═══════════════════════════════════════════ */
 /* TABLE                                       */
 /* ═══════════════════════════════════════════ */
@@ -847,6 +883,12 @@ body {
 
 .table-hover>tbody>tr:hover {
   background: var(--accent-tint-1) !important;
+}
+
+/* Registrations dialog: names of the guests below their number */
+.reg-guests {
+  display: inline-block;
+  max-width: 120px;
 }
 
 /* ═══════════════════════════════════════════ */
@@ -868,6 +910,22 @@ body {
 .form-field-row .form-select {
   padding: 0.4rem 0.6rem;
   font-size: var(--font-size-sm);
+}
+
+.form-field-row .ff-label,
+.form-field-row .ff-description,
+.form-field-row .ff-options {
+  flex: 2;
+}
+
+.form-field-row .ff-type {
+  flex: 1.4;
+}
+
+.ff-required-label {
+  color: var(--text-muted);
+  font-size: var(--font-size-xs);
+  white-space: nowrap;
 }
 
 /* ═══════════════════════════════════════════ */
@@ -929,6 +987,10 @@ body {
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-glow);
+}
+
+.login-title {
+  font-size: calc(var(--font-size-2xl) * 2);
 }
 
 /* ═══════════════════════════════════════════ */
@@ -1229,6 +1291,11 @@ body {
   100% {
     background-position: -200% 0;
   }
+}
+
+/* Placeholder of a stat tile while the profile loads */
+.profile-stat-skeleton {
+  height: 60px;
 }
 
 /* ═══════════════════════════════════════════ */
@@ -1670,6 +1737,15 @@ body {
   .info-features-grid {
     grid-template-columns: 1fr 1fr;
   }
+}
+
+/* "Deine gespeicherten Daten": key column and long values */
+.info-data-key {
+  width: 35%;
+}
+
+.info-data-long {
+  word-break: break-all;
 }
 
 /* ═══════════════════════════════════════════ */
@@ -2184,6 +2260,14 @@ body {
   }
 }
 
+.bot-status-dot.is-online {
+  background: var(--success);
+}
+
+.bot-status-dot.is-offline {
+  background: var(--danger);
+}
+
 /* ═══════════════════════════════════════════ */
 /* EVENT WIZARD STEPPER                        */
 /* ═══════════════════════════════════════════ */
@@ -2375,6 +2459,28 @@ body {
   inset: 0;
   background: linear-gradient(to bottom, transparent 30%, var(--bg-scrim) 100%);
   pointer-events: none;
+}
+
+.guest-search-results {
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+/* Guest picked for a registration */
+.guest-chip {
+  border: 1px solid var(--accent-glow);
+  background: var(--accent-tint-2);
+  font-size: var(--font-size-sm);
+}
+
+.guest-chip .btn-close {
+  font-size: calc(var(--font-size-xs) * 0.8);
+}
+
+.checkin-code-input {
+  max-width: 200px;
+  letter-spacing: 3px;
+  text-align: center;
 }
 
 /* ═══════════════════════════════════════════ */

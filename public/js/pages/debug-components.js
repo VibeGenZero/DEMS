@@ -226,6 +226,17 @@ function menuBlock() {
         </ul>`);
 }
 
+function helpersBlock() {
+    const icon = (size) => `<i class="bi bi-calendar-event${size ? ` ${size}` : ''}"></i>`;
+    return block('helpers', 'Hilfsklassen', '.is-hidden, .icon-lg, .icon-xl, .icon-2xl, .cursor-pointer, .glass-card.is-tinted', [
+        row('Icon-Größen', ['', 'icon-lg', 'icon-xl', 'icon-2xl'].map(icon).join('')),
+        row('Getönte Karte', '<div class="glass-card is-tinted p-3">Optionsgruppen im Event-Assistenten, Check-in</div>'),
+        row('Startzustand', `<small class="text-secondary">Markup trägt kein <code>style</code>-Attribut, die CSP verbietet es. Was versteckt startet, bekommt
+            <code>.is-hidden</code>; Skripte zeigen es mit <code>showElement()</code> oder <code>element.style.display</code>. Werte, die erst zur Laufzeit feststehen,
+            stehen in <code>data-style-*</code>, <code>applyStyleData()</code> setzt sie.</small>`)
+    ].join(''));
+}
+
 /**
  * Render one block per component.
  *
@@ -236,7 +247,7 @@ export function renderDebugComponents(container) {
     container.innerHTML = [
         buttonBlock(), cardBlock(), chipBlock(), tabsBlock(), dialogBlock(),
         toastBlock(), emptyStateBlock(), skeletonBlock(), avatarBlock(), dateTileBlock(), capacityBlock(),
-        dataTableBlock(), menuBlock()
+        dataTableBlock(), menuBlock(), helpersBlock()
     ].join('');
 }
 

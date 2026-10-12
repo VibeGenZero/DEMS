@@ -46,11 +46,13 @@ app.use(helmet({
         directives: {
             defaultSrc: ["'self'"],
             // Libraries and fonts are vendored in public/vendor/, so no CDN host is allowed.
-            // No inline scripts or handlers: actions run through data-click (public/js/core/actions.js);
-            // styles keep 'unsafe-inline' until D-16 removes the style attributes (budget: test/cssRules.test.js).
+            // No inline scripts or handlers: actions run through data-click (public/js/core/actions.js).
+            // No inline styles either: markup carries no style attribute and no style element
+            // (test/cssRules.test.js). Styles that scripts set through the CSSOM (element.style.…) still work.
             scriptSrc: ["'self'"],
             scriptSrcAttr: ["'none'"],
-            styleSrc: ["'self'", "'unsafe-inline'"],
+            styleSrc: ["'self'"],
+            styleSrcAttr: ["'none'"],
             fontSrc: ["'self'"],
             imgSrc: ["'self'", "data:", "https:", "blob:"],
             connectSrc: ["'self'", "https://discord.com", "https://cdn.discordapp.com"],

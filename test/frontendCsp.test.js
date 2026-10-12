@@ -37,3 +37,16 @@ test('a module that uses an export of another module imports it', () => {
         .map(entry => `${entry.file}:${entry.line} uses ${entry.name} from ${entry.from} without importing it`);
     assert.deepEqual(missing, []);
 });
+
+test('no module shows an element by clearing its inline display', () => {
+    // What starts hidden carries the class .is-hidden; with style.display = '' the class
+    // would stay in charge and the element hidden. showElement() and toggleElement() handle both.
+    const clearing = /\.style\.display\s*=\s*(?:''|""|[^;]*\?\s*(?:''|"")\s*:|[^;]*:\s*(?:''|"")\s*;)/;
+    const offenders = frontendSources()
+        .filter(({ file }) => file !== 'core/ui.js')
+        .flatMap(({ file, source }) => source.split('\n')
+            .map((line, index) => ({ line, place: `public/js/${file}:${index + 1}` }))
+            .filter(({ line }) => clearing.test(line))
+            .map(({ place }) => place));
+    assert.deepEqual(offenders, [], 'use showElement() or toggleElement() from core/ui.js');
+});

@@ -3,7 +3,7 @@
  */
 import { state } from '../core/state.js';
 import { registerActions } from '../core/actions.js';
-import { escapeHtml, renderMarkdownSafe, showToast } from '../core/ui.js';
+import { escapeHtml, renderMarkdownSafe, showElement, showToast } from '../core/ui.js';
 import { showEventDetail } from './detail.js';
 
 export async function renderCheckinSection(eventId, event, registration) {
@@ -11,11 +11,10 @@ export async function renderCheckinSection(eventId, event, registration) {
     if (!container) {
         container = document.createElement('div');
         container.id = 'checkin-section';
-        container.className = 'mt-4 glass-card p-4';
-        container.style.background = 'rgba(139,92,246,0.05)';
+        container.className = 'mt-4 glass-card is-tinted p-4';
         document.getElementById('detail-register-area')?.insertAdjacentElement('afterend', container);
     }
-    container.style.display = '';
+    showElement(container);
 
     // Admin view: show code generation + stats
     if (state.currentUser?.isAdmin) {
@@ -36,7 +35,7 @@ export async function renderCheckinSection(eventId, event, registration) {
                     <div class="col-md-4">
                         <p class="mb-1 text-secondary">Check-in Status:</p>
                         <div class="d-flex align-items-center gap-2">
-                            <span class="badge-pill" style="font-size:1rem;">${stats.checkedIn} / ${stats.total}</span>
+                            <span class="badge-pill fs-6">${stats.checkedIn} / ${stats.total}</span>
                             <span class="text-muted">eingecheckt</span>
                         </div>
                     </div>
@@ -58,7 +57,7 @@ export async function renderCheckinSection(eventId, event, registration) {
         if (registration.checkedIn) {
             container.innerHTML = `
                 <div class="text-center py-3">
-                    <i class="bi bi-check-circle-fill text-success" style="font-size:2rem;"></i>
+                    <i class="bi bi-check-circle-fill text-success icon-xl"></i>
                     <p class="mt-2 mb-0">Du bist eingecheckt! ✅</p>
                 </div>`;
         } else if (event.checkinEnabled) {
@@ -66,8 +65,8 @@ export async function renderCheckinSection(eventId, event, registration) {
                 <h5><i class="bi bi-qr-code-scan me-2"></i>Check-in</h5>
                 <p class="text-secondary small">Gib den Check-in Code ein, den du vom Veranstalter erhalten hast.</p>
                 <div class="d-flex gap-2">
-                    <input type="text" class="form-control font-monospace" id="checkin-code-input" 
-                        placeholder="6-stelliger Code" maxlength="6" style="max-width:200px;letter-spacing:3px;text-align:center;">
+                    <input type="text" class="form-control font-monospace checkin-code-input" id="checkin-code-input"
+                        placeholder="6-stelliger Code" maxlength="6">
                     <button class="btn btn-accent" data-click="submitCheckin" data-event-id="${escapeHtml(eventId)}">
                         <i class="bi bi-check-lg me-1"></i>Einchecken
                     </button>

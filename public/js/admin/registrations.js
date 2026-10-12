@@ -39,7 +39,7 @@ export async function showRegistrations(eventId, eventTitle) {
         tbody.innerHTML = regs.map(reg => {
             const sourceBadge = sourceBadges[reg.source] || sourceBadges.web;
             const guestsText = Array.isArray(reg.guests) && reg.guests.length > 0
-                ? `<span class="badge bg-secondary mb-1">${reg.guests.length} Gast/Gäste</span><br><small class="text-muted text-break" style="max-width: 120px; display: inline-block;">${reg.guests.map(g => escapeHtml(g)).join(', ')}</small>`
+                ? `<span class="badge bg-secondary mb-1">${reg.guests.length} Gast/Gäste</span><br><small class="text-muted text-break reg-guests">${reg.guests.map(g => escapeHtml(g)).join(', ')}</small>`
                 : '<span class="text-muted">—</span>';
 
             return `

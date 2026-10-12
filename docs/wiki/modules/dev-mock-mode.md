@@ -3,7 +3,7 @@ id: dev-mock-mode
 title: Dev mock mode (dev/) — run without Discord and Firebase
 type: module
 tags: [dev, mock, seed, personas, local-development, testing]
-sources: [dev/mockMode.js, dev/mockGuild.js, dev/mockBot.js, dev/devAuth.js, dev/seed.js, dev/seedData.js, dev/banners, dev/start.js, dev/reset.js, compose.dev.yaml]
+sources: [dev/mockMode.js, dev/mockGuild.js, dev/mockBot.js, dev/devAuth.js, dev/dev-login.css, dev/seed.js, dev/seedData.js, dev/banners, dev/start.js, dev/reset.js, compose.dev.yaml]
 part_of: [architecture]
 depends_on: [bot, data-layer, routes-auth]
 see_also: [run-and-debug, testing, docker]
@@ -19,7 +19,7 @@ see_also: [run-and-debug, testing, docker]
 | `dev/mockMode.js` | switch `IS_MOCK_MODE`; production guard (exit 1); forces env: `SQLITE_PATH` = `DEV_SQLITE_PATH` or `data/dems.dev.sqlite`, blank `FIREBASE_*` + bot token, mock guild/admin role/announce channel ids, `BASE_URL=http://localhost:<PORT>`; defaults `SESSION_SECRET=dems-dev-mock-secret`, `ADMIN_RESET_PASSWORD=dev` |
 | `dev/mockGuild.js` | static mock server "DEMS Dev Server": roles (Admin, Moderator, Raid-Team, VIP, Mitglied, managed "DEMS Bot"), channels (incl. non-public `#mod-intern`), 2 scheduled events, 4 personas, 9 members, `findMember`, `defaultAvatar` |
 | `dev/mockBot.js` | replaces the Discord-facing exports of `bot.js` (merged at the end of `bot.js`); `sendChannelMessage` returns fake `{ channelId, messageId }`, `refreshEventAnnouncements` logs `Ankündigung von "…" aktualisiert`, `refreshPollMessages` logs `Abstimmung "…" aktualisiert`, `markPollMessagesDeleted` logs the delete notice |
-| `dev/devAuth.js` | `/auth/discord` and `/auth/discord/callback` → `/auth/dev-login` (persona page) → `/auth/dev-login/:personaId` starts the session like the real login (`startUserSession`: new session id + CSRF token) |
+| `dev/devAuth.js` | `/auth/discord` and `/auth/discord/callback` → `/auth/dev-login` (persona page; its look is `dev/dev-login.css`, served as `/auth/dev-login.css`, because the CSP allows no style element) → `/auth/dev-login/:personaId` starts the session like the real login (`startUserSession`: new session id + CSRF token) |
 | `dev/seedData.js` | `buildSeedData(now)`: 12 events (open, form, full+waitlist, role-only raid with slots (Ben Tank, Kira in her fallback Heiler, Felix waitlisted), 7-field web-only form, running with check-in `DEMO42`, past, archived, draft, 3-part weekly series; each with an SVG banner from `dev/banners/` (`EVENT_BANNERS`), served at `/dev-banners/` only in mock mode, the workshop's file missing on purpose), 12 users, 34 registrations (Tom/`member`: waitlisted on the full event, pending at the tournament), comments, audit log, settings, 2 date polls (open raid poll for the Raid-Team without Lena's vote and with own answers "Bin dabei / Vielleicht / Kann nicht", decided "Sommerfest-Termin" linked to the archived event) with 5 votes; exports `EVENT_ID`, `SERIES_EVENT_IDS`, `CHECKIN_CODE`, `RAID_SLOT_ID`, `POLL_ID` |
 | `dev/seed.js` | `seedIfEmpty()` (marker `devMeta/seed`), `resetAndSeed()`; refuses to load outside mock mode or with a non-SQLite backend |
 | `dev/start.js` / `dev/reset.js` | entry points of `npm run dev:mock` / `npm run dev:reset` |

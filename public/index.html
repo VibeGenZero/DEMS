@@ -72,7 +72,7 @@
   <!-- ═══════════════════════════════════════════ -->
   <!-- MAIN APPLICATION                            -->
   <!-- ═══════════════════════════════════════════ -->
-  <div id="app" style="display:none;">
+  <div class="is-hidden" id="app">
 
     <!-- NAVBAR -->
     <nav class="navbar navbar-expand-lg navbar-dark fixed-top" id="main-navbar">
@@ -90,28 +90,28 @@
                 <i class="bi bi-calendar-event me-1"></i>Events
               </a>
             </li>
-            <li class="nav-item" id="nav-polls" style="display:none;">
+            <li class="nav-item is-hidden" id="nav-polls">
               <a class="nav-link" href="#polls" data-section="polls-section">
                 <i class="bi bi-ui-checks-grid me-1"></i>Abstimmungen
-                <span class="badge rounded-pill text-bg-danger ms-1" id="nav-polls-badge" style="display:none;"></span>
+                <span class="badge rounded-pill text-bg-danger ms-1 is-hidden" id="nav-polls-badge"></span>
               </a>
             </li>
-            <li class="nav-item" id="nav-profile" style="display:none;">
+            <li class="nav-item is-hidden" id="nav-profile">
               <a class="nav-link" href="#profile" data-section="profile-section">
                 <i class="bi bi-person me-1"></i>Mein Profil
               </a>
             </li>
-            <li class="nav-item" id="nav-admin" style="display:none;">
+            <li class="nav-item is-hidden" id="nav-admin">
               <a class="nav-link" href="#admin" data-section="admin-section">
                 <i class="bi bi-gear me-1"></i>Admin
               </a>
             </li>
-            <li class="nav-item" id="nav-bot-control" style="display:none;">
+            <li class="nav-item is-hidden" id="nav-bot-control">
               <a class="nav-link" href="#bot-control" data-section="bot-control-section">
                 <i class="bi bi-robot me-1"></i>Bot-Zentrale
               </a>
             </li>
-            <li class="nav-item" id="nav-debug" style="display:none;">
+            <li class="nav-item is-hidden" id="nav-debug">
               <a class="nav-link" href="#debug" data-section="debug-section">
                 <i class="bi bi-bug me-1"></i>Styling Guide
               </a>
@@ -135,7 +135,7 @@
               </a>
             </div>
             <!-- Logged in -->
-            <div id="user-info" style="display:none;" class="d-flex align-items-center gap-2">
+            <div id="user-info" class="align-items-center gap-2 is-hidden">
               <img id="user-avatar" src="" alt="Avatar" class="rounded-circle" width="32" height="32"
                 data-fallback="hide">
               <span id="user-name" class="text-light fw-medium"></span>
@@ -149,14 +149,13 @@
     </nav>
 
     <!-- ERROR BANNER -->
-    <div id="error-banner" class="alert alert-danger text-center m-0 rounded-0"
-      style="display:none; margin-top:56px!important;">
+    <div id="error-banner" class="alert alert-danger text-center rounded-0 error-banner is-hidden">
       <i class="bi bi-exclamation-triangle me-2"></i>
       <span id="error-message"></span>
     </div>
 
     <!-- MAINTENANCE BANNER -->
-    <div id="maintenance-banner" class="maintenance-banner" style="display:none;">
+    <div id="maintenance-banner" class="maintenance-banner is-hidden">
       <div class="container d-flex align-items-center justify-content-center gap-2 py-2">
         <i class="bi bi-exclamation-triangle-fill"></i>
         <span id="maintenance-banner-text"></span>
@@ -164,7 +163,7 @@
     </div>
 
     <!-- PLANNED MAINTENANCE BANNER -->
-    <div id="planned-maintenance-banner" class="planned-maintenance-banner" style="display:none;">
+    <div id="planned-maintenance-banner" class="planned-maintenance-banner is-hidden">
       <div class="container d-flex align-items-center justify-content-center gap-2 py-2">
         <i class="bi bi-calendar-event me-1"></i>
         <span id="planned-maintenance-banner-text"></span>
@@ -172,7 +171,7 @@
     </div>
 
     <!-- PANIC MODE LOCKDOWN OVERLAY -->
-    <div id="panic-lockdown-overlay" class="panic-lockdown-overlay" style="display:none;">
+    <div id="panic-lockdown-overlay" class="panic-lockdown-overlay is-hidden">
       <div class="panic-lockdown-content text-center">
         <i class="bi bi-shield-exclamation panic-lockdown-icon"></i>
         <h1 class="text-danger mb-3">SYSTEM GESPERRT</h1>
@@ -186,12 +185,12 @@
     </div>
 
     <!-- ── LOGIN SECTION ── -->
-    <section id="login-section" class="app-section" style="display:none;">
+    <section id="login-section" class="app-section is-hidden">
       <div class="container">
         <div class="row justify-content-center align-items-center min-vh-100">
           <div class="col-md-6 text-center">
             <div class="login-card glass-card p-5">
-              <h1 class="brand-text mb-3" style="font-size:3rem;">DEMS</h1>
+              <h1 class="brand-text login-title mb-3">DEMS</h1>
               <p class="text-secondary mb-4">Dein Event-Management-System</p>
               <p class="text-muted mb-4">Melde dich mit deinem Discord-Account an, um Events zu sehen und dich
                 anzumelden.</p>
@@ -216,7 +215,7 @@
     </section>
 
     <!-- ── EVENTS SECTION ── -->
-    <section id="events-section" class="app-section" style="display:none;">
+    <section id="events-section" class="app-section is-hidden">
       <div class="container section-container">
         <div class="section-header">
           <h2><i class="bi bi-calendar-event me-2"></i>Anstehende Events</h2>
@@ -246,14 +245,14 @@
         <div class="category-filter-bar" id="category-filter-bar" role="group" aria-label="Kategorien"></div>
         <!-- Cards (events/cards.js) -->
         <div class="event-grid" id="events-grid"></div>
-        <div id="events-calendar" style="display:none;"></div>
+        <div class="is-hidden" id="events-calendar"></div>
         <!-- Empty, no match or load error (emptyState) -->
-        <div id="events-empty" style="display:none;"></div>
+        <div class="is-hidden" id="events-empty"></div>
       </div>
     </section>
 
     <!-- ── EVENT DETAIL SECTION ── -->
-    <section id="event-detail-section" class="app-section" style="display:none;">
+    <section id="event-detail-section" class="app-section is-hidden">
 
       <!-- Full-width banner (outside container) -->
       <div id="detail-banner-area" class="event-detail-banner-header"></div>
@@ -274,7 +273,7 @@
               <span id="detail-status-tag"></span>
             </div>
             <h2 id="detail-title" class="mb-3 fw-bold"></h2>
-            <div id="detail-countdown-area" class="countdown countdown-detail countdown-live mb-4" style="display:none;"></div>
+            <div id="detail-countdown-area" class="countdown countdown-detail countdown-live mb-4 is-hidden"></div>
 
             <!-- Description -->
             <div class="glass-card p-4 mb-4">
@@ -283,12 +282,12 @@
             </div>
 
             <!-- Participants (only shown when logged in) -->
-            <div id="detail-participants-section" class="glass-card p-4 mb-4" style="display:none;">
+            <div id="detail-participants-section" class="glass-card p-4 mb-4 is-hidden">
               <h6 class="section-label mb-3">
                 <i class="bi bi-people me-2"></i><span id="detail-participants-title">TEILNEHMER</span>
               </h6>
               <div id="detail-participants-avatars" class="participants-avatar-stack"></div>
-              <div id="detail-roster" style="display:none;"></div>
+              <div class="is-hidden" id="detail-roster"></div>
             </div>
 
             <!-- Series dates (rendered by JS) -->
@@ -299,7 +298,7 @@
               <div class="glass-card p-4 mb-4">
                 <h5 class="mb-3"><i class="bi bi-pencil-square me-2"></i>Anmeldung</h5>
                 <form id="registration-form">
-                  <div id="slot-picker-area" class="mb-3" style="display:none;"></div>
+                  <div id="slot-picker-area" class="mb-3 is-hidden"></div>
                   <div id="dynamic-form-fields"></div>
 
                   <div class="mt-3 mb-2" id="guest-tickets-area">
@@ -312,7 +311,7 @@
                         <i class="bi bi-search text-muted"></i>
                       </span>
                     </div>
-                    <div id="guest-search-results" class="list-group mb-2" style="display:none;max-height:200px;overflow-y:auto;"></div>
+                    <div id="guest-search-results" class="list-group guest-search-results mb-2 is-hidden"></div>
                     <div id="selected-guests" class="d-flex flex-wrap gap-2 mb-1"></div>
                     <small class="text-muted">Suche nach Servernutzern — sie erhalten eine Discord-Einladung und müssen bestätigen. Jeder Gast belegt einen Event-Platz.</small>
                   </div>
@@ -325,10 +324,10 @@
             </div>
 
             <!-- Waitlist -->
-            <div id="detail-waitlist" style="display:none;">
+            <div class="is-hidden" id="detail-waitlist">
               <div class="glass-card p-4 mb-4">
                 <div class="d-flex align-items-center gap-3 mb-3">
-                  <i class="bi bi-hourglass-split text-info" style="font-size:2rem;"></i>
+                  <i class="bi bi-hourglass-split text-info icon-xl"></i>
                   <div>
                     <h5 class="mb-1">Event ist voll</h5>
                     <p class="text-secondary mb-0">Du kannst dich auf die Warteliste setzen. <span id="detail-waitlist-count"></span></p>
@@ -344,10 +343,10 @@
             </div>
 
             <!-- Already registered -->
-            <div id="detail-registered" style="display:none;">
+            <div class="is-hidden" id="detail-registered">
               <div class="glass-card p-4 mb-4">
                 <div class="d-flex align-items-center gap-3">
-                  <i class="bi bi-check-circle-fill text-success" style="font-size:2rem;"></i>
+                  <i class="bi bi-check-circle-fill text-success icon-xl"></i>
                   <div class="flex-grow-1">
                     <h5 class="mb-1">Bereits registriert</h5>
                     <p class="text-secondary mb-0">Status: <span id="detail-reg-status" class="fw-bold"></span></p>
@@ -361,10 +360,10 @@
             </div>
 
             <!-- No access -->
-            <div id="detail-no-access" style="display:none;">
+            <div class="is-hidden" id="detail-no-access">
               <div class="glass-card p-4 mb-4">
                 <div class="d-flex align-items-center gap-3">
-                  <i class="bi bi-lock-fill text-warning" style="font-size:2rem;"></i>
+                  <i class="bi bi-lock-fill text-warning icon-xl"></i>
                   <div>
                     <h5 class="mb-1">Zugriff eingeschränkt</h5>
                     <p class="text-secondary mb-0" id="no-access-text">Du hast nicht die erforderliche Rolle für dieses Event.</p>
@@ -382,15 +381,15 @@
               <!-- Details panel -->
               <div class="glass-card p-4 mb-3">
                 <div class="sidebar-section-title">DETAILS</div>
-                <div id="sidebar-date-row" class="sidebar-detail-row" style="display:none;"></div>
-                <div id="sidebar-time-row" class="sidebar-detail-row" style="display:none;"></div>
-                <div id="sidebar-duration-row" class="sidebar-detail-row" style="display:none;"></div>
-                <div id="sidebar-location-row" class="sidebar-detail-row" style="display:none;"></div>
-                <div id="sidebar-creator-row" class="sidebar-detail-row" style="display:none;"></div>
+                <div id="sidebar-date-row" class="sidebar-detail-row is-hidden"></div>
+                <div id="sidebar-time-row" class="sidebar-detail-row is-hidden"></div>
+                <div id="sidebar-duration-row" class="sidebar-detail-row is-hidden"></div>
+                <div id="sidebar-location-row" class="sidebar-detail-row is-hidden"></div>
+                <div id="sidebar-creator-row" class="sidebar-detail-row is-hidden"></div>
               </div>
 
               <!-- Capacity panel -->
-              <div class="glass-card p-4 mb-3" id="sidebar-capacity-panel" style="display:none;">
+              <div class="glass-card p-4 mb-3 is-hidden" id="sidebar-capacity-panel">
                 <div class="sidebar-section-title">KAPAZITÄT</div>
                 <div id="sidebar-capacity-content"></div>
               </div>
@@ -407,14 +406,14 @@
 
     <!-- ── PROFILE SECTION ── -->
     <!-- Date polls -->
-    <section id="polls-section" class="app-section" style="display:none;">
+    <section id="polls-section" class="app-section is-hidden">
       <div class="container section-container">
         <div class="section-header d-flex justify-content-between align-items-center flex-wrap gap-3" id="polls-header">
           <div>
             <h2><i class="bi bi-ui-checks-grid me-2"></i>Abstimmungen</h2>
             <p class="text-secondary mb-0">Stimme ab, wann die nächsten Events stattfinden.</p>
           </div>
-          <button class="btn btn-accent" id="polls-create-btn" style="display:none;" data-click="showPollEditor">
+          <button class="btn btn-accent is-hidden" id="polls-create-btn" data-click="showPollEditor">
             <i class="bi bi-plus-circle me-1"></i>Neue Abstimmung
           </button>
         </div>
@@ -426,14 +425,14 @@
       </div>
     </section>
 
-    <section id="poll-detail-section" class="app-section" style="display:none;">
+    <section id="poll-detail-section" class="app-section is-hidden">
       <div class="container section-container">
         <a href="#polls" class="text-secondary small"><i class="bi bi-arrow-left me-1"></i>Zurück zu den Abstimmungen</a>
         <div id="poll-detail" class="mt-3"></div>
       </div>
     </section>
 
-    <section id="profile-section" class="app-section" style="display:none;">
+    <section id="profile-section" class="app-section is-hidden">
       <div class="container section-container">
         <div class="section-header">
           <h2><i class="bi bi-person me-2"></i>Mein Profil</h2>
@@ -466,11 +465,11 @@
         <div id="profile-registrations">
           <!-- Rendered dynamically -->
         </div>
-        <div id="profile-empty" class="text-center py-5" style="display:none;">
-          <i class="bi bi-inbox" style="font-size:2.5rem;color:var(--text-muted);"></i>
+        <div id="profile-empty" class="text-center py-5 is-hidden">
+          <i class="bi bi-inbox icon-2xl text-body-tertiary"></i>
           <p class="text-muted mt-2">Du hast dich noch für kein Event registriert.</p>
         </div>
-        <div class="text-center mt-3" id="profile-load-more-wrapper" style="display:none;">
+        <div class="text-center mt-3 is-hidden" id="profile-load-more-wrapper">
           <button class="btn btn-outline-secondary btn-sm" id="profile-load-more">
             <i class="bi bi-chevron-down me-1"></i>+ 5 weitere anzeigen
           </button>
@@ -502,13 +501,13 @@
         </div>
 
         <!-- Debug Card (only shown when DEBUG_MODE=true) -->
-        <div id="debug-card-wrapper" style="display:none;">
-          <h5 class="mb-3 mt-4"><i class="bi bi-bug me-2" style="color:var(--warning);"></i>Debug-Informationen</h5>
+        <div class="is-hidden" id="debug-card-wrapper">
+          <h5 class="mb-3 mt-4"><i class="bi bi-bug me-2 text-warning"></i>Debug-Informationen</h5>
           <div class="glass-card mb-4">
-            <div class="d-flex align-items-center justify-content-between p-4" style="cursor:pointer;"
+            <div class="d-flex align-items-center justify-content-between p-4 cursor-pointer"
               data-bs-toggle="collapse" data-bs-target="#debug-collapse" aria-expanded="false">
               <div>
-                <div class="fw-semibold" style="color:var(--warning);">🐛 Debug Panel</div>
+                <div class="fw-semibold text-warning">🐛 Debug Panel</div>
                 <small class="text-muted">Session, User-Daten, Server-Info, Verbose-Logging</small>
               </div>
               <i class="bi bi-chevron-down" id="debug-chevron"></i>
@@ -544,7 +543,7 @@
 
 
     <!-- ── STYLING GUIDE SECTION (DEBUG ONLY) ── -->
-    <section id="debug-section" class="app-section" style="display:none;">
+    <section id="debug-section" class="app-section is-hidden">
       <div class="container section-container">
         <div class="section-header">
           <h2><i class="bi bi-palette me-2"></i>Styleguide</h2>
@@ -656,7 +655,7 @@
     </section>
 
     <!-- ── ADMIN SECTION ── -->
-    <section id="admin-section" class="app-section" style="display:none;">
+    <section id="admin-section" class="app-section is-hidden">
       <div class="container section-container">
         <div class="section-header d-flex justify-content-between align-items-center flex-wrap gap-3">
           <div>
@@ -715,7 +714,7 @@
         <div id="admin-events-table"></div>
 
         <!-- Audit Log -->
-        <div id="audit-log-container" class="mt-4" style="display:none;">
+        <div id="audit-log-container" class="mt-4 is-hidden">
           <div class="glass-card p-4">
             <div class="d-flex justify-content-between align-items-center mb-3">
               <h4 class="mb-0"><i class="bi bi-journal-text me-2"></i>Audit-Log</h4>
@@ -733,7 +732,7 @@
     </section>
 
     <!-- Bot Control Center (Bot-Zentrale) -->
-    <section id="bot-control-section" class="app-section" style="display:none;">
+    <section id="bot-control-section" class="app-section is-hidden">
       <div class="container section-container">
         <div class="section-header">
           <h2><i class="bi bi-robot me-2"></i>Bot-Zentrale</h2>
@@ -978,16 +977,15 @@
                 <input type="url" class="form-control" id="event-banner-url"
                   placeholder="https://example.com/banner.jpg">
                 <small class="text-muted">Direkte URL zu einem Banner-Bild (z.B. Imgur, Discord CDN)</small>
-                <div class="mt-2" id="banner-preview-container" style="display:none;">
-                  <img id="banner-preview" src="" alt="Banner Vorschau"
-                    style="max-width:100%; border-radius:var(--radius); max-height:200px; object-fit:cover;">
+                <div class="mt-2 is-hidden" id="banner-preview-container">
+                  <img id="banner-preview" class="banner-preview" src="" alt="Banner Vorschau">
                 </div>
               </div>
               <div class="mb-3">
                 <label class="form-label small text-muted"><i class="bi bi-palette me-1"></i>Akzentfarbe (optional)</label>
                 <div class="d-flex align-items-center gap-3">
-                  <input type="color" class="form-control form-control-color" id="event-accent-color"
-                    value="#8b5cf6" style="width:48px;height:36px;padding:2px;">
+                  <input type="color" class="form-control form-control-color accent-color-input" id="event-accent-color"
+                    value="#8b5cf6">
                   <small class="text-muted">Hintergrundfarbe wenn kein Banner-Bild gesetzt ist.</small>
                 </div>
               </div>
@@ -996,7 +994,7 @@
                 <input type="text" class="form-control form-control-sm" id="event-location-text"
                   placeholder="z.B. #gaming-voice oder Teamspeak Server"
                   autocomplete="off" data-input="handleLocationInput">
-                <div id="location-suggestions" class="location-dropdown" style="display:none;"></div>
+                <div id="location-suggestions" class="location-dropdown is-hidden"></div>
                 <input type="hidden" id="event-location-channel-id">
                 <input type="hidden" id="event-location-channel-type">
                 <small class="text-muted mt-1 d-block">Tippe # für Discord-Channel-Vorschläge.</small>
@@ -1004,7 +1002,7 @@
             </div>
 
             <!-- ── Step 2: Datum & Zeit ── -->
-            <div class="wizard-page" id="wizard-page-2" style="display:none;">
+            <div class="wizard-page is-hidden" id="wizard-page-2">
               <div class="row g-3 mb-3">
                 <div class="col-md-6">
                   <label class="form-label">📅 Startdatum</label>
@@ -1040,13 +1038,13 @@
                 </div>
               </div>
               <!-- Recurring -->
-              <div class="mb-3 glass-card p-3" style="background:rgba(139,92,246,0.05);">
+              <div class="mb-3 glass-card is-tinted p-3">
                 <div class="form-check mb-2">
                   <input class="form-check-input" type="checkbox" id="event-recurring"
                     data-change="toggleVisible" data-target="recurring-options">
                   <label class="form-check-label" for="event-recurring">🔁 Wiederkehrendes Event</label>
                 </div>
-                <div id="recurring-options" style="display:none;">
+                <div class="is-hidden" id="recurring-options">
                   <div class="row g-3">
                     <div class="col-md-6">
                       <label class="form-label">Intervall</label>
@@ -1066,7 +1064,7 @@
             </div>
 
             <!-- ── Step 3: Teilnehmer & Zugang ── -->
-            <div class="wizard-page" id="wizard-page-3" style="display:none;">
+            <div class="wizard-page is-hidden" id="wizard-page-3">
               <div class="row g-3 mb-3">
                 <div class="col-md-6">
                   <label class="form-label">Max. Teilnehmer</label>
@@ -1086,7 +1084,7 @@
                   <input class="form-check-input" type="checkbox" id="event-use-slots" data-change="toggleSlotEditor">
                   <label class="form-check-label" for="event-use-slots"><i class="bi bi-diagram-3 me-1"></i>Rollen-Slots verwenden</label>
                 </div>
-                <div id="slot-editor-area" style="display:none;">
+                <div class="is-hidden" id="slot-editor-area">
                   <div id="slot-editor-rows" class="slot-editor-rows"></div>
                   <div class="d-flex flex-wrap gap-2 mt-2">
                     <button type="button" class="btn btn-sm btn-outline-light" data-click="addSlotRow"><i class="bi bi-plus-lg me-1"></i>Slot</button>
@@ -1116,10 +1114,10 @@
                     <input class="form-check-input" type="checkbox" id="event-allow-guests" checked>
                     <label class="form-check-label" for="event-allow-guests">Gäste zulassen</label>
                   </div>
-                  <small class="text-muted" id="event-guests-slot-hint" style="display:none;">Bei Slot-Events nicht verfügbar</small>
+                  <small class="text-muted is-hidden" id="event-guests-slot-hint">Bei Slot-Events nicht verfügbar</small>
                 </div>
               </div>
-              <div class="mb-3" id="role-requirement-area" style="display:none;">
+              <div class="mb-3 is-hidden" id="role-requirement-area">
                 <label class="form-label">Erforderliche Rollen</label>
                 <div id="role-checkboxes" class="d-flex flex-wrap gap-2">
                   <!-- Populated dynamically -->
@@ -1135,7 +1133,7 @@
             </div>
 
             <!-- ── Step 4: Anmeldeformular ── -->
-            <div class="wizard-page" id="wizard-page-4" style="display:none;">
+            <div class="wizard-page is-hidden" id="wizard-page-4">
               <p class="text-muted small mb-3">
                 <i class="bi bi-ui-checks me-1"></i>
                 Optionale Felder, die Teilnehmer beim Anmelden ausfüllen müssen.
@@ -1149,9 +1147,9 @@
             </div>
 
             <!-- ── Step 5: Erweitert ── -->
-            <div class="wizard-page" id="wizard-page-5" style="display:none;">
+            <div class="wizard-page is-hidden" id="wizard-page-5">
               <!-- Auto Voice/Text Channels -->
-              <div class="mb-3 glass-card p-3" style="background:rgba(139,92,246,0.05);">
+              <div class="mb-3 glass-card is-tinted p-3">
                 <div class="form-check mb-2">
                   <input class="form-check-input" type="checkbox" id="event-auto-create-channels"
                     data-change="toggleVisible" data-target="channel-config-options">
@@ -1160,7 +1158,7 @@
                 </div>
                 <small class="text-muted d-block ms-4 mb-2">Erstellt einen privaten Kanal für dieses Event in Discord,
                   auf den nur angenommene Teilnehmer zugreifen können.</small>
-                <div id="channel-config-options" style="display:none;" class="ms-4 mt-3">
+                <div id="channel-config-options" class="ms-4 mt-3 is-hidden">
                   <div class="mb-2">
                     <label class="form-label small text-muted">Kanal-Typ</label>
                     <select class="form-select form-select-sm" id="event-channel-type">
@@ -1184,13 +1182,13 @@
                 </div>
               </div>
               <!-- Custom Bot Messages -->
-              <div class="mb-3 glass-card p-3" style="background:rgba(139,92,246,0.05);">
+              <div class="mb-3 glass-card is-tinted p-3">
                 <div class="form-check mb-2">
                   <input class="form-check-input" type="checkbox" id="event-custom-msg-toggle"
                     data-change="toggleVisible" data-target="custom-msg-options">
                   <label class="form-check-label" for="event-custom-msg-toggle">🤖 Eigene Bot-Nachrichten</label>
                 </div>
-                <div id="custom-msg-options" style="display:none;">
+                <div class="is-hidden" id="custom-msg-options">
                   <div class="mb-3">
                     <label class="form-label">Registrierungs-Nachricht</label>
                     <textarea class="form-control" id="event-msg-registration" rows="2"
@@ -1229,15 +1227,13 @@
           <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Abbrechen</button>
           <div class="d-flex gap-2 align-items-center">
             <span class="text-muted small me-2" id="wizard-step-counter">Schritt 1 von 5</span>
-            <button type="button" class="btn btn-outline-secondary" id="wizard-btn-back" data-click="wizardBack"
-              style="display:none;">
+            <button type="button" class="btn btn-outline-secondary is-hidden" id="wizard-btn-back" data-click="wizardBack">
               <i class="bi bi-arrow-left me-1"></i>Zurück
             </button>
             <button type="button" class="btn btn-accent" id="wizard-btn-next" data-click="wizardNext">
               Weiter<i class="bi bi-arrow-right ms-1"></i>
             </button>
-            <button type="button" class="btn btn-accent" id="wizard-btn-save" data-click="saveEvent"
-              style="display:none;">
+            <button type="button" class="btn btn-accent is-hidden" id="wizard-btn-save" data-click="saveEvent">
               <i class="bi bi-save me-1"></i>Speichern
             </button>
           </div>
@@ -1428,7 +1424,7 @@
               </tbody>
             </table>
           </div>
-          <div id="registrations-empty" class="text-center py-4" style="display:none;">
+          <div id="registrations-empty" class="text-center py-4 is-hidden">
             <p class="text-muted">Noch keine Anmeldungen.</p>
           </div>
         </div>
@@ -1537,7 +1533,7 @@
 
           <ul class="list-unstyled d-flex flex-column gap-3">
             <li class="d-flex gap-3">
-              <i class="bi bi-person-badge text-accent" style="font-size:1.5rem;"></i>
+              <i class="bi bi-person-badge text-accent icon-lg"></i>
               <div>
                 <strong>Identität (Username, Avatar)</strong>
                 <p class="text-secondary mb-0 small">Damit wir wissen, wer du bist und dein Profilbild anzeigen können.
@@ -1545,7 +1541,7 @@
               </div>
             </li>
             <li class="d-flex gap-3">
-              <i class="bi bi-diagram-3 text-accent" style="font-size:1.5rem;"></i>
+              <i class="bi bi-diagram-3 text-accent icon-lg"></i>
               <div>
                 <strong>Server-Mitgliedschaft</strong>
                 <p class="text-secondary mb-0 small">Wir müssen prüfen, ob du Mitglied auf dem Server bist, um dir
@@ -1553,7 +1549,7 @@
               </div>
             </li>
             <li class="d-flex gap-3">
-              <i class="bi bi-shield-check text-accent" style="font-size:1.5rem;"></i>
+              <i class="bi bi-shield-check text-accent icon-lg"></i>
               <div>
                 <strong>Rollen & Berechtigungen</strong>
                 <p class="text-secondary mb-0 small">Viele Events sind auf bestimmte Rollen beschränkt. Wir lesen deine
@@ -1563,7 +1559,7 @@
           </ul>
 
           <div class="alert alert-success mt-3 mb-0 d-flex align-items-center">
-            <i class="bi bi-check-circle-fill me-3" style="font-size:1.5rem;"></i>
+            <i class="bi bi-check-circle-fill me-3 icon-lg"></i>
             <div>
               <strong>Wir speichern keine Passwörter.</strong><br>
               <span class="small">Wir haben keinen Zugriff auf deine privaten Nachrichten und posten nichts in deinem
@@ -1647,7 +1643,7 @@
               </select>
             </div>
           </div>
-          <div id="poll-role-area" class="mt-3" style="display:none;">
+          <div id="poll-role-area" class="mt-3 is-hidden">
             <div id="poll-role-checkboxes" class="d-flex flex-wrap gap-2"></div>
           </div>
           <label class="form-label mt-3">Antworten</label>
@@ -1743,7 +1739,7 @@
     </div>
   </div>
 
-  <section id="info-section" class="app-section" style="display:none;">
+  <section id="info-section" class="app-section is-hidden">
     <div class="container section-container">
       <!-- Animated Background -->
       <div class="info-bg-particles" id="info-particles"></div>
@@ -1858,7 +1854,7 @@
       </div>
 
       <!-- My Data Button -->
-      <div class="row justify-content-center" id="info-mydata-area" style="display:none;">
+      <div class="row justify-content-center is-hidden" id="info-mydata-area">
         <div class="col-lg-8 text-center">
           <div class="info-data-divider mb-4">
             <span class="info-divider-line"></span>
@@ -1868,7 +1864,7 @@
           <button class="btn btn-accent btn-lg info-data-btn" id="info-show-data-btn">
             <i class="bi bi-database-fill-gear me-2"></i>Meine gespeicherten Daten anzeigen
           </button>
-          <div id="info-user-data" class="mt-4" style="display:none;"></div>
+          <div id="info-user-data" class="mt-4 is-hidden"></div>
         </div>
       </div>
 

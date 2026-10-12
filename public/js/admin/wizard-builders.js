@@ -21,13 +21,13 @@ export function addFormField(existing = null) {
         .join('');
 
     row.innerHTML = `
-    <input type="text" class="form-control ff-label" placeholder="Feldname" value="${escapeHtml(label)}" style="flex:2">
-    <select class="form-select ff-type" style="flex:1.4" data-change="toggleOptionsInput">
+    <input type="text" class="form-control ff-label" placeholder="Feldname" value="${escapeHtml(label)}">
+    <select class="form-select ff-type" data-change="toggleOptionsInput">
       ${typeOptions}
     </select>
-    <input type="text" class="form-control ff-description" placeholder="Hinweis (optional)" value="${escapeHtml(description)}" style="flex:2">
-    <input type="text" class="form-control ff-options" placeholder="Optionen (kommagetrennt)" value="${escapeHtml(options)}" style="flex:2;${type === 'dropdown' ? '' : 'display:none'}">
-    <label class="d-flex align-items-center gap-1" style="white-space:nowrap;font-size:0.8rem;color:var(--text-muted);">
+    <input type="text" class="form-control ff-description" placeholder="Hinweis (optional)" value="${escapeHtml(description)}">
+    <input type="text" class="form-control ff-options${type === 'dropdown' ? '' : ' is-hidden'}" placeholder="Optionen (kommagetrennt)" value="${escapeHtml(options)}">
+    <label class="d-flex align-items-center gap-1 ff-required-label">
       <input type="checkbox" class="form-check-input ff-required" ${required ? 'checked' : ''}> Pflicht
     </label>
     <button type="button" class="btn btn-sm btn-outline-danger" data-click="removeFormField">

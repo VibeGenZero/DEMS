@@ -118,7 +118,9 @@ test('runAction calls the handler with element and event', async () => {
 });
 
 test('built-in actions show, hide and scroll to their target', async () => {
-    const options = { style: { display: 'none' } };
+    // The target starts hidden through the class .is-hidden, as in index.html
+    const classes = new Set(['mt-2', 'is-hidden']);
+    const options = { style: { display: '' }, classList: { remove: (name) => classes.delete(name) } };
     const log = { style: { display: '' } };
     let scrolled = null;
     const area = { scrollIntoView: (opts) => { scrolled = opts; } };
@@ -127,6 +129,7 @@ test('built-in actions show, hide and scroll to their target', async () => {
     box.checked = true;
     await actions.runAction('toggleVisible', box);
     assert.equal(options.style.display, '');
+    assert.deepEqual([...classes], ['mt-2']);
     box.checked = false;
     await actions.runAction('toggleVisible', box);
     assert.equal(options.style.display, 'none');

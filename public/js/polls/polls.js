@@ -4,7 +4,7 @@
 import { state } from '../core/state.js';
 import { navigateTo } from '../core/router.js';
 import { registerActions } from '../core/actions.js';
-import { escapeHtml, renderMarkdownSafe, showToast } from '../core/ui.js';
+import { applyStyleData, escapeHtml, renderMarkdownSafe, showToast, toggleElement } from '../core/ui.js';
 import { renderRosterAvatar } from '../events/slots.js';
 import { renderPollAdminBar } from './admin.js';
 
@@ -66,7 +66,7 @@ export async function refreshPollBadge() {
 export async function showPollsSection() {
     document.getElementById('polls-section').style.display = 'block';
     const createBtn = document.getElementById('polls-create-btn');
-    if (createBtn) createBtn.style.display = state.currentUser && state.currentUser.isAdmin ? '' : 'none';
+    if (createBtn) toggleElement(createBtn, state.currentUser && state.currentUser.isAdmin);
 
     const openGrid = document.getElementById('polls-open');
     const closedGrid = document.getElementById('polls-closed');
@@ -81,7 +81,7 @@ export async function showPollsSection() {
             ? open.map(renderPollCard).join('')
             : '<div class="col-12"><div class="glass-card p-4 text-center text-secondary">Gerade läuft keine Abstimmung.</div></div>';
         closedGrid.innerHTML = done.map(renderPollCard).join('');
-        document.getElementById('polls-closed-wrapper').style.display = done.length ? '' : 'none';
+        toggleElement(document.getElementById('polls-closed-wrapper'), done.length);
         refreshPollBadge();
     } catch {
         openGrid.innerHTML = '<div class="col-12 text-danger">Abstimmungen konnten nicht geladen werden.</div>';
@@ -161,6 +161,7 @@ export function renderPollDetail(poll) {
             <div id="poll-admin-bar"></div>
         </div>
         <div class="poll-options">${poll.tally.options.map(entry => renderPollOptionRow(poll, entry)).join('')}</div>`;
+    applyStyleData(container);
     renderPollAdminBar(poll);
 }
 
@@ -192,8 +193,8 @@ export function renderPollOptionRow(poll, entry) {
                 <span class="poll-option-count poll-counts">${renderPollCounts(entry, labels)}</span>
             </div>
             <div class="poll-bar">
-                <div class="poll-bar-yes" style="width:${Math.round((entry.yes / total) * 100)}%"></div>
-                <div class="poll-bar-maybe" style="width:${Math.round((entry.maybe / total) * 100)}%"></div>
+                <div class="poll-bar-yes" data-style-width="${Math.round((entry.yes / total) * 100)}"></div>
+                <div class="poll-bar-maybe" data-style-width="${Math.round((entry.maybe / total) * 100)}"></div>
             </div>
             <div class="poll-option-foot">
                 <div class="poll-voters">${avatars}</div>

@@ -54,6 +54,73 @@ export function showConfirmDialog(message, confirmLabel = 'Bestätigen', { dange
     });
 }
 
+/**
+ * Show an element in its own display type (block, flex, inline-block …).
+ * Markup hides its start state with the class .is-hidden, because the CSP
+ * forbids style attributes; clearing the inline display alone would leave
+ * that class in charge. Where the display type is known,
+ * `element.style.display = 'block'` works as before.
+ *
+ * @param {Element} element -> Element to show.
+ * @returns {void}
+ */
+export function showElement(element) {
+    element.classList.remove('is-hidden');
+    element.style.display = '';
+}
+
+/**
+ * Show an element in its own display type or hide it.
+ *
+ * @param {Element} element -> Element to show or hide.
+ * @param {*} visible -> Truthy shows, falsy hides.
+ * @returns {void}
+ */
+export function toggleElement(element, visible) {
+    if (visible) showElement(element);
+    else element.style.display = 'none';
+}
+
+const HEX_COLOR = /^#(?:[0-9a-fA-F]{3}){1,2}$/;
+const HEX_COLOR_LONG = /^#[0-9a-fA-F]{6}$/;
+
+/**
+ * Hex colour of a Discord role.
+ *
+ * @param {number|string} value -> Role colour as the bot reports it (integer, 0 = none) or as hex text.
+ * @returns {string} -> "#rrggbb" (or the given "#rgb"), empty without a colour.
+ */
+export function hexColor(value) {
+    if (typeof value === 'string') return HEX_COLOR.test(value) ? value : '';
+    if (Number.isInteger(value) && value > 0 && value <= 0xffffff) return `#${value.toString(16).padStart(6, '0')}`;
+    return '';
+}
+
+/**
+ * Give rendered markup the values that are only known at runtime. Markup
+ * carries no style attributes (the CSP forbids them), so it names such a
+ * value in a data attribute and this function sets it through the CSSOM,
+ * which the CSP allows:
+ *   data-style-color, data-style-border-color, data-style-background -> hex colours
+ *   data-style-glow  -> text shadow in a six-digit hex colour
+ *   data-style-width -> width in percent, 0 to 100
+ * Anything else is ignored. Call it after assigning innerHTML.
+ *
+ * @param {Element} root -> Element whose descendants were just rendered.
+ * @returns {void}
+ */
+export function applyStyleData(root) {
+    const selector = '[data-style-color], [data-style-border-color], [data-style-background], [data-style-glow], [data-style-width]';
+    for (const element of root.querySelectorAll(selector)) {
+        const { styleColor, styleBorderColor, styleBackground, styleGlow, styleWidth } = element.dataset;
+        if (HEX_COLOR.test(styleColor)) element.style.color = styleColor;
+        if (HEX_COLOR.test(styleBorderColor)) element.style.borderColor = styleBorderColor;
+        if (HEX_COLOR.test(styleBackground)) element.style.backgroundColor = styleBackground;
+        if (HEX_COLOR_LONG.test(styleGlow)) element.style.textShadow = `0 0 20px ${styleGlow}40`;
+        if (styleWidth !== undefined) element.style.width = `${Math.min(100, Math.max(0, Number(styleWidth) || 0))}%`;
+    }
+}
+
 export function showError(message) {
     const banner = document.getElementById('error-banner');
     document.getElementById('error-message').textContent = message;
@@ -101,14 +168,35 @@ export function escapeHtml(str) {
         .replace(/'/g, '&#039;');
 }
 
+// Texts of users keep their Markdown look but get no styles of their own: the CSP
+// ignores style attributes and style elements. Without them nobody can lay an
+// element over the page either.
+const MARKDOWN_SANITIZER = { FORBID_ATTR: ['style'], FORBID_TAGS: ['style'] };
+
+/**
+ * marked walkTokens hook: raw HTML loses its style attributes and style tags.
+ * DOMPurify parses the HTML before it filters, and the browser reports every
+ * style it meets while parsing; removed here, nothing is reported. Text that
+ * only mentions a style attribute is no HTML token and stays as written.
+ *
+ * @param {Object} token -> marked token.
+ * @returns {void}
+ */
+function dropInlineStyles(token) {
+    if (token.type !== 'html') return;
+    token.text = token.text
+        .replace(/<\/?style\b[^>]*>/gi, '')
+        .replace(/\sstyle\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '');
+}
+
 /**
  * Render Markdown string to safe HTML using marked + DOMPurify
  */
 export function renderMarkdownSafe(mdString) {
     if (typeof mdString !== 'string' || !mdString.trim()) return '';
     try {
-        const rawHtml = marked.parse(mdString);
-        return DOMPurify.sanitize(rawHtml);
+        const rawHtml = marked.parse(mdString, { walkTokens: dropInlineStyles });
+        return DOMPurify.sanitize(rawHtml, MARKDOWN_SANITIZER);
     } catch (e) {
         console.warn('Markdown parse error:', e);
         return escapeHtml(mdString).replace(/\n/g, '<br>');

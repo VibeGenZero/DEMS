@@ -5,7 +5,7 @@ import { state } from '../core/state.js';
 import { showCreateEventModal, wizardGoTo } from '../admin/wizard.js';
 import { navigateTo } from '../core/router.js';
 import { registerActions } from '../core/actions.js';
-import { escapeHtml, showConfirmDialog, showToast } from '../core/ui.js';
+import { applyStyleData, escapeHtml, hexColor, showConfirmDialog, showToast } from '../core/ui.js';
 import { DEFAULT_POLL_LABELS, formatPollOptionLabel, getPollLabels, renderPollCounts, showPollDetail } from './polls.js';
 
 export let pollDeadlinePicker = null;
@@ -20,10 +20,12 @@ export async function renderPollRoleCheckboxes(selected, containerId = 'poll-rol
             state.cachedRoles = [];
         }
     }
-    document.getElementById(containerId).innerHTML = state.cachedRoles.map(role => `
-        <label class="badge-pill" style="cursor:pointer;border-color:${escapeHtml(role.color || '')}">
-            <input type="checkbox" value="${escapeHtml(role.id)}"${selected.includes(role.id) ? ' checked' : ''} style="margin-right:4px;"> ${escapeHtml(role.name)}
+    const container = document.getElementById(containerId);
+    container.innerHTML = state.cachedRoles.map(role => `
+        <label class="badge-pill role-chip" data-style-border-color="${hexColor(role.color)}">
+            <input type="checkbox" class="me-1" value="${escapeHtml(role.id)}"${selected.includes(role.id) ? ' checked' : ''}> ${escapeHtml(role.name)}
         </label>`).join('');
+    applyStyleData(container);
 }
 
 export function togglePollRoles() {

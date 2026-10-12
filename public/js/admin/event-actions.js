@@ -6,7 +6,7 @@
 import { state } from '../core/state.js';
 import { loadAdminEvents, loadAdminStats, switchAdminTab } from './dashboard.js';
 import { registerActions } from '../core/actions.js';
-import { escapeHtml, showConfirmDialog, showToast } from '../core/ui.js';
+import { applyStyleData, escapeHtml, hexColor, showConfirmDialog, showToast } from '../core/ui.js';
 import { DISCORD_MODAL_MAX_FIELDS } from '../events/registration-form.js';
 
 // Toast after a status change, by the status the event has now
@@ -152,18 +152,18 @@ export async function announceEvent(eventId) {
                 container.innerHTML = '<span class="text-muted">Keine Rollen verfügbar.</span>';
             } else {
                 container.innerHTML = selectableRoles.map(role => {
-                    const color = role.color ? `#${role.color.toString(16).padStart(6, '0')}` : 'var(--text-secondary)';
                     return `
                         <div class="form-check">
                             <input type="checkbox" class="form-check-input announce-role-cb" 
                                 id="announce-role-${role.id}" value="${role.id}">
-                            <label class="form-check-label" for="announce-role-${role.id}" 
-                                style="color: ${color}; font-weight: 500;">
+                            <label class="form-check-label announce-role-label" for="announce-role-${role.id}"
+                                data-style-color="${hexColor(role.color)}">
                                 ${escapeHtml(role.name)}
                             </label>
                         </div>
                     `;
                 }).join('');
+                applyStyleData(container);
             }
         } else {
             container.innerHTML = '<span class="text-danger">Fehler beim Laden der Rollen.</span>';

@@ -4,7 +4,7 @@
 import { state } from '../core/state.js';
 import { navigateTo } from '../core/router.js';
 import { registerActions } from '../core/actions.js';
-import { escapeHtml, showToast } from '../core/ui.js';
+import { applyStyleData, escapeHtml, showToast } from '../core/ui.js';
 
 // Mirrors isEventVisibleTo in utils/eventUtils.js: the API answers 404 to
 // non-admins for draft and archived events, so their page cannot be opened
@@ -35,7 +35,7 @@ export async function showProfileSection() {
   `;
 
     statsContainer.innerHTML = Array(4).fill('').map(() => `
-    <div class="stat-card"><div class="skeleton-block" style="height:60px;"></div></div>
+    <div class="stat-card"><div class="skeleton-block profile-stat-skeleton"></div></div>
   `).join('');
     badgesContainer.innerHTML = '<div class="text-center py-3"><div class="spinner-border text-secondary spinner-border-sm"></div></div>';
     regContainer.innerHTML = '<div class="text-center py-4"><div class="spinner-border text-secondary spinner-border-sm"></div></div>';
@@ -49,15 +49,15 @@ export async function showProfileSection() {
 
         // ── Stats Grid ──────────────────────────────────────
         const statItems = [
-            { icon: 'bi-calendar-check', label: 'Events', value: stats.total, color: 'var(--accent-light)' },
-            { icon: 'bi-check-circle', label: 'Angenommen', value: stats.accepted, color: 'var(--success)' },
-            { icon: 'bi-qr-code', label: 'Eingecheckt', value: stats.checkedIn, color: 'var(--info)' },
-            { icon: 'bi-hourglass-split', label: 'Ausstehend', value: stats.pending, color: 'var(--warning)' }
+            { icon: 'bi-calendar-check', label: 'Events', value: stats.total, tone: 'text-accent' },
+            { icon: 'bi-check-circle', label: 'Angenommen', value: stats.accepted, tone: 'text-success' },
+            { icon: 'bi-qr-code', label: 'Eingecheckt', value: stats.checkedIn, tone: 'text-info' },
+            { icon: 'bi-hourglass-split', label: 'Ausstehend', value: stats.pending, tone: 'text-warning' }
         ];
 
         statsContainer.innerHTML = statItems.map(s => `
       <div class="stat-card profile-stat-card">
-        <div class="stat-icon"><i class="bi ${s.icon}" style="color:${s.color};"></i></div>
+        <div class="stat-icon"><i class="bi ${s.icon} ${s.tone}"></i></div>
         <div class="stat-value" data-target="${s.value}">0</div>
         <div class="stat-label">${s.label}</div>
       </div>
@@ -87,18 +87,19 @@ export async function showProfileSection() {
 
         badgesContainer.innerHTML = badges.map(badge => `
       <div class="profile-badge-card ${badge.unlocked ? 'unlocked' : 'locked'}">
-        <div class="profile-badge-icon" style="${badge.unlocked ? `color:${badge.color};text-shadow:0 0 20px ${badge.color}40;` : ''}">
+        <div class="profile-badge-icon"${badge.unlocked ? ` data-style-color="${escapeHtml(badge.color)}" data-style-glow="${escapeHtml(badge.color)}"` : ''}>
           <i class="bi ${badge.icon}"></i>
         </div>
         <div class="profile-badge-name">${escapeHtml(badge.name)}</div>
         <div class="profile-badge-desc">${escapeHtml(badge.description)}</div>
         ${badge.progress !== undefined && !badge.unlocked ? `
           <div class="profile-badge-progress">
-            <div class="profile-badge-progress-bar" style="width:${Math.round(badge.progress * 100)}%;background:${badge.color};"></div>
+            <div class="profile-badge-progress-bar" data-style-width="${Math.round(badge.progress * 100)}" data-style-background="${escapeHtml(badge.color)}"></div>
           </div>
         ` : ''}
       </div>
     `).join('');
+        applyStyleData(badgesContainer);
 
         if (typeof gsap !== 'undefined') {
             gsap.from('.profile-badge-card', {

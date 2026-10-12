@@ -2,7 +2,7 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');
 const path = require('path');
-const { loadFrontendApp, REPO_ROOT } = require('./helpers');
+const { loadFrontendApp, isHidden, REPO_ROOT } = require('./helpers');
 
 const ADMIN = { id: 'u-admin', username: 'admin', roles: [], isAdmin: true };
 
@@ -50,3 +50,18 @@ test('the reminder field accepts several hours', async () => {
     assert.doesNotMatch(field, /type="number"/);
 });
 
+test('the wizard shows the pages and buttons that start hidden in the markup', async () => {
+    const { app, element } = await loadFrontendApp({});
+    const hidden = (id) => isHidden(element(id));
+    // index.html: only the first page and "Weiter" are visible at the start
+    assert.deepEqual(['wizard-page-1', 'wizard-page-2', 'wizard-btn-back', 'wizard-btn-next', 'wizard-btn-save'].map(hidden), [false, true, true, false, true]);
+
+    app.wizardGoTo(2);
+    assert.deepEqual(['wizard-page-1', 'wizard-page-2', 'wizard-btn-back', 'wizard-btn-next', 'wizard-btn-save'].map(hidden), [true, false, false, false, true]);
+
+    app.wizardGoTo(5);
+    assert.deepEqual(['wizard-page-2', 'wizard-page-5', 'wizard-btn-back', 'wizard-btn-next', 'wizard-btn-save'].map(hidden), [true, false, false, true, false]);
+
+    app.wizardGoTo(1);
+    assert.deepEqual(['wizard-page-1', 'wizard-page-5', 'wizard-btn-back', 'wizard-btn-next', 'wizard-btn-save'].map(hidden), [false, true, true, false, true]);
+});

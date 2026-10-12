@@ -43,6 +43,18 @@ test('the login button leads to the persona page', async () => {
     }
 });
 
+test('the persona page takes its look from a stylesheet, as the policy allows no style element', async () => {
+    const client = createClient(server.baseUrl);
+    const html = await (await client.request('/auth/dev-login')).text();
+    assert.doesNotMatch(html, /<style|\sstyle=/);
+    assert.match(html, /<link rel="stylesheet" href="\/auth\/dev-login\.css">/);
+
+    const css = await client.request('/auth/dev-login.css');
+    assert.equal(css.status, 200);
+    assert.match(css.headers.get('content-type'), /text\/css/);
+    assert.match(await css.text(), /\.persona\s*\{/);
+});
+
 test('the Discord callback does not reach Discord in mock mode', async () => {
     const res = await createClient(server.baseUrl).request('/auth/discord/callback?code=abc');
     assert.equal(res.status, 302);
@@ -128,7 +140,7 @@ test('an unknown persona is rejected', async () => {
     assert.equal(await currentUser(client), null);
 });
 
-test('the content security policy allows only own scripts, styles and fonts, no eval and no inline scripts or handlers', async () => {
+test('the content security policy allows only own scripts, styles and fonts, no eval and nothing inline', async () => {
     const res = await createClient(server.baseUrl).request('/');
     assert.equal(res.status, 200);
     const directives = Object.fromEntries(res.headers.get('content-security-policy').split(';')
@@ -137,7 +149,8 @@ test('the content security policy allows only own scripts, styles and fonts, no 
 
     assert.equal(directives['script-src'], "'self'");
     assert.equal(directives['script-src-attr'], "'none'");
-    assert.equal(directives['style-src'], "'self' 'unsafe-inline'");
+    assert.equal(directives['style-src'], "'self'");
+    assert.equal(directives['style-src-attr'], "'none'");
     assert.equal(directives['font-src'], "'self'");
     assert.ok(!directives['connect-src'].includes('cdn.jsdelivr.net'), directives['connect-src']);
 });
