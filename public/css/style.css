@@ -1059,19 +1059,153 @@ body {
 }
 
 /* ═══════════════════════════════════════════ */
-/* CONFETTI                                    */
+/* UPDATE EFFECTS                              */
+/* Played once per version with the news       */
+/* dialog (core/update-effects.js): confetti   */
+/* for a major version, a power-up for a minor */
+/* one, bugs for a patch. The script sets      */
+/* place, timing, --fx-drift and --fx-turn.    */
 /* ═══════════════════════════════════════════ */
-.confetti {
-  position: absolute;
-  width: 10px;
-  height: 10px;
-  background-color: var(--accent);
-  animation: fall linear forwards;
+.update-effects {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-toast);
+  overflow: hidden;
+  pointer-events: none;
 }
 
-@keyframes fall {
-  to {
-    transform: translateY(100vh) rotate(720deg);
+.update-effect-piece {
+  --fx-drift: 0vw;
+  --fx-turn: 0deg;
+  position: absolute;
+  opacity: 0;
+  animation-fill-mode: forwards;
+}
+
+.update-effect-tone-1 {
+  color: var(--accent-light);
+}
+
+.update-effect-tone-2 {
+  color: var(--success);
+}
+
+.update-effect-tone-3 {
+  color: var(--warning);
+}
+
+.update-effect-tone-4 {
+  color: var(--info);
+}
+
+.update-effect-tone-5 {
+  color: var(--danger);
+}
+
+.update-effect-tone-6 {
+  color: var(--accent);
+}
+
+/* Confetti: falls from above the screen, turning and drifting sideways */
+.update-effect-piece.is-confetti {
+  top: -5vh;
+  width: 0.625rem;
+  height: 0.875rem;
+  background-color: currentColor;
+  animation-name: update-confetti;
+  animation-timing-function: linear;
+}
+
+@keyframes update-confetti {
+  0% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) rotate(0deg);
+  }
+
+  85% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate3d(var(--fx-drift), 110vh, 0) rotate(var(--fx-turn));
+  }
+}
+
+/* Power-up: icons rise from below the screen, grow and fade */
+.update-effect-piece.is-powerup {
+  top: 100vh;
+  font-size: var(--font-size-2xl);
+  text-shadow: 0 0 0.75rem currentColor;
+  animation-name: update-powerup;
+  animation-timing-function: ease-out;
+}
+
+@keyframes update-powerup {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 0, 0) scale(0.6);
+  }
+
+  15% {
+    opacity: 1;
+  }
+
+  70% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate3d(var(--fx-drift), -110vh, 0) scale(1.5);
+  }
+}
+
+/* Bugs: pop up around the dialog, wiggle, then scurry off the way they face */
+.update-effect-piece.is-bug {
+  font-size: var(--font-size-2xl);
+  animation-name: update-bug;
+  animation-timing-function: ease-in-out;
+}
+
+@keyframes update-bug {
+  0% {
+    opacity: 0;
+    transform: rotate(var(--fx-turn)) scale(0);
+  }
+
+  12% {
+    opacity: 1;
+    transform: rotate(var(--fx-turn)) scale(1.4);
+  }
+
+  22% {
+    transform: rotate(calc(var(--fx-turn) - 14deg)) scale(1);
+  }
+
+  36% {
+    transform: rotate(calc(var(--fx-turn) + 14deg)) scale(1);
+  }
+
+  50% {
+    transform: rotate(calc(var(--fx-turn) - 14deg)) scale(1);
+  }
+
+  64% {
+    opacity: 1;
+    transform: rotate(var(--fx-turn)) translateY(0) scale(1);
+  }
+
+  100% {
+    opacity: 0;
+    transform: rotate(var(--fx-turn)) translateY(-9rem) scale(0.8);
+  }
+}
+
+/* Asked for less motion: the script plays nothing; this rule is the second lock */
+@media (prefers-reduced-motion: reduce) {
+  .update-effects {
+    display: none;
   }
 }
 
