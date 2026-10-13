@@ -21,7 +21,8 @@ const EVENT_ID = {
     RUNNING: 'dev-event-running',
     PAST: 'dev-event-past',
     ARCHIVED: 'dev-event-archived',
-    DRAFT: 'dev-event-draft'
+    DRAFT: 'dev-event-draft',
+    CANCELLED: 'dev-event-cancelled'
 };
 const SERIES_ID = 'dev-series-training';
 const SERIES_EVENT_IDS = ['dev-event-series-1', 'dev-event-series-2', 'dev-event-series-3'];
@@ -49,6 +50,7 @@ const EVENT_BANNERS = {
     [EVENT_ID.PAST]: 'retro',
     [EVENT_ID.ARCHIVED]: 'sommerfest',
     [EVENT_ID.DRAFT]: 'halloween',
+    [EVENT_ID.CANCELLED]: 'koop',
     ...Object.fromEntries(SERIES_EVENT_IDS.map(id => [id, 'training']))
 };
 
@@ -248,6 +250,17 @@ function buildEvents(clock) {
             endDate: clock.slot(30, 23),
             category: 'Community',
             createdAt: clock.offset(-2 * DAY)
+        }),
+        // Called off two weeks ago -> "Abgesagt" in the history of a profile
+        [EVENT_ID.CANCELLED]: buildEvent(clock, {
+            title: 'LAN-Abend',
+            description: 'Musste ausfallen: Der Raum war doppelt belegt.',
+            maxParticipants: 10,
+            status: 'cancelled',
+            startDate: clock.slot(-14, 18),
+            endDate: clock.slot(-14, 23),
+            category: 'Gaming',
+            createdAt: clock.offset(-28 * DAY)
         })
     };
 
@@ -305,7 +318,7 @@ function buildRegistration(clock, eventId, person, fields = {}) {
 }
 
 function buildRegistrations(clock) {
-    const { lena, tom, neo, kira, jonas, aylin, ben, chiara, dennis, elif, felix, greta } = people;
+    const { mori, lena, tom, neo, kira, jonas, aylin, ben, chiara, dennis, elif, felix, greta } = people;
     const entry = (key, eventId, person, fields) => [`dev-reg-${key}`, buildRegistration(clock, eventId, person, fields)];
     const checkedIn = (checkedInAt) => ({ checkedIn: true, checkedInAt });
     const tournamentAnswers = (name, role, teamRole = '', channel = '') => ({
@@ -398,7 +411,19 @@ function buildRegistrations(clock) {
         // Series
         entry('series1-lena', SERIES_EVENT_IDS[0], lena),
         entry('series1-ben', SERIES_EVENT_IDS[0], ben),
-        entry('series2-lena', SERIES_EVENT_IDS[1], lena)
+        entry('series2-lena', SERIES_EVENT_IDS[1], lena),
+
+        // Profile page: a persona with a slot, one with a rejection, two with a cancelled event
+        entry('role-mori', EVENT_ID.ROLE, mori, {
+            slotId: RAID_SLOT_ID.DPS, preferredSlotId: RAID_SLOT_ID.DPS, altSlotIds: [], createdAt: clock.offset(-1 * DAY)
+        }),
+        entry('bigform-tom', EVENT_ID.BIG_FORM, tom, {
+            status: 'rejected',
+            formAnswers: { 'Name': 'Tom', 'Streaming-Erfahrung': 'Keine', 'Aufzeichnung erlaubt': true },
+            createdAt: clock.offset(-2 * DAY)
+        }),
+        entry('cancelled-lena', EVENT_ID.CANCELLED, lena, { createdAt: clock.offset(-20 * DAY) }),
+        entry('cancelled-tom', EVENT_ID.CANCELLED, tom, { createdAt: clock.offset(-20 * DAY) })
     ]);
 }
 
