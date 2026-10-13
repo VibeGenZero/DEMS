@@ -66,11 +66,11 @@ const describe = (rule, declaration) => `${rule.file}:${declaration.line} ${rule
 // Inline styles in markup: a style attribute (also set through setAttribute) or a style element.
 // The CSP forbids them (style-src 'self', style-src-attr 'none'), so the browser drops them silently.
 const INLINE_STYLE = /\sstyle\s*=\s*["'`]|<style[\s>]|setAttribute\(\s*['"]style['"]/;
-const IMPORTANT_BUDGET = 30;
+const IMPORTANT_BUDGET = 29;
 // Emojis in index.html and the modules. Symbols are Bootstrap Icons (bi-*);
 // lower the number when a page drops some, never raise it. Emojis that users
 // type in (slot emojis) are data, not source, and do not count.
-const EMOJI_BUDGET = 37;
+const EMOJI_BUDGET = 30;
 const EMOJI = /\p{Extended_Pictographic}/gu;
 
 test('index.html loads Bootstrap, the tokens and the DEMS styles in this order', () => {

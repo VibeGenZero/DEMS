@@ -7,6 +7,7 @@ import { registerActions } from '../core/actions.js';
 import { contrastRatio, parseColor } from '../core/contrast.js';
 import { escapeHtml } from '../core/ui.js';
 import { renderDebugComponents } from './debug-components.js';
+import { renderBadgeList, renderUpcomingRow } from './profile-view.js';
 
 // Token groups in display order: name pattern and how a sample is drawn
 const TOKEN_GROUPS = [
@@ -35,6 +36,15 @@ const FILL_OF = {
 };
 
 const LEGACY_BUTTONS = ['btn-outline-primary', 'btn-outline-success', 'btn-outline-warning', 'btn-outline-danger', 'btn-warning', 'btn-link'];
+// Samples of the profile page styles (PROFILE SECTION in style.css), built by the page's own functions
+const SAMPLE_PROFILE_ENTRY = {
+    status: 'accepted', checkedIn: false, slot: { name: 'Tank', emoji: '', wish: false },
+    event: { id: 'sample', title: 'profile-event', startDate: '', endDate: '', location: 'Lobby', checkinEnabled: false }
+};
+const SAMPLE_BADGES = [
+    { name: 'badge-row', description: 'erreicht', icon: 'bi-trophy', unlocked: true },
+    { name: 'badge-row is-locked', description: '2/3 Events eingecheckt', icon: 'bi-check-all', unlocked: false, progress: 0.66 }
+];
 const ANIMATIONS = [
     { label: 'Fade In', run: () => gsap.fromTo('.sg-anim-demo-item', { opacity: 0 }, { opacity: 1, duration: 0.6, stagger: 0.1 }) },
     { label: 'Slide Up', run: () => gsap.fromTo('.sg-anim-demo-item', { y: 40, opacity: 0 }, { y: 0, opacity: 1, duration: 0.5, stagger: 0.1, ease: 'power3.out' }) },
@@ -137,20 +147,10 @@ function renderLegacy() {
           </div>
         </div>
         <div class="col-md-4">
-          <div class="profile-reg-card">
-            <div class="profile-reg-info">
-              <h6>profile-reg-card</h6>
-              <small>Kategorie · 01. Jan 2026</small>
-            </div>
-            <span class="chip chip-success">Angenommen</span>
-          </div>
+          ${renderUpcomingRow(SAMPLE_PROFILE_ENTRY, new Date(), false)}
         </div>
         <div class="col-md-4">
-          <div class="profile-badge-card unlocked p-3 text-center">
-            <div class="fs-2">🏆</div>
-            <div class="fw-semibold mt-1">profile-badge-card</div>
-            <small class="text-muted">unlocked</small>
-          </div>
+          <ul class="badge-list">${renderBadgeList(SAMPLE_BADGES)}</ul>
         </div>
       </div>`;
 

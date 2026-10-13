@@ -17,9 +17,9 @@ const { PERSONAS } = require('../dev/mockGuild');
 const { db, collection, doc, getDoc, getDocs, setDoc } = require('../firebaseAdmin');
 
 const EXPECTED_COUNTS = {
-    events: 12,
+    events: 13,
     users: 12,
-    registrations: 34,
+    registrations: 38,
     comments: 6,
     auditLogs: 10,
     polls: 2,
@@ -134,6 +134,23 @@ test('the raid event has a line-up with a fallback role and a waitlist', async (
     const registrations = await registrationsOf(EVENT_ID.ROLE);
     assert.ok(registrations.some(r => r.status === 'accepted' && r.slotId !== r.preferredSlotId));
     assert.ok(registrations.some(r => r.status === 'waitlisted' && r.slotId === null && r.preferredSlotId === 'tank'));
+});
+
+test('the seed shows the profile a slot, a rejection and a cancelled event', async () => {
+    const userIdOf = (personaId) => PERSONAS.find(persona => persona.id === personaId).userId;
+    const registrations = (await getDocs(collection(db, 'registrations'))).docs.map(d => d.data());
+    const find = (personaId, eventId) => registrations.find(r => r.eventId === eventId && r.userId === userIdOf(personaId));
+
+    assert.deepEqual([find('admin', EVENT_ID.ROLE).status, find('admin', EVENT_ID.ROLE).slotId], ['accepted', 'dps']);
+    assert.equal(find('member', EVENT_ID.BIG_FORM).status, 'rejected');
+
+    const cancelled = await getEvent(EVENT_ID.CANCELLED);
+    assert.equal(cancelled.status, 'cancelled');
+    assert.ok(new Date(cancelled.endDate) < new Date());
+    for (const personaId of ['raider', 'member']) assert.equal(find(personaId, EVENT_ID.CANCELLED).status, 'accepted', personaId);
+
+    // Lena stays free to pick a raid role herself (browser tour)
+    assert.equal(find('raider', EVENT_ID.ROLE), undefined);
 });
 
 test('the newcomer persona has no profile yet', async () => {

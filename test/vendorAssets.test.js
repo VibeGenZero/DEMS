@@ -73,3 +73,11 @@ test('the fonts used by style.css are bundled', () => {
     }
     assert.ok(indexReferences().includes('/vendor/fonts/fonts.css'), 'index.html does not load fonts.css');
 });
+
+test('every badge icon exists in the Bootstrap Icons font', () => {
+    const route = fs.readFileSync(path.join(__dirname, '..', 'routes', 'user.js'), 'utf8');
+    const css = fs.readFileSync(path.join(VENDOR_DIR, 'bootstrap-icons', 'bootstrap-icons.css'), 'utf8');
+    const icons = [...new Set([...route.matchAll(/icon: '(bi-[a-z0-9-]+)'/g)].map(match => match[1]))];
+    assert.ok(icons.length >= 8, `found only ${icons.join(', ')}`);
+    assert.deepEqual(icons.filter(icon => !css.includes(`.${icon}::before`)), []);
+});

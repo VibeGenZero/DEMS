@@ -1,10 +1,22 @@
 /**
- * Profile page, account settings, first-login dialog.
+ * Profile page (#profile): loads the profile and fills its areas; account
+ * settings and the first-login dialog. Rows, card and badge list are built
+ * by profile-view.js.
  */
 import { state } from '../core/state.js';
 import { navigateTo } from '../core/router.js';
 import { registerActions } from '../core/actions.js';
-import { applyStyleData, escapeHtml, showToast } from '../core/ui.js';
+import { emptyState } from '../core/components.js';
+import { applyStyleData, showConfirmDialog, showToast, toggleElement } from '../core/ui.js';
+import {
+    renderBadgeList, renderBadgeSkeleton, renderHistoryRow, renderProfileCard, renderProfileSkeleton, renderUpcomingRow
+} from './profile-view.js';
+
+// History rows shown at first and added by each "Weitere anzeigen"
+const HISTORY_PAGE_SIZE = 5;
+// History of the last answer and how many of its rows are shown
+let profileHistory = [];
+let historyVisible = HISTORY_PAGE_SIZE;
 
 // Mirrors isEventVisibleTo in utils/eventUtils.js: the API answers 404 to
 // non-admins for draft and archived events, so their page cannot be opened
@@ -12,209 +24,138 @@ export function canOpenEvent(event) {
     return !!event && (!!state.currentUser?.isAdmin || !['draft', 'archived'].includes(event.status));
 }
 
+/**
+ * Show the profile page: placeholders first, then the answer of GET /api/user/profile.
+ *
+ * @returns {Promise<void>}
+ */
 export async function showProfileSection() {
-    const section = document.getElementById('profile-section');
-    section.style.display = 'block';
-
+    document.getElementById('profile-section').style.display = 'block';
     if (!state.currentUser) return navigateTo('events');
 
-    // Show loading state
-    const header = document.getElementById('profile-header');
-    const statsContainer = document.getElementById('profile-stats');
-    const badgesContainer = document.getElementById('profile-badges');
-    const regContainer = document.getElementById('profile-registrations');
-    const emptyEl = document.getElementById('profile-empty');
-    const badgeCountEl = document.getElementById('profile-badge-count');
-
-    header.innerHTML = `
-    <img src="${escapeHtml(state.currentUser.avatar)}" class="profile-avatar" alt="Avatar">
-    <div>
-      <div class="profile-name">${escapeHtml(state.currentUser.displayName)}</div>
-      <div class="profile-meta">@${escapeHtml(state.currentUser.username)} · Discord ID: ${state.currentUser.id}</div>
-    </div>
-  `;
-
-    statsContainer.innerHTML = Array(4).fill('').map(() => `
-    <div class="stat-card"><div class="skeleton-block profile-stat-skeleton"></div></div>
-  `).join('');
-    badgesContainer.innerHTML = '<div class="text-center py-3"><div class="spinner-border text-secondary spinner-border-sm"></div></div>';
-    regContainer.innerHTML = '<div class="text-center py-4"><div class="spinner-border text-secondary spinner-border-sm"></div></div>';
-    emptyEl.style.display = 'none';
+    const upcomingEl = document.getElementById('profile-upcoming');
+    const badgesEl = document.getElementById('profile-badges');
+    document.getElementById('profile-card').innerHTML = renderProfileCard(state.currentUser, null);
+    document.getElementById('profile-upcoming-count').textContent = '';
+    document.getElementById('profile-badge-count').textContent = '';
+    upcomingEl.innerHTML = renderProfileSkeleton(3);
+    badgesEl.innerHTML = renderBadgeSkeleton(4);
+    toggleElement(document.getElementById('profile-history-block'), false);
 
     try {
         const res = await fetch('/api/user/profile');
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
         if (window.VERBOSE_LOG) console.log('[VERBOSE] GET /api/user/profile', data);
-        const { stats, badges, registrations, unlockedBadges, totalBadges } = data;
-
-        // ── Stats Grid ──────────────────────────────────────
-        const statItems = [
-            { icon: 'bi-calendar-check', label: 'Events', value: stats.total, tone: 'text-accent' },
-            { icon: 'bi-check-circle', label: 'Angenommen', value: stats.accepted, tone: 'text-success' },
-            { icon: 'bi-qr-code', label: 'Eingecheckt', value: stats.checkedIn, tone: 'text-info' },
-            { icon: 'bi-hourglass-split', label: 'Ausstehend', value: stats.pending, tone: 'text-warning' }
-        ];
-
-        statsContainer.innerHTML = statItems.map(s => `
-      <div class="stat-card profile-stat-card">
-        <div class="stat-icon"><i class="bi ${s.icon} ${s.tone}"></i></div>
-        <div class="stat-value" data-target="${s.value}">0</div>
-        <div class="stat-label">${s.label}</div>
-      </div>
-    `).join('');
-
-        if (typeof gsap !== 'undefined') {
-            // Animate stat counters
-            statsContainer.querySelectorAll('.stat-value').forEach(el => {
-                const target = parseInt(el.dataset.target) || 0;
-                gsap.to(el, {
-                    textContent: target,
-                    duration: 1.2,
-                    ease: 'power2.out',
-                    snap: { textContent: 1 },
-                    delay: 0.2
-                });
-            });
-
-            gsap.from('.profile-stat-card', {
-                y: 20, duration: 0.4,
-                stagger: 0.08, ease: 'power3.out'
-            });
-        }
-
-        // ── Badges ──────────────────────────────────────────
-        badgeCountEl.textContent = `${unlockedBadges} / ${totalBadges} freigeschaltet`;
-
-        badgesContainer.innerHTML = badges.map(badge => `
-      <div class="profile-badge-card ${badge.unlocked ? 'unlocked' : 'locked'}">
-        <div class="profile-badge-icon"${badge.unlocked ? ` data-style-color="${escapeHtml(badge.color)}" data-style-glow="${escapeHtml(badge.color)}"` : ''}>
-          <i class="bi ${badge.icon}"></i>
-        </div>
-        <div class="profile-badge-name">${escapeHtml(badge.name)}</div>
-        <div class="profile-badge-desc">${escapeHtml(badge.description)}</div>
-        ${badge.progress !== undefined && !badge.unlocked ? `
-          <div class="profile-badge-progress">
-            <div class="profile-badge-progress-bar" data-style-width="${Math.round(badge.progress * 100)}" data-style-background="${escapeHtml(badge.color)}"></div>
-          </div>
-        ` : ''}
-      </div>
-    `).join('');
-        applyStyleData(badgesContainer);
-
-        if (typeof gsap !== 'undefined') {
-            gsap.from('.profile-badge-card', {
-                scale: 0.8, duration: 0.4,
-                stagger: 0.06, ease: 'back.out(1.4)',
-                delay: 0.3
-            });
-        }
-
-        // ── Registrations ───────────────────────────────────
-        const loadMoreWrapper = document.getElementById('profile-load-more-wrapper');
-        const loadMoreBtn = document.getElementById('profile-load-more');
-
-        if (!registrations.length) {
-            regContainer.innerHTML = '';
-            emptyEl.style.display = 'block';
-            loadMoreWrapper.style.display = 'none';
-        } else {
-            const statusTexts = { pending: '⏳ Ausstehend', accepted: '✅ Angenommen', rejected: '❌ Abgelehnt', waitlisted: '📋 Warteliste' };
-            const PAGE_SIZE = 5;
-            let visibleCount = PAGE_SIZE;
-
-            function renderRegCards() {
-                const slice = registrations.slice(0, visibleCount);
-                regContainer.innerHTML = slice.map(reg => `
-        <div class="profile-reg-card${canOpenEvent(reg.event) ? '' : ' profile-reg-card-static'}" ${canOpenEvent(reg.event) ? `data-click="navigateTo" data-route="event/${escapeHtml(reg.event.id)}"` : ''}>
-          <div class="profile-reg-info">
-            <h6>${reg.event ? escapeHtml(reg.event.title) : '<span class="text-muted">Gelöschtes Event</span>'}</h6>
-            <small>
-              ${reg.createdAt ? new Date(reg.createdAt).toLocaleDateString('de-DE', { day: '2-digit', month: 'short', year: 'numeric' }) : ''}
-              ${reg.event && reg.event.category ? ` · ${escapeHtml(reg.event.category)}` : ''}
-              ${reg.checkedIn ? ' · <span class="text-success">✓ Eingecheckt</span>' : ''}
-            </small>
-          </div>
-          <span class="badge-pill status-${reg.status}">
-            ${statusTexts[reg.status] || reg.status}
-          </span>
-        </div>
-      `).join('');
-
-                loadMoreWrapper.style.display = visibleCount < registrations.length ? 'block' : 'none';
-            }
-
-            renderRegCards();
-
-            loadMoreBtn.onclick = () => {
-                const prevCount = visibleCount;
-                visibleCount = Math.min(visibleCount + PAGE_SIZE, registrations.length);
-                renderRegCards();
-
-                if (typeof gsap !== 'undefined') {
-                    const newCards = Array.from(regContainer.querySelectorAll('.profile-reg-card')).slice(prevCount);
-                    gsap.from(newCards, { y: 15, duration: 0.3, stagger: 0.05, ease: 'power3.out' });
-                }
-            };
-
-            if (typeof gsap !== 'undefined') {
-                gsap.from('.profile-reg-card', {
-                    y: 15, duration: 0.3,
-                    stagger: 0.05, ease: 'power3.out',
-                    delay: 0.5
-                });
-            }
-        }
-
-        // Animate the header card
-        if (typeof gsap !== 'undefined') {
-            gsap.from('#profile-header-card', {
-                y: 20, duration: 0.5, ease: 'power3.out'
-            });
-        }
-
-        // Load account settings
-        await loadAccountSettings();
-
-        // ── Debug Card ──────────────────────────────────────
-        if (window.DEBUG_MODE) {
-            const wrapper = document.getElementById('debug-card-wrapper');
-            wrapper.style.display = 'block';
-
-            document.getElementById('debug-user-json').textContent =
-                JSON.stringify(state.currentUser, null, 2);
-
-            document.getElementById('debug-server-info').textContent =
-                JSON.stringify({
-                    debugMode: window.DEBUG_MODE,
-                    guildId: window._demsGuildId,
-                    userAgent: navigator.userAgent.slice(0, 80),
-                    href: window.location.href,
-                }, null, 2);
-
-            const verboseToggle = document.getElementById('verbose-log-toggle');
-            verboseToggle.checked = localStorage.getItem('dems_verbose_log') === 'true';
-            window.VERBOSE_LOG = verboseToggle.checked;
-
-            const collapseEl = document.getElementById('debug-collapse');
-            collapseEl.addEventListener('show.bs.collapse', () => {
-                document.getElementById('debug-chevron').style.transform = 'rotate(180deg)';
-            });
-            collapseEl.addEventListener('hide.bs.collapse', () => {
-                document.getElementById('debug-chevron').style.transform = 'rotate(0deg)';
-            });
-        }
-
-    } catch {
-        regContainer.innerHTML = '<div class="alert alert-danger">Fehler beim Laden des Profils.</div>';
-        statsContainer.innerHTML = '';
-        badgesContainer.innerHTML = '';
+        renderProfile(data);
+    } catch (err) {
+        console.error('Failed to load the profile:', err);
+        upcomingEl.innerHTML = emptyState({
+            icon: 'exclamation-triangle',
+            title: 'Profil konnte nicht geladen werden',
+            text: 'Prüfe deine Verbindung und versuche es noch einmal.',
+            action: '<button type="button" class="btn btn-accent" data-click="reloadProfile"><i class="bi bi-arrow-clockwise me-1"></i>Erneut versuchen</button>'
+        });
+        badgesEl.innerHTML = '';
     }
+
+    await loadAccountSettings();
+    showDebugCard();
+}
+
+/**
+ * Fill card, upcoming events, badges and history from a profile answer.
+ * Missing lists count as empty, so an incomplete answer still shows a page.
+ *
+ * @param {Object} data -> Answer of GET /api/user/profile.
+ * @returns {void}
+ */
+function renderProfile(data) {
+    const now = new Date();
+    const upcoming = Array.isArray(data.upcoming) ? data.upcoming : [];
+    const badges = Array.isArray(data.badges) ? data.badges : [];
+    profileHistory = Array.isArray(data.history) ? data.history : [];
+    historyVisible = HISTORY_PAGE_SIZE;
+
+    document.getElementById('profile-card').innerHTML = renderProfileCard(state.currentUser, data.stats || {});
+    document.getElementById('profile-upcoming-count').textContent = upcoming.length ? String(upcoming.length) : '';
+    document.getElementById('profile-upcoming').innerHTML = upcoming.length
+        ? upcoming.map(entry => renderUpcomingRow(entry, now, canOpenEvent(entry.event))).join('')
+        : emptyState({
+            icon: 'calendar-x',
+            title: 'Noch nichts geplant',
+            text: 'Melde dich für ein Event an, dann steht es hier.',
+            action: '<a class="btn btn-accent" href="#events"><i class="bi bi-calendar-event me-1"></i>Events ansehen</a>'
+        });
+
+    const badgesEl = document.getElementById('profile-badges');
+    badgesEl.innerHTML = renderBadgeList(badges);
+    applyStyleData(badgesEl);
+    document.getElementById('profile-badge-count').textContent = `${badges.filter(badge => badge.unlocked).length} von ${badges.length}`;
+
+    renderProfileHistory();
+}
+
+/**
+ * Show the first `historyVisible` rows of the history; without a history the block stays hidden.
+ *
+ * @returns {void}
+ */
+function renderProfileHistory() {
+    toggleElement(document.getElementById('profile-history-block'), profileHistory.length > 0);
+    document.getElementById('profile-history-count').textContent = profileHistory.length ? String(profileHistory.length) : '';
+    document.getElementById('profile-history').innerHTML = profileHistory.slice(0, historyVisible)
+        .map(entry => renderHistoryRow(entry, canOpenEvent(entry.event))).join('');
+    toggleElement(document.getElementById('profile-history-more'), historyVisible < profileHistory.length);
+}
+
+/**
+ * Show five more rows of the history; the rows are already loaded.
+ *
+ * @returns {void}
+ */
+export function showMoreProfileHistory() {
+    historyVisible = Math.min(historyVisible + HISTORY_PAGE_SIZE, profileHistory.length);
+    renderProfileHistory();
+}
+
+/**
+ * Fill the debug card below the profile (only with DEBUG_MODE).
+ *
+ * @returns {void}
+ */
+function showDebugCard() {
+    if (!window.DEBUG_MODE) return;
+    document.getElementById('debug-card-wrapper').style.display = 'block';
+
+    document.getElementById('debug-user-json').textContent =
+        JSON.stringify(state.currentUser, null, 2);
+
+    document.getElementById('debug-server-info').textContent =
+        JSON.stringify({
+            debugMode: window.DEBUG_MODE,
+            guildId: window._demsGuildId,
+            userAgent: navigator.userAgent.slice(0, 80),
+            href: window.location.href,
+        }, null, 2);
+
+    const verboseToggle = document.getElementById('verbose-log-toggle');
+    verboseToggle.checked = localStorage.getItem('dems_verbose_log') === 'true';
+    window.VERBOSE_LOG = verboseToggle.checked;
+
+    const collapseEl = document.getElementById('debug-collapse');
+    collapseEl.addEventListener('show.bs.collapse', () => {
+        document.getElementById('debug-chevron').style.transform = 'rotate(180deg)';
+    });
+    collapseEl.addEventListener('hide.bs.collapse', () => {
+        document.getElementById('debug-chevron').style.transform = 'rotate(0deg)';
+    });
 }
 
 export function toggleVerboseLog(enabled) {
     window.VERBOSE_LOG = enabled;
     localStorage.setItem('dems_verbose_log', enabled ? 'true' : 'false');
-    showToast(enabled ? '🐛 Verbose-Logging aktiviert' : 'Verbose-Logging deaktiviert', enabled ? 'warning' : 'secondary');
+    showToast(enabled ? 'Verbose-Logging aktiviert' : 'Verbose-Logging deaktiviert', enabled ? 'warning' : 'info');
 }
 
 export async function loadAccountSettings() {
@@ -247,8 +188,9 @@ export async function saveAccountSettings() {
 }
 
 export async function deleteUserAccount() {
-    if (!confirm('Bist du sicher? Dein Account und alle Registrierungen werden dauerhaft gelöscht.')) return;
-    if (!confirm('Letzte Bestätigung: Account wirklich löschen?')) return;
+    const confirmed = await showConfirmDialog(
+        'Account und alle Anmeldungen dauerhaft löschen? Das lässt sich nicht rückgängig machen.', 'Account löschen');
+    if (!confirmed) return;
     try {
         const res = await fetch('/api/user/account', {
             method: 'DELETE',
@@ -291,5 +233,7 @@ registerActions({
     saveAccountSettings: () => saveAccountSettings(),
     deleteUserAccount: () => deleteUserAccount(),
     toggleVerboseLog: (el) => toggleVerboseLog(el.checked),
-    confirmInvitationPreference: (el) => confirmInvitationPreference(el.dataset.accept === 'true')
+    confirmInvitationPreference: (el) => confirmInvitationPreference(el.dataset.accept === 'true'),
+    showMoreProfileHistory: () => showMoreProfileHistory(),
+    reloadProfile: () => showProfileSection()
 });
