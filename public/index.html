@@ -643,6 +643,18 @@
             <div class="sg-anim-demo-item glass-card p-3 text-center">Demo-Element B</div>
             <div class="sg-anim-demo-item glass-card p-3 text-center">Demo-Element C</div>
           </div>
+          <div class="fw-semibold mt-4 mb-2">Update-Effekte (einmal je Version mit dem Fenster „Neuigkeiten“)</div>
+          <div class="d-flex flex-wrap gap-2">
+            <button type="button" class="btn btn-secondary btn-sm" data-click="playUpdateEffect" data-kind="confetti">
+              <i class="bi bi-stars me-1"></i>Konfetti (3.0.0)
+            </button>
+            <button type="button" class="btn btn-secondary btn-sm" data-click="playUpdateEffect" data-kind="powerup">
+              <i class="bi bi-lightning-charge-fill me-1"></i>Power-up (3.1.0)
+            </button>
+            <button type="button" class="btn btn-secondary btn-sm" data-click="playUpdateEffect" data-kind="bugs">
+              <i class="bi bi-bug-fill me-1"></i>Käfer (3.0.1)
+            </button>
+          </div>
         </div>
 
         <!-- 9. Icons -->
@@ -1607,6 +1619,9 @@
       </div>
     </div>
   </div>
+
+  <!-- Effects for a new version, played over the page (core/update-effects.js) -->
+  <div id="update-effects" class="update-effects is-hidden" aria-hidden="true"></div>
 
   <!-- ── INFO SECTION ── -->
   <!-- Date poll editor -->

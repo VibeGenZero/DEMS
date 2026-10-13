@@ -1,8 +1,10 @@
 /**
- * "Neuigkeiten & Updates" dialog.
+ * "Neuigkeiten & Updates" dialog. A version the browser meets for the first
+ * time gets a small effect (update-effects.js).
  */
 import { registerActions } from './actions.js';
 import { escapeHtml } from './ui.js';
+import { celebrateUpdate } from './update-effects.js';
 
 export async function checkUpdates() {
     try {
@@ -34,6 +36,7 @@ export async function checkUpdates() {
 
             const modal = new bootstrap.Modal(modalEl);
             modal.show();
+            celebrateUpdate(data.version);
 
             // Store current version availability for checkbox logic
             modalEl.dataset.version = data.version;

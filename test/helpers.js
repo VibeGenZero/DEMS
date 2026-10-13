@@ -366,9 +366,10 @@ async function loadFrontendModules(entryFile, context) {
  * @param {Object} [options] -> Harness options.
  * @param {Object<string, string>} [options.storage] -> Initial localStorage entries.
  * @param {boolean|string} [options.confirm] -> Answer of the confirm dialog: true (default) confirms, false dismisses, 'too-early' clicks the confirm button while the dialog still fades in and dismisses it afterwards.
+ * @param {boolean} [options.reducedMotion] -> true answers matchMedia('(prefers-reduced-motion: reduce)') with a match.
  * @returns {Promise<Object>} -> `{ app, state, element, toasts, dialogs, requests, location, fire }`: app holds every export of every module, state is core/state.js (`state.currentUser = persona` logs a user in), element(id) returns the fake element or null, toasts lists the shown messages, dialogs lists the confirm dialogs shown (`{ text, label, danger }`; the dialog answers at once), requests the fetch calls `{ url, method, headers, body }`, location is window.location, fire(type) runs the recorded document listeners.
  */
-async function loadFrontendApp(routes, { storage = {}, confirm = true } = {}) {
+async function loadFrontendApp(routes, { storage = {}, confirm = true, reducedMotion = false } = {}) {
     const registry = new Map();
     registerHtmlIds(registry, fs.readFileSync(path.join(REPO_ROOT, 'public', 'index.html'), 'utf8'));
     const toasts = [];
@@ -409,6 +410,7 @@ async function loadFrontendApp(routes, { storage = {}, confirm = true } = {}) {
         // isValidBannerUrl() parses with URL, as the browser does
         URL, URLSearchParams,
         setTimeout: noop, clearTimeout: noop, setInterval: () => 0, clearInterval: noop,
+        matchMedia: (query) => ({ matches: reducedMotion && /prefers-reduced-motion:\s*reduce/.test(query) }),
         gsap: { from: noop, to: noop, fromTo: noop, set: noop },
         marked: { parse: (text) => text },
         DOMPurify: { sanitize: (text) => text },
