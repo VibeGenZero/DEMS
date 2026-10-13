@@ -332,3 +332,14 @@ test('the overview says when there is nothing or when loading failed', async () 
     assert.match(failed.element('events-empty').innerHTML, /data-click="showEventsSection"/);
     assert.doesNotMatch(failed.element('events-empty').innerHTML, /Console/);
 });
+
+test('the time line of a card can name the place', async () => {
+    const { app } = await loadFrontendApp({});
+    const now = new Date('2026-10-13T12:00:00.000Z');
+    const start = '2026-10-16T12:00:00.000Z';
+    assert.match(app.renderEventWhen({ startDate: start }, now, 'Lobby'), /<strong>in 3 Tagen<\/strong> · \d{2}:\d{2} · Lobby<\/p>$/);
+    assert.match(app.renderEventWhen({ startDate: '' }, now, 'Lobby'), />Termin folgt · Lobby<\/p>$/);
+    assert.match(app.renderEventWhen({ startDate: start }, now, '<b>x</b>'), / · &lt;b&gt;x&lt;\/b&gt;<\/p>$/);
+    // Without a place the line stays as it was
+    assert.doesNotMatch(app.renderEventWhen({ startDate: start }, now), /\d{2}:\d{2} ·/);
+});

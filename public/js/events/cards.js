@@ -111,13 +111,15 @@ export function renderDateTile(event, now) {
  *
  * @param {Object} event -> Event.
  * @param {Date} now -> Reference time.
- * @returns {string} -> "Läuft gerade · seit 14:30", "Morgen · 19:00" … or "Termin folgt".
+ * @param {string} [place] -> Place of the event; appended when given (profile rows).
+ * @returns {string} -> "Läuft gerade · seit 14:30", "Morgen · 19:00 · Lobby" … or "Termin folgt".
  */
-export function renderEventWhen(event, now) {
+export function renderEventWhen(event, now, place = '') {
     const start = parseDate(event.startDate);
-    if (!start) return '<p class="event-card-when">Termin folgt</p>';
-    if (isRunning(event, now)) return `<p class="event-card-when is-live"><strong>Läuft gerade</strong> · seit ${formatTime(start)}</p>`;
-    return `<p class="event-card-when"><strong>${relativeDay(start, now)}</strong> · ${formatTime(start)}</p>`;
+    const where = place ? ` · ${escapeHtml(String(place))}` : '';
+    if (!start) return `<p class="event-card-when">Termin folgt${where}</p>`;
+    if (isRunning(event, now)) return `<p class="event-card-when is-live"><strong>Läuft gerade</strong> · seit ${formatTime(start)}${where}</p>`;
+    return `<p class="event-card-when"><strong>${relativeDay(start, now)}</strong> · ${formatTime(start)}${where}</p>`;
 }
 
 /**
