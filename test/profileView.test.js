@@ -288,6 +288,17 @@ test('a member gets no link to a draft, an admin does', async () => {
     assert.match(admin, /href="#event\/ev-2"/);
 });
 
+test('an archived event in the history links for admins only', async () => {
+    const archived = entry({ id: 'h-old', event: event({ id: 'old-raid', title: 'Alter Raid', status: 'archived', startDate: at(-240), endDate: at(-238) }) });
+    const historyOf = async (user) => (await openProfile({ ...PROFILE, history: [archived] }, user)).element('profile-history').innerHTML;
+
+    const member = await historyOf(MEMBER);
+    assert.match(member, /^<div class="profile-history-row">/);
+    assert.match(member, /Alter Raid/);
+    assert.doesNotMatch(member, /href=/);
+    assert.match(await historyOf(ADMIN), /^<a class="profile-history-row" href="#event\/old-raid">/);
+});
+
 test('"Weitere anzeigen" shows five more rows without a request and disappears at the end', async () => {
     const { app, element, requests } = await openProfile(PROFILE);
     const loads = () => requests.filter(request => request.url === '/api/user/profile').length;

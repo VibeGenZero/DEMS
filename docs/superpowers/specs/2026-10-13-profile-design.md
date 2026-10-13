@@ -137,7 +137,7 @@ Der Verlauf zeigt fünf Zeilen. „Weitere anzeigen“ zeigt je fünf mehr und v
 
 | Zustand | Anzeige |
 |---|---|
-| Laden | drei Platzhalter-Zeilen links, Platzhalter in Profilkarte und Badges |
+| Laden | drei Platzhalter-Zeilen links und Platzhalter in der Badge-Liste; die Profilkarte zeigt sofort Avatar und Namen aus den Sitzungsdaten, ihre drei Zahlen als „–“ |
 | keine kommenden Events | Leerzustand „Noch nichts geplant“ mit „Melde dich für ein Event an, dann steht es hier.“ und dem Button „Events ansehen“ (`#events`) |
 | kein Verlauf | Überschrift und Liste „Verlauf“ entfallen |
 | Fehler (Netz oder Antwort ohne 2xx) | links der Leerzustand „Profil konnte nicht geladen werden“ mit Button „Erneut versuchen“; Profilkarte aus den Sitzungsdaten, Badges leer |
@@ -182,11 +182,12 @@ Der Block „PROFILE SECTION“ in `style.css` wird ersetzt, nur mit Tokens aus 
 
 | Klasse | Zweck |
 |---|---|
-| `.profile-layout` und vier Bereichs-Klassen | das Raster |
-| `.profile-card`, `.profile-numbers` | Profilkarte und die drei Zahlen |
+| `.profile-layout` und vier Bereichs-Klassen (`.profile-area-*`) | das Raster |
+| `.profile-panel`, `.profile-panel-head`, `.profile-heading`, `.profile-heading-count`, `.profile-list`, `.profile-history-block`, `.profile-more` | Karten der rechten Spalte, Überschriften mit Anzahl, Listen und der Button „Weitere anzeigen“ |
+| `.profile-card-head`, `.profile-card-names`, `.profile-name`, `.profile-handle`, `.profile-numbers`, `.profile-number` | Profilkarte und die drei Zahlen |
 | `.profile-event` (Link oder `div`), `.profile-event-body`, `.profile-event-title`, `.profile-event-facts`, `.profile-event-action`, `.is-muted` | Zeile unter „Kommende Events“ |
-| `.profile-history-row` | Zeile im Verlauf |
-| `.badge-list`, `.badge-row`, `.badge-row-icon`, `.is-locked` | Badge-Liste |
+| `.profile-history-row`, `.profile-history-date`, `.profile-history-title` | Zeile im Verlauf |
+| `.badge-list`, `.badge-row`, `.badge-row-icon`, `.badge-row-body`, `.badge-row-name`, `.badge-row-rule`, `.is-locked` | Badge-Liste |
 
 Aus den Komponenten kommen unverändert: `.glass-card`, `.date-tile`, `.chip` mit seinen Farben, `.btn`, `.avatar`, `.empty-state`, `.skeleton` und der Balken `.capacity-meter` (`<progress>`) für den Badge-Fortschritt. Die Badge-Farbe setzt `applyStyleData` über `data-style-color`. Es kommt keine neue Komponente dazu, also auch kein neuer Styleguide-Block.
 
