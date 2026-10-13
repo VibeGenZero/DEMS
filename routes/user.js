@@ -281,7 +281,6 @@ router.get('/profile', requireAuth, async (req, res) => {
                 displayName: user.displayName,
                 avatar: user.avatar
             },
-            registrations,
             upcoming,
             history,
             stats,

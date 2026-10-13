@@ -194,6 +194,7 @@ test('the profile lists upcoming events by start and the history newest first', 
     const res = await (await loginAs('member')).request('/api/user/profile');
     assert.equal(res.status, 200);
     const profile = await res.json();
+    assert.equal('registrations' in profile, false);
 
     assert.deepEqual(profile.upcoming.map(entry => [entry.event.id, entry.status]), [
         [EVENT_ID.RUNNING, 'accepted'],

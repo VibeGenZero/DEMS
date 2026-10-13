@@ -438,65 +438,66 @@
           <h2><i class="bi bi-person me-2"></i>Mein Profil</h2>
         </div>
 
-        <!-- Profile Header -->
-        <div class="glass-card p-4 mb-4" id="profile-header-card">
-          <div class="profile-header" id="profile-header">
+        <div class="profile-layout">
+          <!-- Events: what is coming up, then the history. Rows: pages/profile-view.js -->
+          <div class="profile-area-events">
+            <h3 class="profile-heading"><i class="bi bi-calendar-event"></i>Kommende Events
+              <span class="profile-heading-count" id="profile-upcoming-count"></span></h3>
+            <div class="profile-list" id="profile-upcoming">
+              <!-- Rendered dynamically -->
+            </div>
+            <div class="profile-history-block is-hidden" id="profile-history-block">
+              <h3 class="profile-heading"><i class="bi bi-clock-history"></i>Verlauf
+                <span class="profile-heading-count" id="profile-history-count"></span></h3>
+              <div class="profile-list" id="profile-history">
+                <!-- Rendered dynamically -->
+              </div>
+              <button type="button" class="btn btn-outline-secondary btn-sm profile-more is-hidden" id="profile-history-more"
+                data-click="showMoreProfileHistory">
+                <i class="bi bi-chevron-down me-1"></i>Weitere anzeigen
+              </button>
+            </div>
+          </div>
+
+          <!-- Profile card: avatar, names, numbers -->
+          <div class="glass-card profile-area-card profile-panel" id="profile-card">
             <!-- Rendered dynamically -->
           </div>
-        </div>
 
-        <!-- Stats Grid -->
-        <h5 class="mb-3"><i class="bi bi-bar-chart me-2"></i>Statistiken</h5>
-        <div class="profile-stats-grid mb-4" id="profile-stats">
-          <!-- Rendered dynamically -->
-        </div>
-
-        <!-- Badges -->
-        <div class="d-flex justify-content-between align-items-center mb-3">
-          <h5 class="mb-0"><i class="bi bi-award me-2"></i>Badges</h5>
-          <span class="text-muted small" id="profile-badge-count"></span>
-        </div>
-        <div class="profile-badges-grid mb-4" id="profile-badges">
-          <!-- Rendered dynamically -->
-        </div>
-
-        <!-- Registrations -->
-        <h5 class="mb-3"><i class="bi bi-list-check me-2"></i>Meine Registrierungen</h5>
-        <div id="profile-registrations">
-          <!-- Rendered dynamically -->
-        </div>
-        <div id="profile-empty" class="text-center py-5 is-hidden">
-          <i class="bi bi-inbox icon-2xl text-body-tertiary"></i>
-          <p class="text-muted mt-2">Du hast dich noch für kein Event registriert.</p>
-        </div>
-        <div class="text-center mt-3 is-hidden" id="profile-load-more-wrapper">
-          <button class="btn btn-outline-secondary btn-sm" id="profile-load-more">
-            <i class="bi bi-chevron-down me-1"></i>+ 5 weitere anzeigen
-          </button>
-        </div>
-
-        <!-- Account Settings -->
-        <h5 class="mb-3 mt-4"><i class="bi bi-gear me-2"></i>Account-Einstellungen</h5>
-        <div class="glass-card p-4 mb-4" id="account-settings-card">
-          <div class="d-flex align-items-center justify-content-between mb-3">
-            <div>
-              <div class="fw-semibold">Einladungen erhalten</div>
-              <small class="text-muted">Andere Nutzer können dich als Gast zu Events einladen.</small>
+          <!-- Badges -->
+          <div class="glass-card profile-area-badges profile-panel">
+            <div class="profile-panel-head">
+              <h3 class="profile-heading"><i class="bi bi-award"></i>Badges</h3>
+              <span class="profile-heading-count" id="profile-badge-count"></span>
             </div>
-            <div class="form-check form-switch">
-              <input class="form-check-input" type="checkbox" id="accept-invitations-toggle" role="switch"
-                data-change="saveAccountSettings">
-            </div>
+            <ul class="badge-list" id="profile-badges">
+              <!-- Rendered dynamically -->
+            </ul>
           </div>
-          <hr class="border-secondary">
-          <div class="d-flex align-items-center justify-content-between">
-            <div>
-              <div class="fw-semibold text-danger">Account löschen</div>
-              <small class="text-muted">Löscht deinen Account und alle Registrierungen dauerhaft.</small>
+
+          <!-- Account Settings -->
+          <div class="glass-card profile-area-settings profile-panel" id="account-settings-card">
+            <h3 class="profile-heading"><i class="bi bi-gear"></i>Einstellungen</h3>
+            <div class="d-flex align-items-center justify-content-between gap-3">
+              <div>
+                <div class="fw-semibold">Einladungen erhalten</div>
+                <small class="text-muted">Andere können dich als Gast zu Events einladen.</small>
+              </div>
+              <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" id="accept-invitations-toggle" role="switch"
+                  aria-label="Einladungen erhalten" data-change="saveAccountSettings">
+              </div>
             </div>
-            <button class="btn btn-outline-danger btn-sm" data-click="deleteUserAccount">
-              <i class="bi bi-trash me-1"></i>Account löschen
-            </button>
+            <hr class="border-secondary">
+            <div class="d-flex align-items-center justify-content-between gap-3">
+              <div>
+                <div class="fw-semibold text-danger">Account löschen</div>
+                <small class="text-muted">Löscht deinen Account und alle Anmeldungen dauerhaft.</small>
+              </div>
+              <button type="button" class="btn btn-outline-danger btn-sm flex-shrink-0" data-click="deleteUserAccount">
+                <i class="bi bi-trash me-1"></i>Löschen
+              </button>
+            </div>
           </div>
         </div>
 
@@ -507,7 +508,7 @@
             <div class="d-flex align-items-center justify-content-between p-4 cursor-pointer"
               data-bs-toggle="collapse" data-bs-target="#debug-collapse" aria-expanded="false">
               <div>
-                <div class="fw-semibold text-warning">🐛 Debug Panel</div>
+                <div class="fw-semibold text-warning"><i class="bi bi-bug me-1"></i>Debug Panel</div>
                 <small class="text-muted">Session, User-Daten, Server-Info, Verbose-Logging</small>
               </div>
               <i class="bi bi-chevron-down" id="debug-chevron"></i>

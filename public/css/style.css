@@ -1077,225 +1077,311 @@ body {
 
 /* ═══════════════════════════════════════════ */
 /* PROFILE SECTION                             */
+/* #profile: events on the left; card, badges  */
+/* and settings in a side column, one column   */
+/* below 992 px. Markup: pages/profile-view.js */
 /* ═══════════════════════════════════════════ */
-
-/* Profile Header */
-.profile-header {
-  margin-bottom: 2rem;
-  display: flex;
-  align-items: center;
-  gap: 1.25rem;
+.profile-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas:
+    "card"
+    "events"
+    "badges"
+    "settings";
+  gap: var(--space-24);
+  align-items: start;
 }
 
-.profile-avatar {
-  width: 72px;
-  height: 72px;
-  border-radius: 50%;
-  border: 3px solid var(--accent);
-  box-shadow: 0 0 20px var(--accent-glow);
-  object-fit: cover;
-  flex-shrink: 0;
+.profile-area-card {
+  grid-area: card;
+}
+
+.profile-area-events {
+  grid-area: events;
+  min-width: 0;
+}
+
+.profile-area-badges {
+  grid-area: badges;
+}
+
+.profile-area-settings {
+  grid-area: settings;
+}
+
+@media (min-width: 992px) {
+  /* The events span all rows; the last row takes what they need beyond the side column */
+  .profile-layout {
+    grid-template-columns: minmax(0, 1fr) 20rem;
+    grid-template-rows: auto auto 1fr;
+    grid-template-areas:
+      "events card"
+      "events badges"
+      "events settings";
+  }
+}
+
+.profile-panel {
+  padding: var(--space-16);
+}
+
+.profile-panel-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-8);
+}
+
+.profile-heading {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-8);
+  margin: 0 0 var(--space-12);
+  color: var(--text-primary);
+  font-size: var(--font-size-lg);
+  font-weight: 600;
+}
+
+.profile-heading-count {
+  color: var(--text-muted);
+  font-size: var(--font-size-sm);
+  font-weight: 400;
+}
+
+.profile-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+}
+
+.profile-history-block {
+  display: flex;
+  flex-direction: column;
+  margin-top: var(--space-24);
+}
+
+.profile-more {
+  align-self: center;
+  margin-top: var(--space-12);
+}
+
+/* Profile card */
+.profile-card-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-12);
+  min-width: 0;
+}
+
+.profile-card-names {
+  min-width: 0;
 }
 
 .profile-name {
-  font-size: var(--font-size-2xl);
-  font-weight: 700;
   color: var(--text-primary);
+  font-size: var(--font-size-xl);
+  font-weight: 700;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
 }
 
-.profile-meta {
-  font-size: var(--font-size-sm);
+.profile-handle {
   color: var(--text-muted);
-  margin-top: 0.15rem;
+  font-size: var(--font-size-sm);
+  overflow-wrap: anywhere;
 }
 
-/* Profile Stats Grid */
-.profile-stats-grid {
+.profile-numbers {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-  gap: 1rem;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-8);
+  margin: var(--space-16) 0 0;
+  padding-top: var(--space-12);
+  border-top: 1px solid var(--border-subtle);
 }
 
-.profile-stat-card {
-  opacity: 1 !important;
+/* The number stands above its label; in the markup the label comes first, as a <dl> wants it */
+.profile-number {
+  display: flex;
+  flex-direction: column-reverse;
+  min-width: 0;
 }
 
-/* Profile Badges Grid */
-.profile-badges-grid {
+.profile-number dd {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: var(--font-size-xl);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+}
+
+.profile-number dt {
+  color: var(--text-muted);
+  font-size: var(--font-size-xs);
+  font-weight: 500;
+}
+
+/* Row of "Kommende Events": date tile | title, time line, chips | arrow or check-in */
+.profile-event {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-  gap: 1rem;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: var(--space-12);
+  align-items: center;
+  padding: var(--space-12);
+  color: inherit;
+  text-decoration: none;
 }
 
-.profile-badge-card {
-  background: var(--bg-glass);
+.profile-event-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.profile-event-title {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: var(--font-size-md);
+  font-weight: 600;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.profile-event-facts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-4) var(--space-8);
+  margin-top: var(--space-4);
+}
+
+.profile-event-action.bi {
+  color: var(--text-muted);
+}
+
+/* Rejected: quieter, still readable */
+.profile-event.is-muted .profile-event-title,
+.profile-event.is-muted .date-tile-day {
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+/* Row of "Verlauf": day | title | chip */
+.profile-history-row {
+  display: grid;
+  grid-template-columns: 6.5rem minmax(0, 1fr) auto;
+  gap: var(--space-12);
+  align-items: center;
+  padding: var(--space-8) var(--space-12);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius);
-  padding: 1.25rem;
-  text-align: center;
-  transition: var(--transition);
-  position: relative;
-  overflow: hidden;
-  opacity: 1;
-}
-
-.profile-badge-card:hover {
-  border-color: var(--border-accent);
-  box-shadow: var(--shadow-glow);
-  transform: translateY(-2px);
-}
-
-.profile-badge-card.unlocked {
-  border-color: var(--border-accent);
-  background: var(--accent-tint-1);
-}
-
-.profile-badge-card.unlocked::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 3px;
-  background: linear-gradient(90deg, var(--accent), var(--accent-light));
-  opacity: 0.8;
-}
-
-.profile-badge-card.locked {
-  opacity: 0.5;
-  filter: grayscale(0.4);
-}
-
-.profile-badge-card.locked:hover {
-  filter: grayscale(0.3);
-  opacity: 0.7;
-}
-
-.profile-badge-icon {
-  transition: var(--transition);
-  font-size: var(--font-size-3xl);
-  margin-bottom: 0.5rem;
-  color: var(--text-muted);
-}
-
-.profile-badge-name {
-  font-size: var(--font-size-sm);
-  font-weight: 700;
   color: var(--text-primary);
-  margin-bottom: 0.25rem;
+  text-decoration: none;
+  transition: var(--transition);
 }
 
-.profile-badge-desc {
-  font-size: var(--font-size-xs);
+a.profile-history-row:hover {
+  border-color: var(--border-accent);
+  background: var(--bg-tint-1);
+  color: var(--text-primary);
+}
+
+.profile-history-date {
   color: var(--text-muted);
-  line-height: 1.3;
-  margin-bottom: 0.5rem;
+  font-size: var(--font-size-sm);
+  font-variant-numeric: tabular-nums;
 }
 
-.profile-badge-progress {
-  width: 100%;
-  height: 4px;
-  background: var(--bg-tint-2);
-  border-radius: var(--radius-pill);
-  overflow: hidden;
-  margin-top: 0.5rem;
+.profile-history-title {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
-.profile-badge-progress-bar {
-  height: 100%;
-  border-radius: var(--radius-pill);
-  transition: width var(--duration-slow) ease;
+/* Badge list: icon | name and rule, a bar for open badges */
+.badge-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-12);
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
-.profile-badge-card.unlocked:hover {
-  box-shadow: var(--shadow-glow);
-  transform: translateY(-3px);
-}
-
-.profile-badge-card.unlocked .profile-badge-icon {
-  animation: badgePulse 2s ease-in-out infinite;
-}
-
-@keyframes badgePulse {
-
-  0%,
-  100% {
-    transform: scale(1);
-  }
-
-  50% {
-    transform: scale(1.08);
-  }
-}
-
-/* Profile Registrations */
-.profile-reg-card {
+.badge-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  background: var(--bg-glass);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius);
-  padding: 1rem 1.25rem;
-  margin-bottom: 0.75rem;
-  cursor: pointer;
-  transition: var(--transition);
-  opacity: 1;
+  gap: var(--space-12);
 }
 
-.profile-reg-card:hover {
-  background: var(--bg-glass-hover);
-  border-color: var(--border-accent);
-  box-shadow: var(--shadow-glow);
-  transform: translateX(4px);
-}
-
-/* Event page not reachable (draft/archived for members, deleted) -> no link look */
-.profile-reg-card.profile-reg-card-static {
-  cursor: default;
-}
-
-.profile-reg-card.profile-reg-card-static:hover {
-  border-color: var(--border-subtle);
-  background: var(--bg-glass);
-  box-shadow: none;
-  transform: none;
-}
-
-.profile-reg-info h6 {
-  margin: 0 0 0.25rem 0;
-  font-weight: 600;
+.badge-row-icon {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  background: var(--bg-tint-2);
+  color: var(--accent-text);
   font-size: var(--font-size-md);
+}
+
+.badge-row-body {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.badge-row-name {
   color: var(--text-primary);
-}
-
-.profile-reg-info small {
-  color: var(--text-muted);
   font-size: var(--font-size-sm);
+  font-weight: 600;
 }
 
-/* Skeleton loading block */
-.skeleton-block {
-  background: linear-gradient(90deg, var(--bg-tint-1) 25%, var(--bg-tint-2) 50%, var(--bg-tint-1) 75%);
-  background-size: 200% 100%;
-  animation: skeleton-shimmer 1.5s ease-in-out infinite;
-  border-radius: var(--radius);
+.badge-row-rule {
+  color: var(--text-muted);
+  font-size: var(--font-size-xs);
+  line-height: 1.3;
 }
 
-@keyframes skeleton-shimmer {
-  0% {
-    background-position: 200% 0;
+.badge-row.is-locked .badge-row-icon {
+  color: var(--text-muted);
+}
+
+.badge-row.is-locked .badge-row-name {
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.badge-row .capacity-meter {
+  display: block;
+  width: 100%;
+  margin-top: var(--space-4);
+}
+
+@media (max-width: 575.98px) {
+  /* The check-in button gets its own line; the arrow would only take room */
+  .profile-event {
+    grid-template-columns: auto minmax(0, 1fr);
   }
 
-  100% {
-    background-position: -200% 0;
+  .profile-event-action.btn {
+    grid-column: 1 / -1;
   }
-}
 
-/* Placeholder of a stat tile while the profile loads */
-.profile-stat-skeleton {
-  height: 60px;
+  .profile-event-action.bi {
+    display: none;
+  }
+
+  .profile-history-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .profile-history-date {
+    grid-column: 1 / -1;
+  }
 }
 
 /* ═══════════════════════════════════════════ */
@@ -1320,16 +1406,6 @@ body {
 
   .countdown-detail .countdown-item {
     min-width: 50px;
-  }
-
-  .profile-header {
-    flex-direction: column;
-    text-align: center;
-  }
-
-  .profile-reg-card {
-    flex-direction: column;
-    align-items: flex-start;
   }
 }
 

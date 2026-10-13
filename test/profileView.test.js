@@ -1,6 +1,8 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { loadFrontendApp } = require('./helpers');
+const fs = require('fs');
+const path = require('path');
+const { loadFrontendApp, frontendSources, isHidden, REPO_ROOT } = require('./helpers');
 
 const NOW = new Date('2026-10-13T12:00:00.000Z');
 const HOUR = 60 * 60 * 1000;
@@ -226,4 +228,173 @@ test('the profile markup uses icons, never emojis', async () => {
         app.renderBadgeSkeleton(4)
     ].join('');
     assert.doesNotMatch(html, EMOJI);
+});
+
+const MEMBER = { id: 'u-member', username: 'tom', displayName: 'Tom', avatar: '', roles: [], isAdmin: false };
+const ADMIN = { ...MEMBER, id: 'u-admin', username: 'mori', displayName: 'Mori', isAdmin: true };
+
+const pastEntry = (index) => entry({
+    id: `h${index}`,
+    event: event({ id: `past-${index}`, title: `Vergangen ${index}`, startDate: at(-24 * (index + 1)), endDate: at(-24 * (index + 1) + 2) })
+});
+const PROFILE = {
+    stats: { total: 9, accepted: 7, pending: 1, rejected: 0, waitlisted: 1, checkedIn: 2 },
+    badges: BADGES,
+    unlockedBadges: 2,
+    totalBadges: 4,
+    upcoming: [entry({ id: 'r1' }), entry({ id: 'r2', event: event({ id: 'ev-2', title: 'Raid', status: 'draft' }) })],
+    history: Array.from({ length: 12 }, (_, index) => pastEntry(index))
+};
+const countOf = (element, needle) => element.innerHTML.split(needle).length - 1;
+const UPCOMING_ROW = 'class="glass-card profile-event';
+const HISTORY_ROW = 'class="profile-history-row"';
+
+/**
+ * Open the profile page for a user.
+ *
+ * @param {Object|null} profile -> Answer of GET /api/user/profile; null leaves the route unanswered (404).
+ * @param {Object} [user] -> Session user.
+ * @param {Object} [options] -> Options of loadFrontendApp().
+ * @returns {Promise<Object>} -> The harness of loadFrontendApp() plus `routes`.
+ */
+async function openProfile(profile, user = MEMBER, options = {}) {
+    const routes = profile ? { '/api/user/profile': profile } : {};
+    const harness = await loadFrontendApp(routes, options);
+    harness.state.currentUser = user;
+    await harness.app.showProfileSection();
+    return { ...harness, routes };
+}
+
+test('the page fills card, upcoming events, history and badges', async () => {
+    const { element, toasts } = await openProfile(PROFILE);
+    assert.match(element('profile-card').innerHTML, /<div class="profile-name">Tom<\/div>/);
+    assert.match(element('profile-card').innerHTML, /<dt>Anmeldungen<\/dt><dd>9<\/dd>/);
+    assert.equal(countOf(element('profile-upcoming'), UPCOMING_ROW), 2);
+    assert.equal(element('profile-upcoming-count').textContent, '2');
+    assert.equal(isHidden(element('profile-history-block')), false);
+    assert.equal(element('profile-history-count').textContent, '12');
+    assert.equal(countOf(element('profile-history'), HISTORY_ROW), 5);
+    assert.equal(isHidden(element('profile-history-more')), false);
+    assert.equal(countOf(element('profile-badges'), '<li class="badge-row'), 4);
+    assert.equal(element('profile-badge-count').textContent, '2 von 4');
+    assert.deepEqual(toasts, []);
+});
+
+test('a member gets no link to a draft, an admin does', async () => {
+    const draftRow = (harness) => harness.element('profile-upcoming').innerHTML.split(UPCOMING_ROW).find(html => html.includes('Raid'));
+    const member = draftRow(await openProfile(PROFILE));
+    assert.doesNotMatch(member, /href=|bi-chevron-right/);
+    const admin = draftRow(await openProfile(PROFILE, ADMIN));
+    assert.match(admin, /href="#event\/ev-2"/);
+});
+
+test('"Weitere anzeigen" shows five more rows without a request and disappears at the end', async () => {
+    const { app, element, requests } = await openProfile(PROFILE);
+    const loads = () => requests.filter(request => request.url === '/api/user/profile').length;
+    assert.equal(loads(), 1);
+
+    await app.runAction('showMoreProfileHistory', element('profile-history-more'));
+    assert.equal(countOf(element('profile-history'), HISTORY_ROW), 10);
+    assert.equal(isHidden(element('profile-history-more')), false);
+
+    await app.runAction('showMoreProfileHistory', element('profile-history-more'));
+    assert.equal(countOf(element('profile-history'), HISTORY_ROW), 12);
+    assert.equal(isHidden(element('profile-history-more')), true);
+    assert.equal(loads(), 1);
+
+    // Opening the page again starts with five rows, and nothing is listed twice
+    await app.showProfileSection();
+    assert.equal(countOf(element('profile-history'), HISTORY_ROW), 5);
+    assert.equal(isHidden(element('profile-history-more')), false);
+    await Promise.all([app.showProfileSection(), app.showProfileSection()]);
+    assert.equal(countOf(element('profile-upcoming'), UPCOMING_ROW), 2);
+    assert.equal(countOf(element('profile-history'), HISTORY_ROW), 5);
+});
+
+test('a short history shows no button, an empty one no block', async () => {
+    const short = await openProfile({ ...PROFILE, history: PROFILE.history.slice(0, 5) });
+    assert.equal(countOf(short.element('profile-history'), HISTORY_ROW), 5);
+    assert.equal(isHidden(short.element('profile-history-more')), true);
+
+    const none = await openProfile({ ...PROFILE, history: [] });
+    assert.equal(isHidden(none.element('profile-history-block')), true);
+});
+
+test('without upcoming events the page invites to the overview', async () => {
+    const { element } = await openProfile({ ...PROFILE, upcoming: [] });
+    const html = element('profile-upcoming').innerHTML;
+    assert.match(html, /<h3 class="empty-state-title">Noch nichts geplant<\/h3>/);
+    assert.match(html, /<a class="btn btn-accent" href="#events">/);
+    assert.equal(element('profile-upcoming-count').textContent, '');
+});
+
+test('a failed answer offers to try again and still shows who is logged in', async () => {
+    const { app, element, routes } = await openProfile(null);
+    assert.match(element('profile-upcoming').innerHTML, /Profil konnte nicht geladen werden/);
+    assert.match(element('profile-upcoming').innerHTML, /data-click="reloadProfile"/);
+    assert.match(element('profile-card').innerHTML, /<div class="profile-name">Tom<\/div>/);
+    assert.match(element('profile-card').innerHTML, /<dd>–<\/dd>/);
+    assert.equal(element('profile-badges').innerHTML, '');
+    assert.equal(isHidden(element('profile-history-block')), true);
+
+    // No network at all looks the same
+    routes['/api/user/profile'] = () => { throw new Error('offline'); };
+    await app.runAction('reloadProfile', {});
+    assert.match(element('profile-upcoming').innerHTML, /Profil konnte nicht geladen werden/);
+
+    routes['/api/user/profile'] = PROFILE;
+    await app.runAction('reloadProfile', {});
+    assert.equal(countOf(element('profile-upcoming'), UPCOMING_ROW), 2);
+    assert.match(element('profile-card').innerHTML, /<dt>Anmeldungen<\/dt><dd>9<\/dd>/);
+});
+
+test('an answer without lists shows empty lists instead of breaking', async () => {
+    const { element } = await openProfile({});
+    assert.match(element('profile-upcoming').innerHTML, /Noch nichts geplant/);
+    assert.equal(isHidden(element('profile-history-block')), true);
+    assert.equal(element('profile-badges').innerHTML, '');
+    assert.equal(element('profile-badge-count').textContent, '0 von 0');
+    assert.match(element('profile-card').innerHTML, /<dt>Anmeldungen<\/dt><dd>0<\/dd>/);
+});
+
+test('deleting the account asks once in the DEMS dialog', async () => {
+    const dismissed = await openProfile(PROFILE, MEMBER, { confirm: false });
+    await dismissed.app.deleteUserAccount();
+    assert.deepEqual(dismissed.dialogs, [{
+        text: 'Account und alle Anmeldungen dauerhaft löschen? Das lässt sich nicht rückgängig machen.',
+        label: 'Account löschen',
+        danger: true
+    }]);
+    assert.equal(dismissed.requests.some(request => request.method === 'DELETE'), false);
+
+    const confirmed = await openProfile(PROFILE);
+    confirmed.routes['/api/user/account'] = { success: true };
+    confirmed.state.csrfToken = 'token-1';
+    await confirmed.app.deleteUserAccount();
+    assert.equal(confirmed.dialogs.length, 1);
+    const sent = confirmed.requests.filter(request => request.method === 'DELETE');
+    assert.deepEqual(sent.map(request => [request.url, request.headers['X-CSRF-TOKEN']]), [['/api/user/account', 'token-1']]);
+    assert.deepEqual(confirmed.toasts, ['Account erfolgreich gelöscht.']);
+});
+
+test('the profile module asks no browser dialog, animates nothing and uses no emoji', async () => {
+    const source = fs.readFileSync(path.join(REPO_ROOT, 'public', 'js', 'pages', 'profile.js'), 'utf8');
+    assert.doesNotMatch(source, /(?<![\w.])confirm\(/);
+    assert.doesNotMatch(source, /gsap/);
+    assert.doesNotMatch(source, EMOJI);
+
+    const { app, toasts } = await openProfile(PROFILE);
+    app.toggleVerboseLog(true);
+    app.toggleVerboseLog(false);
+    assert.deepEqual(toasts, ['Verbose-Logging aktiviert', 'Verbose-Logging deaktiviert']);
+});
+
+test('nothing uses the classes of the old profile any more', () => {
+    const OLD_CLASSES = /profile-(?:reg-card|reg-info|badge-card|badges-grid|stats-grid|stat-card|stat-skeleton|header|avatar|meta)\b/;
+    const sources = [
+        ['index.html', fs.readFileSync(path.join(REPO_ROOT, 'public', 'index.html'), 'utf8')],
+        ['style.css', fs.readFileSync(path.join(REPO_ROOT, 'public', 'css', 'style.css'), 'utf8')],
+        ...frontendSources().map(({ file, source }) => [file, source])
+    ];
+    for (const [file, source] of sources) assert.doesNotMatch(source, OLD_CLASSES, file);
 });

@@ -17,7 +17,7 @@ see_also: [api-index, data-model]
 | Method | Path | Behaviour |
 |---|---|---|
 | GET | `/registrations` | own registrations with embedded `event` (via `toPublicEvent`, no `checkinCode`), newest first |
-| GET | `/profile` | `{ user, upcoming, history, stats, badges, unlockedBadges, totalBadges }` (until the page is rebuilt also the older `registrations`); see "Profile lists" |
+| GET | `/profile` | `{ user, upcoming, history, stats, badges, unlockedBadges, totalBadges }`; see "Profile lists" |
 | GET | `/search?q=` | ≥2 chars; users matching `displayName`/`username`, excluding self and users with `acceptInvitations === false`; max 10 |
 | GET | `/settings` | `{ acceptInvitations }` (default true) |
 | PUT | `/settings` | body `{ acceptInvitations }` |

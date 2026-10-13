@@ -33,7 +33,7 @@ for (const persona of PERSONAS) {
         await expect(page.locator('#polls-open .poll-card').first()).toBeVisible();
 
         await navigate(page, 'profile');
-        await expect(page.locator('#profile-header')).toContainText(persona.displayName);
+        await expect(page.locator('#profile-card')).toContainText(persona.displayName);
 
         await navigate(page, 'info');
 

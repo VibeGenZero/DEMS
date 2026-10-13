@@ -115,7 +115,7 @@ test('a member opens event, polls and profile without one refused style', async 
     await expect(page.locator('#poll-detail-section')).toBeVisible();
     await expect(page.locator('#poll-detail-section .poll-bar').first()).toBeVisible();
     await navigate(page, 'profile');
-    await expect(page.locator('#profile-badges .profile-badge-card').first()).toBeVisible();
+    await expect(page.locator('#profile-badges .badge-row').first()).toBeVisible();
     await navigate(page, 'info');
     expect(await violationsOf(page)).toEqual([]);
 });
