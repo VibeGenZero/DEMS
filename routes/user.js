@@ -7,6 +7,7 @@ const { deleteUserPollVotes } = require('../utils/pollStore');
 const { promoteFromWaitlist, toPublicEvent } = require('../utils/eventUtils');
 const { notifyRegistrationsChanged } = require('../utils/announcementRefresh');
 const { OCCUPYING_STATUSES } = require('../utils/capacity');
+const { buildProfileEvents } = require('../utils/profileEvents');
 
 /**
  * GET /api/user/registrations — Get all registrations for the logged-in user
@@ -62,7 +63,7 @@ router.get('/registrations', requireAuth, async (req, res) => {
 });
 
 /**
- * GET /api/user/profile — Full profile: registrations + stats + badges
+ * GET /api/user/profile — stats, badges and the member's events: `upcoming` and `history` (utils/profileEvents.js)
  */
 router.get('/profile', requireAuth, async (req, res) => {
     try {
@@ -83,11 +84,14 @@ router.get('/profile', requireAuth, async (req, res) => {
         });
 
         const eventMap = new Map();
+        // Complete event data for the lists of the page; never sent as it is
+        const eventsById = new Map();
         for (const eid of eventIds) {
             try {
                 const eventSnap = await getDoc(doc(db, 'events', eid));
                 if (eventSnap.exists()) {
                     eventMap.set(eid, toPublicEvent(eventSnap.id, eventSnap.data()));
+                    eventsById.set(eid, eventSnap.data());
                 }
             } catch { /* event may have been deleted */ }
         }
@@ -131,7 +135,7 @@ router.get('/profile', requireAuth, async (req, res) => {
                 id: 'newcomer',
                 name: 'Newcomer',
                 description: 'Erste Registrierung',
-                icon: 'bi-seedling',
+                icon: 'bi-flower1',
                 color: '#22c55e',
                 unlocked: true
             });
@@ -140,7 +144,7 @@ router.get('/profile', requireAuth, async (req, res) => {
                 id: 'newcomer',
                 name: 'Newcomer',
                 description: 'Registriere dich für ein Event',
-                icon: 'bi-seedling',
+                icon: 'bi-flower1',
                 color: '#22c55e',
                 unlocked: false
             });
@@ -264,6 +268,12 @@ router.get('/profile', requireAuth, async (req, res) => {
             progress: Math.min(activeRegs.length / 3, 1)
         });
 
+        // ── Lists of the profile page ────────────────────────────
+        const { upcoming, history } = buildProfileEvents(
+            regSnap.docs.map(regDoc => ({ id: regDoc.id, ...regDoc.data() })),
+            eventsById
+        );
+
         res.json({
             user: {
                 id: user.id,
@@ -272,6 +282,8 @@ router.get('/profile', requireAuth, async (req, res) => {
                 avatar: user.avatar
             },
             registrations,
+            upcoming,
+            history,
             stats,
             badges,
             unlockedBadges: badges.filter(b => b.unlocked).length,

@@ -3,14 +3,14 @@ id: utils
 title: utils/ — domain helpers
 type: module
 tags: [utils, registration, form-fields, waitlist, audit-log, profile, debug]
-sources: [utils/registrationService.js, utils/formFields.js, utils/eventUtils.js, utils/eventListing.js, utils/eventUrl.js, utils/userProfile.js, utils/avatar.js, utils/botPermissions.js, utils/csv.js, utils/template.js, utils/sessionStore.js, utils/reminders.js, utils/debugLog.js, utils/capacity.js, utils/slotService.js, utils/eventLock.js, utils/announcementRefresh.js, utils/pollService.js, utils/pollStore.js]
+sources: [utils/registrationService.js, utils/formFields.js, utils/eventUtils.js, utils/eventListing.js, utils/profileEvents.js, utils/eventUrl.js, utils/userProfile.js, utils/avatar.js, utils/botPermissions.js, utils/csv.js, utils/template.js, utils/sessionStore.js, utils/reminders.js, utils/debugLog.js, utils/capacity.js, utils/slotService.js, utils/eventLock.js, utils/announcementRefresh.js, utils/pollService.js, utils/pollStore.js]
 part_of: [architecture]
 depends_on: [data-layer, bot]
 see_also: [registration-flow, form-fields, role-slots]
 ---
 # utils/ — domain helpers
 
-> TL;DR: Shared domain logic used by routes and the bot: `registrationService.js` (the single source of truth for creating registrations), `formFields.js` (field types and answer format), `eventUtils.js` (loading registrations/line-ups, waitlist promotion, audit log), `capacity.js` and `slotService.js` (pure place and slot rules), `eventLock.js` (per-event lock), `announcementRefresh.js` (debounced live announcements), `eventUrl.js` (links to event pages), `userProfile.js` (users upsert after login) and `debugLog.js` (`DEBUG_MODE` logger).
+> TL;DR: Shared domain logic used by routes and the bot: `registrationService.js` (the single source of truth for creating registrations), `formFields.js` (field types and answer format), `eventUtils.js` (loading registrations/line-ups, waitlist promotion, audit log), `capacity.js` and `slotService.js` (pure place and slot rules), `eventLock.js` (per-event lock), `announcementRefresh.js` (debounced live announcements), `eventUrl.js` (links to event pages), `profileEvents.js` (upcoming and history lists of the profile), `userProfile.js` (users upsert after login) and `debugLog.js` (`DEBUG_MODE` logger).
 
 ## utils/registrationService.js
 
@@ -47,10 +47,18 @@ Exports `FORM_FIELD_TYPE` (`text, textarea, dropdown, checkbox, user, role, chan
 
 | Export | Behaviour |
 |---|---|
+| `parseDate(value)` | `Date` or `null`; accepts the older format with a space instead of `T` |
 | `eventEndTime(event)` | `endDate`, else start + 2 h (`DEFAULT_DURATION_MS`); `null` without a valid `startDate` (a space instead of `T` is accepted) |
 | `isEventOver(event, now)` | end before `now`; an event without a date counts as upcoming. Used by `GET /api/events?upcoming=1` and the bot's auto status; `public/js/events/cards.js` applies the same rule in the browser |
 | `pickSeriesRepresentative(seriesEvents, now)` | the date that stands for a series in `GET /api/events`: the first one that is not over (a running date included, so the overview shows "Läuft gerade"), else the last |
 | `myRegistrationStatus(registrations, userId)` | `myStatus` of the event list: own `accepted`/`pending`/`waitlisted`, else `guest` in an accepted or pending registration of someone else, else `null` |
+
+## utils/profileEvents.js (pure)
+
+| Export | Behaviour |
+|---|---|
+| `buildProfileEvents(registrations, eventsById, now)` | `{ upcoming, history }` for `GET /api/user/profile`; rules in [routes-user](routes-user.md) |
+| `toProfileEntry(registration, event)` | one entry: registration status, check-in, slot (`getSlots`/`findSlot`) and eight event fields; never the check-in code |
 
 ## utils/capacity.js, utils/slotService.js (pure)
 

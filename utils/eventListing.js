@@ -75,4 +75,4 @@ function myRegistrationStatus(registrations, userId) {
     return host ? 'guest' : null;
 }
 
-module.exports = { DEFAULT_DURATION_MS, eventEndTime, isEventOver, pickSeriesRepresentative, myRegistrationStatus };
+module.exports = { DEFAULT_DURATION_MS, parseDate, eventEndTime, isEventOver, pickSeriesRepresentative, myRegistrationStatus };

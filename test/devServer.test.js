@@ -189,6 +189,54 @@ test('the routes read the mock Discord server', async () => {
     assert.ok(!options.channels.some(channel => channel.name === 'mod-intern'));
 });
 
+// The profile tests read the seed as it is, so they run before the tests below register, check in and duplicate
+test('the profile lists upcoming events by start and the history newest first', async () => {
+    const res = await (await loginAs('member')).request('/api/user/profile');
+    assert.equal(res.status, 200);
+    const profile = await res.json();
+
+    assert.deepEqual(profile.upcoming.map(entry => [entry.event.id, entry.status]), [
+        [EVENT_ID.RUNNING, 'accepted'],
+        [EVENT_ID.FULL, 'waitlisted'],
+        [EVENT_ID.FORM, 'pending'],
+        [EVENT_ID.BIG_FORM, 'rejected']
+    ]);
+    // Tom can still check in to the running event; the full event offers no check-in
+    assert.deepEqual([profile.upcoming[0].checkedIn, profile.upcoming[0].event.checkinEnabled], [false, true]);
+    assert.equal(profile.upcoming[1].event.checkinEnabled, false);
+
+    assert.deepEqual(profile.history.map(entry => [entry.event.id, entry.event.status, entry.checkedIn]), [
+        [EVENT_ID.PAST, 'active', true],
+        [EVENT_ID.CANCELLED, 'cancelled', false],
+        [EVENT_ID.ARCHIVED, 'archived', false]
+    ]);
+});
+
+test('a profile entry carries only what the page shows', async () => {
+    const profile = await (await (await loginAs('raider')).request('/api/user/profile')).json();
+    const entries = [...profile.upcoming, ...profile.history];
+    assert.equal(entries.length, profile.stats.total);
+    for (const entry of entries) {
+        assert.deepEqual(Object.keys(entry).sort(), ['checkedIn', 'createdAt', 'event', 'id', 'slot', 'status']);
+        assert.deepEqual(Object.keys(entry.event).sort(), ['category', 'checkinEnabled', 'endDate', 'id', 'location', 'startDate', 'status', 'title']);
+    }
+    assert.equal(profile.upcoming.find(entry => entry.event.id === EVENT_ID.OPEN).event.location, 'Lobby');
+    // Both dates of the series are listed, each with its own start
+    const series = profile.upcoming.filter(entry => SERIES_EVENT_IDS.includes(entry.event.id));
+    assert.equal(series.length, 2);
+    assert.notEqual(series[0].event.startDate, series[1].event.startDate);
+});
+
+test('the profile tells the slot of a registration, a new member gets two empty lists', async () => {
+    const admin = await (await (await loginAs('admin')).request('/api/user/profile')).json();
+    const raid = admin.upcoming.find(entry => entry.event.id === EVENT_ID.ROLE);
+    assert.deepEqual([raid.slot.name, raid.slot.wish], ['Schaden', false]);
+    assert.notEqual(raid.slot.emoji, '');
+
+    const newbie = await (await (await loginAs('newbie')).request('/api/user/profile')).json();
+    assert.deepEqual([newbie.upcoming, newbie.history, newbie.stats.total], [[], [], 0]);
+});
+
 test('announcing an event is logged instead of sent to Discord', async () => {
     const admin = await loginAs('admin');
     const res = await admin.send('POST', `/api/admin/events/${EVENT_ID.OPEN}/announce`, { text: 'Heute Abend geht es los!' });

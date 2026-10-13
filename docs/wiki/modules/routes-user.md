@@ -3,25 +3,36 @@ id: routes-user
 title: routes/user.js — profile, badges, settings, account
 type: module
 tags: [api, user, profile, badges, settings, guests, gdpr]
-sources: [routes/user.js]
+sources: [routes/user.js, utils/profileEvents.js]
 part_of: [architecture]
 depends_on: [middleware, data-layer]
 see_also: [api-index, data-model]
 ---
 # routes/user.js — profile, badges, settings, account
 
-> TL;DR: Mounted at `/api/user`, every route needs a logged-in user. Provides the user's registrations, a profile with stats and computed badges, a user search for guest invitations, the `acceptInvitations` setting and full account deletion.
+> TL;DR: Mounted at `/api/user`, every route needs a logged-in user. Provides the user's registrations, a profile with stats, computed badges and the member's events split into upcoming and history, a user search for guest invitations, the `acceptInvitations` setting and full account deletion.
 
 ## Endpoints
 
 | Method | Path | Behaviour |
 |---|---|---|
 | GET | `/registrations` | own registrations with embedded `event` (via `toPublicEvent`, no `checkinCode`), newest first |
-| GET | `/profile` | `{ user, registrations, stats, badges, unlockedBadges, totalBadges }` |
+| GET | `/profile` | `{ user, upcoming, history, stats, badges, unlockedBadges, totalBadges }` (until the page is rebuilt also the older `registrations`); see "Profile lists" |
 | GET | `/search?q=` | ≥2 chars; users matching `displayName`/`username`, excluding self and users with `acceptInvitations === false`; max 10 |
 | GET | `/settings` | `{ acceptInvitations }` (default true) |
 | PUT | `/settings` | body `{ acceptInvitations }` |
 | DELETE | `/account` | batch-deletes own registrations + `users/{id}`, promotes waitlists, deletes own date poll votes (`deleteUserPollVotes`), destroys session |
+
+## Profile lists (`utils/profileEvents.js`)
+
+`buildProfileEvents(registrations, eventsById, now)` splits the member's own registrations (every status, also `rejected`):
+
+| List | Contains | Order |
+|---|---|---|
+| `history` | event deleted, `cancelled`, `archived` or over (`isEventOver`) | latest event start first; without an event or a start the registration's `createdAt` |
+| `upcoming` | everything else: running events, events without a date, drafts | next start first; without a start last; equal starts by `createdAt` |
+
+An entry is `{ id, status, checkedIn, createdAt, slot, event }`. `event` is `{ id, title, startDate, endDate, status, category, location, checkinEnabled }` or `null` for a deleted event: `location` is the text only, `checkinEnabled` is true when the switch is on and a code exists. `slot` is `{ name, emoji, wish }`: the slot taken (`wish: false`), for a pending or waitlisted registration without a slot its main role (`wish: true`), else `null`.
 
 ## Badges (computed on every `/profile` call, never stored)
 
@@ -34,7 +45,7 @@ see_also: [api-index, data-model]
 | `streak-master` | ≥3 accepted events in a row, each ≤30 days apart |
 | `multitasker` | ≥3 upcoming accepted/pending registrations |
 
-Badge texts are German; icons are Bootstrap Icons class names (`bi-*`).
+Badge texts are German; icons are Bootstrap Icons class names (`bi-*`); `test/vendorAssets.test.js` checks that each one exists in the vendored font.
 
 ## Gotchas
 
