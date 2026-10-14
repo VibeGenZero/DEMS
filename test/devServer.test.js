@@ -528,6 +528,17 @@ test('a half-done draft can be previewed; members and requests without a token c
     assert.equal(noToken.status, 403);
 });
 
+test('a description longer than Discord allows is cut in the announcement instead of breaking it', async () => {
+    const admin = await loginAs('admin');
+    const res = await admin.send('POST', '/api/admin/events/preview', { title: 'Lange Beschreibung', status: 'draft', description: `${'x'.repeat(4094)}🎉${'y'.repeat(400)}` });
+    assert.equal(res.status, 200);
+    const { embed } = await res.json();
+    // 4096 characters at most; a cut emoji leaves no half character behind
+    assert.ok(embed.description.length <= 4096, String(embed.description.length));
+    assert.ok(embed.description.endsWith('…'));
+    assert.doesNotMatch(embed.description, /[\uD800-\uDBFF]…$/);
+});
+
 test('the preview of a saved event counts its registrations, also after a slot was removed', async () => {
     const admin = await loginAs('admin');
     const full = await (await admin.request(`/api/events/${EVENT_ID.FULL}`)).json();
