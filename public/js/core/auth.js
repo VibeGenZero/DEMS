@@ -4,6 +4,7 @@
 import { state } from './state.js';
 import { registerActions } from './actions.js';
 import { showToast } from './ui.js';
+import { avatar } from './components.js';
 import { showFirstLoginModal } from '../pages/profile.js';
 import { refreshPollBadge } from '../polls/polls.js';
 
@@ -52,21 +53,7 @@ export function showLoggedIn() {
     const userInfo = document.getElementById('user-info');
     userInfo.style.display = 'flex';
 
-    const avatarEl = document.getElementById('user-avatar');
-    if (state.currentUser.avatar) {
-        avatarEl.src = state.currentUser.avatar;
-        avatarEl.style.display = 'block'; // Ensure it's visible if we have a src
-
-        // Add error handler if not already present (to hide broken images)
-        if (!avatarEl.onerror) {
-            avatarEl.onerror = function () {
-                this.style.display = 'none';
-            };
-        }
-    } else {
-        avatarEl.style.display = 'none';
-    }
-
+    document.getElementById('user-avatar').innerHTML = avatar({ url: state.currentUser.avatar, name: state.currentUser.displayName });
     document.getElementById('user-name').textContent = state.currentUser.displayName;
     document.getElementById('nav-profile').style.display = 'block';
     document.getElementById('nav-polls').style.display = 'block';
@@ -87,7 +74,7 @@ export function showLoggedOut() {
     document.getElementById('nav-polls').style.display = 'none';
 
     // Clear sensitive data from UI
-    document.getElementById('user-avatar').src = '';
+    document.getElementById('user-avatar').innerHTML = '';
     document.getElementById('user-name').textContent = '';
 }
 

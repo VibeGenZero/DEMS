@@ -82,6 +82,16 @@ test('initials come from the first two words', async () => {
     for (const empty of ['', '   ', undefined, null]) assert.equal(initialsOf(empty), '?');
 });
 
+test('initials skip brackets and other punctuation in Discord names', async () => {
+    const { initialsOf } = await loadComponents();
+    assert.equal(initialsOf('Mori (Admin)'), 'MA');
+    assert.equal(initialsOf('DEMS Bot (Mock)#0000'), 'DB');
+    assert.equal(initialsOf('[GER] Lyonel'), 'GL');
+    assert.equal(initialsOf('- Mara -'), 'M');
+    assert.equal(initialsOf('2fast 4you'), '24');
+    for (const nothing of ['()', '-- ..']) assert.equal(initialsOf(nothing), '?');
+});
+
 test('an avatar is an image with an initials fallback, or an initials tile', async () => {
     const { avatar } = await loadComponents();
     assert.equal(

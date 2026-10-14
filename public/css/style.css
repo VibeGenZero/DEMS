@@ -2162,12 +2162,6 @@ a.profile-history-row:hover {
   margin-bottom: 0.5rem;
 }
 
-.comment-avatar {
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-}
-
 .comment-username {
   font-weight: 600;
   font-size: var(--font-size-sm);
@@ -2231,27 +2225,6 @@ a.profile-history-row:hover {
   align-items: center;
   flex-wrap: wrap;
   gap: 1rem;
-}
-
-.bot-avatar {
-  width: 56px;
-  height: 56px;
-  border-radius: 50%;
-  border: 2px solid var(--accent);
-  box-shadow: 0 0 12px var(--border-accent);
-}
-
-.bot-avatar-placeholder {
-  width: 56px;
-  height: 56px;
-  border-radius: 50%;
-  border: 2px solid var(--border-subtle);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: var(--font-size-2xl);
-  color: var(--text-muted);
-  background: var(--bg-card);
 }
 
 .bot-status-dot {
@@ -2802,51 +2775,6 @@ a.profile-history-row:hover {
   align-items: center;
 }
 
-.participant-avatar {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  border: 2px solid var(--bg-card);
-  object-fit: cover;
-  cursor: default;
-  transition: transform var(--duration-fast);
-}
-
-.participant-avatar:hover {
-  transform: scale(1.12);
-  z-index: 1;
-  position: relative;
-}
-
-.participant-avatar-placeholder {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, var(--accent-dark), var(--accent-fill));
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: var(--font-size-sm);
-  font-weight: 700;
-  color: var(--on-accent);
-  border: 2px solid var(--bg-card);
-  cursor: default;
-}
-
-.participants-overflow-badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  background: var(--bg-secondary);
-  border: 2px solid var(--border-subtle);
-  font-size: var(--font-size-xs);
-  font-weight: 600;
-  color: var(--text-secondary);
-}
-
 /* ═══════════════════════════════════════════ */
 /* LOCATION AUTOCOMPLETE DROPDOWN             */
 /* ═══════════════════════════════════════════ */
@@ -3245,24 +3173,6 @@ a.profile-history-row:hover {
   min-height: 1.75rem;
 }
 
-.roster-avatar {
-  width: 1.75rem;
-  height: 1.75rem;
-  border-radius: 50%;
-  object-fit: cover;
-  flex-shrink: 0;
-}
-
-.roster-avatar-fallback {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--accent-dark);
-  color: var(--on-accent);
-  font-size: var(--font-size-sm);
-  font-weight: 600;
-}
-
 .roster-name {
   overflow: hidden;
   text-overflow: ellipsis;
@@ -3280,9 +3190,10 @@ a.profile-history-row:hover {
   color: var(--warning);
 }
 
+/* Same size as the .avatar-sm of the members above */
 .roster-seat-dot {
-  width: 1.75rem;
-  height: 1.75rem;
+  width: 1.5rem;
+  height: 1.5rem;
   border-radius: 50%;
   border: 1px dashed var(--text-muted);
   flex-shrink: 0;

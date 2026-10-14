@@ -4,7 +4,7 @@
  *   <button data-click="editEvent" data-event-id="…">
  *   registerActions({ editEvent: (el) => editEvent(el.dataset.eventId) });
  * Replaces inline onclick/onchange/oninput/onerror handlers, so the CSP can
- * forbid them. Broken images use data-fallback="hide|invisible|initials".
+ * forbid them. Broken images use data-fallback="hide|initials".
  */
 import { toggleElement } from './ui.js';
 
@@ -15,12 +15,10 @@ const ACTION_ATTRIBUTES = { click: 'data-click', change: 'data-change', input: '
 
 const FALLBACKS = {
     hide: (img) => { img.style.display = 'none'; },
-    invisible: (img) => { img.style.visibility = 'hidden'; },
     initials: (img) => {
-        // Library avatars keep their size classes; older images get the participant tile
-        const isAvatar = /(^|\s)avatar(\s|$)/.test(img.className || '');
-        const placeholder = document.createElement(isAvatar ? 'span' : 'div');
-        placeholder.className = isAvatar ? `${img.className} avatar-initials` : 'participant-avatar-placeholder';
+        // The tile keeps the avatar's size classes (avatar() in core/components.js)
+        const placeholder = document.createElement('span');
+        placeholder.className = `${img.className} avatar-initials`;
         placeholder.title = img.title;
         placeholder.textContent = img.dataset.initials || '?';
         img.replaceWith(placeholder);

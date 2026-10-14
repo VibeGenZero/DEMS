@@ -5,6 +5,7 @@ import { state } from '../core/state.js';
 import { navigateTo } from '../core/router.js';
 import { registerActions } from '../core/actions.js';
 import { applyStyleData, escapeHtml, isValidBannerUrl, renderMarkdownSafe, showElement, showToast } from '../core/ui.js';
+import { avatar } from '../core/components.js';
 import { renderCheckinSection } from './checkin.js';
 import { loadComments } from './comments.js';
 import { resetGuestSelection } from './guests.js';
@@ -242,14 +243,8 @@ export async function loadDetailParticipants(eventId) {
         }
 
         const overflow = data.total > 20 ? data.total - 20 : 0;
-        avatarsEl.innerHTML = data.participants.map(p => {
-            const initials = (p.displayName || '?').charAt(0).toUpperCase();
-            if (p.avatar) {
-                // The fallback reads name and initials from attributes; no user text in handler code
-                return `<img src="${escapeHtml(p.avatar)}" class="participant-avatar" title="${escapeHtml(p.displayName)}" alt="${escapeHtml(p.displayName)}" data-initials="${escapeHtml(initials)}" data-fallback="initials">`;
-            }
-            return `<div class="participant-avatar-placeholder" title="${escapeHtml(p.displayName)}">${escapeHtml(initials)}</div>`;
-        }).join('') + (overflow > 0 ? `<div class="participants-overflow-badge">+${overflow}</div>` : '');
+        avatarsEl.innerHTML = data.participants.map(p => avatar({ url: p.avatar, name: p.displayName })).join('')
+            + (overflow > 0 ? `<span class="avatar avatar-more">+${overflow}</span>` : '');
     } catch { /* non-fatal */ }
 }
 

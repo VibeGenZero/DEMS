@@ -4,6 +4,7 @@
 import { state } from '../core/state.js';
 import { registerActions } from '../core/actions.js';
 import { escapeHtml } from '../core/ui.js';
+import { avatar } from '../core/components.js';
 
 export let guestSearchTimer = null;
 
@@ -41,7 +42,7 @@ export async function searchGuests() {
         resultsEl.innerHTML = filtered.map(u => `
             <button type="button" class="list-group-item list-group-item-action bg-dark text-white border-secondary d-flex align-items-center gap-2"
                 data-click="addGuestToList" data-user-id="${escapeHtml(u.id)}" data-display-name="${escapeHtml(u.displayName)}" data-avatar="${escapeHtml(u.avatar || '')}">
-                <img src="${escapeHtml(u.avatar)}" width="28" height="28" class="rounded-circle" data-fallback="hide">
+                ${avatar({ url: u.avatar, name: u.displayName, size: 'sm' })}
                 <span>${escapeHtml(u.displayName)}</span>
                 <small class="text-muted ms-1">@${escapeHtml(u.username)}</small>
             </button>
@@ -78,7 +79,7 @@ export function renderSelectedGuests() {
     }
     container.innerHTML = state.selectedGuests.map(g => `
         <div class="badge guest-chip d-flex align-items-center gap-1 p-2">
-            <img src="${escapeHtml(g.avatar)}" width="18" height="18" class="rounded-circle" data-fallback="hide">
+            ${avatar({ url: g.avatar, name: g.displayName, size: 'sm' })}
             <span>${escapeHtml(g.displayName)}</span>
             <button type="button" class="btn-close btn-close-white ms-1"
                 data-click="removeGuestFromList" data-user-id="${escapeHtml(g.id)}"></button>

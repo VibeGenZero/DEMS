@@ -4,6 +4,7 @@
 import { state } from '../core/state.js';
 import { registerActions } from '../core/actions.js';
 import { applyStyleData, escapeHtml, showToast } from '../core/ui.js';
+import { avatar } from '../core/components.js';
 
 
 export async function showBotControlSection() {
@@ -49,7 +50,7 @@ export async function loadBotStatus() {
         panel.innerHTML = `
             <div class="bot-status-header">
                 <div class="d-flex align-items-center gap-3">
-                    ${status.avatarUrl ? `<img src="${escapeHtml(status.avatarUrl)}" alt="Bot Avatar" class="bot-avatar">` : '<div class="bot-avatar-placeholder"><i class="bi bi-robot"></i></div>'}
+                    ${avatar({ url: status.avatarUrl, name: status.username || 'Bot', size: 'lg' })}
                     <div>
                         <h4 class="mb-0">${escapeHtml(status.username || 'Bot')}</h4>
                         <div class="d-flex align-items-center gap-2 mt-1">
