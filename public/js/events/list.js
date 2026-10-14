@@ -75,10 +75,10 @@ function renderCategoryBar() {
  * Set each card's own banner colour (data-banner-bg) as a CSS variable;
  * an inline style attribute would need the CSP's 'unsafe-inline'.
  *
- * @param {Element} grid -> #events-grid.
+ * @param {Element} grid -> Container with cards (#events-grid, the wizard preview).
  * @returns {void}
  */
-function applyBannerColors(grid) {
+export function applyBannerColors(grid) {
     grid.querySelectorAll('[data-banner-bg]').forEach(media => media.style.setProperty('--event-banner-bg', media.dataset.bannerBg));
 }
 

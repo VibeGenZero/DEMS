@@ -938,8 +938,8 @@
           <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
         </div>
 
-        <!-- Wizard Step Indicator -->
-        <div class="px-4 pt-3">
+        <!-- Wizard Step Indicator and the switch between editing and preview -->
+        <div class="px-4 pt-3 wizard-head">
           <div class="wizard-nav">
             <div class="wizard-step-item active" id="wstep-1" data-click="wizardGoTo" data-step="1">
               <div class="wizard-step-bubble">1</div>
@@ -965,6 +965,12 @@
               <div class="wizard-step-bubble">5</div>
               <div class="wizard-step-label">Erweitert</div>
             </div>
+          </div>
+          <div class="nav nav-pills wizard-mode" role="tablist" aria-label="Ansicht des Assistenten">
+            <button type="button" class="nav-link active" id="wizard-mode-edit" role="tab" aria-selected="true"
+              data-click="setWizardMode" data-mode="edit"><i class="bi bi-pencil me-1"></i>Bearbeiten</button>
+            <button type="button" class="nav-link" id="wizard-mode-preview" role="tab" aria-selected="false"
+              data-click="setWizardMode" data-mode="preview"><i class="bi bi-eye me-1"></i>Vorschau</button>
           </div>
         </div>
 
@@ -1240,6 +1246,18 @@
             </div>
 
           </form>
+
+          <!-- Preview of the unsaved input (admin/wizard-preview.js); inert: its links lead nowhere -->
+          <div class="is-hidden" id="wizard-preview">
+            <section class="wizard-preview-block">
+              <h6 class="section-label mb-2">In der Event-Übersicht</h6>
+              <div class="wizard-preview-card" id="wizard-preview-card" inert></div>
+            </section>
+            <section class="wizard-preview-block">
+              <h6 class="section-label mb-2">In Discord</h6>
+              <div id="wizard-preview-discord" inert></div>
+            </section>
+          </div>
         </div>
 
         <!-- Wizard Footer -->

@@ -7,6 +7,7 @@ import { loadAdminEvents, loadAdminStats } from './dashboard.js';
 import { addFormField, getFormFieldsFromBuilder, getSlotsFromEditor, renderSlotEditor } from './wizard-builders.js';
 import { checkWizardStep } from './wizard-checks.js';
 import { clearAllMarks, showStepErrors } from './wizard-marks.js';
+import { cancelWizardPreview, renderWizardPreview } from './wizard-preview.js';
 import { navigateTo } from '../core/router.js';
 import { registerActions } from '../core/actions.js';
 import { applyStyleData, escapeHtml, hexColor, showElement, showToast, toggleElement } from '../core/ui.js';
@@ -16,7 +17,34 @@ export let currentWizardStep = 1;
 
 export const WIZARD_TOTAL_STEPS = 5;
 
+// Preview area and the two switch buttons; leaving the preview drops a pending answer
+function showPreviewArea(visible) {
+    if (!visible) cancelWizardPreview();
+    toggleElement(document.getElementById('wizard-preview'), visible);
+    for (const mode of ['edit', 'preview']) {
+        const button = document.getElementById(`wizard-mode-${mode}`);
+        const active = (mode === 'preview') === visible;
+        button.classList.toggle('active', active);
+        button.setAttribute('aria-selected', String(active));
+    }
+}
+
+/**
+ * Switch between editing the current step and the preview of the whole input.
+ *
+ * @param {string} mode -> "edit" or "preview".
+ * @returns {Promise<void>} -> Resolves when the preview is drawn (at once for "edit").
+ */
+export function setWizardMode(mode) {
+    const preview = mode === 'preview';
+    showPreviewArea(preview);
+    toggleElement(document.getElementById(`wizard-page-${currentWizardStep}`), !preview);
+    if (!preview) return Promise.resolve();
+    return renderWizardPreview(collectEventDraft(), document.getElementById('event-edit-id').value);
+}
+
 export function wizardGoTo(step) {
+    showPreviewArea(false);
     // Hide current page & deactivate indicator
     document.getElementById(`wizard-page-${currentWizardStep}`).style.display = 'none';
 
@@ -64,6 +92,8 @@ export function wizardNext() {
     const errors = checkWizardStep(currentWizardStep, collectEventDraft());
     const first = showStepErrors(currentWizardStep, errors);
     if (errors.length > 0) {
+        // The marks need the step in view; from the preview it goes back to editing
+        setWizardMode('edit');
         first?.focus();
         return;
     }
@@ -455,5 +485,6 @@ registerActions({
     wizardNext: () => wizardNext(),
     wizardBack: () => wizardBack(),
     saveEvent: () => saveEvent(),
-    updateStartRequired: () => updateStartRequired()
+    updateStartRequired: () => updateStartRequired(),
+    setWizardMode: (el) => setWizardMode(el.dataset.mode)
 });

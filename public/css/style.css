@@ -2690,6 +2690,34 @@ a.profile-history-row:hover {
   background: var(--discord-button-danger);
 }
 
+/* ═══════════════════════════════════════════ */
+/* WIZARD PREVIEW                              */
+/* setWizardMode() in admin/wizard.js,         */
+/* renderWizardPreview() in wizard-preview.js  */
+/* ═══════════════════════════════════════════ */
+.wizard-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--space-16);
+}
+
+.wizard-head .wizard-nav {
+  flex: 1 1 24rem;
+}
+
+.wizard-mode {
+  flex: none;
+}
+
+.wizard-preview-block + .wizard-preview-block {
+  margin-top: var(--space-24);
+}
+
+.wizard-preview-card {
+  max-width: 22rem;
+}
+
 /* ═══════════════════════════════════════════════ */
 /*  MAINTENANCE MODE                              */
 /* ═══════════════════════════════════════════════ */

@@ -89,3 +89,84 @@ test('opening the wizard again clears the marks of the last attempt', async () =
     assert.equal(element('wstep-1').classList.contains('has-error'), false);
     assert.equal(element('event-title-feedback').textContent, '');
 });
+
+const PREVIEW = {
+    embed: { title: '🎉 Raidnacht', description: 'Bringt Tränke mit.', color: 0x8b5cf6, fields: [{ name: 'Datum', value: 'TBA', inline: true }], footer: { text: 'DEMS — Event Management' } },
+    components: [{ type: 1, components: [{ type: 2, style: 5, label: 'Zum Event', url: 'http://localhost:3000/#event/vorschau' }] }],
+    places: { taken: 2, capacity: 6, guests: 0, pending: 0, waitlist: 0, text: '2 von 6 Plätzen belegt', waitlistText: '' },
+    bot: { name: 'DEMS Bot', avatarUrl: null }
+};
+
+test('the preview shows the card at once and the Discord message of the server', async () => {
+    const { app, element, requests } = await openWizard({ '/api/admin/events/preview': PREVIEW });
+    element('event-title').value = 'Raidnacht';
+    await app.setWizardMode('preview');
+    assert.ok(isHidden(element('wizard-page-1')));
+    assert.equal(isHidden(element('wizard-preview')), false);
+    assert.ok(element('wizard-mode-preview').classList.contains('active'));
+    assert.equal(element('wizard-mode-edit').classList.contains('active'), false);
+
+    const call = requests.find(request => request.url === '/api/admin/events/preview');
+    assert.equal(call.method, 'POST');
+    assert.equal(call.headers['X-CSRF-TOKEN'], 'test-token');
+    assert.equal(JSON.parse(call.body).title, 'Raidnacht');
+    assert.equal(JSON.parse(call.body).id, undefined);
+
+    assert.ok(element('wizard-preview-card').innerHTML.includes('<h3 class="event-card-title">Raidnacht</h3>'));
+    assert.ok(element('wizard-preview-card').innerHTML.includes('2 von 6 belegt'));
+    assert.ok(element('wizard-preview-discord').innerHTML.includes('<div class="discord-embed-title">🎉 Raidnacht</div>'));
+});
+
+test('a failed preview keeps the card and says so', async () => {
+    const { app, element } = await openWizard();
+    element('event-title').value = 'Raidnacht';
+    await app.setWizardMode('preview');
+    assert.ok(element('wizard-preview-card').innerHTML.includes('Raidnacht'));
+    assert.equal(element('wizard-preview-discord').innerHTML, '<p class="text-body-tertiary small mb-0">Discord-Vorschau gerade nicht verfügbar.</p>');
+});
+
+test('an answer that arrives after switching back is dropped', async () => {
+    let answer;
+    const late = new Promise(resolve => { answer = resolve; });
+    const { app, element } = await openWizard({ '/api/admin/events/preview': () => late });
+    element('event-title').value = 'Raidnacht';
+    const pending = app.setWizardMode('preview');
+    await app.setWizardMode('edit');
+    answer(PREVIEW);
+    await pending;
+    assert.doesNotMatch(element('wizard-preview-discord').innerHTML, /discord-embed/);
+    assert.equal(isHidden(element('wizard-page-1')), false);
+    assert.ok(isHidden(element('wizard-preview')));
+});
+
+test('only the newest of two quick previews is shown', async () => {
+    const answers = [];
+    const { app, element } = await openWizard({ '/api/admin/events/preview': () => new Promise(resolve => answers.push(resolve)) });
+    element('event-title').value = 'Raidnacht';
+    const first = app.setWizardMode('preview');
+    const second = app.setWizardMode('preview');
+    answers[1]({ ...PREVIEW, embed: { ...PREVIEW.embed, title: 'Zweite Fassung' } });
+    await second;
+    answers[0](PREVIEW);
+    await first;
+    assert.ok(element('wizard-preview-discord').innerHTML.includes('Zweite Fassung'));
+    assert.doesNotMatch(element('wizard-preview-discord').innerHTML, /🎉 Raidnacht/);
+});
+
+test('"Weiter" from the preview edits the next step, or the marked one', async () => {
+    const { app, element } = await openWizard({ '/api/admin/events/preview': PREVIEW });
+    await app.setWizardMode('preview');
+    app.wizardNext();
+    assert.equal(stepOf(element), 'Schritt 1 von 5');
+    assert.ok(isHidden(element('wizard-preview')));
+    assert.equal(isHidden(element('wizard-page-1')), false);
+    assert.ok(element('event-title').classList.contains('is-invalid'));
+
+    element('event-title').value = 'Raidnacht';
+    await app.setWizardMode('preview');
+    app.wizardNext();
+    assert.equal(stepOf(element), 'Schritt 2 von 5');
+    assert.ok(isHidden(element('wizard-preview')));
+    assert.equal(isHidden(element('wizard-page-2')), false);
+    assert.ok(element('wizard-mode-edit').classList.contains('active'));
+});
