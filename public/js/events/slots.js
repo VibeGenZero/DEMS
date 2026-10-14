@@ -4,6 +4,7 @@
 import { state } from '../core/state.js';
 import { registerActions } from '../core/actions.js';
 import { escapeHtml, showToast } from '../core/ui.js';
+import { avatar } from '../core/components.js';
 import { showEventDetail } from './detail.js';
 
 export let slotPickerSlots = [];
@@ -80,12 +81,9 @@ export function toggleAltSlot(slotId) {
     renderAltSlotChips();
 }
 
+// Line-up, waitlist and poll votes: a person in a list next to the name
 export function renderRosterAvatar(person) {
-    const initial = escapeHtml((person.displayName || '?').charAt(0).toUpperCase());
-    if (person.avatar) {
-        return `<img src="${escapeHtml(person.avatar)}" class="roster-avatar" alt="" data-fallback="invisible">`;
-    }
-    return `<span class="roster-avatar roster-avatar-fallback">${initial}</span>`;
+    return avatar({ url: person.avatar, name: person.displayName, size: 'sm' });
 }
 
 export function renderRoster(data) {

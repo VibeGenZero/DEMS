@@ -4,6 +4,7 @@
 import { state } from '../core/state.js';
 import { registerActions } from '../core/actions.js';
 import { escapeHtml, showElement, showToast } from '../core/ui.js';
+import { avatar } from '../core/components.js';
 
 export async function loadComments(eventId) {
     // Check if comment area exists, if not create it
@@ -75,7 +76,7 @@ export function renderComment(comment, eventId, isLoggedIn) {
     return `
     <div class="comment-card ${comment.isAdmin ? 'comment-admin-reply' : ''}">
         <div class="comment-header">
-            <img class="comment-avatar" src="${escapeHtml(comment.userAvatar || '')}" alt="" data-fallback="hide">
+            ${avatar({ url: comment.userAvatar, name: comment.userName, size: 'sm' })}
             <span class="comment-username">${escapeHtml(comment.userName)}</span>
             ${comment.isAdmin ? '<span class="comment-admin-badge">ADMIN</span>' : ''}
             <span class="comment-date">${dateStr}</span>

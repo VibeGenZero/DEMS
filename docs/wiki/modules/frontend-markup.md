@@ -17,7 +17,7 @@ see_also: [frontend-app, security]
 |---|---|
 | `<head>` | everything from `/vendor` (see below): `fonts/fonts.css`, FontAwesome (for EasyMDE), Bootstrap CSS + Bootstrap Icons, EasyMDE + Flatpickr, marked + DOMPurify; then `/css/tokens.css?v=3`, `/css/components.css?v=3` and `/css/style.css?v=3` (in this order) |
 | Loading screen | `#loading-screen`, `.loading-letter`, `.loading-status`, `#particles` |
-| Navbar | `#main-navbar`, `#nav-polls` (with `#nav-polls-badge`), `#nav-profile`, `#nav-admin`, `#nav-bot-control`, `#nav-debug`, `#login-btn-container`, `#user-info`, `#user-avatar`, `#user-name` |
+| Navbar | `#main-navbar`, `#nav-polls` (with `#nav-polls-badge`), `#nav-profile`, `#nav-admin`, `#nav-bot-control`, `#nav-debug`, `#login-btn-container`, `#user-info`, `#user-avatar` (empty; `showLoggedIn` puts `avatar()` into it), `#user-name` |
 | Banners | error banner, maintenance banner, planned-maintenance banner, panic lockdown overlay |
 | Sections (`.app-section`) | `#login-section`, `#events-section`, `#event-detail-section`, `#polls-section`, `#poll-detail-section`, `#profile-section`, `#debug-section`, `#admin-section`, `#bot-control-section`, `#info-section` |
 | Profile | `.profile-layout` with four areas: events (`#profile-upcoming` with `#profile-upcoming-count`, `#profile-history-block` with `#profile-history`, `#profile-history-count` and the button `#profile-history-more`), `#profile-card`, badges (`#profile-badges`, `#profile-badge-count`), `#account-settings-card`; below it `#debug-card-wrapper` |
@@ -81,7 +81,7 @@ Contrast rules, enforced by `test/designTokens.test.js` (WCAG AA): every text co
 | Toast | `showToast(message, type)`; class `toast-<type>` colours the edge and the icon | – |
 | Empty state | `emptyState({ icon, title, text, action })` → `.empty-state` | – |
 | Skeleton | `.skeleton` + `.skeleton-text` (`.is-short`), `-title`, `-img`, `-chip`, `-avatar`, `-card-body` | – |
-| Avatar | `avatar({ url, name, size })` → `.avatar` (36 px), `.avatar-sm` 24, `.avatar-lg` 64, `.avatar-xl` 96, `.avatar-initials`; `.avatar-stack`, `.avatar-more` | the ten page-specific avatar classes stay until D-09 |
+| Avatar | `avatar({ url, name, size })` → `.avatar` (36 px), `.avatar-sm` 24, `.avatar-lg` 64, `.avatar-xl` 96, `.avatar-initials`; `.avatar-stack`, `.avatar-more` ("+5"). Every person and the bot use it: navbar and participants 36 px; comments, line-up, waitlist, poll votes and guests `sm`; profile card and bot control `lg`. Without an image, or when it fails to load, the same tile shows the initials | – |
 | Date tile | `renderDateTile(event, now)` (`events/cards.js`) → `.date-tile` with `.date-tile-weekday`, `-day`, `-month`; `.is-live` shows "LIVE" in red while the event runs | – |
 | Capacity | `renderCapacity(event)` → `.capacity` with a `<progress class="capacity-meter">` and `.capacity-text` ("5 von 20 belegt"); `.is-low` from 80 % ("Noch 2 Plätze"), `.is-full` ("Ausgebucht"), "· 3 warten" with a waitlist; the places sentence of the API (`places.text`) is the tooltip; without a limit "5 Plätze belegt" and no bar. The event page sidebar uses the same bar. The older `.capacity-bar` of the bot centre and `.capacity-label`/`.capacity-sublabel` of the event page are separate | – |
 | Data table | `<table class="data-table">`: head button `.data-table-sort` (the `<th>` carries `aria-sort`), row name `.data-table-title` (a button), second line `.data-table-meta`, last cell `.data-table-actions` with `.data-table-buttons`; rows `.is-sub` (indented, tinted) and `.is-muted` (colour only, never opacity or transform: the row's menu would end up behind the following rows). Below 768 px every row is a block and the heads are only read by screen readers | – |
@@ -98,7 +98,7 @@ No inline handlers (`onclick`, `onchange`, `oninput`, `onerror`): the CSP blocks
 |---|---|
 | `data-click="name"` / `data-change="name"` / `data-input="name"` | runs the action `name` registered with `registerActions` (see [frontend-app](frontend-app.md)); the innermost element with an action wins; links get `preventDefault` |
 | other `data-*` | parameters of the action, read via `el.dataset` (always escaped with `escapeHtml`) |
-| `data-fallback="hide\|invisible\|initials"` | broken image: hide it, keep its space, or replace it with an initials tile (`data-initials`, `title`) — an `img.avatar` keeps its size classes and becomes `.avatar.avatar-initials` |
+| `data-fallback="hide\|initials"` | broken image: hide it (event banners), or replace an `img.avatar` with a `span` of the same classes plus `.avatar-initials`, text from `data-initials`, `title` kept (`avatar()` sets both) |
 | `data-click="hide"` / `data-click="scrollTo"` / `data-change="toggleVisible"` + `data-target="<id>"` | built-in actions: hide, scroll to, or show/hide (checkbox) the element with that id |
 
 ## Rules

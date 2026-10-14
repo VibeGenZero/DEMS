@@ -7,18 +7,22 @@ import { escapeHtml } from './ui.js';
 
 const AVATAR_SIZES = ['sm', 'lg', 'xl'];
 const ICON_NAME = /^[a-z0-9-]+$/;
+// What can stand for a word: a letter, a digit or an emoji, never a bracket or dash
+const INITIAL = /[\p{L}\p{N}\p{Extended_Pictographic}]/u;
 
 /**
  * Initials of a display name.
  *
  * @param {string} name -> Display name, e.g. from Discord.
- * @returns {string} -> First letters of the first two words in upper case, "?" for an empty name.
+ * @returns {string} -> First letter, digit or emoji of the first two words that have one, in upper case; "?" if none has.
  */
 export function initialsOf(name) {
-    const words = String(name ?? '').trim().split(/\s+/).filter(Boolean);
-    if (words.length === 0) return '?';
     // Spread keeps an emoji or an accented letter in one piece
-    return words.slice(0, 2).map(word => [...word][0].toUpperCase()).join('');
+    const initials = String(name ?? '').trim().split(/\s+/)
+        .map(word => [...word].find(char => INITIAL.test(char)))
+        .filter(Boolean);
+    if (initials.length === 0) return '?';
+    return initials.slice(0, 2).map(char => char.toUpperCase()).join('');
 }
 
 /**
