@@ -24,6 +24,8 @@ see_also: [routes-admin, reminders-presence, registration-flow]
 | Duplicate | `POST /api/admin/events/:id/duplicate` | new `draft` "(Kopie)", check-in code cleared |
 | Delete | `DELETE /api/admin/events/:id` | event + registrations deleted (comments stay) |
 
+Active events need a `startDate`: creating, editing and publishing through `/status` refuse one without it, drafts may wait (D-10). The wizard checks each step before „Weiter“ (`admin/wizard-checks.js`) and previews the overview card and the Discord announcement of the unsaved input (`POST /api/admin/events/preview`).
+
 The admin table names these actions by what they do (`admin/event-rows.js` decides which a row offers): "Veröffentlichen" and "Wieder aktivieren" send `PUT …/status` with `active`, "Zurück in Entwürfe" with `draft`, "Archivieren" with `archived`. "Jetzt starten …" (`POST …/start`) is only offered for a draft without a start date, "Jetzt beenden …" (`POST …/end`) only while the event runs, because it writes the end date. `cancel` has no button; cancelled events show in the archive tab with the chip "Abgesagt".
 
 Visibility: `GET /api/events` returns only `active` (admins may pass `?status=`); `GET /api/admin/all-events` returns everything.

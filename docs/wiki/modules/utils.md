@@ -3,7 +3,7 @@ id: utils
 title: utils/ — domain helpers
 type: module
 tags: [utils, registration, form-fields, waitlist, audit-log, profile, debug]
-sources: [utils/registrationService.js, utils/formFields.js, utils/eventUtils.js, utils/eventListing.js, utils/profileEvents.js, utils/eventUrl.js, utils/userProfile.js, utils/avatar.js, utils/botPermissions.js, utils/csv.js, utils/template.js, utils/sessionStore.js, utils/reminders.js, utils/debugLog.js, utils/capacity.js, utils/slotService.js, utils/eventLock.js, utils/announcementRefresh.js, utils/pollService.js, utils/pollStore.js]
+sources: [utils/registrationService.js, utils/formFields.js, utils/eventUtils.js, utils/eventListing.js, utils/profileEvents.js, utils/eventUrl.js, utils/userProfile.js, utils/avatar.js, utils/botPermissions.js, utils/csv.js, utils/template.js, utils/sessionStore.js, utils/reminders.js, utils/debugLog.js, utils/capacity.js, utils/slotService.js, utils/eventLock.js, utils/announcementRefresh.js, utils/pollService.js, utils/pollStore.js, utils/eventPreview.js]
 part_of: [architecture]
 depends_on: [data-layer, bot]
 see_also: [registration-flow, form-fields, role-slots]
@@ -103,6 +103,10 @@ Pure, no database. `csvCell(value)` → one quoted CSV cell; values starting wit
 ## utils/reminders.js
 
 Pure rules for `event.reminderHours` (see [reminders-presence](../concepts/reminders-presence.md)): `normalizeReminderHours(value)` → `[{ hours, sent }]` from a list, a legacy number or the form text "24, 1" (comma, semicolon or space; hours > 0, each once); `mergeReminderHours(value, oldEvent, startDate)` → list to store on save, keeps `sent` for the same hours while the start is unchanged; `findDueReminders(event, now)` → indexes of unsent reminders whose time is reached before the start.
+
+## utils/eventPreview.js (pure)
+
+`buildPreviewEvent(body)` → the fields the overview card and the Discord announcement need, from the wizard draft: `title` (≤ 200), `description` (≤ 5000), dates, `bannerUrl` only as an http(s) URL (discord.js refuses anything else in `setImage`), `category`, `status`/`accessMode` with the defaults of `POST /events`, `formFields` with a label, `accentColor` only as hex, slots via `normalizeSlots` (none when they are broken), `maxParticipants` = slot sum or the number, guests off with slots. Used by `POST /api/admin/events/preview`.
 
 ## utils/debugLog.js
 

@@ -71,7 +71,7 @@ see_also: [request-lifecycle, add-api-endpoint]
 | Method | Path |
 |---|---|
 | GET | `/api/admin/roles`, `/channels`, `/stats`, `/all-events`, `/import/discord-events` |
-| POST | `/api/admin/events` |
+| POST | `/api/admin/events`, `/events/preview` |
 | PUT | `/api/admin/events/:id`, `/events/:id/status`, `/events/:id/cancel` |
 | POST | `/api/admin/events/:id/start`, `/events/:id/end`, `/events/:id/duplicate`, `/events/:id/generate-checkin`, `/events/:id/announce`, `/events/:id/sync-discord` |
 | DELETE | `/api/admin/events/:id`, `/events/series/:seriesId` |
