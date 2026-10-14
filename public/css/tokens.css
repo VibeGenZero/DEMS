@@ -69,6 +69,17 @@
   --discord-hover: #4752c4;
   --on-discord: #ffffff;
 
+  /* Discord look of the wizard preview (dark Discord design) */
+  --discord-bg: #313338;
+  --discord-embed-bg: #2b2d31;
+  --discord-text: #dbdee1;
+  --discord-heading: #f2f3f5;
+  --discord-muted: #9ba1ab;
+  --discord-link: #00a8fc;
+  --discord-button-secondary: #4e5058;
+  --discord-button-success: #248046;
+  --discord-button-danger: #da373c;
+
   /* Typography */
   --font-body: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
   --font-logo: 'UnifrakturCook', cursive;

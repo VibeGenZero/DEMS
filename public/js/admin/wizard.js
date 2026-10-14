@@ -1,75 +1,50 @@
 /**
- * Event wizard: steps, create/edit/save, roles, location autocomplete.
+ * Event wizard: steps with their checks, create/edit/save, roles.
+ * Location field: wizard-location.js; rules: wizard-checks.js; marks: wizard-marks.js.
  */
 import { state } from '../core/state.js';
 import { loadAdminEvents, loadAdminStats } from './dashboard.js';
 import { addFormField, getFormFieldsFromBuilder, getSlotsFromEditor, renderSlotEditor } from './wizard-builders.js';
+import { checkWizardStep } from './wizard-checks.js';
+import { clearAllMarks, showStepErrors } from './wizard-marks.js';
+import { cancelWizardPreview, renderWizardPreview } from './wizard-preview.js';
 import { navigateTo } from '../core/router.js';
 import { registerActions } from '../core/actions.js';
 import { applyStyleData, escapeHtml, hexColor, showElement, showToast, toggleElement } from '../core/ui.js';
 import { showPollDetail } from '../polls/polls.js';
 
-export let _cachedChannels = null;
-
-export async function loadChannelsForAutocomplete() {
-    if (_cachedChannels !== null) return _cachedChannels;
-    try {
-        const res = await fetch('/api/admin/channels');
-        _cachedChannels = await res.json();
-        return _cachedChannels;
-    } catch { return []; }
-}
-
-export async function handleLocationInput() {
-    const input = document.getElementById('event-location-text');
-    const suggestionsEl = document.getElementById('location-suggestions');
-    if (!input || !suggestionsEl) return;
-
-    const val = input.value.trim();
-
-    const chanIdEl = document.getElementById('event-location-channel-id');
-    const chanTypeEl = document.getElementById('event-location-channel-type');
-    if (chanIdEl) chanIdEl.value = '';
-    if (chanTypeEl) chanTypeEl.value = '';
-
-    if (!val) {
-        suggestionsEl.style.display = 'none';
-        return;
-    }
-
-    const channels = await loadChannelsForAutocomplete();
-    const q = val.replace(/^#/, '').toLowerCase();
-    const filtered = channels.filter(c => c.name.toLowerCase().includes(q)).slice(0, 8);
-
-    if (!filtered.length) {
-        suggestionsEl.style.display = 'none';
-        return;
-    }
-
-    suggestionsEl.innerHTML = filtered.map(c => `
-        <div class="location-suggestion-item"
-             data-click="selectLocationChannel" data-channel-id="${escapeHtml(c.id)}" data-channel-name="${escapeHtml(c.name)}" data-channel-type="${escapeHtml(c.type)}">
-            <i class="bi bi-${c.type === 'voice' ? 'volume-up' : 'hash'} me-2"></i>${escapeHtml(c.name)}
-        </div>`).join('');
-    suggestionsEl.style.display = 'block';
-}
-
-export function selectLocationChannel(channelId, channelName, channelType) {
-    const input = document.getElementById('event-location-text');
-    if (input) input.value = '#' + channelName;
-    const chanIdEl = document.getElementById('event-location-channel-id');
-    if (chanIdEl) chanIdEl.value = channelId;
-    const chanTypeEl = document.getElementById('event-location-channel-type');
-    if (chanTypeEl) chanTypeEl.value = channelType;
-    const suggestionsEl = document.getElementById('location-suggestions');
-    if (suggestionsEl) suggestionsEl.style.display = 'none';
-}
-
 export let currentWizardStep = 1;
 
 export const WIZARD_TOTAL_STEPS = 5;
 
+// Preview area and the two switch buttons; leaving the preview drops a pending answer
+function showPreviewArea(visible) {
+    if (!visible) cancelWizardPreview();
+    toggleElement(document.getElementById('wizard-preview'), visible);
+    for (const mode of ['edit', 'preview']) {
+        const button = document.getElementById(`wizard-mode-${mode}`);
+        const active = (mode === 'preview') === visible;
+        button.classList.toggle('active', active);
+        button.setAttribute('aria-selected', String(active));
+    }
+}
+
+/**
+ * Switch between editing the current step and the preview of the whole input.
+ *
+ * @param {string} mode -> "edit" or "preview".
+ * @returns {Promise<void>} -> Resolves when the preview is drawn (at once for "edit").
+ */
+export function setWizardMode(mode) {
+    const preview = mode === 'preview';
+    showPreviewArea(preview);
+    toggleElement(document.getElementById(`wizard-page-${currentWizardStep}`), !preview);
+    if (!preview) return Promise.resolve();
+    return renderWizardPreview(collectEventDraft(), document.getElementById('event-edit-id').value);
+}
+
 export function wizardGoTo(step) {
+    showPreviewArea(false);
     // Hide current page & deactivate indicator
     document.getElementById(`wizard-page-${currentWizardStep}`).style.display = 'none';
 
@@ -114,14 +89,13 @@ export function wizardGoTo(step) {
 }
 
 export function wizardNext() {
-    if (currentWizardStep === 1) {
-        const titleEl = document.getElementById('event-title');
-        if (!titleEl.value.trim()) {
-            titleEl.classList.add('is-invalid');
-            titleEl.focus();
-            return;
-        }
-        titleEl.classList.remove('is-invalid');
+    const errors = checkWizardStep(currentWizardStep, collectEventDraft());
+    const first = showStepErrors(currentWizardStep, errors);
+    if (errors.length > 0) {
+        // The marks need the step in view; from the preview it goes back to editing
+        setWizardMode('edit');
+        first?.focus();
+        return;
     }
     if (currentWizardStep < WIZARD_TOTAL_STEPS) {
         wizardGoTo(currentWizardStep + 1);
@@ -132,6 +106,15 @@ export function wizardBack() {
     if (currentWizardStep > 1) {
         wizardGoTo(currentWizardStep - 1);
     }
+}
+
+/**
+ * Show the star at the start date while the status is "Aktiv": drafts may wait for a date.
+ *
+ * @returns {void}
+ */
+export function updateStartRequired() {
+    toggleElement(document.getElementById('event-start-required'), document.getElementById('event-status').value === 'active');
 }
 
 // Mirrors normalizeReminderHours in utils/reminders.js: stored list, legacy number or the form text "24, 1"
@@ -195,6 +178,9 @@ export async function showCreateEventModal() {
     updateBannerPreview();
 
     await loadRoles();
+
+    clearAllMarks();
+    updateStartRequired();
 
     // Reset wizard to step 1
     wizardGoTo(1);
@@ -331,6 +317,9 @@ export async function editEvent(eventId) {
             document.getElementById('role-requirement-area').style.display = this.value === 'role-required' ? 'block' : 'none';
         };
 
+        clearAllMarks();
+        updateStartRequired();
+
         // Reset wizard to step 1
         wizardGoTo(1);
 
@@ -345,9 +334,13 @@ export async function editEvent(eventId) {
     }
 }
 
-export async function saveEvent() {
-    const editId = document.getElementById('event-edit-id').value;
-    const data = {
+/**
+ * Input of the wizard as POST/PUT /api/admin/events expects it; also the draft of the checks and the preview.
+ *
+ * @returns {Object} -> Event fields; form fields unfiltered, so empty labels can be reported.
+ */
+export function collectEventDraft() {
+    return {
         title: document.getElementById('event-title').value,
         description: state.descriptionEditor ? state.descriptionEditor.value() : document.getElementById('event-description').value,
         bannerUrl: document.getElementById('event-banner-url').value,
@@ -391,7 +384,28 @@ export async function saveEvent() {
             };
         })(),
     };
+}
 
+export async function saveEvent() {
+    const draft = collectEventDraft();
+    // Every step is checked and marked; the first one with problems is shown, nothing is sent
+    let firstStep = 0;
+    let firstInput = null;
+    for (let step = 1; step <= WIZARD_TOTAL_STEPS; step++) {
+        const errors = checkWizardStep(step, draft);
+        const input = showStepErrors(step, errors);
+        if (errors.length > 0 && !firstStep) {
+            firstStep = step;
+            firstInput = input;
+        }
+    }
+    if (firstStep) {
+        wizardGoTo(firstStep);
+        firstInput?.focus();
+        return;
+    }
+
+    const editId = document.getElementById('event-edit-id').value;
     try {
         const url = editId ? `/api/admin/events/${editId}` : '/api/admin/events';
         const method = editId ? 'PUT' : 'POST';
@@ -401,7 +415,7 @@ export async function saveEvent() {
                 'Content-Type': 'application/json',
                 'X-CSRF-TOKEN': state.csrfToken
             },
-            body: JSON.stringify(data)
+            body: JSON.stringify(draft)
         });
 
         if (res.ok) {
@@ -471,6 +485,6 @@ registerActions({
     wizardNext: () => wizardNext(),
     wizardBack: () => wizardBack(),
     saveEvent: () => saveEvent(),
-    handleLocationInput: () => handleLocationInput(),
-    selectLocationChannel: (el) => selectLocationChannel(el.dataset.channelId, el.dataset.channelName, el.dataset.channelType)
+    updateStartRequired: () => updateStartRequired(),
+    setWizardMode: (el) => setWizardMode(el.dataset.mode)
 });

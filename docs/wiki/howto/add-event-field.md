@@ -19,7 +19,7 @@ see_also: [event-lifecycle, add-api-endpoint]
 | 2 | `routes/admin.js` | `PUT /events/:id`: same field in `updates` — otherwise edits silently drop it |
 | 3 | `middleware/validators.js` | add a rule to `validateEvent` if the value needs checking (URLs, colours, enums) |
 | 4 | `public/index.html` | input in the right wizard step of `#eventModal` (Grundlagen, Datum & Zeit, Teilnehmer & Zugang, Anmeldeformular, Erweitert) |
-| 5 | `public/js/admin/wizard.js` | `editEvent()`: fill the input from the event; `saveEvent()`: put it into the payload; `showCreateEventModal()`: reset it |
+| 5 | `public/js/admin/wizard.js` | `editEvent()`: fill the input from the event; `collectEventDraft()`: put it into the draft (saved and previewed); `showCreateEventModal()`: reset it; a rule in `checkWizardStep` (`admin/wizard-checks.js`) if it can be wrong; `buildPreviewEvent` (`utils/eventPreview.js`) if the card or the announcement show it |
 | 6 | `public/js/events/detail.js`, `public/js/events/list.js`, `public/js/admin/event-table.js` | render it (`showEventDetail` / `renderSidebarDetails` / event cards in `showEventsSection` / the admin table in `admin/event-table.js`, only when admins need the field in the list) with `escapeHtml` |
 | 7 | `dev/seedData.js` | default in `buildEvent()` (+ example values where useful); counts in `test/seed.test.js` stay unchanged |
 | 8 | wiki | row in [data-model](../concepts/data-model.md); `npm run wiki` |

@@ -466,6 +466,103 @@ test('events with an unsafe banner URL or colour are refused', async () => {
     assert.equal((await create({ bannerUrl: '', accentColor: '' })).status, 200);
 });
 
+test('an active event needs a start date, a draft does not', async () => {
+    const admin = await loginAs('admin');
+    const active = await admin.send('POST', '/api/admin/events', { title: 'Ohne Datum', status: 'active' });
+    assert.equal(active.status, 400);
+    assert.equal((await active.json()).error, 'Aktive Events brauchen ein Startdatum.');
+    // Without a status the event becomes active, so it needs a date as well
+    assert.equal((await admin.send('POST', '/api/admin/events', { title: 'Ohne Status' })).status, 400);
+
+    const draft = await admin.send('POST', '/api/admin/events', { title: 'Entwurf ohne Datum', status: 'draft' });
+    assert.equal(draft.status, 200);
+    const { id } = await draft.json();
+
+    const edited = await admin.send('PUT', `/api/admin/events/${id}`, { title: 'Entwurf ohne Datum', status: 'active' });
+    assert.equal(edited.status, 400);
+    assert.equal((await edited.json()).error, 'Aktive Events brauchen ein Startdatum.');
+
+    const published = await admin.send('PUT', `/api/admin/events/${id}/status`, { status: 'active' });
+    assert.equal(published.status, 400);
+    assert.equal((await published.json()).error, 'Aktive Events brauchen ein Startdatum.');
+
+    const dated = await admin.send('PUT', `/api/admin/events/${id}`, { title: 'Entwurf ohne Datum', status: 'draft', startDate: '2026-12-01T18:00:00.000Z' });
+    assert.equal(dated.status, 200);
+    assert.equal((await admin.send('PUT', `/api/admin/events/${id}/status`, { status: 'active' })).status, 200);
+});
+
+test('the wizard preview builds the Discord announcement of an unsaved event and stores nothing', async () => {
+    const admin = await loginAs('admin');
+    const countEvents = async () => (await (await admin.request('/api/admin/all-events')).json()).length;
+    const before = await countEvents();
+    const res = await admin.send('POST', '/api/admin/events/preview', {
+        title: 'Vorschau-Raid', description: 'Bringt Tränke mit.', status: 'active', startDate: '2026-12-01T18:00:00.000Z',
+        accessMode: 'open', slots: [{ name: 'Tank', emoji: '🛡️', capacity: 2 }, { name: 'Heiler', emoji: '💚', capacity: 3 }]
+    });
+    assert.equal(res.status, 200);
+    const preview = await res.json();
+    assert.equal(preview.embed.title, '🎉 Vorschau-Raid');
+    assert.equal(preview.embed.description, 'Bringt Tränke mit.');
+    assert.match(preview.embed.fields[0].name, /Datum$/);
+    assert.match(preview.embed.fields[1].name, /Plätze$/);
+    assert.equal(preview.embed.fields[1].value, '0 von 5 Plätzen belegt');
+    assert.deepEqual(preview.components.flatMap(row => row.components).map(button => button.label), ['Tank', 'Heiler', 'Zum Event']);
+    assert.equal(preview.places.text, '0 von 5 Plätzen belegt');
+    assert.deepEqual(preview.bot, { name: 'DEMS Bot (Mock)', avatarUrl: 'https://cdn.discordapp.com/embed/avatars/0.png' });
+    assert.equal(await countEvents(), before);
+});
+
+test('a half-done draft can be previewed; members and requests without a token cannot', async () => {
+    const admin = await loginAs('admin');
+    const draft = await admin.send('POST', '/api/admin/events/preview', { bannerUrl: 'https://' });
+    assert.equal(draft.status, 200);
+    const body = await draft.json();
+    assert.equal(body.embed.image, undefined);
+    assert.equal(body.places.text, '0 Plätze belegt');
+
+    const member = await loginAs('member');
+    assert.equal((await member.send('POST', '/api/admin/events/preview', { title: 'x' })).status, 403);
+    const noToken = await admin.request('/api/admin/events/preview', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: 'x' })
+    });
+    assert.equal(noToken.status, 403);
+});
+
+test('a description longer than Discord allows is cut in the announcement instead of breaking it', async () => {
+    const admin = await loginAs('admin');
+    const res = await admin.send('POST', '/api/admin/events/preview', { title: 'Lange Beschreibung', status: 'draft', description: `${'x'.repeat(4094)}🎉${'y'.repeat(400)}` });
+    assert.equal(res.status, 200);
+    const { embed } = await res.json();
+    // 4096 characters at most; a cut emoji leaves no half character behind
+    assert.ok(embed.description.length <= 4096, String(embed.description.length));
+    assert.ok(embed.description.endsWith('…'));
+    assert.doesNotMatch(embed.description, /[\uD800-\uDBFF]…$/);
+});
+
+test('the preview of a saved event counts its registrations, also after a slot was removed', async () => {
+    const admin = await loginAs('admin');
+    const full = await (await admin.request(`/api/events/${EVENT_ID.FULL}`)).json();
+    const res = await admin.send('POST', '/api/admin/events/preview', { ...full, id: EVENT_ID.FULL });
+    assert.equal(res.status, 200);
+    const preview = await res.json();
+    assert.equal(preview.places.taken, 5);
+    assert.match(preview.places.text, /^5 von 5 Plätzen belegt/);
+
+    const raid = await (await admin.request(`/api/events/${EVENT_ID.ROLE}`)).json();
+    const fewer = await admin.send('POST', '/api/admin/events/preview', { ...raid, id: EVENT_ID.ROLE, slots: raid.slots.slice(1) });
+    assert.equal(fewer.status, 200);
+    assert.ok((await fewer.json()).places.taken >= 1);
+});
+
+test('an event cannot end before it starts', async () => {
+    const admin = await loginAs('admin');
+    const res = await admin.send('POST', '/api/admin/events', {
+        title: 'Rückwärts', status: 'draft', startDate: '2026-12-01T18:00:00.000Z', endDate: '2026-12-01T17:00:00.000Z'
+    });
+    assert.equal(res.status, 400);
+    assert.equal((await res.json()).error, 'Das Ende liegt vor dem Start.');
+});
+
 test('the rate limiters do not get in the way during development', async () => {
     const client = createClient(server.baseUrl);
     for (let i = 0; i < 40; i++) {
@@ -518,7 +615,7 @@ const RAID_SLOTS = [
 /** Create an active instant-approval event with role slots; returns the API response. */
 async function createSlotEvent(admin, title, slots, fields = {}) {
     const res = await admin.send('POST', '/api/admin/events', {
-        title, status: 'active', accessMode: 'open', approvalMode: 'instant', slots, ...fields
+        title, status: 'active', accessMode: 'open', approvalMode: 'instant', startDate: '2026-12-01T18:00:00.000Z', slots, ...fields
     });
     const body = await res.json();
     assert.equal(res.status, 200, JSON.stringify(body));
@@ -583,8 +680,11 @@ test('saving an event keeps sent reminders sent until the start moves', async ()
     assert.equal((await admin.send('PUT', `/api/admin/events/${EVENT_ID.PAST}`, { ...event, reminderHours: 24 })).status, 200);
     assert.deepEqual(await storedReminders(), [{ hours: 24, sent: true }]);
 
-    const movedStart = new Date(new Date(event.startDate).getTime() + 7 * 24 * 60 * 60 * 1000).toISOString();
-    assert.equal((await admin.send('PUT', `/api/admin/events/${EVENT_ID.PAST}`, { ...event, startDate: movedStart, reminderHours: 24 })).status, 200);
+    // The end moves along: an end before the start is refused
+    const week = 7 * 24 * 60 * 60 * 1000;
+    const movedStart = new Date(new Date(event.startDate).getTime() + week).toISOString();
+    const movedEnd = event.endDate ? new Date(new Date(event.endDate).getTime() + week).toISOString() : '';
+    assert.equal((await admin.send('PUT', `/api/admin/events/${EVENT_ID.PAST}`, { ...event, startDate: movedStart, endDate: movedEnd, reminderHours: 24 })).status, 200);
     assert.deepEqual(await storedReminders(), [{ hours: 24, sent: false }]);
 });
 
@@ -620,7 +720,7 @@ test('admins create events with role slots', async () => {
 test('invalid slots are rejected with a German message', async () => {
     const admin = await loginAs('admin');
     const res = await admin.send('POST', '/api/admin/events', {
-        title: 'Kaputte Slots', status: 'active', slots: [{ name: 'Tank', emoji: ':shield:', capacity: 1 }]
+        title: 'Kaputte Slots', status: 'active', startDate: '2026-12-01T18:00:00.000Z', slots: [{ name: 'Tank', emoji: ':shield:', capacity: 1 }]
     });
     assert.equal(res.status, 400);
     assert.equal((await res.json()).error, 'Das Emoji von Slot „Tank“ muss ein einzelnes Emoji sein.');

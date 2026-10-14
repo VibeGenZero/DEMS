@@ -938,8 +938,8 @@
           <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
         </div>
 
-        <!-- Wizard Step Indicator -->
-        <div class="px-4 pt-3">
+        <!-- Wizard Step Indicator and the switch between editing and preview -->
+        <div class="px-4 pt-3 wizard-head">
           <div class="wizard-nav">
             <div class="wizard-step-item active" id="wstep-1" data-click="wizardGoTo" data-step="1">
               <div class="wizard-step-bubble">1</div>
@@ -966,6 +966,12 @@
               <div class="wizard-step-label">Erweitert</div>
             </div>
           </div>
+          <div class="nav nav-pills wizard-mode" role="tablist" aria-label="Ansicht des Assistenten">
+            <button type="button" class="nav-link active" id="wizard-mode-edit" role="tab" aria-selected="true"
+              data-click="setWizardMode" data-mode="edit"><i class="bi bi-pencil me-1"></i>Bearbeiten</button>
+            <button type="button" class="nav-link" id="wizard-mode-preview" role="tab" aria-selected="false"
+              data-click="setWizardMode" data-mode="preview"><i class="bi bi-eye me-1"></i>Vorschau</button>
+          </div>
         </div>
 
         <div class="modal-body">
@@ -975,9 +981,9 @@
             <!-- ── Step 1: Grundlagen ── -->
             <div class="wizard-page" id="wizard-page-1">
               <div class="mb-3">
-                <label class="form-label">Titel <span class="text-danger">*</span></label>
+                <label class="form-label" for="event-title">Titel <span class="text-danger">*</span></label>
                 <input type="text" class="form-control" id="event-title" maxlength="200" placeholder="Event-Name">
-                <div class="invalid-feedback">Bitte einen Titel eingeben.</div>
+                <div class="invalid-feedback" id="event-title-feedback"></div>
               </div>
               <div class="mb-3">
                 <label class="form-label">Beschreibung</label>
@@ -985,9 +991,10 @@
                   placeholder="Beschreibe das Event..."></textarea>
               </div>
               <div class="mb-3">
-                <label class="form-label">🖼️ Banner URL</label>
+                <label class="form-label" for="event-banner-url"><i class="bi bi-image me-1"></i>Banner-URL</label>
                 <input type="url" class="form-control" id="event-banner-url"
                   placeholder="https://example.com/banner.jpg">
+                <div class="invalid-feedback" id="event-banner-url-feedback"></div>
                 <small class="text-muted">Direkte URL zu einem Banner-Bild (z.B. Imgur, Discord CDN)</small>
                 <div class="mt-2 is-hidden" id="banner-preview-container">
                   <img id="banner-preview" class="banner-preview" src="" alt="Banner Vorschau">
@@ -1017,14 +1024,16 @@
             <div class="wizard-page is-hidden" id="wizard-page-2">
               <div class="row g-3 mb-3">
                 <div class="col-md-6">
-                  <label class="form-label">📅 Startdatum</label>
+                  <label class="form-label" for="event-start-date"><i class="bi bi-calendar-event me-1"></i>Startdatum <span class="text-danger" id="event-start-required">*</span></label>
                   <input type="text" class="form-control" id="event-start-date" placeholder="Datum & Uhrzeit wählen"
                     readonly>
+                  <div class="invalid-feedback" id="event-start-date-feedback"></div>
                 </div>
                 <div class="col-md-6">
-                  <label class="form-label">📅 Enddatum</label>
+                  <label class="form-label" for="event-end-date"><i class="bi bi-calendar-event me-1"></i>Enddatum</label>
                   <input type="text" class="form-control" id="event-end-date" placeholder="Datum & Uhrzeit wählen"
                     readonly>
+                  <div class="invalid-feedback" id="event-end-date-feedback"></div>
                 </div>
               </div>
               <div class="row g-3 mb-3">
@@ -1042,7 +1051,7 @@
                 </div>
                 <div class="col-md-6">
                   <label class="form-label">Status</label>
-                  <select class="form-select" id="event-status">
+                  <select class="form-select" id="event-status" data-change="updateStartRequired">
                     <option value="active">Aktiv</option>
                     <option value="draft">Entwurf</option>
                     <option value="archived">Archiviert</option>
@@ -1054,7 +1063,7 @@
                 <div class="form-check mb-2">
                   <input class="form-check-input" type="checkbox" id="event-recurring"
                     data-change="toggleVisible" data-target="recurring-options">
-                  <label class="form-check-label" for="event-recurring">🔁 Wiederkehrendes Event</label>
+                  <label class="form-check-label" for="event-recurring"><i class="bi bi-arrow-repeat me-1"></i>Wiederkehrendes Event</label>
                 </div>
                 <div class="is-hidden" id="recurring-options">
                   <div class="row g-3">
@@ -1069,6 +1078,7 @@
                     <div class="col-md-6">
                       <label class="form-label">Wiederholen bis</label>
                       <input type="date" class="form-control" id="event-recurring-until">
+                      <div class="invalid-feedback" id="event-recurring-until-feedback"></div>
                     </div>
                   </div>
                 </div>
@@ -1082,12 +1092,14 @@
                   <label class="form-label">Max. Teilnehmer</label>
                   <input type="number" class="form-control" id="event-max" min="0" value="0"
                     placeholder="0 = unbegrenzt">
+                  <div class="invalid-feedback" id="event-max-feedback"></div>
                   <small class="text-muted">0 = unbegrenzt</small>
                 </div>
                 <div class="col-md-6">
-                  <label class="form-label" for="event-reminder">⏰ Erinnerungen (Stunden vor Start)</label>
+                  <label class="form-label" for="event-reminder"><i class="bi bi-alarm me-1"></i>Erinnerungen (Stunden vor Start)</label>
                   <input type="text" class="form-control" id="event-reminder" value="" inputmode="decimal"
                     placeholder="z. B. 24, 1">
+                  <div class="invalid-feedback" id="event-reminder-feedback"></div>
                   <small class="text-muted">Mehrere mit Komma trennen, leer = keine Erinnerung</small>
                 </div>
               </div>
@@ -1098,6 +1110,7 @@
                 </div>
                 <div class="is-hidden" id="slot-editor-area">
                   <div id="slot-editor-rows" class="slot-editor-rows"></div>
+                  <div class="invalid-feedback" id="slot-editor-feedback"></div>
                   <div class="d-flex flex-wrap gap-2 mt-2">
                     <button type="button" class="btn btn-sm btn-outline-light" data-click="addSlotRow"><i class="bi bi-plus-lg me-1"></i>Slot</button>
                     <button type="button" class="btn btn-sm btn-outline-secondary" data-click="applySlotPreset" data-preset="mmo-raid"><i class="bi bi-magic me-1"></i>Vorlage: MMO-Raid</button>
@@ -1134,6 +1147,7 @@
                 <div id="role-checkboxes" class="d-flex flex-wrap gap-2">
                   <!-- Populated dynamically -->
                 </div>
+                <div class="invalid-feedback" id="role-checkboxes-feedback"></div>
               </div>
               <div class="mb-3">
                 <label class="form-label">Rolle bei Annahme zuweisen</label>
@@ -1153,6 +1167,7 @@
               <div id="form-fields-builder">
                 <!-- Dynamic field rows -->
               </div>
+              <div class="invalid-feedback" id="form-fields-feedback"></div>
               <button type="button" class="btn btn-sm btn-outline-light mt-2" data-click="addFormField">
                 <i class="bi bi-plus me-1"></i>Feld hinzufügen
               </button>
@@ -1165,8 +1180,7 @@
                 <div class="form-check mb-2">
                   <input class="form-check-input" type="checkbox" id="event-auto-create-channels"
                     data-change="toggleVisible" data-target="channel-config-options">
-                  <label class="form-check-label" for="event-auto-create-channels">🎧 Auto-Voice/Text Channels
-                    generieren</label>
+                  <label class="form-check-label" for="event-auto-create-channels"><i class="bi bi-headset me-1"></i>Auto-Voice/Text Channels generieren</label>
                 </div>
                 <small class="text-muted d-block ms-4 mb-2">Erstellt einen privaten Kanal für dieses Event in Discord,
                   auf den nur angenommene Teilnehmer zugreifen können.</small>
@@ -1198,7 +1212,7 @@
                 <div class="form-check mb-2">
                   <input class="form-check-input" type="checkbox" id="event-custom-msg-toggle"
                     data-change="toggleVisible" data-target="custom-msg-options">
-                  <label class="form-check-label" for="event-custom-msg-toggle">🤖 Eigene Bot-Nachrichten</label>
+                  <label class="form-check-label" for="event-custom-msg-toggle"><i class="bi bi-robot me-1"></i>Eigene Bot-Nachrichten</label>
                 </div>
                 <div class="is-hidden" id="custom-msg-options">
                   <div class="mb-3">
@@ -1232,6 +1246,18 @@
             </div>
 
           </form>
+
+          <!-- Preview of the unsaved input (admin/wizard-preview.js); inert: its links lead nowhere -->
+          <div class="is-hidden" id="wizard-preview">
+            <section class="wizard-preview-block">
+              <h6 class="section-label mb-2">In der Event-Übersicht</h6>
+              <div class="wizard-preview-card" id="wizard-preview-card" inert></div>
+            </section>
+            <section class="wizard-preview-block">
+              <h6 class="section-label mb-2">In Discord</h6>
+              <div id="wizard-preview-discord" inert></div>
+            </section>
+          </div>
         </div>
 
         <!-- Wizard Footer -->

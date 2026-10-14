@@ -12,6 +12,7 @@ import './admin/event-table.js';
 import './admin/maintenance.js';
 import './admin/registrations.js';
 import './admin/wizard-builders.js';
+import './admin/wizard-location.js';
 import './admin/wizard.js';
 import './core/auth.js';
 import './core/router.js';

@@ -619,7 +619,7 @@ function buildEventEmbed(event, registrationLink, roster) {
     const embed = new EmbedBuilder()
         .setColor(0x8b5cf6)
         .setTitle(`🎉 ${event.title}`)
-        .setDescription(event.description || 'Keine Beschreibung.')
+        .setDescription(cutForEmbed(event.description) || 'Keine Beschreibung.')
         .addFields(
             { name: '🗓️ Datum', value: event.startDate ? new Date(event.startDate).toLocaleString('de-DE', { timeZone: TIMEZONE }) : 'TBA', inline: true },
             { name: '👥 Plätze', value: formatParticipantCount(event, roster), inline: true },
@@ -650,6 +650,23 @@ function buildEventEmbed(event, registrationLink, roster) {
     }
 
     return embed;
+}
+
+// Discord refuses an embed description above 4096 characters; events allow 5000
+const EMBED_DESCRIPTION_MAX = 4096;
+
+/**
+ * Event description as an embed takes it; the event page keeps the full text.
+ *
+ * @param {string} [text] -> Description of the event.
+ * @returns {string} -> The text, or its first characters and "…" when it is too long for Discord.
+ */
+function cutForEmbed(text) {
+    if (!text || text.length <= EMBED_DESCRIPTION_MAX) return text;
+    let cut = text.slice(0, EMBED_DESCRIPTION_MAX - 1);
+    // A cut through an emoji would leave half a character
+    if (/[\uD800-\uDBFF]$/.test(cut)) cut = cut.slice(0, -1);
+    return `${cut}…`;
 }
 
 /**

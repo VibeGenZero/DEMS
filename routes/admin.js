@@ -11,8 +11,9 @@ const { validateEvent, validateRegStatus, validateBotMessages } = require('../mi
 const { sendDM, assignRole, parseTemplate, getGuildRoles, sendChannelMessage, buildEventEmbed, buildEventComponents, getGuildScheduledEvents, createEventChannels, deleteEventChannels, createScheduledEvent, getBotStatus, getBotSettings, saveBotSettings, getRunningEvents, getGuildChannels, buildPollEmbed, buildPollComponents } = require('../bot');
 const { promoteFromWaitlist, addAuditLog, loadEventRoster, loadEventRegistrations, saveEventWithSlots } = require('../utils/eventUtils');
 const { mergeReminderHours } = require('../utils/reminders');
-const { describePlaces } = require('../utils/capacity');
-const { getSlots, findSlot, formatSlotLabel, normalizeSlots, sumCapacity, resolveAcceptanceSlot } = require('../utils/slotService');
+const { describePlaces, formatPlaces, formatWaitlist } = require('../utils/capacity');
+const { getSlots, findSlot, formatSlotLabel, normalizeSlots, sumCapacity, resolveAcceptanceSlot, buildRoster } = require('../utils/slotService');
+const { buildPreviewEvent } = require('../utils/eventPreview');
 const { normalizePollInput, tallyPoll } = require('../utils/pollService');
 const {
     loadPoll, loadPollVotes, updatePoll, closePoll, decidePollWithEvent, deletePoll
@@ -276,6 +277,30 @@ router.post('/events', validateEvent, async (req, res) => {
 });
 
 /**
+ * POST /api/admin/events/preview — Discord announcement and places of an
+ * unsaved event for the wizard preview; built like "Ankündigen", stores nothing
+ */
+router.post('/events/preview', async (req, res) => {
+    try {
+        const id = typeof req.body.id === 'string' ? req.body.id : '';
+        const event = buildPreviewEvent(req.body);
+        // A new event shows the message as right after announcing it: nobody registered yet
+        const roster = id ? await loadEventRoster(id, event) : buildRoster(event, []);
+        const linkId = id || 'vorschau';
+        const bot = getBotStatus() || {};
+        res.json({
+            embed: buildEventEmbed(event, buildEventUrl(linkId), roster).toJSON(),
+            components: buildEventComponents(event, linkId, roster).map(row => row.toJSON()),
+            places: { ...roster.places, text: formatPlaces(roster.places), waitlistText: formatWaitlist(roster.places.waitlist) },
+            bot: { name: String(bot.username || 'DEMS').replace(/#\d+$/, ''), avatarUrl: bot.avatarUrl || null }
+        });
+    } catch (err) {
+        console.error('Event preview error:', err);
+        res.status(500).json({ error: 'Vorschau konnte nicht erstellt werden.' });
+    }
+});
+
+/**
  * PUT /api/admin/events/:id — Update event
  */
 router.put('/events/:id', validateEvent, async (req, res) => {
@@ -357,6 +382,10 @@ router.put('/events/:id/status', async (req, res) => {
 
         const eventSnap = await getDoc(doc(db, 'events', req.params.id));
         const oldEvent = eventSnap.exists() ? eventSnap.data() : {};
+        // Members plan by the start date -> an event without one stays a draft (D-10)
+        if (status === 'active' && !oldEvent.startDate) {
+            return res.status(400).json({ error: 'Aktive Events brauchen ein Startdatum.' });
+        }
 
         await updateDoc(doc(db, 'events', req.params.id), { status, updatedAt: new Date().toISOString() });
         await addAuditLog('UPDATE_EVENT_STATUS', req.session.user.id, `Changed status to ${status}`, req.params.id);

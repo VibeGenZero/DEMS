@@ -79,6 +79,8 @@ test('an admin walks through every page without one refused style', async ({ pag
     // A click beside the calendar closes it (Escape would close the whole dialog)
     await page.locator('#wizard-step-counter').click();
     await expect(page.locator('.flatpickr-calendar.open')).toHaveCount(0);
+    // An active event needs a start date; a draft may go on without one
+    await page.locator('#event-status').selectOption('draft');
     await page.locator('#wizard-btn-next').click();
     await expect(page.locator('#wizard-page-3')).toBeVisible();
     await page.locator('#eventModal [data-click="wizardGoTo"][data-step="5"]').click();
@@ -126,6 +128,7 @@ test('a style attribute in a description does not reach the page', async ({ page
     const created = await adminRequest(page, 'POST', '/api/admin/events', {
         title: `E2E Stil ${testInfo.project.name} ${Date.now()}`,
         status: 'active',
+        startDate: new Date(Date.now() + 7 * 86_400_000).toISOString(),
         accessMode: 'open',
         approvalMode: 'instant',
         description: 'Hallo <span style="color:red;position:fixed">rot</span> und **fett** <style>body{display:none}</style>'

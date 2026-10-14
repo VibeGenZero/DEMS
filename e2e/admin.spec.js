@@ -34,7 +34,9 @@ async function adminRequest(page, method, path, body) {
 /** Create an event of this test; the title is unique per project and run. */
 async function createEvent(page, testInfo, fields = {}) {
     const title = `E2E ${testInfo.project.name} ${testInfo.title.slice(0, 20)} ${Date.now()}`;
-    const created = await adminRequest(page, 'POST', '/api/admin/events', { title, status: 'draft', accessMode: 'open', approvalMode: 'instant', ...fields });
+    const created = await adminRequest(page, 'POST', '/api/admin/events', {
+        title, status: 'draft', accessMode: 'open', approvalMode: 'instant', startDate: new Date(Date.now() + 7 * 86_400_000).toISOString(), ...fields
+    });
     return { id: created.id, title };
 }
 

@@ -40,7 +40,7 @@ const FILLS = {
     '--on-warning': ['--warning-fill'],
     '--on-info': ['--info-fill'],
     '--on-danger': ['--danger-fill', '--danger-fill-hover'],
-    '--on-discord': ['--discord', '--discord-hover']
+    '--on-discord': ['--discord', '--discord-hover', '--discord-button-secondary', '--discord-button-success', '--discord-button-danger']
 };
 const AA_TEXT = 4.5;
 const AA_NON_TEXT = 3;
@@ -126,6 +126,17 @@ test('text on solid fills reaches AA contrast', async () => {
     const failures = [];
     for (const [text, fills] of Object.entries(FILLS)) {
         for (const fill of fills) failures.push(...tooLow(`${text} on ${fill}`, ratio(text, color(fill)), AA_TEXT));
+    }
+    assert.deepEqual(failures, []);
+});
+
+test('the Discord preview reaches AA contrast on both Discord surfaces', async () => {
+    const { color, ratio } = await loadPalette();
+    const failures = [];
+    for (const background of ['--discord-bg', '--discord-embed-bg']) {
+        for (const text of ['--discord-text', '--discord-heading', '--discord-muted', '--discord-link']) {
+            failures.push(...tooLow(`${text} on ${background}`, ratio(text, color(background)), AA_TEXT));
+        }
     }
     assert.deepEqual(failures, []);
 });
