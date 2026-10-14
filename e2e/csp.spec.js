@@ -128,6 +128,7 @@ test('a style attribute in a description does not reach the page', async ({ page
     const created = await adminRequest(page, 'POST', '/api/admin/events', {
         title: `E2E Stil ${testInfo.project.name} ${Date.now()}`,
         status: 'active',
+        startDate: new Date(Date.now() + 7 * 86_400_000).toISOString(),
         accessMode: 'open',
         approvalMode: 'instant',
         description: 'Hallo <span style="color:red;position:fixed">rot</span> und **fett** <style>body{display:none}</style>'
