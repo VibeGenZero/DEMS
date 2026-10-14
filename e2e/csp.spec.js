@@ -79,6 +79,8 @@ test('an admin walks through every page without one refused style', async ({ pag
     // A click beside the calendar closes it (Escape would close the whole dialog)
     await page.locator('#wizard-step-counter').click();
     await expect(page.locator('.flatpickr-calendar.open')).toHaveCount(0);
+    // An active event needs a start date; a draft may go on without one
+    await page.locator('#event-status').selectOption('draft');
     await page.locator('#wizard-btn-next').click();
     await expect(page.locator('#wizard-page-3')).toBeVisible();
     await page.locator('#eventModal [data-click="wizardGoTo"][data-step="5"]').click();

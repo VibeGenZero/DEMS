@@ -2527,6 +2527,14 @@ a.profile-history-row:hover {
   background: var(--accent-dark);
 }
 
+/* A checked step with problems (admin/wizard-marks.js); wins over active and completed */
+.wizard-step-item.has-error .wizard-step-bubble {
+  background: var(--danger-fill);
+  border-color: var(--danger-fill);
+  color: var(--on-danger);
+  box-shadow: none;
+}
+
 .wizard-page {
   animation: wizardFadeIn 0.25s ease;
 }

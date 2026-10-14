@@ -61,7 +61,8 @@ export function getFormFieldsFromBuilder() {
             field.options = row.querySelector('.ff-options').value.split(',').map(s => s.trim()).filter(Boolean);
         }
         return field;
-    }).filter(f => f.label);
+    });
+    // Empty labels stay in: the wizard check reports them (wizard-checks.js)
 }
 
 export const MAX_SLOTS_PER_EVENT = 10;

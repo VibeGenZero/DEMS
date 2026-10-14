@@ -70,7 +70,7 @@ const IMPORTANT_BUDGET = 29;
 // Emojis in index.html and the modules. Symbols are Bootstrap Icons (bi-*);
 // lower the number when a page drops some, never raise it. Emojis that users
 // type in (slot emojis) are data, not source, and do not count.
-const EMOJI_BUDGET = 30;
+const EMOJI_BUDGET = 23;
 const EMOJI = /\p{Extended_Pictographic}/gu;
 
 test('index.html loads Bootstrap, the tokens and the DEMS styles in this order', () => {
