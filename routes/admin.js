@@ -357,6 +357,10 @@ router.put('/events/:id/status', async (req, res) => {
 
         const eventSnap = await getDoc(doc(db, 'events', req.params.id));
         const oldEvent = eventSnap.exists() ? eventSnap.data() : {};
+        // Members plan by the start date -> an event without one stays a draft (D-10)
+        if (status === 'active' && !oldEvent.startDate) {
+            return res.status(400).json({ error: 'Aktive Events brauchen ein Startdatum.' });
+        }
 
         await updateDoc(doc(db, 'events', req.params.id), { status, updatedAt: new Date().toISOString() });
         await addAuditLog('UPDATE_EVENT_STATUS', req.session.user.id, `Changed status to ${status}`, req.params.id);

@@ -59,6 +59,15 @@ function validateEvent(req, res, next) {
         errors.push(`Status muss einer der folgenden sein: ${validStatuses.join(', ')}`);
     }
 
+    // Members plan by the start date; reminders and the overview need it too (D-10)
+    const { startDate, endDate } = req.body;
+    if ((status || 'active') === 'active' && !startDate) {
+        errors.push('Aktive Events brauchen ein Startdatum.');
+    }
+    if (startDate && endDate && new Date(endDate).getTime() < new Date(startDate).getTime()) {
+        errors.push('Das Ende liegt vor dem Start.');
+    }
+
     // Description length check
     if (req.body.description && typeof req.body.description === 'string' && req.body.description.length > 5000) {
         errors.push('Beschreibung darf maximal 5000 Zeichen lang sein.');
