@@ -62,7 +62,13 @@ export function fullRect(viewport) {
 const viewportSize = () => ({ width: document.documentElement.clientWidth, height: window.innerHeight });
 const boxOf = (rect) => ({ left: rect.left, top: rect.top, width: rect.width, height: rect.height });
 const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
-const play = (build) => new Promise(resolve => build(gsap.timeline({ onComplete: resolve })));
+// Play a timeline; while it runs, stopFlight() can cut it short (the promise still resolves)
+let stopRunning = null;
+const play = (build) => new Promise((resolve) => {
+    const timeline = gsap.timeline({ onComplete: () => { stopRunning = null; resolve(); } });
+    stopRunning = () => { stopRunning = null; timeline.kill(); resolve(); };
+    build(timeline);
+});
 // The overview content scales back; the section itself runs the CSS section fade
 const overviewContent = () => document.getElementById('events-section')?.firstElementChild || null;
 
@@ -168,6 +174,7 @@ export async function openEventCard(card, event = {}) {
     }
 
     const o = FLIGHT_OPEN;
+    const opened = flight;
     await play(tl => {
         tl.to(parts.scrim, { opacity: SCRIM_OPACITY, duration: o.dim, ease: 'none' }, 0);
         if (content) tl.to(content, { scale: RECEDE_SCALE, duration: o.recede, ease: 'power2.out' }, 0);
@@ -177,6 +184,12 @@ export async function openEventCard(card, event = {}) {
         tl.to(parts.face, { opacity: 0, duration: o.faceOut, ease: 'none' }, o.growAt);
     });
 
+    // Someone went elsewhere meanwhile (navbar, back button): their way wins
+    if (flight !== opened || opened.aborted) {
+        if (flight === opened) endFlight();
+        return;
+    }
+
     // The sheet covers the window: show the real page underneath, then let it through
     history.pushState(null, '', `#event/${eventId}`);
     window.scrollTo(0, 0);
@@ -184,6 +197,11 @@ export async function openEventCard(card, event = {}) {
     if (content) gsap.set(content, { clearProps: 'transform,transformOrigin' });
     await play(tl => tl.to(parts.layer, { opacity: 0, duration: o.contentIn, ease: 'power2.out' }));
     gsap.set(parts.layer, { clearProps: 'opacity' });
+    // Left for another page while the layer faded: nothing to fly home to
+    if (opened.aborted) {
+        endFlight();
+        return;
+    }
     clearLayer();
     phase = null;
 }
@@ -196,7 +214,14 @@ export async function openEventCard(card, event = {}) {
  * @returns {boolean} -> True when the flight home has begun (finish it with landCardFlight).
  */
 export function beginCardClose(route) {
-    if (!flight || phase) return false;
+    if (!flight) return false;
+    // A route change while the card still flies open, other than the flight's own: stop the flight
+    if (phase === 'opening' && window.location.hash !== `#event/${flight.eventId}`) {
+        flight.aborted = true;
+        if (stopRunning) stopRunning();
+        return false;
+    }
+    if (phase) return false;
     if (route !== 'events') {
         endFlight();
         return false;

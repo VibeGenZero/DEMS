@@ -8,6 +8,8 @@ import { state } from '../core/state.js';
 
 const EXPIRED_HTML = '<span class="countdown-expired"><i class="bi bi-clock-history me-1"></i>Event hat bereits begonnen</span>';
 const UNITS = ['Tage', 'Std', 'Min', 'Sek'];
+// The running timer per countdown element: a page drawn again in place starts one, not a second
+const runningTimers = new WeakMap();
 
 /**
  * Time left until a date.
@@ -92,6 +94,8 @@ function flipDigit(cell, char) {
  * @returns {number|undefined} -> The interval id while it runs.
  */
 export function startCountdown(element, targetDate) {
+    if (runningTimers.has(element)) clearInterval(runningTimers.get(element));
+    runningTimers.delete(element);
     let timer; // Declare first to avoid TDZ
     let shown = null;
     const update = () => {
@@ -124,6 +128,7 @@ export function startCountdown(element, targetDate) {
     // Run once immediately
     if (update()) {
         timer = setInterval(update, 1000);
+        runningTimers.set(element, timer);
         state.countdownTimers.push(timer);
         return timer;
     }

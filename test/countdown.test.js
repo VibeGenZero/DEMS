@@ -34,3 +34,20 @@ test('an event that has begun says so', async () => {
     const { renderCountdownHTML } = await loadCountdown();
     assert.match(renderCountdownHTML(null), /Event hat bereits begonnen/);
 });
+
+test('a countdown started again on the same element keeps one timer', async () => {
+    const running = new Set();
+    let nextId = 1;
+    const context = vm.createContext({
+        setInterval: () => { const id = nextId++; running.add(id); return id; },
+        clearInterval: (id) => { running.delete(id); }
+    });
+    const modules = await loadFrontendModules(path.join(REPO_ROOT, 'public', 'js', 'events', 'countdown.js'), context);
+    const { startCountdown } = modules.get('countdown.js');
+    const element = { innerHTML: '', classList: { remove() {} }, querySelectorAll: () => [] };
+    const future = new Date(Date.now() + 3 * 86_400_000).toISOString();
+    // The event page draws itself again after a registration and starts the countdown anew
+    startCountdown(element, future);
+    startCountdown(element, future);
+    assert.equal(running.size, 1);
+});

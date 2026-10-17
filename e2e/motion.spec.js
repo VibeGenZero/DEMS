@@ -414,3 +414,84 @@ test('registering celebrates in place', async ({ page, browser }, testInfo) => {
         await adminContext.close();
     }
 });
+
+test('a navbar click during the flight wins and leaves no flight behind', async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== 'desktop', 'the folded menu on the phone needs two clicks');
+    const errors = watchErrors(page);
+    await loginAs(page, 'member');
+    await expect(overviewCard(page)).toBeVisible();
+    await overviewCard(page).click();
+    await expect(flightLayer(page)).toBeVisible();
+    await page.waitForTimeout(250);
+    await page.locator('#main-navbar .nav-link[data-section="polls-section"]').click();
+    await expect(page).toHaveURL(/#polls$/);
+    await expect(page.locator('#polls-section')).toBeVisible();
+    await expect(flightLayer(page)).toBeHidden();
+    await page.waitForTimeout(1200);
+    await expect(page).toHaveURL(/#polls$/);
+    await expect(page.locator('#event-detail-section')).toBeHidden();
+
+    // Back to the overview: no flight comes back from the dead
+    await page.evaluate(() => {
+        const layer = document.getElementById('card-flight');
+        window.flightSeen = false;
+        new MutationObserver(() => {
+            if (!layer.classList.contains('is-hidden') && layer.style.display !== 'none') window.flightSeen = true;
+        }).observe(layer, { attributes: true });
+    });
+    await page.locator('#main-navbar .nav-link[data-section="events-section"]').click();
+    await expect(overviewCard(page)).toBeVisible();
+    await page.waitForTimeout(600);
+    expect(await page.evaluate(() => window.flightSeen)).toBe(false);
+    await expect(overviewCard(page)).not.toHaveClass(/is-flying/);
+    expect(errors).toEqual([]);
+});
+
+test('leaving the page while the flight fades out ends the flight', async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== 'desktop', 'the folded menu on the phone needs two clicks');
+    await loginAs(page, 'member');
+    await expect(overviewCard(page)).toBeVisible();
+    // A slow event answer keeps the flight between "URL changed" and "layer faded"
+    await page.route('**/api/events/dev-event-open', async (route) => {
+        await new Promise(resolve => setTimeout(resolve, 1500));
+        await route.continue();
+    });
+    await overviewCard(page).click();
+    // The URL turns to the event when the sheet covers the window; the page loads, then the layer fades
+    await expect(page).toHaveURL(/#event\/dev-event-open$/);
+    await page.locator('#main-navbar .nav-link[data-section="polls-section"]').click();
+    await expect(page).toHaveURL(/#polls$/);
+    await expect(flightLayer(page)).toBeHidden();
+    await page.evaluate(() => {
+        const layer = document.getElementById('card-flight');
+        window.flightSeen = false;
+        new MutationObserver(() => {
+            if (!layer.classList.contains('is-hidden') && layer.style.display !== 'none') window.flightSeen = true;
+        }).observe(layer, { attributes: true });
+    });
+    await page.locator('#main-navbar .nav-link[data-section="events-section"]').click();
+    await expect(overviewCard(page)).toBeVisible();
+    await page.waitForTimeout(600);
+    expect(await page.evaluate(() => window.flightSeen)).toBe(false);
+});
+
+test('the wizard opens with the glider under its active tab', async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== 'desktop', 'desktop first; the phone runs the same code');
+    const errors = watchErrors(page);
+    await loginAs(page, 'admin');
+    await navigate(page, 'admin');
+    await page.locator('[data-click="showCreateEventModal"]').click();
+    await waitForDialog(page, '#eventModal');
+    const tabs = page.locator('#wizard-mode');
+    const active = tabs.locator('.nav-link.active');
+    await expect(active).toContainText('Bearbeiten');
+    // Either the glider stands under the tab, or the tab keeps its own surface: never neither
+    await expect.poll(async () => {
+        const glider = await tabs.locator('.nav-glider').boundingBox().catch(() => null);
+        const box = await active.boundingBox();
+        const ownSurface = await active.evaluate(link => getComputedStyle(link).backgroundColor !== 'rgba(0, 0, 0, 0)');
+        const gliderUnder = Boolean(glider) && glider.width > 0 && Math.abs(glider.x - box.x) <= 2 && Math.abs(glider.width - box.width) <= 2;
+        return gliderUnder || ownSurface;
+    }).toBe(true);
+    expect(errors).toEqual([]);
+});

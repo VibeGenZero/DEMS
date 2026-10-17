@@ -77,12 +77,14 @@ export function glideTabs(container) {
         glider.setAttribute('aria-hidden', 'true');
         container.prepend(glider);
     }
-    container.classList.add('has-glider');
     const active = container.querySelector('.nav-link.active');
-    if (!active) {
+    // Not laid out yet (a closed dialog, a hidden section): the tab keeps its own surface until it can be measured
+    if (!active || active.offsetWidth === 0) {
+        container.classList.remove('has-glider');
         toggleElement(glider, false);
         return;
     }
+    container.classList.add('has-glider');
     showElement(glider);
     const target = { x: active.offsetLeft, y: active.offsetTop, width: active.offsetWidth, height: active.offsetHeight };
     const from = lastTabBox.get(container);
@@ -100,6 +102,10 @@ export function glideTabs(container) {
  */
 export function initTabGlider(root) {
     root.addEventListener('shown.bs.tab', (event) => glideTabs(event.target?.closest?.('.nav-pills') || null));
+    // Tabs drawn inside a closed dialog can be measured once it shows
+    root.addEventListener('shown.bs.modal', (event) => {
+        for (const tabs of event.target?.querySelectorAll?.('.nav-pills') || []) glideTabs(tabs);
+    });
     window.addEventListener('resize', () => placeNavMarker(false));
     // A font that arrives late changes the width of the links
     if (root.fonts && typeof root.fonts.addEventListener === 'function') root.fonts.addEventListener('loadingdone', () => placeNavMarker(false));
