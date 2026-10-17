@@ -1618,6 +1618,23 @@ a.profile-history-row:hover {
   }
 }
 
+/* Less motion asked for: the sections only fade, briefly */
+@media (prefers-reduced-motion: reduce) {
+  .app-section {
+    animation: sectionFadeInCalm 0.2s ease forwards;
+  }
+}
+
+@keyframes sectionFadeInCalm {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
 /* Pulse glow for live countdown */
 @keyframes pulseGlow {
 
