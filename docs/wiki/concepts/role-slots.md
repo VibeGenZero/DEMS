@@ -37,7 +37,7 @@ Normal events use `utils/capacity.js`: places = 1 + guests + open invitations; p
 | Switch own slot (free slots only) | web "Slot wechseln", Discord "Zu … wechseln" | `switchOwnSlot` |
 | Move (admin, may overbook) | admin registration list | `moveRegistrationToSlot`, audit `MOVE_REGISTRATION_SLOT` |
 | Unregister | web, `/unregister`, Discord "Abmelden" | `unregisterUserFromEvent` |
-| Promote | after unregister, reject, switch, move, capacity increase, account deletion | `promoteFromWaitlist` / `promoteFromWaitlistLocked` + `announcePromotions` |
+| Promote | after unregister, reject, switch, move, capacity increase, account deletion; not once the event is over | `promoteFromWaitlist` / `promoteFromWaitlistLocked` + `announcePromotions` |
 
 ## Discord
 

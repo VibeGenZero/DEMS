@@ -194,3 +194,27 @@ test('a running event still takes registrations up to its end', async () => {
     const eventId = await createEvent({ startDate: new Date(Date.now() - 60 * MINUTE).toISOString(), endDate: new Date(Date.now() + MINUTE).toISOString() });
     assert.equal((await register(eventId, 'Pünktlich')).ok, true);
 });
+
+test('nobody moves up into an event that is over', async () => {
+    const MINUTE = 60 * 1000;
+    const ended = { startDate: new Date(Date.now() - 180 * MINUTE).toISOString(), endDate: new Date(Date.now() - MINUTE).toISOString() };
+    const entry = (eventId, name, status, slotId) => setDoc(doc(db, 'registrations', `${eventId}-${name}`), {
+        eventId, userId: user(name).id, userName: name, status, slotId: status === 'accepted' ? slotId : null, preferredSlotId: slotId,
+        altSlotIds: [], guests: [], pendingGuests: [], formAnswers: {}, source: 'web', createdAt: new Date().toISOString()
+    });
+
+    // Unregistering after the end frees a place, but the waitlist stays where it is
+    const eventId = await createEvent({ ...ended, maxParticipants: 1 });
+    await entry(eventId, 'Ana', 'accepted', null);
+    await entry(eventId, 'Ben', 'waitlisted', null);
+    assert.equal((await unregisterUserFromEvent({ eventId, userId: user('Ana').id })).ok, true);
+    assert.equal((await registrationOf(eventId, 'Ben')).status, 'waitlisted');
+
+    // An admin moving someone out of a full slot after the end promotes nobody either
+    const slotEventId = await createEvent({ ...ended, slots: SLOTS, maxParticipants: 4 });
+    await entry(slotEventId, 'Ana', 'accepted', 'tank');
+    await entry(slotEventId, 'Ben', 'waitlisted', 'tank');
+    const ana = await registrationOf(slotEventId, 'Ana');
+    assert.equal((await moveRegistrationToSlot({ registrationId: ana.id, slotId: 'heal' })).ok, true);
+    assert.equal((await registrationOf(slotEventId, 'Ben')).status, 'waitlisted');
+});

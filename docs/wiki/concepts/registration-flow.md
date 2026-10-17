@@ -71,4 +71,4 @@ DM texts come from `event.customBotMessages[status]`, else `botMessages/template
 ## Gotchas
 
 - Registrations of one event are serialized by `withEventLock` (in memory, single process); a second server process would need a real transaction.
-- Promotion moves up every waitlisted registration that still fits (guests counted), oldest first.
+- Promotion moves up every waitlisted registration that still fits (guests counted), oldest first — but never once the event is over (`promoteFromWaitlistLocked` returns no promotion, W-01).

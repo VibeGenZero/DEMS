@@ -13,6 +13,7 @@ const ARCHIVE_DELAY_MS = 24 * 60 * 60 * 1000;
 const ARCHIVE_INTERVAL_MS = 5 * 60 * 1000;
 
 let archiveTimer = null;
+let schedulerGeneration = 0;
 
 /**
  * Whether the scheduler archives an event now.
@@ -55,25 +56,37 @@ async function archiveEndedEvents({ now = new Date() } = {}) {
 }
 
 /**
- * Start the archive scheduler: one run now, then every 5 minutes.
+ * Start the archive scheduler: one run once `waitFor` has settled, then
+ * every 5 minutes. The server passes the bot start, because an archive
+ * refreshes the Discord announcements and that only works with a ready bot;
+ * without the wait the catch-up run at start would leave their buttons.
  *
+ * @param {Object} [options] -> Start options.
+ * @param {Promise<*>} [options.waitFor] -> Settles when the first run may begin.
  * @returns {void}
  */
-function startArchiveScheduler() {
+function startArchiveScheduler({ waitFor = Promise.resolve() } = {}) {
     stopArchiveScheduler();
+    const generation = schedulerGeneration;
     const run = () => archiveEndedEvents().catch(err => console.error('Archive scheduler failed:', err.message));
-    run();
-    archiveTimer = setInterval(run, ARCHIVE_INTERVAL_MS);
-    if (typeof archiveTimer.unref === 'function') archiveTimer.unref();
-    console.log('🗄️ Archive scheduler started (checks every 5 min)');
+    const begin = () => {
+        // Stopped or started again while waiting
+        if (generation !== schedulerGeneration) return;
+        run();
+        archiveTimer = setInterval(run, ARCHIVE_INTERVAL_MS);
+        if (typeof archiveTimer.unref === 'function') archiveTimer.unref();
+        console.log('🗄️ Archive scheduler started (checks every 5 min)');
+    };
+    Promise.resolve(waitFor).then(begin, begin);
 }
 
 /**
- * Stop the archive scheduler.
+ * Stop the archive scheduler, also before its first run.
  *
  * @returns {void}
  */
 function stopArchiveScheduler() {
+    schedulerGeneration++;
     if (archiveTimer) clearInterval(archiveTimer);
     archiveTimer = null;
 }

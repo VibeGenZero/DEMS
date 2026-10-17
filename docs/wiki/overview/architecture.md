@@ -51,5 +51,5 @@ flowchart LR
 1. `server.js` loads `.env` (dotenv, quiet) and `dev/mockMode.js` (forces the mock environment when `DEV_MOCK=true`).
 2. Requiring `bot.js` loads `firebaseAdmin.js`, which picks Firestore or SQLite.
 3. Express starts listening (`PORT`, default 3000); a listen error exits with code 1.
-4. `startBot(DISCORD_BOT_TOKEN)` logs the bot in (skipped without token), `startReminderScheduler()` starts the 5-minute reminder loop.
+4. `startBot(DISCORD_BOT_TOKEN)` logs the bot in (skipped without token), `startReminderScheduler()` starts the 5-minute reminder loop; the poll and archive schedulers follow (the archive's first run waits for `whenBotSettled()`).
 5. `SIGINT`/`SIGTERM` → `gracefulShutdown`: close HTTP server, `stopBot()`, exit (forced after 10 s).

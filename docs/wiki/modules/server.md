@@ -18,7 +18,7 @@ see_also: [request-lifecycle, security, configuration]
 2. Refuse to start without `SESSION_SECRET` (or with the placeholder `your_random_session_secret_here`) → exit 1.
 3. Register the middleware chain → see [request-lifecycle](../overview/request-lifecycle.md).
 4. Mount routers: `/auth` (+ `dev/devAuth` first in mock mode), `/api/events`, `/api/polls`, `/api/admin`, `/api/user`.
-5. Start: `app.listen(PORT)`, `startBot(DISCORD_BOT_TOKEN)`, `startReminderScheduler()`, `startPollScheduler()` (date poll deadlines), `startArchiveScheduler()` (archives active events 24 h after their end, see [event-lifecycle](../concepts/event-lifecycle.md)); both stopped in `gracefulShutdown`.
+5. Start: `app.listen(PORT)`, `startBot(DISCORD_BOT_TOKEN)`, `startReminderScheduler()`, `startPollScheduler()` (date poll deadlines), `startArchiveScheduler({ waitFor: whenBotSettled() })` (archives active events 24 h after their end; the first run waits until the bot is ready or will not start, see [event-lifecycle](../concepts/event-lifecycle.md)); both stopped in `gracefulShutdown`.
 6. Graceful shutdown on `SIGINT`/`SIGTERM` (close server → `stopBot()` → exit; forced exit after 10 s).
 
 ## Endpoints defined in server.js

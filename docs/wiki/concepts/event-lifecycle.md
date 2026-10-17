@@ -34,7 +34,7 @@ Visibility: `GET /api/events` returns only `active` (admins may pass `?status=`)
 ## End of an event (W-01)
 
 - The end is `endDate`, else start + 2 h (`eventEndTime` in `utils/eventListing.js`, `eventEnd` in `public/js/events/cards.js`). An `endDate` before the start counts as missing; an event without a start has no end and never counts as over.
-- From the end on, an event takes no registration and no slot change: web and Discord answer "Das Event ist schon vorbei." (`event_ended`, see [registration-flow](registration-flow.md)), the Discord announcement keeps only "Zum Event", the event page shows "Dieses Event ist vorbei." instead of the form and the countdown. Registered members still see their own status.
+- From the end on, an event takes no registration and no slot change: web and Discord answer "Das Event ist schon vorbei." (`event_ended`, see [registration-flow](registration-flow.md)), the Discord announcement keeps only "Zum Event", the event page shows "Dieses Event ist vorbei." instead of the form and the countdown. Registered members still see their own status. Unregistering stays possible, but nobody moves up from the waitlist any more (no promotion after the end).
 - 24 h after the end the archive scheduler sets `archived` (table row above). It runs once at server start, so events that ended while the server was down are caught up, then every 5 minutes — see [reminders-presence](reminders-presence.md). Until then the admin table shows the event as "Vorbei" with the main action "Archivieren".
 - Events that never become `active` (drafts, cancelled) are not touched; an event that is already archived stays archived.
 

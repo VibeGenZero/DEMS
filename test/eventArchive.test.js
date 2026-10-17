@@ -12,7 +12,7 @@ process.env.DEV_SQLITE_PATH = path.join(tmpDir, 'archive.sqlite');
 
 const bot = require('../bot');
 const { db, collection, doc, getDoc, getDocs, setDoc } = require('../firebaseAdmin');
-const { isDueForArchive, archiveEndedEvents } = require('../utils/eventArchive');
+const { isDueForArchive, archiveEndedEvents, startArchiveScheduler, stopArchiveScheduler } = require('../utils/eventArchive');
 
 after(async () => {
     await bot.client.destroy();
@@ -76,4 +76,37 @@ test('the scheduler runs on events without a date', async () => {
     const dateless = await createEvent({});
     assert.equal(await archiveEndedEvents({ now: NOW }), 0);
     assert.equal(await statusOf(dateless), 'active');
+});
+
+const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+const longAgo = () => ({ startDate: new Date(Date.now() - 50 * HOUR).toISOString(), endDate: new Date(Date.now() - 48 * HOUR).toISOString() });
+async function waitForStatus(id, status) {
+    for (let attempt = 0; attempt < 50; attempt++) {
+        if (await statusOf(id) === status) return true;
+        await sleep(20);
+    }
+    return false;
+}
+
+test('the scheduler waits for the bot before its first run', async () => {
+    // Announcements can only be refreshed once the bot is ready
+    const due = await createEvent(longAgo());
+    let botReady;
+    startArchiveScheduler({ waitFor: new Promise(resolve => { botReady = resolve; }) });
+    await sleep(100);
+    assert.equal(await statusOf(due), 'active');
+
+    botReady(true);
+    assert.equal(await waitForStatus(due, 'archived'), true);
+    stopArchiveScheduler();
+});
+
+test('a scheduler stopped before the bot is ready never runs', async () => {
+    const due = await createEvent(longAgo());
+    let botReady;
+    startArchiveScheduler({ waitFor: new Promise(resolve => { botReady = resolve; }) });
+    stopArchiveScheduler();
+    botReady(true);
+    await sleep(100);
+    assert.equal(await statusOf(due), 'active');
 });

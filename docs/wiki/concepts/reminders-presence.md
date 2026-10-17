@@ -25,7 +25,7 @@ see_also: [event-lifecycle, discord-integration]
 
 ## Archive scheduler (`utils/eventArchive.js`, W-01)
 
-- `startArchiveScheduler()` is started by `server.js` (independent of the bot and its settings) and stopped in the graceful shutdown. It runs `archiveEndedEvents()` right away, then every 5 min (`ARCHIVE_INTERVAL_MS`, timer `unref`'d).
+- `startArchiveScheduler({ waitFor: whenBotSettled() })` is started by `server.js` (independent of the bot settings) and stopped in the graceful shutdown. Its first run waits until the bot is ready (the refresh of the archived announcements needs it) or will not start (no token, failed login, 2 min without the ready event), then it runs `archiveEndedEvents()` every 5 min (`ARCHIVE_INTERVAL_MS`, timer `unref`'d).
 - `isDueForArchive(event, now)`: `status === 'active'` and `now >= end + 24 h` (`ARCHIVE_DELAY_MS`; end rule of `eventEndTime`). Each due event gets `status: 'archived'`, an audit entry `AUTO_ARCHIVE_EVENT` by `system` and `notifyRegistrationsChanged` (announcement refresh); an error on one event is logged and the others go on. The log line `🗄️ Archived N ended event(s)` appears only when N > 0.
 - Rules: [event-lifecycle](event-lifecycle.md).
 

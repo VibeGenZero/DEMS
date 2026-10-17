@@ -82,6 +82,10 @@ const client = new Client({
 });
 
 let isReady = false;
+// Settles with true once the bot is ready, with false when it will not start
+let settleBotStart;
+const botStartSettled = new Promise(resolve => { settleBotStart = resolve; });
+const BOT_SETTLE_TIMEOUT_MS = 2 * 60 * 1000;
 let botStartedAt = null;
 let dmsSentCount = 0;
 let commandsProcessedCount = 0;
@@ -92,6 +96,7 @@ client.once(Events.ClientReady, async () => {
     debugLog('bot.ready', { tag: client.user.tag, guildId: process.env.DISCORD_GUILD_ID });
     isReady = true;
     botStartedAt = new Date();
+    settleBotStart(true);
     await registerSlashCommands();
     logBotInviteUrl();
     await applyBotSettings();
@@ -2286,6 +2291,7 @@ function logBotInviteUrl() {
 async function startBot(token) {
     if (!token) {
         console.warn('⚠️ No bot token provided, bot will not start.');
+        settleBotStart(false);
         return false;
     }
     try {
@@ -2293,8 +2299,25 @@ async function startBot(token) {
         return true;
     } catch (err) {
         console.error('❌ Bot login fehlgeschlagen:', err.message);
+        settleBotStart(false);
         return false;
     }
+}
+
+/**
+ * Wait until the bot is ready, or until it is clear that it will not be:
+ * no token, a failed login, or no ready event within two minutes.
+ *
+ * @param {number} [timeoutMs] -> How long to wait for the ready event.
+ * @returns {Promise<boolean>} -> True once ready, else false.
+ */
+function whenBotSettled(timeoutMs = BOT_SETTLE_TIMEOUT_MS) {
+    let timer;
+    const timeout = new Promise(resolve => {
+        timer = setTimeout(() => resolve(false), timeoutMs);
+        if (typeof timer.unref === 'function') timer.unref();
+    });
+    return Promise.race([botStartSettled, timeout]).finally(() => clearTimeout(timer));
 }
 
 /**
@@ -2920,6 +2943,7 @@ async function getRunningEvents() {
 module.exports = {
     client,
     startBot,
+    whenBotSettled,
     stopBot,
     sendDM,
     sendChannelMessage,

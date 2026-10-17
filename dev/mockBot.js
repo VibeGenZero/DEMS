@@ -87,6 +87,11 @@ async function startBot() {
     return true;
 }
 
+// The simulated bot is ready at once
+async function whenBotSettled() {
+    return true;
+}
+
 // ── Reading ──────────────────────────────────────────────────────────────
 
 async function getGuildName() {
@@ -287,6 +292,7 @@ async function createScheduledEvent(event) {
 
 module.exports = {
     startBot,
+    whenBotSettled,
     getGuildName,
     getGuildIconUrl,
     getGuildRoles,

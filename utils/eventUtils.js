@@ -6,6 +6,7 @@ const {
 } = require('./slotService');
 const { withEventLock } = require('./eventLock');
 const { notifyRegistrationsChanged } = require('./announcementRefresh');
+const { isEventOver } = require('./eventListing');
 
 /**
  * Move waitlisted registrations up while places are free.
@@ -33,12 +34,15 @@ async function promoteFromWaitlist(eventId, event) {
  *
  * Slot events fill free slots with the oldest matching entries; normal
  * events move up everyone whose places (including guests) still fit.
+ * Nobody moves up once the event is over: a place in it is worth nothing
+ * then, and the DM, role and channel access would only confuse (W-01).
  *
  * @param {string} eventId -> The event document ID.
  * @param {Object} event -> The event document data.
  * @returns {Promise<Array<Object>>} -> `[{ registrationId, userId, status, slotId }]`.
  */
 async function promoteFromWaitlistLocked(eventId, event) {
+    if (isEventOver(event)) return [];
     const registrations = await loadEventRegistrations(eventId);
     const picked = hasSlots(event)
         ? pickWaitlistPromotions(getSlots(event), registrations)
