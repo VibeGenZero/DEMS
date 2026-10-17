@@ -336,3 +336,37 @@ test('the admin tab glider follows the tab', async ({ page }, testInfo) => {
     expect(await tabs.locator('.nav-link.active').evaluate(link => getComputedStyle(link).backgroundColor)).toBe('rgba(0, 0, 0, 0)');
     expect(errors).toEqual([]);
 });
+
+// ── Countdown ──────────────────────────────────────────────────────────────
+
+test('the countdown flips only the digits that change', async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== 'desktop', 'desktop first; the phone runs the same code');
+    const errors = watchErrors(page);
+    await loginAs(page, 'member');
+    await page.evaluate(() => { window.location.hash = '#event/dev-event-open'; });
+    const cells = page.locator('#detail-countdown-area .countdown-digit');
+    await expect(cells.first()).toBeVisible();
+    // Note whether a digit ever flips (the new one comes in as .countdown-digit-next)
+    await page.evaluate(() => {
+        window.flipped = 0;
+        new MutationObserver((records) => {
+            for (const record of records) {
+                for (const node of record.addedNodes) if (node.classList && node.classList.contains('countdown-digit-next')) window.flipped += 1;
+            }
+        }).observe(document.getElementById('detail-countdown-area'), { childList: true, subtree: true });
+    });
+    const count = await cells.count();
+    const before = await cells.allTextContents();
+    await page.waitForTimeout(1600);
+    const after = await cells.allTextContents();
+    expect(after.length).toBe(count);
+    const changed = after.filter((digit, i) => digit !== before[i]).length;
+    expect(changed).toBeGreaterThan(0);
+    // Each flip touched one cell; seconds tick, so not every digit changed
+    expect(changed).toBeLessThan(count);
+    expect(await page.evaluate(() => window.flipped)).toBeGreaterThan(0);
+    // Once landed every cell holds one digit again
+    await expect.poll(() => page.locator('#detail-countdown-area .countdown-digit-next').count()).toBe(0);
+    expect(await page.locator('#detail-countdown-area .countdown-digit > span').count()).toBe(count);
+    expect(errors).toEqual([]);
+});
