@@ -33,12 +33,16 @@ import './polls/polls.js';
 import { initActions } from './core/actions.js';
 import { createParticles, finishLoading, runBootAnimation } from './core/boot.js';
 import { initDialogMotion } from './core/motion.js';
+import { initCardFlight } from './events/card-flight.js';
 import { checkUpdates } from './core/updates.js';
 import { showUserData } from './pages/info.js';
 
 initActions(document);
 // Dialogs and toasts only open once the page is there
-document.addEventListener('DOMContentLoaded', () => initDialogMotion(document));
+document.addEventListener('DOMContentLoaded', () => {
+    initDialogMotion(document);
+    initCardFlight(document);
+});
 
 document.addEventListener('DOMContentLoaded', () => {
     const lastBoot = localStorage.getItem('dems_boot_ts');

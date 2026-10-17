@@ -15,6 +15,7 @@ export const state = {
     selectedSlotId: null,
     selectedAltSlotIds: [],
     detailEventId: null,
+    flyingEventId: null, // Event whose overview card is flying (events/card-flight.js)
     currentPoll: null,
     pendingPollDecision: null,
     botStatusRefreshInterval: null,

@@ -25,3 +25,167 @@ test('a dialog springs open and its buttons work at once', async ({ page }, test
     await expect(dialog).toBeHidden();
     expect(errors).toEqual([]);
 });
+
+// ── Card flight ────────────────────────────────────────────────────────────
+
+const OPEN_TITLE = 'Community-Spieleabend';
+const overviewCard = (page) => page.locator('#events-grid .event-card', { hasText: OPEN_TITLE });
+const flightLayer = (page) => page.locator('#card-flight');
+
+/** Open the card by a click and wait until its page stands alone. */
+async function flyOpen(page) {
+    await overviewCard(page).click();
+    await expect(page).toHaveURL(/#event\/dev-event-open$/);
+    await expect(page.locator('#event-detail-section')).toBeVisible();
+    await expect(flightLayer(page)).toBeHidden();
+}
+
+const near = (a, b) => Math.abs(a.x - b.x) <= 2 && Math.abs(a.y - b.y) <= 2 && Math.abs(a.width - b.width) <= 2 && Math.abs(a.height - b.height) <= 2;
+
+test('a card flies open into its event page', async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== 'desktop', 'desktop first; the phone runs the same code');
+    const errors = watchErrors(page);
+    await loginAs(page, 'member');
+    await expect(overviewCard(page)).toBeVisible();
+    await overviewCard(page).click();
+    await expect(flightLayer(page)).toBeVisible();
+    await expect(page).toHaveURL(/#event\/dev-event-open$/);
+    await expect(page.locator('#event-detail-section')).toBeVisible();
+    await expect(flightLayer(page)).toBeHidden();
+    expect(errors).toEqual([]);
+});
+
+for (const way of ['Esc', 'the back button', '"Zurück zur Übersicht"']) {
+    test(`${way} flies the card home`, async ({ page }, testInfo) => {
+        test.skip(testInfo.project.name !== 'desktop', 'desktop first; the phone runs the same code');
+        const errors = watchErrors(page);
+        await loginAs(page, 'member');
+        await expect(overviewCard(page)).toBeVisible();
+        // The cards appear one after the other; measure once this one rests
+        await expect.poll(async () => isIdentity(await transformOf(overviewCard(page)))).toBe(true);
+        const before = await overviewCard(page).boundingBox();
+        await flyOpen(page);
+
+        if (way === 'Esc') await page.keyboard.press('Escape');
+        else if (way === 'the back button') await page.goBack();
+        else await page.locator('[data-click="closeEventPage"]').click();
+
+        // The URL changes at once, the flight starts with the hashchange after it
+        await expect(flightLayer(page)).toBeVisible();
+        await expect(page).toHaveURL(/#events$/);
+        await expect(flightLayer(page)).toBeHidden();
+        await expect(overviewCard(page)).not.toHaveClass(/is-flying/);
+        await expect.poll(async () => near(await overviewCard(page).boundingBox(), before)).toBe(true);
+        expect(errors).toEqual([]);
+    });
+}
+
+test('a ctrl click opens the event in a new tab', async ({ page, context }, testInfo) => {
+    test.skip(testInfo.project.name !== 'desktop', 'no modifier keys on the phone');
+    await loginAs(page, 'member');
+    await expect(overviewCard(page)).toBeVisible();
+    const [tab] = await Promise.all([context.waitForEvent('page'), overviewCard(page).click({ modifiers: ['Control'] })]);
+    await tab.waitForLoadState();
+    expect(tab.url()).toMatch(/#event\/dev-event-open$/);
+    await expect(page).toHaveURL(/#events$/);
+    await expect(flightLayer(page)).toBeHidden();
+});
+
+test('with reduced motion the event page opens without a flight', async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== 'desktop', 'desktop first; the phone runs the same code');
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await loginAs(page, 'member');
+    await expect(overviewCard(page)).toBeVisible();
+    await page.evaluate(() => {
+        const layer = document.getElementById('card-flight');
+        window.flightSeen = false;
+        new MutationObserver(() => {
+            if (!layer.classList.contains('is-hidden') && layer.style.display !== 'none') window.flightSeen = true;
+        }).observe(layer, { attributes: true });
+    });
+    await overviewCard(page).click();
+    await expect(page).toHaveURL(/#event\/dev-event-open$/);
+    await expect(page.locator('#event-detail-section')).toBeVisible();
+    expect(await page.evaluate(() => window.flightSeen)).toBe(false);
+});
+
+test('Esc while typing a comment does not close the page', async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== 'desktop', 'no Esc key on the phone');
+    await loginAs(page, 'member');
+    await expect(overviewCard(page)).toBeVisible();
+    await flyOpen(page);
+    await page.locator('#comment-input').click();
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(400);
+    await expect(page).toHaveURL(/#event\/dev-event-open$/);
+    await expect(flightLayer(page)).toBeHidden();
+});
+
+test('a slow overview still lands or fades the card', async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== 'desktop', 'desktop first; the phone runs the same code');
+    const errors = watchErrors(page);
+    await loginAs(page, 'member');
+    await expect(overviewCard(page)).toBeVisible();
+    await flyOpen(page);
+    // Only the way back is slow
+    await page.route('**/api/events?upcoming=1*', async (route) => {
+        await new Promise(resolve => setTimeout(resolve, 2500));
+        await route.continue();
+    });
+    await page.keyboard.press('Escape');
+    await expect(flightLayer(page)).toBeVisible();
+    await expect(flightLayer(page)).toBeHidden({ timeout: 3000 });
+    await expect(page).toHaveURL(/#events$/);
+    await expect(overviewCard(page)).not.toHaveClass(/is-flying/);
+    expect(errors).toEqual([]);
+});
+
+test('a double click flies only once', async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== 'desktop', 'no double click on the phone');
+    const errors = watchErrors(page);
+    await loginAs(page, 'member');
+    await expect(overviewCard(page)).toBeVisible();
+    await page.evaluate(() => {
+        window.mostSheets = 0;
+        const count = () => {
+            window.mostSheets = Math.max(window.mostSheets, document.querySelectorAll('.card-flight-sheet').length);
+            requestAnimationFrame(count);
+        };
+        count();
+    });
+    await overviewCard(page).dblclick();
+    await expect(page).toHaveURL(/#event\/dev-event-open$/);
+    await expect(page.locator('#event-detail-section')).toBeVisible();
+    await expect(flightLayer(page)).toBeHidden();
+    expect(await page.evaluate(() => window.mostSheets)).toBe(1);
+    expect(errors).toEqual([]);
+});
+
+test('a resized window lands the card at its new place', async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== 'desktop', 'desktop first; the phone runs the same code');
+    const errors = watchErrors(page);
+    await loginAs(page, 'member');
+    await expect(overviewCard(page)).toBeVisible();
+    await flyOpen(page);
+    await page.setViewportSize({ width: 1100, height: 800 });
+    // Note every style the flight writes on the sheet: the last box is where the card landed
+    await page.evaluate(() => {
+        window.lastSheet = null;
+        new MutationObserver((records) => {
+            for (const record of records) {
+                if (!record.target.classList || !record.target.classList.contains('card-flight-sheet')) continue;
+                const box = record.target.getBoundingClientRect();
+                if (box.width > 0) window.lastSheet = { x: box.x, y: box.y, width: box.width, height: box.height };
+            }
+        }).observe(document.getElementById('card-flight'), { attributes: true, attributeFilter: ['style'], subtree: true });
+    });
+    await page.keyboard.press('Escape');
+    await expect(flightLayer(page)).toBeVisible();
+    await expect(flightLayer(page)).toBeHidden();
+    const landed = await page.evaluate(() => window.lastSheet);
+    const card = await overviewCard(page).boundingBox();
+    expect(Math.abs(landed.x - card.x)).toBeLessThanOrEqual(4);
+    expect(Math.abs(landed.y - card.y)).toBeLessThanOrEqual(4);
+    expect(Math.abs(landed.width - card.width)).toBeLessThanOrEqual(4);
+    expect(errors).toEqual([]);
+});

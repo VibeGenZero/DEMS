@@ -181,3 +181,29 @@ test('images that failed before the modules ran get their fallback at start', as
     assert.equal(loading.style.display, undefined);
     assert.equal(loaded.style.display, undefined);
 });
+
+test('a click with a modifier on an action link is left to the browser', async () => {
+    const { actions, document, listeners } = await loadActions();
+    const calls = [];
+    actions.registerActions({ openLink: (el) => calls.push(el.attributes.href) });
+    actions.initActions(document);
+    const click = (target, extra) => {
+        const event = { type: 'click', target, button: 0, defaultPrevented: false, preventDefault() { this.defaultPrevented = true; }, ...extra };
+        for (const entry of listeners.filter(l => l.type === 'click')) entry.listener(event);
+        return event;
+    };
+    const card = fakeElement('a', { href: '#event/x', 'data-click': 'openLink' });
+    for (const extra of [{ ctrlKey: true }, { metaKey: true }, { shiftKey: true }, { altKey: true }, { button: 1 }]) {
+        const event = click(card, extra);
+        assert.equal(event.defaultPrevented, false, JSON.stringify(extra));
+    }
+    await Promise.resolve();
+    assert.deepEqual(calls, []);
+
+    // A link to "#" has nothing to open in a new tab: the action still runs
+    const local = fakeElement('a', { href: '#', 'data-click': 'openLink' });
+    assert.equal(click(local, { ctrlKey: true }).defaultPrevented, true);
+    assert.equal(click(card, {}).defaultPrevented, true);
+    await Promise.resolve();
+    assert.deepEqual(calls, ['#', '#event/x']);
+});
