@@ -343,3 +343,8 @@ test('the time line of a card can name the place', async () => {
     // Without a place the line stays as it was
     assert.doesNotMatch(app.renderEventWhen({ startDate: start }, now), /\d{2}:\d{2} ·/);
 });
+
+test('an end before the start counts as missing on the cards too', async () => {
+    const { app } = await loadFrontendApp({});
+    assert.equal(app.eventEnd({ startDate: '2026-10-10T18:00:00.000Z', endDate: '2026-10-09T23:00:00.000Z' }).toISOString(), '2026-10-10T20:00:00.000Z');
+});

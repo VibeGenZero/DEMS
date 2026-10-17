@@ -192,7 +192,7 @@ export async function loadAuditLog() {
                 <td class="text-muted small">${date}</td>
                 <td><span class="chip chip-sm${chip}">${escapeHtml(String(log.action ?? ''))}</span></td>
                 <td class="small">${escapeHtml(log.details || '')}</td>
-                <td class="text-muted small font-monospace">${(log.adminId || '').substring(0, 8)}…</td>
+                <td class="text-muted small font-monospace">${log.adminId === 'system' ? 'System' : `${(log.adminId || '').substring(0, 8)}…`}</td>
             </tr>`;
         });
 

@@ -82,6 +82,10 @@ const client = new Client({
 });
 
 let isReady = false;
+// Settles with true once the bot is ready, with false when it will not start
+let settleBotStart;
+const botStartSettled = new Promise(resolve => { settleBotStart = resolve; });
+const BOT_SETTLE_TIMEOUT_MS = 2 * 60 * 1000;
 let botStartedAt = null;
 let dmsSentCount = 0;
 let commandsProcessedCount = 0;
@@ -92,6 +96,7 @@ client.once(Events.ClientReady, async () => {
     debugLog('bot.ready', { tag: client.user.tag, guildId: process.env.DISCORD_GUILD_ID });
     isReady = true;
     botStartedAt = new Date();
+    settleBotStart(true);
     await registerSlashCommands();
     logBotInviteUrl();
     await applyBotSettings();
@@ -722,6 +727,7 @@ function formatRosterMembers(slot) {
 function canRegisterViaDiscord(event) {
     if (!event) return false;
     if (event.status && event.status !== 'active') return false;
+    if (isEventOver(event)) return false;
     return fitsIntoDiscordModal(event);
 }
 
@@ -1556,6 +1562,10 @@ async function checkRegistrationConditions({ event, eventId, userId, roleIds }) 
         return 'Dieses Event akzeptiert keine Anmeldungen.';
     }
 
+    if (isEventOver(event)) {
+        return 'Das Event ist schon vorbei.';
+    }
+
     const existingQ = query(
         collection(db, 'registrations'),
         where('eventId', '==', eventId),
@@ -1712,6 +1722,10 @@ async function handleEventRegisterModal(interaction, eventId) {
 
     const event = eventSnap.data();
 
+    if (isEventOver(event)) {
+        return interaction.reply({ content: 'Das Event ist schon vorbei.', flags: MessageFlags.Ephemeral });
+    }
+
     // The form may have been changed while the modal was open
     if (!canRegisterViaDiscord(event)) {
         return interaction.reply({
@@ -1829,6 +1843,10 @@ async function handleEventSlotModal(interaction, eventId, slotId) {
         return interaction.reply({ content: '❌ Event nicht gefunden.', flags: MessageFlags.Ephemeral });
     }
     const event = eventSnap.data();
+
+    if (isEventOver(event)) {
+        return interaction.reply({ content: 'Das Event ist schon vorbei.', flags: MessageFlags.Ephemeral });
+    }
 
     // Slots or the form may have changed while the modal was open
     if (!canRegisterViaDiscord(event) || !findSlot(getSlots(event), slotId)) {
@@ -2273,6 +2291,7 @@ function logBotInviteUrl() {
 async function startBot(token) {
     if (!token) {
         console.warn('⚠️ No bot token provided, bot will not start.');
+        settleBotStart(false);
         return false;
     }
     try {
@@ -2280,8 +2299,25 @@ async function startBot(token) {
         return true;
     } catch (err) {
         console.error('❌ Bot login fehlgeschlagen:', err.message);
+        settleBotStart(false);
         return false;
     }
+}
+
+/**
+ * Wait until the bot is ready, or until it is clear that it will not be:
+ * no token, a failed login, or no ready event within two minutes.
+ *
+ * @param {number} [timeoutMs] -> How long to wait for the ready event.
+ * @returns {Promise<boolean>} -> True once ready, else false.
+ */
+function whenBotSettled(timeoutMs = BOT_SETTLE_TIMEOUT_MS) {
+    let timer;
+    const timeout = new Promise(resolve => {
+        timer = setTimeout(() => resolve(false), timeoutMs);
+        if (typeof timer.unref === 'function') timer.unref();
+    });
+    return Promise.race([botStartSettled, timeout]).finally(() => clearTimeout(timer));
 }
 
 /**
@@ -2878,6 +2914,8 @@ async function getRunningEvents() {
         const events = [];
         for (const docSnap of snapshot.docs) {
             const event = { id: docSnap.id, ...docSnap.data() };
+            // Ended events are no longer running; the scheduler archives them a day later
+            if (isEventOver(event)) continue;
             // Count registrations
             const regQ = query(
                 collection(db, 'registrations'),
@@ -2905,6 +2943,7 @@ async function getRunningEvents() {
 module.exports = {
     client,
     startBot,
+    whenBotSettled,
     stopBot,
     sendDM,
     sendChannelMessage,

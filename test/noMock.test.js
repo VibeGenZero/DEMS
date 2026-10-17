@@ -32,6 +32,11 @@ test('without DEV_MOCK the stylesheet of the persona page does not exist', async
     assert.doesNotMatch(res.headers.get('content-type') || '', /css/);
 });
 
+test('without a bot token the archive scheduler still starts', async () => {
+    // The first run waits for the bot; a missing token must not keep it waiting
+    await server.waitForOutput('Archive scheduler started');
+});
+
 test('without DEV_MOCK the dummy banners do not exist', async () => {
     // The SPA fallback answers with index.html, never with the image
     const res = await createClient(server.baseUrl).request('/dev-banners/raid.svg');

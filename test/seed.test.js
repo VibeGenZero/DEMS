@@ -17,7 +17,7 @@ const { PERSONAS } = require('../dev/mockGuild');
 const { db, collection, doc, getDoc, getDocs, setDoc } = require('../firebaseAdmin');
 
 const EXPECTED_COUNTS = {
-    events: 13,
+    events: 14,
     users: 12,
     registrations: 38,
     comments: 6,
@@ -71,6 +71,10 @@ test('the seed covers the scenarios of the spec', async () => {
     assert.ok(new Date(running.startDate) < now && new Date(running.endDate) > now);
 
     assert.ok(new Date((await getEvent(EVENT_ID.PAST)).endDate) < now);
+    // Between its end and the automatic archive (W-01): over, but still active
+    const ended = await getEvent(EVENT_ID.ENDED);
+    assert.equal(ended.status, 'active');
+    assert.ok(new Date(ended.endDate) < now && new Date(ended.endDate) > new Date(now.getTime() - 24 * 60 * 60 * 1000));
     assert.ok(new Date((await getEvent(EVENT_ID.OPEN)).startDate) > now);
 
     const series = await Promise.all(SERIES_EVENT_IDS.map(getEvent));

@@ -170,3 +170,51 @@ test('message templates can use the slot', async () => {
     const plain = await buildTemplateVars({ user: user('Ana'), eventId: 'x', event: { title: 'Raid' } });
     assert.equal(plain['slot.name'], '');
 });
+
+test('registration and slot switch close when the event is over', async () => {
+    const MINUTE = 60 * 1000;
+    const ended = { startDate: new Date(Date.now() - 180 * MINUTE).toISOString(), endDate: new Date(Date.now() - MINUTE).toISOString() };
+    const ENDED = { ok: false, code: 'event_ended', httpStatus: 400, error: 'Das Event ist schon vorbei.' };
+    const pick = (result) => ({ ok: result.ok, code: result.code, httpStatus: result.httpStatus, error: result.error });
+
+    const eventId = await createEvent(ended);
+    assert.deepEqual(pick(await register(eventId, 'Spät')), ENDED);
+    assert.deepEqual(pick(await register(eventId, 'Mitgast', { guests: [{ id: 'svc-guest-1', displayName: 'Gast' }] })), ENDED);
+
+    const slotEventId = await createEvent({ ...ended, slots: SLOTS, maxParticipants: 4 });
+    await setDoc(doc(db, 'registrations', `${slotEventId}-ana`), {
+        eventId: slotEventId, userId: user('Ana').id, userName: 'Ana', status: 'accepted', slotId: 'tank', preferredSlotId: 'tank',
+        altSlotIds: [], guests: [], pendingGuests: [], formAnswers: {}, source: 'web', createdAt: new Date().toISOString()
+    });
+    assert.deepEqual(pick(await switchOwnSlot({ eventId: slotEventId, userId: user('Ana').id, slotId: 'heal' })), ENDED);
+});
+
+test('a running event still takes registrations up to its end', async () => {
+    const MINUTE = 60 * 1000;
+    const eventId = await createEvent({ startDate: new Date(Date.now() - 60 * MINUTE).toISOString(), endDate: new Date(Date.now() + MINUTE).toISOString() });
+    assert.equal((await register(eventId, 'Pünktlich')).ok, true);
+});
+
+test('nobody moves up into an event that is over', async () => {
+    const MINUTE = 60 * 1000;
+    const ended = { startDate: new Date(Date.now() - 180 * MINUTE).toISOString(), endDate: new Date(Date.now() - MINUTE).toISOString() };
+    const entry = (eventId, name, status, slotId) => setDoc(doc(db, 'registrations', `${eventId}-${name}`), {
+        eventId, userId: user(name).id, userName: name, status, slotId: status === 'accepted' ? slotId : null, preferredSlotId: slotId,
+        altSlotIds: [], guests: [], pendingGuests: [], formAnswers: {}, source: 'web', createdAt: new Date().toISOString()
+    });
+
+    // Unregistering after the end frees a place, but the waitlist stays where it is
+    const eventId = await createEvent({ ...ended, maxParticipants: 1 });
+    await entry(eventId, 'Ana', 'accepted', null);
+    await entry(eventId, 'Ben', 'waitlisted', null);
+    assert.equal((await unregisterUserFromEvent({ eventId, userId: user('Ana').id })).ok, true);
+    assert.equal((await registrationOf(eventId, 'Ben')).status, 'waitlisted');
+
+    // An admin moving someone out of a full slot after the end promotes nobody either
+    const slotEventId = await createEvent({ ...ended, slots: SLOTS, maxParticipants: 4 });
+    await entry(slotEventId, 'Ana', 'accepted', 'tank');
+    await entry(slotEventId, 'Ben', 'waitlisted', 'tank');
+    const ana = await registrationOf(slotEventId, 'Ana');
+    assert.equal((await moveRegistrationToSlot({ registrationId: ana.id, slotId: 'heal' })).ok, true);
+    assert.equal((await registrationOf(slotEventId, 'Ben')).status, 'waitlisted');
+});

@@ -25,7 +25,7 @@ see_also: [discord-integration, reminders-presence, form-fields]
 | Event channels & scheduled events | `createEventChannels`, `addParticipantToEventChannels`, `removeParticipantFromEventChannels`, `deleteEventChannels`, `getGuildScheduledEvents`, `createScheduledEvent` |
 | Reminders | `checkReminders({ now, send })` (exported for tests), `messageAcceptedParticipants`, `startReminderScheduler`; rules in `utils/reminders.js` |
 | Bot control center | `getBotStatus`, `getBotSettings`, `saveBotSettings`, `buildActivityVariables`, `applyBotSettings`, `getRunningEvents` |
-| Lifecycle | `startBot(token)`, `stopBot()`, `logBotInviteUrl` (URL from `buildBotInviteUrl`, `utils/botPermissions.js`) |
+| Lifecycle | `startBot(token)`, `whenBotSettled(timeoutMs)` (true once ready; false without a token, after a failed login or after 2 min without the ready event; the mock answers true), `stopBot()`, `logBotInviteUrl` (URL from `buildBotInviteUrl`, `utils/botPermissions.js`) |
 
 ## Interaction custom IDs
 
@@ -46,7 +46,7 @@ Slash commands (guild-scoped, registered on ready): `/events` (list active event
 
 ## Exports
 
-`client, startBot, stopBot, sendDM, sendChannelMessage, buildEventEmbed, assignRole, removeRole, getUserRoles, fetchMemberRoleIds, isGuildMember, getGuildName, getGuildIconUrl, getGuildRoles, getGuildChannels, getPublicGuildChannels, getGuildScheduledEvents, parseTemplate, startReminderScheduler, createEventChannels, addParticipantToEventChannels, removeParticipantFromEventChannels, deleteEventChannels, createScheduledEvent, getBotStatus, getBotSettings, saveBotSettings, getRunningEvents, sendGuestInvitation, buildEventComponents, canRegisterViaDiscord, refreshEventAnnouncements, isGoneDiscordError, buildSlotModal, buildRegisteredSlotReply, buildPollEmbed, buildPollComponents, buildPollVoteReply, refreshPollMessages, markPollMessagesDeleted`.
+`client, startBot, whenBotSettled, stopBot, sendDM, sendChannelMessage, buildEventEmbed, assignRole, removeRole, getUserRoles, fetchMemberRoleIds, isGuildMember, getGuildName, getGuildIconUrl, getGuildRoles, getGuildChannels, getPublicGuildChannels, getGuildScheduledEvents, parseTemplate, startReminderScheduler, createEventChannels, addParticipantToEventChannels, removeParticipantFromEventChannels, deleteEventChannels, createScheduledEvent, getBotStatus, getBotSettings, saveBotSettings, getRunningEvents, sendGuestInvitation, buildEventComponents, canRegisterViaDiscord, refreshEventAnnouncements, isGoneDiscordError, buildSlotModal, buildRegisteredSlotReply, buildPollEmbed, buildPollComponents, buildPollVoteReply, refreshPollMessages, markPollMessagesDeleted`.
 
 At the end of the file: `if (IS_MOCK_MODE) Object.assign(module.exports, require('./dev/mockBot'))` — in dev mock mode every Discord-facing export is replaced by a logging simulation (see [dev-mock-mode](dev-mock-mode.md)). Pure logic (`parseTemplate`, `buildEventEmbed`, `buildEventComponents`, settings, running events, `stopBot`) stays real.
 

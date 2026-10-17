@@ -47,7 +47,8 @@ test('the tabs sort the events by status', async ({ page }) => {
     await expect(rows(page).first()).toContainText('Live: Speedrun-Marathon');
     await expect(rows(page).first()).toContainText('Läuft gerade');
     await expect(row(page, 'Turnier: Arena-Cup').locator('.btn-primary')).toHaveText(/Anmeldungen · 2 offen/);
-    const past = row(page, 'Retro-Spieleabend');
+    // Ended three hours ago: over, archived only a day after its end (W-01)
+    const past = row(page, 'Feierabend-Runde');
     await expect(past).toContainText('Vorbei');
     await expect(past.locator('.data-table-buttons > .btn')).toHaveText(/Archivieren/);
     await expect(page.locator('#admin-events-table')).not.toContainText('Sommerfest');
@@ -56,6 +57,8 @@ test('the tabs sort the events by status', async ({ page }) => {
     await expect(row(page, 'Entwurf: Halloween-Special').locator('.data-table-buttons > .btn')).toHaveText(/Veröffentlichen/);
     await tab(page, 'Archiv').click();
     await expect(row(page, 'Sommerfest')).toBeVisible();
+    // The scheduler archived the week-old retro evening at start
+    await expect(row(page, 'Retro-Spieleabend')).toBeVisible();
     expect(errors).toEqual([]);
 });
 
@@ -204,4 +207,16 @@ test('the phone stacks the rows and nothing sticks out', async ({ page }, testIn
     const title = await first.locator('.data-table-title').boundingBox();
     const actions = await first.locator('.data-table-buttons').boundingBox();
     expect(actions.y).toBeGreaterThan(title.y + title.height);
+});
+
+test('the bot control center lists no ended event', async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== 'desktop', 'the list is the same on the phone');
+    const errors = watchErrors(page);
+    await loginAs(page, 'admin');
+    await navigate(page, 'bot-control');
+    const running = page.locator('#bot-running-events');
+    await expect(running.locator('.running-event-card', { hasText: 'Live: Speedrun-Marathon' }).locator('.live-indicator')).toBeVisible();
+    await expect(running).not.toContainText('Retro-Spieleabend');
+    await expect(running).not.toContainText('Feierabend-Runde');
+    expect(errors).toEqual([]);
 });

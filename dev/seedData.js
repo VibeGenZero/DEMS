@@ -20,6 +20,7 @@ const EVENT_ID = {
     BIG_FORM: 'dev-event-bigform',
     RUNNING: 'dev-event-running',
     PAST: 'dev-event-past',
+    ENDED: 'dev-event-ended',
     ARCHIVED: 'dev-event-archived',
     DRAFT: 'dev-event-draft',
     CANCELLED: 'dev-event-cancelled'
@@ -48,6 +49,7 @@ const EVENT_BANNERS = {
     [EVENT_ID.BIG_FORM]: 'workshop',
     [EVENT_ID.RUNNING]: 'speedrun',
     [EVENT_ID.PAST]: 'retro',
+    [EVENT_ID.ENDED]: 'spieleabend',
     [EVENT_ID.ARCHIVED]: 'sommerfest',
     [EVENT_ID.DRAFT]: 'halloween',
     [EVENT_ID.CANCELLED]: 'koop',
@@ -229,6 +231,17 @@ function buildEvents(clock) {
             checkinCode: '481516',
             eventStartNotificationSent: true,
             createdAt: clock.offset(-21 * DAY)
+        }),
+        // Ended three hours ago: over, but archived only a day after its end (W-01)
+        [EVENT_ID.ENDED]: buildEvent(clock, {
+            title: 'Feierabend-Runde',
+            description: 'Ein paar Runden nach der Arbeit.',
+            maxParticipants: 8,
+            startDate: clock.offset(-6 * HOUR),
+            endDate: clock.offset(-3 * HOUR),
+            category: 'Community',
+            eventStartNotificationSent: true,
+            createdAt: clock.offset(-5 * DAY)
         }),
         [EVENT_ID.ARCHIVED]: buildEvent(clock, {
             title: 'Sommerfest',
