@@ -189,3 +189,10 @@ test('waitlisted and rejected members get a matching answer', () => {
     assert.ok(reply.content.includes('abgelehnt'));
     assert.deepEqual(reply.components, []);
 });
+
+test('an ended event keeps only the link button', () => {
+    const HOUR = 60 * 60 * 1000;
+    const ended = slotEvent({ startDate: new Date(Date.now() - 3 * HOUR).toISOString(), endDate: new Date(Date.now() - HOUR).toISOString() });
+    const rows = buttonsOf(bot.buildEventComponents(ended, 'evt9'));
+    assert.deepEqual(rows.map(row => row.map(button => button.label)), [['Zum Event']]);
+});

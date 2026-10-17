@@ -722,6 +722,7 @@ function formatRosterMembers(slot) {
 function canRegisterViaDiscord(event) {
     if (!event) return false;
     if (event.status && event.status !== 'active') return false;
+    if (isEventOver(event)) return false;
     return fitsIntoDiscordModal(event);
 }
 
@@ -1556,6 +1557,10 @@ async function checkRegistrationConditions({ event, eventId, userId, roleIds }) 
         return 'Dieses Event akzeptiert keine Anmeldungen.';
     }
 
+    if (isEventOver(event)) {
+        return 'Das Event ist schon vorbei.';
+    }
+
     const existingQ = query(
         collection(db, 'registrations'),
         where('eventId', '==', eventId),
@@ -1712,6 +1717,10 @@ async function handleEventRegisterModal(interaction, eventId) {
 
     const event = eventSnap.data();
 
+    if (isEventOver(event)) {
+        return interaction.reply({ content: 'Das Event ist schon vorbei.', flags: MessageFlags.Ephemeral });
+    }
+
     // The form may have been changed while the modal was open
     if (!canRegisterViaDiscord(event)) {
         return interaction.reply({
@@ -1829,6 +1838,10 @@ async function handleEventSlotModal(interaction, eventId, slotId) {
         return interaction.reply({ content: '❌ Event nicht gefunden.', flags: MessageFlags.Ephemeral });
     }
     const event = eventSnap.data();
+
+    if (isEventOver(event)) {
+        return interaction.reply({ content: 'Das Event ist schon vorbei.', flags: MessageFlags.Ephemeral });
+    }
 
     // Slots or the form may have changed while the modal was open
     if (!canRegisterViaDiscord(event) || !findSlot(getSlots(event), slotId)) {
@@ -2878,6 +2891,8 @@ async function getRunningEvents() {
         const events = [];
         for (const docSnap of snapshot.docs) {
             const event = { id: docSnap.id, ...docSnap.data() };
+            // Ended events are no longer running; the scheduler archives them a day later
+            if (isEventOver(event)) continue;
             // Count registrations
             const regQ = query(
                 collection(db, 'registrations'),

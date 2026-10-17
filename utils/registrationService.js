@@ -9,6 +9,7 @@ const { buildEventUrl } = require('./eventUrl');
 const { withEventLock } = require('./eventLock');
 const { notifyRegistrationsChanged } = require('./announcementRefresh');
 const { OCCUPYING_STATUSES, countOccupiedPlaces } = require('./capacity');
+const { isEventOver } = require('./eventListing');
 const {
     getSlots, findSlot, formatSlotLabel, sanitizeAltSlotIds, countSlotOccupancy, hasFreePlace, pickSlot
 } = require('./slotService');
@@ -33,6 +34,7 @@ const REGISTRATION_STATUS = {
 const REGISTRATION_ERROR = {
     NOT_FOUND: 'event_not_found',
     INACTIVE: 'event_inactive',
+    ENDED: 'event_ended',
     ALREADY_REGISTERED: 'already_registered',
     MISSING_ROLE: 'missing_role',
     GUESTS_NOT_ALLOWED: 'guests_not_allowed',
@@ -48,6 +50,7 @@ const REGISTRATION_ERROR = {
 const ERROR_HTTP_STATUS = {
     [REGISTRATION_ERROR.NOT_FOUND]: 404,
     [REGISTRATION_ERROR.INACTIVE]: 400,
+    [REGISTRATION_ERROR.ENDED]: 400,
     [REGISTRATION_ERROR.ALREADY_REGISTERED]: 400,
     [REGISTRATION_ERROR.MISSING_ROLE]: 403,
     [REGISTRATION_ERROR.GUESTS_NOT_ALLOWED]: 400,
@@ -194,6 +197,10 @@ async function createRegistration({ eventId, user, formAnswers, guests, source, 
 
     if (event.status && event.status !== 'active') {
         return buildFailure(REGISTRATION_ERROR.INACTIVE, 'Dieses Event akzeptiert keine Anmeldungen.');
+    }
+    // The end closes registration; the scheduler archives the event a day later (W-01)
+    if (isEventOver(event)) {
+        return buildFailure(REGISTRATION_ERROR.ENDED, 'Das Event ist schon vorbei.');
     }
 
     const registrations = await loadEventRegistrations(eventId);
@@ -356,6 +363,9 @@ async function switchOwnSlot({ eventId, userId, slotId }) {
         const event = eventSnap.data();
         if (event.status && event.status !== 'active') {
             return buildFailure(REGISTRATION_ERROR.INACTIVE, 'Dieses Event akzeptiert keine Anmeldungen.');
+        }
+        if (isEventOver(event)) {
+            return buildFailure(REGISTRATION_ERROR.ENDED, 'Das Event ist schon vorbei.');
         }
 
         const slots = getSlots(event);

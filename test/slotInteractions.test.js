@@ -101,3 +101,15 @@ test('/events tells the places of an event with the sentence of the website', as
     const embed = payload.embeds.map(entry => entry.toJSON()).find(entry => entry.title === 'Listen-Abend');
     assert.equal(embed.fields.find(field => field.name === '👥 Plätze').value, '3 von 10 Plätzen belegt (inkl. 1 Gast, 1 Anfrage offen)');
 });
+
+test('a slot button of an ended event answers that it is over', async () => {
+    const HOUR = 60 * 60 * 1000;
+    await setDoc(doc(db, 'events', 'int-ended'), {
+        title: 'Raid int-ended', status: 'active', approvalMode: 'instant', slots: SLOTS, maxParticipants: 2,
+        startDate: new Date(Date.now() - 3 * HOUR).toISOString(), endDate: new Date(Date.now() - HOUR).toISOString()
+    });
+    const interaction = createFakeInteraction({ kind: 'button', customId: 'event_slot:int-ended:tank', userId: 'int-user-9' });
+    await dispatchInteraction(bot.client, interaction);
+    const answers = interaction.calls.filter(([name]) => name === 'reply' || name === 'editReply').map(([, payload]) => payload.content);
+    assert.ok(answers.some(content => content.includes('Das Event ist schon vorbei.')), JSON.stringify(interaction.calls));
+});
