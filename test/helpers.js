@@ -304,7 +304,11 @@ function createFakeElement(registry, id = '', classNames = []) {
         setAttribute() {},
         getAttribute: () => null,
         appendChild: register,
+        prepend: register,
         insertAdjacentElement: (_position, child) => register(child),
+        // Not laid out: no box, no offset parent (a hidden element in a browser)
+        offsetParent: null,
+        getBoundingClientRect: () => ({ left: 0, top: 0, right: 0, bottom: 0, width: 0, height: 0 }),
         querySelector: () => null,
         querySelectorAll: () => []
     };

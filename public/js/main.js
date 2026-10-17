@@ -33,6 +33,7 @@ import './polls/polls.js';
 import { initActions } from './core/actions.js';
 import { createParticles, finishLoading, runBootAnimation } from './core/boot.js';
 import { initDialogMotion } from './core/motion.js';
+import { initTabGlider } from './core/tab-glider.js';
 import { initCardFlight } from './events/card-flight.js';
 import { checkUpdates } from './core/updates.js';
 import { showUserData } from './pages/info.js';
@@ -42,6 +43,7 @@ initActions(document);
 document.addEventListener('DOMContentLoaded', () => {
     initDialogMotion(document);
     initCardFlight(document);
+    initTabGlider(document);
 });
 
 document.addEventListener('DOMContentLoaded', () => {

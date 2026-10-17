@@ -121,6 +121,8 @@
                 <i class="bi bi-info-circle me-1"></i>Info
               </a>
             </li>
+            <!-- Underline of the active link; glides between the links (core/tab-glider.js) -->
+            <li class="nav-marker is-hidden" id="nav-marker" aria-hidden="true"></li>
           </ul>
           <div class="d-flex align-items-center" id="auth-area">
             <!-- Logged in -->
@@ -966,7 +968,7 @@
               <div class="wizard-step-label">Erweitert</div>
             </div>
           </div>
-          <div class="nav nav-pills wizard-mode" role="tablist" aria-label="Ansicht des Assistenten">
+          <div class="nav nav-pills wizard-mode" id="wizard-mode" role="tablist" aria-label="Ansicht des Assistenten">
             <button type="button" class="nav-link active" id="wizard-mode-edit" role="tab" aria-selected="true"
               data-click="setWizardMode" data-mode="edit"><i class="bi bi-pencil me-1"></i>Bearbeiten</button>
             <button type="button" class="nav-link" id="wizard-mode-preview" role="tab" aria-selected="false"

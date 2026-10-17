@@ -3,6 +3,7 @@
  */
 import { registerActions } from './actions.js';
 import { state } from './state.js';
+import { placeNavMarker } from './tab-glider.js';
 import { showBotControlSection } from '../admin/bot-control.js';
 import { showAdminSection } from '../admin/dashboard.js';
 import { beginCardClose, landCardFlight } from '../events/card-flight.js';
@@ -90,6 +91,7 @@ export function handleRoute() {
             link.classList.add('active');
         }
     });
+    placeNavMarker();
 
     if (!state.currentUser && route !== 'login' && route !== 'info') {
         if ((route === 'event' || route === 'poll') && param) rememberPendingRoute(hash);

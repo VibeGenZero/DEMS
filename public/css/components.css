@@ -338,6 +338,30 @@ a {
   background: var(--bg-tint-1);
 }
 
+/* One surface glides to the active tab (glideTabs in core/tab-glider.js) */
+.nav-pills.has-glider {
+  position: relative;
+}
+
+.nav-pills .nav-glider {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 0;
+  border-radius: var(--bs-nav-pills-border-radius);
+  background: var(--bs-nav-pills-link-active-bg);
+  pointer-events: none;
+}
+
+.nav-pills.has-glider .nav-link {
+  position: relative;
+  z-index: 1;
+}
+
+.nav-pills.has-glider .nav-link.active {
+  background: transparent;
+}
+
 .nav-pills .nav-link {
   display: inline-flex;
   align-items: center;

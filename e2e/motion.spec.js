@@ -40,7 +40,26 @@ async function flyOpen(page) {
     await expect(flightLayer(page)).toBeHidden();
 }
 
-const near = (a, b) => Math.abs(a.x - b.x) <= 2 && Math.abs(a.y - b.y) <= 2 && Math.abs(a.width - b.width) <= 2 && Math.abs(a.height - b.height) <= 2;
+/** Note every style the flight writes on the sheet; the last box is where it landed. */
+function watchLanding(page) {
+    return page.evaluate(() => {
+        window.lastSheet = null;
+        new MutationObserver((records) => {
+            for (const record of records) {
+                if (!record.target.classList || !record.target.classList.contains('card-flight-sheet')) continue;
+                const box = record.target.getBoundingClientRect();
+                if (box.width > 0) window.lastSheet = { x: box.x, y: box.y, width: box.width, height: box.height };
+            }
+        }).observe(document.getElementById('card-flight'), { attributes: true, attributeFilter: ['style'], subtree: true });
+    });
+}
+
+/** The sheet landed on the card as it stands now (the overview may have changed meanwhile). */
+async function landedOnCard(page) {
+    const landed = await page.evaluate(() => window.lastSheet);
+    const card = await overviewCard(page).boundingBox();
+    return Boolean(landed && card) && Math.abs(landed.x - card.x) <= 4 && Math.abs(landed.y - card.y) <= 4 && Math.abs(landed.width - card.width) <= 4;
+}
 
 test('a card flies open into its event page', async ({ page }, testInfo) => {
     test.skip(testInfo.project.name !== 'desktop', 'desktop first; the phone runs the same code');
@@ -61,10 +80,8 @@ for (const way of ['Esc', 'the back button', '"Zurück zur Übersicht"']) {
         const errors = watchErrors(page);
         await loginAs(page, 'member');
         await expect(overviewCard(page)).toBeVisible();
-        // The cards appear one after the other; measure once this one rests
-        await expect.poll(async () => isIdentity(await transformOf(overviewCard(page)))).toBe(true);
-        const before = await overviewCard(page).boundingBox();
         await flyOpen(page);
+        await watchLanding(page);
 
         if (way === 'Esc') await page.keyboard.press('Escape');
         else if (way === 'the back button') await page.goBack();
@@ -75,7 +92,7 @@ for (const way of ['Esc', 'the back button', '"Zurück zur Übersicht"']) {
         await expect(page).toHaveURL(/#events$/);
         await expect(flightLayer(page)).toBeHidden();
         await expect(overviewCard(page)).not.toHaveClass(/is-flying/);
-        await expect.poll(async () => near(await overviewCard(page).boundingBox(), before)).toBe(true);
+        expect(await landedOnCard(page)).toBe(true);
         expect(errors).toEqual([]);
     });
 }
@@ -168,25 +185,11 @@ test('a resized window lands the card at its new place', async ({ page }, testIn
     await expect(overviewCard(page)).toBeVisible();
     await flyOpen(page);
     await page.setViewportSize({ width: 1100, height: 800 });
-    // Note every style the flight writes on the sheet: the last box is where the card landed
-    await page.evaluate(() => {
-        window.lastSheet = null;
-        new MutationObserver((records) => {
-            for (const record of records) {
-                if (!record.target.classList || !record.target.classList.contains('card-flight-sheet')) continue;
-                const box = record.target.getBoundingClientRect();
-                if (box.width > 0) window.lastSheet = { x: box.x, y: box.y, width: box.width, height: box.height };
-            }
-        }).observe(document.getElementById('card-flight'), { attributes: true, attributeFilter: ['style'], subtree: true });
-    });
+    await watchLanding(page);
     await page.keyboard.press('Escape');
     await expect(flightLayer(page)).toBeVisible();
     await expect(flightLayer(page)).toBeHidden();
-    const landed = await page.evaluate(() => window.lastSheet);
-    const card = await overviewCard(page).boundingBox();
-    expect(Math.abs(landed.x - card.x)).toBeLessThanOrEqual(4);
-    expect(Math.abs(landed.y - card.y)).toBeLessThanOrEqual(4);
-    expect(Math.abs(landed.width - card.width)).toBeLessThanOrEqual(4);
+    expect(await landedOnCard(page)).toBe(true);
     expect(errors).toEqual([]);
 });
 
@@ -277,5 +280,59 @@ test('bars and numbers end at their values', async ({ page }, testInfo) => {
     await expect(page.locator('#admin-stats .stat-value').first()).toBeVisible();
     const stats = await page.evaluate(async () => (await fetch('/api/admin/stats')).json());
     await expect.poll(() => page.locator('#admin-stats .stat-value').allTextContents()).toEqual([stats.events.total, stats.events.active, stats.registrations.total, stats.registrations.pending, stats.registrations.accepted, stats.registrations.waitlisted].map(String));
+    expect(errors).toEqual([]);
+});
+
+// ── Gliding markers ────────────────────────────────────────────────────────
+
+/** Whether the centre of `marker` stands under the centre of `link` (±2 px). */
+async function markerUnder(page, markerSelector, link) {
+    const marker = await page.locator(markerSelector).boundingBox();
+    const box = await link.boundingBox();
+    if (!marker || !box) return false;
+    return Math.abs((marker.x + marker.width / 2) - (box.x + box.width / 2)) <= 2;
+}
+
+test('the navbar marker glides under the active link', async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== 'desktop', 'the folded menu on the phone keeps its underline');
+    const errors = watchErrors(page);
+    await loginAs(page, 'member');
+    const events = page.locator('#main-navbar .nav-link[data-section="events-section"]');
+    await expect.poll(() => markerUnder(page, '#nav-marker', events)).toBe(true);
+    await navigate(page, 'profile');
+    const profile = page.locator('#main-navbar .nav-link[data-section="profile-section"]');
+    await expect.poll(() => markerUnder(page, '#nav-marker', profile)).toBe(true);
+    // The old underline of the active link is gone on the desktop
+    const underline = await profile.evaluate(link => getComputedStyle(link, '::after').display);
+    expect(underline).toBe('none');
+    expect(errors).toEqual([]);
+});
+
+test('the marker follows a resized window', async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== 'desktop', 'the folded menu on the phone keeps its underline');
+    await loginAs(page, 'member');
+    await navigate(page, 'profile');
+    const profile = page.locator('#main-navbar .nav-link[data-section="profile-section"]');
+    await expect.poll(() => markerUnder(page, '#nav-marker', profile)).toBe(true);
+    await page.setViewportSize({ width: 1100, height: 800 });
+    await expect.poll(() => markerUnder(page, '#nav-marker', profile)).toBe(true);
+});
+
+test('the admin tab glider follows the tab', async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== 'desktop', 'desktop first; the phone runs the same code');
+    const errors = watchErrors(page);
+    await loginAs(page, 'admin');
+    await navigate(page, 'admin');
+    const tabs = page.locator('#admin-events-tabs');
+    await expect(tabs.locator('.nav-glider')).toBeVisible();
+    await expect.poll(() => markerUnder(page, '#admin-events-tabs .nav-glider', tabs.locator('.nav-link.active'))).toBe(true);
+    await tabs.locator('.nav-link', { hasText: 'Entwürfe' }).click();
+    await expect(tabs.locator('.nav-link.active')).toContainText('Entwürfe');
+    await expect.poll(() => markerUnder(page, '#admin-events-tabs .nav-glider', tabs.locator('.nav-link.active'))).toBe(true);
+    // The glider fills the tab, the tab itself shows no surface of its own
+    const glider = await tabs.locator('.nav-glider').boundingBox();
+    const active = await tabs.locator('.nav-link.active').boundingBox();
+    expect(Math.abs(glider.width - active.width)).toBeLessThanOrEqual(2);
+    expect(await tabs.locator('.nav-link.active').evaluate(link => getComputedStyle(link).backgroundColor)).toBe('rgba(0, 0, 0, 0)');
     expect(errors).toEqual([]);
 });

@@ -193,6 +193,34 @@ body {
   color: var(--accent-light);
 }
 
+/* From lg on one marker glides between the links instead (core/tab-glider.js) */
+#main-navbar .navbar-nav {
+  position: relative;
+}
+
+.nav-marker {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 30px;
+  height: 2px;
+  background: var(--accent);
+  border-radius: var(--radius-pill);
+  pointer-events: none;
+}
+
+@media (max-width: 991.98px) {
+  .nav-marker {
+    display: none;
+  }
+}
+
+@media (min-width: 992px) {
+  #main-navbar .nav-link.active::after {
+    display: none;
+  }
+}
+
 #main-navbar .nav-link.active::after {
   content: '';
   position: absolute;
