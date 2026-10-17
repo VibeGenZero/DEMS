@@ -11,6 +11,7 @@ import { loadComments } from './comments.js';
 import { resetGuestSelection } from './guests.js';
 import { renderFormFields, submitRegistration } from './registration-form.js';
 import { eventHasSlots, renderOwnSlot, renderRoster, renderSlotPicker } from './slots.js';
+import { eventEnd } from './cards.js';
 
 export const GRADIENT_PRESETS = [
     'linear-gradient(135deg, #6d28d9 0%, #8b5cf6 100%)',
@@ -251,7 +252,7 @@ export async function loadDetailParticipants(eventId) {
 // Clears what the previously opened event left on the page; the early returns
 // below (no access, not logged in) never reach the code that refills it
 export function resetEventDetailAreas() {
-    ['detail-register-area', 'detail-registered', 'detail-no-access', 'detail-waitlist',
+    ['detail-register-area', 'detail-registered', 'detail-no-access', 'detail-waitlist', 'detail-ended',
         'detail-participants-section', 'comments-section', 'checkin-section'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.style.display = 'none';
@@ -303,12 +304,9 @@ export async function showEventDetail(eventId) {
 
         // Countdown
         const cdArea = document.getElementById('detail-countdown-area');
-        if (event.startDate) {
-            cdArea.style.display = 'flex';
-            startCountdown(cdArea, event.startDate);
-        } else {
-            cdArea.style.display = 'none';
-        }
+        const isOver = !!eventEnd(event) && eventEnd(event) < new Date();
+        cdArea.style.display = event.startDate && !isOver ? 'flex' : 'none';
+        if (event.startDate && !isOver) startCountdown(cdArea, event.startDate);
 
         // Sidebar details
         renderSidebarDetails(event);
@@ -395,6 +393,15 @@ export async function showEventDetail(eventId) {
             loadDetailParticipants(eventId);
             loadComments(eventId);
             renderCheckinSection(eventId, event, regData);
+            return;
+        }
+
+        // Over: the form is closed, the scheduler archives the event a day later (W-01)
+        if (isOver) {
+            document.getElementById('detail-ended').style.display = 'block';
+            renderSidebarAction('none');
+            loadDetailParticipants(eventId);
+            loadComments(eventId);
             return;
         }
 

@@ -5,6 +5,7 @@ import { state } from '../core/state.js';
 import { registerActions } from '../core/actions.js';
 import { applyStyleData, escapeHtml, showToast } from '../core/ui.js';
 import { avatar } from '../core/components.js';
+import { isRunning } from '../events/cards.js';
 
 
 export async function showBotControlSection() {
@@ -129,12 +130,12 @@ export async function loadBotRunningEvents() {
                 day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit'
             }) : 'TBD';
 
+            // LIVE only between start and end; the server leaves ended events out (W-01)
             const now = new Date();
             const start = event.startDate ? new Date(event.startDate) : null;
-            const isLive = start && now >= start;
-            const liveIndicator = isLive
-                ? '<span class="live-indicator"><span class="live-dot"></span>LIVE</span>'
-                : '<span class="upcoming-indicator"><i class="bi bi-clock me-1"></i>Bevorstehend</span>';
+            let liveIndicator = '<span class="upcoming-indicator"><i class="bi bi-flag me-1"></i>Beendet</span>';
+            if (isRunning(event, now)) liveIndicator = '<span class="live-indicator"><span class="live-dot"></span>LIVE</span>';
+            else if (!start || start > now) liveIndicator = '<span class="upcoming-indicator"><i class="bi bi-clock me-1"></i>Bevorstehend</span>';
 
             const capacityPercent = event.maxParticipants > 0
                 ? Math.round((stats.accepted / event.maxParticipants) * 100)
