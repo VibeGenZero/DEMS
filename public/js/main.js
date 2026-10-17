@@ -37,7 +37,8 @@ import { checkUpdates } from './core/updates.js';
 import { showUserData } from './pages/info.js';
 
 initActions(document);
-initDialogMotion(document);
+// Dialogs and toasts only open once the page is there
+document.addEventListener('DOMContentLoaded', () => initDialogMotion(document));
 
 document.addEventListener('DOMContentLoaded', () => {
     const lastBoot = localStorage.getItem('dems_boot_ts');
