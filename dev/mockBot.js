@@ -93,6 +93,11 @@ async function getGuildName() {
     return GUILD.name;
 }
 
+// The mock server has no icon -> the login card shows its initials
+async function getGuildIconUrl() {
+    return null;
+}
+
 async function getGuildRoles() {
     return ROLES.map(role => ({ ...role }));
 }
@@ -283,6 +288,7 @@ async function createScheduledEvent(event) {
 module.exports = {
     startBot,
     getGuildName,
+    getGuildIconUrl,
     getGuildRoles,
     getGuildChannels,
     getPublicGuildChannels,

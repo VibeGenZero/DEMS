@@ -78,14 +78,14 @@
     <nav class="navbar navbar-expand-lg navbar-dark fixed-top" id="main-navbar">
       <div class="container">
         <a class="navbar-brand brand-text" href="#events">
-          <i class="bi bi-moon-stars-fill me-2"></i><span>DEMS</span>
+          <i class="bi bi-moon-stars-fill me-2"></i><span id="nav-brand-name">DEMS</span>
         </a>
         <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navContent">
           <span class="navbar-toggler-icon"></span>
         </button>
         <div class="collapse navbar-collapse" id="navContent">
           <ul class="navbar-nav me-auto">
-            <li class="nav-item">
+            <li class="nav-item is-hidden" id="nav-events">
               <a class="nav-link" href="#events" data-section="events-section">
                 <i class="bi bi-calendar-event me-1"></i>Events
               </a>
@@ -123,17 +123,6 @@
             </li>
           </ul>
           <div class="d-flex align-items-center" id="auth-area">
-            <!-- Not logged in -->
-            <div id="login-btn-container">
-              <a href="/auth/discord" class="btn btn-discord">
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16"
-                  class="me-2">
-                  <path
-                    d="M13.545 2.907a13.2 13.2 0 0 0-3.257-1.011.05.05 0 0 0-.052.025c-.141.25-.297.577-.406.833a12.2 12.2 0 0 0-3.658 0 8 8 0 0 0-.412-.833.05.05 0 0 0-.052-.025c-1.125.194-2.22.534-3.257 1.011a.04.04 0 0 0-.021.018C.356 6.024-.213 9.047.066 12.032q.003.022.021.037a13.3 13.3 0 0 0 3.995 2.02.05.05 0 0 0 .056-.019q.463-.63.818-1.329a.05.05 0 0 0-.01-.059l-.018-.011a9 9 0 0 1-1.248-.595.05.05 0 0 1-.02-.066l.015-.019q.127-.095.248-.195a.05.05 0 0 1 .051-.007c2.619 1.196 5.454 1.196 8.041 0a.05.05 0 0 1 .053.007q.121.1.248.195a.05.05 0 0 1-.004.085 8 8 0 0 1-1.249.594.05.05 0 0 0-.03.03.05.05 0 0 0 .003.041c.24.465.515.909.817 1.329a.05.05 0 0 0 .056.019 13.2 13.2 0 0 0 4.001-2.02.05.05 0 0 0 .021-.037c.334-3.451-.559-6.449-2.366-9.106a.03.03 0 0 0-.02-.019m-8.198 7.307c-.789 0-1.438-.724-1.438-1.612s.637-1.613 1.438-1.613c.807 0 1.45.73 1.438 1.613 0 .888-.637 1.612-1.438 1.612m5.316 0c-.788 0-1.438-.724-1.438-1.612s.637-1.613 1.438-1.613c.807 0 1.451.73 1.438 1.613 0 .888-.631 1.612-1.438 1.612" />
-                </svg>
-                Login mit Discord
-              </a>
-            </div>
             <!-- Logged in -->
             <div id="user-info" class="align-items-center gap-2 is-hidden">
               <span id="user-avatar" class="d-flex"></span>
@@ -189,11 +178,15 @@
         <div class="row justify-content-center align-items-center min-vh-100">
           <div class="col-md-6 text-center">
             <div class="login-card glass-card p-5">
-              <h1 class="brand-text login-title mb-3">DEMS</h1>
+              <div class="login-server-icon" id="login-server-icon"><span class="avatar avatar-xl avatar-initials" title="DEMS">D</span></div>
+              <h1 class="brand-text login-title mb-1" id="login-server-name">DEMS</h1>
               <p class="text-secondary mb-4">Dein Event-Management-System</p>
-              <p class="text-muted mb-4">Melde dich mit deinem Discord-Account an, um Events zu sehen und dich
-                anzumelden.</p>
-              <div id="login-btn-container">
+              <ul class="login-points">
+                <li><i class="bi bi-calendar-event" aria-hidden="true"></i><span>Alle Events von <span id="login-server-ref">DEMS</span> an einem Ort, mit freien Plätzen und Warteliste.</span></li>
+                <li><i class="bi bi-check2-circle" aria-hidden="true"></i><span>Anmelden mit einem Klick, auf der Website oder direkt in Discord.</span></li>
+                <li><i class="bi bi-bell" aria-hidden="true"></i><span>Erinnerungen per Discord-DM, damit du nichts verpasst.</span></li>
+              </ul>
+              <div class="login-actions">
                 <a href="/auth/discord" class="btn btn-discord btn-lg px-5 mb-3">
                   <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 16 16"
                     class="me-2">

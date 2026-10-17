@@ -27,6 +27,10 @@ test('bot.js answers with the mock server when DEV_MOCK=true', async () => {
     assert.ok(roles.some(role => role.managed));
 });
 
+test('the mock server has no icon, so the login card shows its initials', async () => {
+    assert.equal(await bot.getGuildIconUrl(GUILD.id), null);
+});
+
 test('only public channels are offered to members', async () => {
     const all = await bot.getGuildChannels(GUILD.id);
     const publicChannels = await bot.getPublicGuildChannels(GUILD.id);

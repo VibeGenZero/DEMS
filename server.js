@@ -12,7 +12,7 @@ const path = require('path');
 const helmet = require('helmet');
 const cors = require('cors');
 const rateLimit = require('express-rate-limit');
-const { startBot, startReminderScheduler, stopBot, getGuildName, fetchMemberRoleIds } = require('./bot');
+const { startBot, startReminderScheduler, stopBot, getGuildName, getGuildIconUrl, fetchMemberRoleIds } = require('./bot');
 const { startPollScheduler, stopPollScheduler } = require('./utils/pollStore');
 const { createCsrfToken, createRoleRefresh } = require('./middleware/auth');
 const { PersistentSessionStore } = require('./utils/sessionStore');
@@ -229,26 +229,28 @@ app.get('/api/maintenance/status', async (req, res) => {
     }
 });
 
-// Server info endpoint - returns server name (env override or Discord API)
+// Server info endpoint - server name (env override or Discord API) and icon for the login page
 app.get('/api/server-info', async (req, res) => {
     const debugMode = IS_DEBUG;
     try {
         const guildId = process.env.DISCORD_GUILD_ID || '';
+        // The icon comes from Discord even when SERVER_NAME overrides the name
+        const iconUrl = guildId ? await getGuildIconUrl(guildId) : null;
         if (process.env.SERVER_NAME) {
-            return res.json({ serverName: process.env.SERVER_NAME, guildId, debugMode });
+            return res.json({ serverName: process.env.SERVER_NAME, iconUrl, guildId, debugMode });
         }
 
         if (guildId) {
             const serverName = await getGuildName(guildId);
             if (serverName) {
-                return res.json({ serverName, guildId, debugMode });
+                return res.json({ serverName, iconUrl, guildId, debugMode });
             }
         }
 
-        res.json({ serverName: 'DEMS', guildId, debugMode });
+        res.json({ serverName: 'DEMS', iconUrl, guildId, debugMode });
     } catch (err) {
         console.error('Error fetching server info:', err);
-        res.json({ serverName: 'DEMS', guildId: '', debugMode });
+        res.json({ serverName: 'DEMS', iconUrl: null, guildId: '', debugMode });
     }
 });
 

@@ -111,6 +111,16 @@ test('the persona login starts a new session like the Discord login', async () =
     assert.equal((await currentUser(client)).username, 'tom');
 });
 
+test('the server info names the Discord server and its icon without a login', async () => {
+    const res = await fetch(`${server.baseUrl}/api/server-info`);
+    assert.equal(res.status, 200);
+    const info = await res.json();
+    assert.equal(info.serverName, 'DEMS Dev Server');
+    // The mock server has no icon -> the login card shows its initials
+    assert.ok('iconUrl' in info);
+    assert.equal(info.iconUrl, null);
+});
+
 test('requests without a session cookie store no session until the CSRF token is fetched', async () => {
     // Sessions live in the database -> pages, assets and crawlers must not create one each
     for (const url of ['/', '/css/style.css', '/irgendein/pfad', '/api/server-info', '/auth/me']) {
