@@ -248,3 +248,34 @@ test('fast typing leaves every card at its grid place', async ({ page }, testInf
     expect(await gridCards(page).evaluateAll(cards => cards.map(card => card.getBoundingClientRect().top))).toEqual(places);
     expect(errors).toEqual([]);
 });
+
+// ── Bars and numbers ───────────────────────────────────────────────────────
+
+test('bars and numbers end at their values', async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== 'desktop', 'desktop first; the phone runs the same code');
+    const errors = watchErrors(page);
+    await loginAs(page, 'admin');
+    await expect.poll(() => cardsAtRest(page)).toBe(true);
+    // Overview: each meter ends at the places its card names ("5 von 20 belegt")
+    const readMeters = () => page.evaluate(() => [...document.querySelectorAll('#events-grid .event-card')].map((card) => {
+        const meter = card.querySelector('.capacity-meter');
+        const match = (card.querySelector('.capacity-text')?.textContent || '').match(/^(\d+) von/);
+        return meter && match ? [meter.value, Number(match[1])] : null;
+    }).filter(Boolean));
+    expect((await readMeters()).length).toBeGreaterThan(0);
+    await expect.poll(async () => (await readMeters()).every(([value, taken]) => value === taken)).toBe(true);
+
+    // Poll: the bars reach the widths of their votes
+    await page.evaluate(() => { window.location.hash = '#poll/dev-poll-raid'; });
+    await expect(page.locator('.poll-bar-yes').first()).toBeVisible();
+    const readBars = () => page.locator('.poll-bar-yes, .poll-bar-maybe').evaluateAll(list => list.map(bar => [bar.style.width, `${Math.min(100, Math.max(0, Number(bar.dataset.styleWidth) || 0))}%`]));
+    expect((await readBars()).length).toBeGreaterThan(0);
+    await expect.poll(async () => (await readBars()).every(([width, expected]) => width === expected)).toBe(true);
+
+    // Admin: the numbers count up to the statistics
+    await navigate(page, 'admin');
+    await expect(page.locator('#admin-stats .stat-value').first()).toBeVisible();
+    const stats = await page.evaluate(async () => (await fetch('/api/admin/stats')).json());
+    await expect.poll(() => page.locator('#admin-stats .stat-value').allTextContents()).toEqual([stats.events.total, stats.events.active, stats.registrations.total, stats.registrations.pending, stats.registrations.accepted, stats.registrations.waitlisted].map(String));
+    expect(errors).toEqual([]);
+});

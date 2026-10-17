@@ -152,3 +152,43 @@ export function initDialogMotion(root) {
         if (event.target && !event.defaultPrevented) animateTo(event.target, { x: 40, opacity: 0, duration: 0.15, ease: 'power2.in' });
     });
 }
+
+/**
+ * Let several meters grow one after the other.
+ *
+ * @param {Iterable<HTMLProgressElement>} meters -> Meters with their final values set.
+ * @param {Object} [options] -> `{ stagger, delay }` in seconds; stagger defaults to 0.12.
+ * @returns {void}
+ */
+export function growMeters(meters, { stagger = 0.12, delay = 0 } = {}) {
+    [...meters].forEach((meter, i) => growMeter(meter, { delay: delay + i * stagger }));
+}
+
+/**
+ * Let bars whose width is set inline grow from 0 to that width, one after the other.
+ *
+ * @param {Iterable<HTMLElement>} bars -> Bars with style.width set (applyStyleData).
+ * @param {Object} [options] -> `{ stagger, delay, duration }` in seconds.
+ * @returns {void}
+ */
+export function growWidths(bars, { stagger = 0.12, delay = 0, duration = 0.8 } = {}) {
+    if (prefersReducedMotion()) return;
+    [...bars].forEach((bar, i) => {
+        const end = bar.style.width;
+        if (end) gsap.fromTo(bar, { width: '0%' }, { width: end, duration, delay: delay + i * stagger, ease: SPRING });
+    });
+}
+
+/**
+ * Let every number count up from 0 to the number its text shows.
+ *
+ * @param {Iterable<Element>} elements -> Elements whose text is a whole number.
+ * @param {Object} [options] -> `{ duration, delay }` for countUp.
+ * @returns {void}
+ */
+export function countUpAll(elements, options = {}) {
+    for (const element of elements) {
+        const text = String(element.textContent).trim();
+        if (/^\d+$/.test(text)) countUp(element, Number(text), options);
+    }
+}

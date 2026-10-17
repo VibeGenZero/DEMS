@@ -3,6 +3,7 @@
  */
 import { state } from '../core/state.js';
 import { registerActions } from '../core/actions.js';
+import { animateFromTo, countUpAll } from '../core/motion.js';
 import { escapeHtml, showToast } from '../core/ui.js';
 import { ADMIN_SORT_KEYS, ADMIN_TABS, DEFAULT_ADMIN_SORT, adminTabCounts, buildAdminRows } from './event-rows.js';
 import { renderAdminEmpty, renderAdminLoadError, renderAdminTable, renderAdminTableSkeleton, renderAdminTabs } from './event-table.js';
@@ -78,10 +79,8 @@ export async function loadAdminStats() {
       </div>
     `;
 
-        gsap.fromTo('.stat-card',
-            { y: 20, opacity: 0 },
-            { y: 0, opacity: 1, duration: 0.3, stagger: 0.05, ease: 'power3.out' }
-        );
+        animateFromTo('.stat-card', { y: 20, opacity: 0 }, { y: 0, opacity: 1, duration: 0.3, stagger: 0.05, ease: 'power3.out' });
+        countUpAll(container.querySelectorAll('.stat-value'));
     } catch {
         container.innerHTML = '<div class="text-muted text-center py-3">Statistiken konnten nicht geladen werden.</div>';
     }

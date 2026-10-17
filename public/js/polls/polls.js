@@ -4,6 +4,7 @@
 import { state } from '../core/state.js';
 import { navigateTo } from '../core/router.js';
 import { registerActions } from '../core/actions.js';
+import { growWidths } from '../core/motion.js';
 import { applyStyleData, escapeHtml, renderMarkdownSafe, showToast, toggleElement } from '../core/ui.js';
 import { renderRosterAvatar } from '../events/slots.js';
 import { renderPollAdminBar } from './admin.js';
@@ -131,6 +132,8 @@ export async function showPollDetail(pollId) {
         if (!res.ok) throw new Error('not found');
         state.currentPoll = await res.json();
         renderPollDetail(state.currentPoll);
+        // The results grow when the poll opens, not again after each vote
+        growWidths(container.querySelectorAll('.poll-bar-yes, .poll-bar-maybe'));
     } catch {
         showToast('Abstimmung nicht gefunden.', 'danger');
         navigateTo('polls');

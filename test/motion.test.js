@@ -143,3 +143,41 @@ test('with reduced motion a toast only fades in', async () => {
     assert.equal('x' in shown.fromVars, false);
     assert.equal('x' in shown.vars, false);
 });
+
+test('meters grow one after the other with the spring', async () => {
+    const { app, animations } = await loadFrontendApp({});
+    app.growMeters([{ value: 5 }, { value: 3 }]);
+    const grown = animations.filter(entry => entry.method === 'fromTo');
+    assert.equal(grown.length, 2);
+    assert.deepEqual(grown.map(entry => entry.fromVars.value), [0, 0]);
+    assert.deepEqual(grown.map(entry => entry.vars.value), [5, 3]);
+    assert.deepEqual(grown.map(entry => entry.vars.delay), [0, 0.12]);
+    assert.ok(grown.every(entry => entry.vars.ease === 'back.out(1.4)'));
+    const calm = await loadFrontendApp({}, { reducedMotion: true });
+    calm.app.growMeters([{ value: 5 }]);
+    assert.equal(calm.animations.length, 0);
+});
+
+test('bars grow from zero to their width', async () => {
+    const { app, animations } = await loadFrontendApp({});
+    app.growWidths([{ style: { width: '40%' } }, { style: { width: '10%' } }]);
+    const grown = animations.filter(entry => entry.method === 'fromTo');
+    assert.deepEqual(grown.map(entry => [entry.fromVars.width, entry.vars.width, entry.vars.delay]), [['0%', '40%', 0], ['0%', '10%', 0.12]]);
+    assert.ok(grown.every(entry => entry.vars.ease === 'back.out(1.4)' && entry.vars.duration === 0.8));
+    const calm = await loadFrontendApp({}, { reducedMotion: true });
+    calm.app.growWidths([{ style: { width: '40%' } }]);
+    assert.equal(calm.animations.length, 0);
+});
+
+test('numbers count up to what the markup shows', async () => {
+    const { app, animations } = await loadFrontendApp({});
+    const numbers = [{ textContent: '13' }, { textContent: '4' }];
+    app.countUpAll(numbers);
+    assert.equal(animations.filter(entry => entry.method === 'to').length, 2);
+    assert.deepEqual(numbers.map(number => number.textContent), ['13', '4']);
+    const calm = await loadFrontendApp({}, { reducedMotion: true });
+    const still = [{ textContent: '7' }];
+    calm.app.countUpAll(still);
+    assert.equal(still[0].textContent, '7');
+    assert.equal(calm.animations.length, 0);
+});

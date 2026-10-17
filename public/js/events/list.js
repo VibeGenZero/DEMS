@@ -5,6 +5,7 @@
  */
 import { registerActions } from '../core/actions.js';
 import { emptyState } from '../core/components.js';
+import { animateFromTo, growMeters } from '../core/motion.js';
 import { state } from '../core/state.js';
 import { escapeHtml, showElement } from '../core/ui.js';
 import { forgetCalendarEvents, showCalendar } from './calendar.js';
@@ -117,9 +118,11 @@ export function renderOverview(now = new Date()) {
     }
 }
 
-// Cards appear one after the other; not when they come back from a card flight
+// Cards appear one after the other and their place meters grow; not when they come back from a card flight
 function revealCards() {
-    if (currentView === 'grid' && !state.flyingEventId) gsap.fromTo('#events-grid .event-card', { y: 12, opacity: 0 }, { y: 0, opacity: 1, duration: 0.25, stagger: 0.04, ease: 'power2.out' });
+    if (currentView !== 'grid' || state.flyingEventId) return;
+    animateFromTo('#events-grid .event-card', { y: 12, opacity: 0 }, { y: 0, opacity: 1, duration: 0.25, stagger: 0.04, ease: 'power2.out' });
+    growMeters(document.querySelectorAll('#events-grid .capacity-meter'), { delay: 0.1 });
 }
 
 function showLoadError(status) {
