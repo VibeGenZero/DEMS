@@ -5,6 +5,7 @@ import { state } from '../core/state.js';
 import { registerActions } from '../core/actions.js';
 import { escapeHtml, showToast } from '../core/ui.js';
 import { showEventDetail } from './detail.js';
+import { fadeOutRegistration, pressButton, sidebarTaken } from './detail-motion.js';
 import { eventHasSlots } from './slots.js';
 
 
@@ -41,6 +42,7 @@ export async function submitRegistration(eventId, event, btnId, formContainerId)
         return;
     }
 
+    pressButton(btn);
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Wird gesendet...';
 
@@ -77,7 +79,8 @@ export async function submitRegistration(eventId, event, btnId, formContainerId)
 
         if (submitRes.ok) {
             showToast(result.message || 'Erfolgreich!', 'success');
-            showEventDetail(eventId);
+            // The page updates in place; the bar grows from the places shown so far
+            showEventDetail(eventId, { celebrate: 'registered', fromTaken: sidebarTaken() });
         } else {
             showToast(result.error || 'Fehler bei der Anmeldung.', 'danger');
             // Allow retry by not reloading the whole page, just resetting button
@@ -132,7 +135,8 @@ export async function unregisterFromEvent() {
 
         if (res.ok) {
             showToast(result.message || 'Erfolgreich abgemeldet!', 'success');
-            // Reload the event detail to show registration form again
+            // The status box fades away, then the form comes back
+            await fadeOutRegistration();
             showEventDetail(eventId);
         } else {
             showToast(result.error || 'Fehler bei der Abmeldung.', 'danger');

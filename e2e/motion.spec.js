@@ -370,3 +370,47 @@ test('the countdown flips only the digits that change', async ({ page }, testInf
     expect(await page.locator('#detail-countdown-area .countdown-digit > span').count()).toBe(count);
     expect(errors).toEqual([]);
 });
+
+// ── Success moment ─────────────────────────────────────────────────────────
+
+test('registering celebrates in place', async ({ page, browser }, testInfo) => {
+    test.skip(testInfo.project.name !== 'desktop', 'desktop first; the phone runs the same code');
+    const errors = watchErrors(page);
+    // An admin creates an open event of this test: desktop and phone share the database
+    const adminContext = await browser.newContext();
+    const adminPage = await adminContext.newPage();
+    await loginAs(adminPage, 'admin');
+    const title = `E2E Erfolg ${Date.now()}`;
+    const created = await adminPage.evaluate(async (eventTitle) => {
+        const { token } = await (await fetch('/api/csrf-token')).json();
+        const res = await fetch('/api/admin/events', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': token },
+            body: JSON.stringify({ title: eventTitle, status: 'active', accessMode: 'open', approvalMode: 'instant', maxParticipants: 10, startDate: new Date(Date.now() + 7 * 86_400_000).toISOString() })
+        });
+        return res.json();
+    }, title);
+    try {
+        await loginAs(page, 'member');
+        await page.evaluate((id) => { window.location.hash = `#event/${id}`; }, created.id);
+        await expect(page.locator('#detail-title')).toHaveText(title);
+        await page.locator('#register-btn').click();
+        await expect(page.locator('#detail-registered')).toBeVisible();
+        await expect(page.locator('#sidebar-action-area .btn')).toContainText('Angemeldet');
+        await expect.poll(() => page.locator('#sidebar-capacity-content .capacity-meter').evaluate(meter => meter.value)).toBe(1);
+        // The spring leaves nothing behind
+        await expect.poll(async () => isIdentity(await transformOf(page.locator('#detail-registered')))).toBe(true);
+
+        page.once('dialog', dialog => dialog.accept());
+        await page.locator('#unregister-btn').click();
+        await expect(page.locator('#register-btn')).toBeVisible();
+        await expect(page.locator('#detail-registered')).toBeHidden();
+        expect(errors).toEqual([]);
+    } finally {
+        await adminPage.evaluate(async (id) => {
+            const { token } = await (await fetch('/api/csrf-token')).json();
+            await fetch(`/api/admin/events/${id}`, { method: 'DELETE', headers: { 'X-CSRF-TOKEN': token } });
+        }, created.id);
+        await adminContext.close();
+    }
+});

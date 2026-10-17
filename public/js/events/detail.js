@@ -13,6 +13,7 @@ import { renderFormFields, submitRegistration } from './registration-form.js';
 import { eventHasSlots, renderOwnSlot, renderRoster, renderSlotPicker } from './slots.js';
 import { eventEnd } from './cards.js';
 import { startCountdown } from './countdown.js';
+import { revealDetail } from './detail-motion.js';
 
 export const GRADIENT_PRESETS = [
     'linear-gradient(135deg, #6d28d9 0%, #8b5cf6 100%)',
@@ -219,7 +220,14 @@ export function resetEventDetailAreas() {
     });
 }
 
-export async function showEventDetail(eventId) {
+/**
+ * Show an event page.
+ *
+ * @param {string} eventId -> Event id.
+ * @param {Object} [options] -> `{ celebrate, fromTaken }`: after a registration or a check-in the page updates in place with the success moment (detail-motion.js).
+ * @returns {Promise<void>}
+ */
+export async function showEventDetail(eventId, { celebrate, fromTaken } = {}) {
     if (!eventId) return navigateTo('events');
 
     // Reset guest selection for fresh start
@@ -323,7 +331,7 @@ export async function showEventDetail(eventId) {
 
         if (!state.currentUser) {
             renderSidebarAction('none');
-            gsap.from('.col-lg-8', { y: 20, opacity: 0, duration: 0.4, ease: 'power3.out' });
+            revealDetail();
             return;
         }
 
@@ -344,10 +352,11 @@ export async function showEventDetail(eventId) {
             renderOwnSlot(event, regData);
 
             renderSidebarAction('registered');
-            gsap.from('.col-lg-8', { y: 20, opacity: 0, duration: 0.4, ease: 'power3.out' });
+            // The check-in box exists after this call: the success moment of a check-in springs it
+            renderCheckinSection(eventId, event, regData);
+            revealDetail(celebrate, { fromTaken });
             loadDetailParticipants(eventId);
             loadComments(eventId);
-            renderCheckinSection(eventId, event, regData);
             return;
         }
 
@@ -369,7 +378,7 @@ export async function showEventDetail(eventId) {
                 noAccessArea.style.display = 'block';
                 document.getElementById('no-access-text').textContent = 'Du hast nicht die erforderliche Rolle für dieses Event.';
                 renderSidebarAction('noaccess');
-                gsap.from('.col-lg-8', { y: 20, opacity: 0, duration: 0.4, ease: 'power3.out' });
+                revealDetail();
                 return;
             }
         }
@@ -426,7 +435,7 @@ export async function showEventDetail(eventId) {
             renderSidebarAction('register', event);
         }
 
-        gsap.from('.col-lg-8', { y: 20, opacity: 0, duration: 0.4, ease: 'power3.out' });
+        revealDetail();
 
         // Load comments section
         loadDetailParticipants(eventId);
