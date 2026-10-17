@@ -141,7 +141,8 @@ export function initDialogMotion(root) {
     const dialogOf = (event) => event.target?.querySelector?.('.modal-dialog') || null;
     root.addEventListener('show.bs.modal', (event) => {
         const dialog = dialogOf(event);
-        if (dialog) animateFromTo(dialog, { scale: 0.86, y: 12, opacity: 0 }, { scale: 1, y: 0, opacity: 1, duration: 0.45, ease: SPRING });
+        // Bootstrap shows the dialog after its 0.15 s backdrop fade; the spring starts then
+        if (dialog) animateFromTo(dialog, { scale: 0.86, y: 12, opacity: 0 }, { scale: 1, y: 0, opacity: 1, duration: 0.45, delay: 0.15, ease: SPRING });
     });
     // Bootstrap removes a dialog and a toast after its own 0.15 s fade
     root.addEventListener('hide.bs.modal', (event) => {

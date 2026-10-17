@@ -106,6 +106,8 @@ test('every dialog springs open and shrinks away', async () => {
     assert.deepEqual(JSON.parse(JSON.stringify(open.fromVars)), { scale: 0.86, y: 12, opacity: 0 });
     assert.equal(open.vars.ease, 'back.out(1.4)');
     assert.equal(open.vars.duration, 0.45);
+    // Bootstrap shows the dialog only after its 0.15 s backdrop fade: the spring waits for it
+    assert.equal(open.vars.delay, 0.15);
 
     root.listeners['hide.bs.modal']({ target: modal });
     const close = animations.at(-1);
