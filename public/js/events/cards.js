@@ -201,7 +201,8 @@ export function renderEventCard(event, now) {
         event.seriesId ? `<span class="chip chip-sm"><i class="bi bi-arrow-repeat"></i>Serie · ${seriesSize} ${seriesSize === 1 ? 'Termin' : 'Termine'}</span>` : '',
         renderCapacity(event)
     ].join('');
-    return `<a class="glass-card event-card" href="#event/${escapeHtml(String(event.id ?? ''))}">`
+    const id = escapeHtml(String(event.id ?? ''));
+    return `<a class="glass-card event-card" href="#event/${id}" data-click="openEventCard" data-event-id="${id}">`
         + `<div class="event-card-media" data-banner-bg="${escapeHtml(bannerBackground(event))}">${banner}${category}</div>`
         + renderDateTile(event, now)
         + `<div class="event-card-body"><h3 class="event-card-title">${escapeHtml(String(event.title ?? ''))}</h3>${renderEventWhen(event, now)}<div class="event-card-facts">${facts}</div></div>`

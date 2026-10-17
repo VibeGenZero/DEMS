@@ -5,9 +5,12 @@
  */
 import { registerActions } from '../core/actions.js';
 import { emptyState } from '../core/components.js';
+import { animateFromTo, growMeters } from '../core/motion.js';
+import { state } from '../core/state.js';
 import { escapeHtml, showElement } from '../core/ui.js';
 import { forgetCalendarEvents, showCalendar } from './calendar.js';
 import { renderEventCard, renderEventCardSkeletons } from './cards.js';
+import { filterOverview } from './overview-motion.js';
 
 export const UPCOMING_EVENTS_URL = '/api/events?upcoming=1&limit=100';
 
@@ -109,6 +112,17 @@ export function renderOverview(now = new Date()) {
     empty.style.display = 'none';
     grid.innerHTML = visible.map(event => renderEventCard(event, now)).join('');
     applyBannerColors(grid);
+    // The card whose copy is flying keeps its place free (events/card-flight.js)
+    if (state.flyingEventId) {
+        grid.querySelectorAll('.event-card').forEach(card => card.classList.toggle('is-flying', card.dataset.eventId === state.flyingEventId));
+    }
+}
+
+// Cards appear one after the other and their place meters grow; not when they come back from a card flight
+function revealCards() {
+    if (currentView !== 'grid' || state.flyingEventId) return;
+    animateFromTo('#events-grid .event-card', { y: 12, opacity: 0 }, { y: 0, opacity: 1, duration: 0.25, stagger: 0.04, ease: 'power2.out' });
+    growMeters(document.querySelectorAll('#events-grid .capacity-meter'), { delay: 0.1 });
 }
 
 function showLoadError(status) {
@@ -130,8 +144,16 @@ export async function showEventsSection() {
     document.getElementById('events-section').style.display = 'block';
     forgetCalendarEvents();
     document.getElementById('events-empty').style.display = 'none';
-    document.getElementById('events-grid').innerHTML = renderEventCardSkeletons(SKELETON_CARDS);
+    // Coming back: the known cards at once, so a flying card can land; fresh data follows
+    const cached = upcomingEvents.length > 0;
+    if (cached) {
+        await renderOverview();
+        revealCards();
+    } else {
+        document.getElementById('events-grid').innerHTML = renderEventCardSkeletons(SKELETON_CARDS);
+    }
 
+    let fresh;
     try {
         const res = await fetch(UPCOMING_EVENTS_URL);
         if (!res.ok) {
@@ -140,15 +162,17 @@ export async function showEventsSection() {
         }
         const result = await res.json();
         if (!Array.isArray(result.data)) throw new Error('Ungültige API-Antwort');
-        upcomingEvents = result.data;
+        fresh = result.data;
     } catch (err) {
         console.error('Error loading events:', err);
         showLoadError(0);
         return;
     }
 
-    await renderOverview();
-    if (currentView === 'grid') gsap.fromTo('#events-grid .event-card', { y: 12, opacity: 0 }, { y: 0, opacity: 1, duration: 0.25, stagger: 0.04, ease: 'power2.out' });
+    const changed = JSON.stringify(fresh) !== JSON.stringify(upcomingEvents);
+    upcomingEvents = fresh;
+    if (!cached || changed) await renderOverview();
+    if (!cached) revealCards();
 }
 
 /**
@@ -159,7 +183,15 @@ export async function showEventsSection() {
  */
 export function filterByCategory(category) {
     activeCategory = category;
-    return renderOverview();
+    return applyFilter();
+}
+
+// A new filter in the card view lets the cards glide; the calendar just redraws
+function applyFilter() {
+    const grid = document.getElementById('events-grid');
+    if (currentView !== 'grid' || !grid) return renderOverview();
+    const nextIds = filterEvents(upcomingEvents, { category: activeCategory, search: searchText() }).map(event => String(event.id ?? ''));
+    filterOverview(grid, nextIds, () => renderOverview());
 }
 
 /**
@@ -171,7 +203,7 @@ export function resetEventFilters() {
     activeCategory = '';
     const search = document.getElementById('events-search');
     if (search) search.value = '';
-    return renderOverview();
+    return applyFilter();
 }
 
 /**
@@ -205,7 +237,7 @@ export async function switchView(view) {
 registerActions({
     showEventsSection: () => showEventsSection(),
     filterByCategory: (el) => filterByCategory(el.dataset.category),
-    searchEvents: () => renderOverview(),
+    searchEvents: () => applyFilter(),
     resetEventFilters: () => resetEventFilters(),
     switchView: (el) => switchView(el.dataset.view)
 });

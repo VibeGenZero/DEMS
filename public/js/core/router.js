@@ -3,8 +3,10 @@
  */
 import { registerActions } from './actions.js';
 import { state } from './state.js';
+import { placeNavMarker } from './tab-glider.js';
 import { showBotControlSection } from '../admin/bot-control.js';
 import { showAdminSection } from '../admin/dashboard.js';
+import { beginCardClose, landCardFlight } from '../events/card-flight.js';
 import { showEventDetail } from '../events/detail.js';
 import { showEventsSection } from '../events/list.js';
 import { showDebugSection } from '../pages/debug.js';
@@ -51,6 +53,11 @@ export function restorePendingRoute() {
     }
 }
 
+/**
+ * Show the section of the current hash.
+ *
+ * @returns {Promise<void>|void} -> For the overview and an event page: resolves once the section is drawn.
+ */
 export function handleRoute() {
     // Clear countdown timers
     state.countdownTimers.forEach(t => clearInterval(t));
@@ -72,6 +79,9 @@ export function handleRoute() {
     const route = parts[0];
     const param = parts[1];
 
+    // A page opened by a card flight is copied before its section disappears
+    const closingFlight = beginCardClose(route);
+
     document.querySelectorAll('.app-section').forEach(s => s.style.display = 'none');
 
     // Only the navbar: the tabs component (.nav.nav-pills) uses .nav-link too
@@ -81,6 +91,7 @@ export function handleRoute() {
             link.classList.add('active');
         }
     });
+    placeNavMarker();
 
     if (!state.currentUser && route !== 'login' && route !== 'info') {
         if ((route === 'event' || route === 'poll') && param) rememberPendingRoute(hash);
@@ -89,12 +100,13 @@ export function handleRoute() {
     }
 
     switch (route) {
-        case 'events':
-            showEventsSection();
-            break;
+        case 'events': {
+            const shown = showEventsSection();
+            if (closingFlight) landCardFlight(shown);
+            return shown;
+        }
         case 'event':
-            showEventDetail(param);
-            break;
+            return showEventDetail(param);
         case 'polls':
             showPollsSection();
             break;

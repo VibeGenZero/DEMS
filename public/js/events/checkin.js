@@ -157,7 +157,7 @@ export async function submitCheckin(eventId) {
                 });
             }
 
-            showEventDetail(eventId);
+            showEventDetail(eventId, data.alreadyCheckedIn ? {} : { celebrate: 'checkedin' });
         } else {
             showToast(data.error || 'Fehler beim Check-in.', 'danger');
         }

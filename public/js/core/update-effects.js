@@ -5,6 +5,7 @@
  * browser, never with "reduce motion". Styles: UPDATE EFFECTS in style.css.
  */
 import { registerActions } from './actions.js';
+import { prefersReducedMotion } from './motion.js';
 import { showElement } from './ui.js';
 
 // Pieces per effect, the icons they cycle through, and how long one piece moves (ms)
@@ -108,11 +109,6 @@ function applyEffectData(layer) {
         piece.style.setProperty('--fx-drift', `${Number(fxDrift) || 0}vw`);
         piece.style.setProperty('--fx-turn', `${Number(fxTurn) || 0}deg`);
     }
-}
-
-// People who asked their system for less motion get none
-function prefersReducedMotion() {
-    return typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 }
 
 /**

@@ -1,6 +1,7 @@
 /**
  * Shared UI helpers: escaping, Markdown, toasts, error banner, confirm dialog.
  */
+import { animateFromTo, SPRING } from './motion.js';
 import { state } from './state.js';
 
 
@@ -152,10 +153,7 @@ export function showToast(message, type = 'info') {
     const toast = new bootstrap.Toast(toastEl, { delay: 4000 });
     toast.show();
 
-    gsap.fromTo(toastEl,
-        { x: 50, opacity: 0, scale: 0.9 },
-        { x: 0, opacity: 1, scale: 1, duration: 0.5, ease: "back.out(1.5)" }
-    );
+    animateFromTo(toastEl, { x: 40, opacity: 0 }, { x: 0, opacity: 1, duration: 0.5, ease: SPRING });
 }
 
 export function escapeHtml(str) {

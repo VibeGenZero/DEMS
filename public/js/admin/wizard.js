@@ -3,6 +3,7 @@
  * Location field: wizard-location.js; rules: wizard-checks.js; marks: wizard-marks.js.
  */
 import { state } from '../core/state.js';
+import { glideTabs } from '../core/tab-glider.js';
 import { loadAdminEvents, loadAdminStats } from './dashboard.js';
 import { addFormField, getFormFieldsFromBuilder, getSlotsFromEditor, renderSlotEditor } from './wizard-builders.js';
 import { checkWizardStep } from './wizard-checks.js';
@@ -27,6 +28,7 @@ function showPreviewArea(visible) {
         button.classList.toggle('active', active);
         button.setAttribute('aria-selected', String(active));
     }
+    glideTabs(document.getElementById('wizard-mode'));
 }
 
 /**

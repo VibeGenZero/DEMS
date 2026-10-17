@@ -96,8 +96,21 @@ function dispatch(event, attribute) {
     // The innermost element with an action wins; outer actions do not run
     const element = target.closest(`[${attribute}]`);
     if (!element) return;
-    if (attribute === 'data-click' && element.tagName === 'A') event.preventDefault();
+    if (attribute === 'data-click' && element.tagName === 'A') {
+        // A modifier click on a real link opens a new tab or window: that is the browser's job
+        if (isModifiedClick(event) && opensSomewhere(element)) return;
+        event.preventDefault();
+    }
     runAction(element.getAttribute(attribute), element, event);
+}
+
+function isModifiedClick(event) {
+    return (event.button ?? 0) !== 0 || !!(event.ctrlKey || event.metaKey || event.shiftKey || event.altKey);
+}
+
+function opensSomewhere(link) {
+    const href = link.getAttribute('href');
+    return !!href && href !== '#';
 }
 
 function applyFallback(img) {

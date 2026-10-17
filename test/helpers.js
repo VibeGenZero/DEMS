@@ -304,7 +304,11 @@ function createFakeElement(registry, id = '', classNames = []) {
         setAttribute() {},
         getAttribute: () => null,
         appendChild: register,
+        prepend: register,
         insertAdjacentElement: (_position, child) => register(child),
+        // Not laid out: no box, no offset parent (a hidden element in a browser)
+        offsetParent: null,
+        getBoundingClientRect: () => ({ left: 0, top: 0, right: 0, bottom: 0, width: 0, height: 0 }),
         querySelector: () => null,
         querySelectorAll: () => []
     };
@@ -375,6 +379,7 @@ async function loadFrontendApp(routes, { storage = {}, confirm = true, reducedMo
     const toasts = [];
     const dialogs = [];
     const requests = [];
+    const animations = [];
     const container = createFakeElement(registry);
     const listeners = [];
     const document = {
@@ -400,6 +405,7 @@ async function loadFrontendApp(routes, { storage = {}, confirm = true, reducedMo
         return { ok: true, status: 200, json: async () => body };
     };
     const noop = () => {};
+    const gsap = createGsapRecorder(animations);
     const context = vm.createContext({
         document, fetch, console,
         location: { hash: '', search: '' },
@@ -411,7 +417,7 @@ async function loadFrontendApp(routes, { storage = {}, confirm = true, reducedMo
         URL, URLSearchParams,
         setTimeout: noop, clearTimeout: noop, setInterval: () => 0, clearInterval: noop,
         matchMedia: (query) => ({ matches: reducedMotion && /prefers-reduced-motion:\s*reduce/.test(query) }),
-        gsap: { from: noop, to: noop, fromTo: noop, set: noop },
+        gsap,
         marked: { parse: (text) => text },
         DOMPurify: { sanitize: (text) => text },
         bootstrap: {
@@ -471,7 +477,49 @@ async function loadFrontendApp(routes, { storage = {}, confirm = true, reducedMo
         }
     }
     const fire = (type) => listeners.filter(entry => entry.type === type).forEach(entry => entry.listener({ type }));
-    return { app, state: app.state, element: (id) => registry.get(id) || null, toasts, dialogs, requests, location: context.location, fire };
+    return { app, state: app.state, element: (id) => registry.get(id) || null, toasts, dialogs, requests, animations, location: context.location, fire };
+}
+
+/**
+ * A gsap double that records every call instead of animating. Tweens finish
+ * at once (their onComplete runs right away); a timeline calls its own
+ * onComplete in a microtask, after the caller has added its steps.
+ *
+ * @param {Array<Object>} animations -> Receives `{ method, targets, vars, fromVars }` per call.
+ * @returns {Object} -> to/from/fromTo/set, timeline, killTweensOf, delayedCall.
+ */
+function createGsapRecorder(animations) {
+    const tween = { kill() {} };
+    const record = (method) => (targets, first, second) => {
+        const entry = method.endsWith('fromTo')
+            ? { method, targets, fromVars: first, vars: second }
+            : { method, targets, vars: first };
+        animations.push(entry);
+        if (!method.endsWith('set') && entry.vars && typeof entry.vars.onComplete === 'function') entry.vars.onComplete();
+        return tween;
+    };
+    const timeline = (options = {}) => {
+        const steps = {};
+        for (const method of ['to', 'from', 'fromTo', 'set']) {
+            const add = record(`timeline.${method}`);
+            steps[method] = (...args) => { add(...args); return steps; };
+        }
+        steps.add = (step) => { if (typeof step === 'function') step(); return steps; };
+        steps.addLabel = () => steps;
+        steps.call = (fn) => { if (typeof fn === 'function') fn(); return steps; };
+        steps.kill = () => {};
+        if (typeof options.onComplete === 'function') Promise.resolve().then(options.onComplete);
+        return steps;
+    };
+    return {
+        to: record('to'),
+        from: record('from'),
+        fromTo: record('fromTo'),
+        set: record('set'),
+        timeline,
+        killTweensOf: (targets) => { animations.push({ method: 'killTweensOf', targets }); },
+        delayedCall: (delay, fn) => { animations.push({ method: 'delayedCall', vars: { delay }, fn }); return tween; }
+    };
 }
 
 module.exports = {

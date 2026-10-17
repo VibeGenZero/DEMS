@@ -3,6 +3,8 @@
  */
 import { state } from '../core/state.js';
 import { registerActions } from '../core/actions.js';
+import { animateFromTo, countUpAll } from '../core/motion.js';
+import { glideTabs } from '../core/tab-glider.js';
 import { escapeHtml, showToast } from '../core/ui.js';
 import { ADMIN_SORT_KEYS, ADMIN_TABS, DEFAULT_ADMIN_SORT, adminTabCounts, buildAdminRows } from './event-rows.js';
 import { renderAdminEmpty, renderAdminLoadError, renderAdminTable, renderAdminTableSkeleton, renderAdminTabs } from './event-table.js';
@@ -78,10 +80,8 @@ export async function loadAdminStats() {
       </div>
     `;
 
-        gsap.fromTo('.stat-card',
-            { y: 20, opacity: 0 },
-            { y: 0, opacity: 1, duration: 0.3, stagger: 0.05, ease: 'power3.out' }
-        );
+        animateFromTo('.stat-card', { y: 20, opacity: 0 }, { y: 0, opacity: 1, duration: 0.3, stagger: 0.05, ease: 'power3.out' });
+        countUpAll(container.querySelectorAll('.stat-value'));
     } catch {
         container.innerHTML = '<div class="text-muted text-center py-3">Statistiken konnten nicht geladen werden.</div>';
     }
@@ -100,6 +100,7 @@ export function renderAdminEvents(now = new Date()) {
     const sort = sortOfTab(tab);
     const rows = buildAdminRows(events, { tab, search, sort, now });
     document.getElementById('admin-events-tabs').innerHTML = renderAdminTabs(counts, tab);
+    glideTabs(document.getElementById('admin-events-tabs'));
     document.getElementById('admin-events-table').innerHTML = rows.length
         ? renderAdminTable(rows, { sort, expanded, now })
         : renderAdminEmpty({ tab, search, counts });
@@ -110,6 +111,7 @@ export async function loadAdminEvents() {
     // Placeholders only before the first answer: after an action the old table stays until the new one is there
     if (!adminView.events) {
         document.getElementById('admin-events-tabs').innerHTML = renderAdminTabs(null, adminView.tab);
+        glideTabs(document.getElementById('admin-events-tabs'));
         table.innerHTML = renderAdminTableSkeleton();
     }
     try {

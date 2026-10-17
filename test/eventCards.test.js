@@ -191,7 +191,7 @@ test('an event card links to the event and shows banner, date, time and facts', 
         startDate: at(15, 20), bannerUrl: 'https://example.com/raid.png', accessMode: 'role-required',
         maxParticipants: 6, currentParticipants: 2, myStatus: 'waitlisted'
     }, NOW);
-    assert.match(html, /^<a class="glass-card event-card" href="#event\/ev-1">/);
+    assert.match(html, /^<a class="glass-card event-card" href="#event\/ev-1" data-click="openEventCard" data-event-id="ev-1">/);
     assert.match(html, /<img class="event-card-banner" src="https:\/\/example\.com\/raid\.png" alt="" loading="lazy" data-fallback="hide">/);
     assert.match(html, /event-card-category"><span>Raid<\/span>/);
     assert.match(html, /date-tile-day">15</);
