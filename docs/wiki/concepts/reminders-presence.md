@@ -2,8 +2,8 @@
 id: reminders-presence
 title: Reminders, start notifications and bot presence
 type: concept
-tags: [reminders, scheduler, presence, activity, bot-settings, bot-control]
-sources: [bot.js, utils/reminders.js, utils/eventListing.js, routes/admin.js, server.js]
+tags: [reminders, scheduler, archive, presence, activity, bot-settings, bot-control]
+sources: [bot.js, utils/reminders.js, utils/eventListing.js, utils/eventArchive.js, routes/admin.js, server.js, public/js/admin/bot-control.js]
 depends_on: [bot, data-model]
 see_also: [event-lifecycle, discord-integration]
 ---
@@ -23,6 +23,12 @@ see_also: [event-lifecycle, discord-integration]
 - Saving an event (`POST`/`PUT /api/admin/events`) stores `mergeReminderHours(...)`: a reminder that was already sent stays sent while `startDate` is unchanged, a new start time makes every reminder due again. Duplicating an event resets `sent` and `eventStartNotificationSent`.
 - Times are formatted with `TIMEZONE` (default `Europe/Berlin`).
 
+## Archive scheduler (`utils/eventArchive.js`, W-01)
+
+- `startArchiveScheduler()` is started by `server.js` (independent of the bot and its settings) and stopped in the graceful shutdown. It runs `archiveEndedEvents()` right away, then every 5 min (`ARCHIVE_INTERVAL_MS`, timer `unref`'d).
+- `isDueForArchive(event, now)`: `status === 'active'` and `now >= end + 24 h` (`ARCHIVE_DELAY_MS`; end rule of `eventEndTime`). Each due event gets `status: 'archived'`, an audit entry `AUTO_ARCHIVE_EVENT` by `system` and `notifyRegistrationsChanged` (announcement refresh); an error on one event is logged and the others go on. The log line `🗄️ Archived N ended event(s)` appears only when N > 0.
+- Rules: [event-lifecycle](event-lifecycle.md).
+
 ## Presence (`applyBotSettings`)
 
 | Setting | Values / effect |
@@ -36,7 +42,7 @@ see_also: [event-lifecycle, discord-integration]
 
 ## Bot control center (admin `#bot-control`)
 
-`GET /api/admin/bot/status` (`getBotStatus`: online, tag, avatar, uptime, ping, guild name/member count, DMs sent, commands processed, scheduler/presence flags), `GET/PUT /api/admin/bot/settings`, `GET /api/admin/bot/running-events` (`getRunningEvents`: active events with accepted/pending/waitlisted counts).
+`GET /api/admin/bot/status` (`getBotStatus`: online, tag, avatar, uptime, ping, guild name/member count, DMs sent, commands processed, scheduler/presence flags), `GET/PUT /api/admin/bot/settings`, `GET /api/admin/bot/running-events` (`getRunningEvents`: active events that are not over (`isEventOver`), with accepted/pending/waitlisted counts). The cards (`admin/bot-control.js`) say "LIVE" only between start and end (`isRunning`), "Bevorstehend" before the start, "Beendet" otherwise.
 
 ## Gotchas
 

@@ -49,7 +49,7 @@ see_also: [event-lifecycle, maintenance-mode, discord-integration, api-index]
 | DELETE | `/polls/:id` | `deletePoll` (votes too; posted messages become a notice) | `DELETE_POLL` |
 | GET | `/bot/status` | `getBotStatus()` | — |
 | GET / PUT | `/bot/settings` | presence + feature toggles (`saveBotSettings` → `applyBotSettings`) | `UPDATE_BOT_SETTINGS` |
-| GET | `/bot/running-events` | active events with registration stats | — |
+| GET | `/bot/running-events` | active events that are not over, with registration stats | — |
 | GET / PUT | `/maintenance` | warning, login/registration toggles, planned maintenance (panic state preserved) | `UPDATE_MAINTENANCE` |
 | POST | `/maintenance/panic` | lockdown, no password | `PANIC_MODE_ACTIVATED` |
 | POST | `/maintenance/panic/deactivate` | body `{ password }` = `ADMIN_RESET_PASSWORD` (`safeEqual`) | `PANIC_MODE_DEACTIVATED` |

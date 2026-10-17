@@ -3,7 +3,7 @@ id: utils
 title: utils/ — domain helpers
 type: module
 tags: [utils, registration, form-fields, waitlist, audit-log, profile, debug]
-sources: [utils/registrationService.js, utils/formFields.js, utils/eventUtils.js, utils/eventListing.js, utils/profileEvents.js, utils/eventUrl.js, utils/userProfile.js, utils/avatar.js, utils/botPermissions.js, utils/csv.js, utils/template.js, utils/sessionStore.js, utils/reminders.js, utils/debugLog.js, utils/capacity.js, utils/slotService.js, utils/eventLock.js, utils/announcementRefresh.js, utils/pollService.js, utils/pollStore.js, utils/eventPreview.js]
+sources: [utils/registrationService.js, utils/formFields.js, utils/eventUtils.js, utils/eventListing.js, utils/profileEvents.js, utils/eventUrl.js, utils/userProfile.js, utils/avatar.js, utils/botPermissions.js, utils/csv.js, utils/template.js, utils/sessionStore.js, utils/reminders.js, utils/debugLog.js, utils/capacity.js, utils/slotService.js, utils/eventLock.js, utils/announcementRefresh.js, utils/pollService.js, utils/pollStore.js, utils/eventPreview.js, utils/eventArchive.js]
 part_of: [architecture]
 depends_on: [data-layer, bot]
 see_also: [registration-flow, form-fields, role-slots]
@@ -48,10 +48,19 @@ Exports `FORM_FIELD_TYPE` (`text, textarea, dropdown, checkbox, user, role, chan
 | Export | Behaviour |
 |---|---|
 | `parseDate(value)` | `Date` or `null`; accepts the older format with a space instead of `T` |
-| `eventEndTime(event)` | `endDate`, else start + 2 h (`DEFAULT_DURATION_MS`); `null` without a valid `startDate` (a space instead of `T` is accepted) |
-| `isEventOver(event, now)` | end before `now`; an event without a date counts as upcoming. Used by `GET /api/events?upcoming=1` and the bot's auto status; `public/js/events/cards.js` applies the same rule in the browser |
+| `eventEndTime(event)` | `endDate`, else start + 2 h (`DEFAULT_DURATION_MS`); an `endDate` before the start counts as missing; `null` without a valid `startDate` (a space instead of `T` is accepted) |
+| `isEventOver(event, now)` | end before `now`; an event without a date counts as upcoming. Used by `GET /api/events?upcoming=1`, the registration (`event_ended`), the Discord buttons and modals, `getRunningEvents` and the bot's auto status; `public/js/events/cards.js` applies the same rule in the browser |
 | `pickSeriesRepresentative(seriesEvents, now)` | the date that stands for a series in `GET /api/events`: the first one that is not over (a running date included, so the overview shows "Läuft gerade"), else the last |
 | `myRegistrationStatus(registrations, userId)` | `myStatus` of the event list: own `accepted`/`pending`/`waitlisted`, else `guest` in an accepted or pending registration of someone else, else `null` |
+
+## utils/eventArchive.js (scheduler)
+
+| Export | Behaviour |
+|---|---|
+| `ARCHIVE_DELAY_MS`, `ARCHIVE_INTERVAL_MS` | 24 h after the end; a run every 5 min |
+| `isDueForArchive(event, now)` | `status === 'active'` and `now` at least 24 h after `eventEndTime`; false without a start |
+| `archiveEndedEvents({ now })` | archives every due event (`status`, `updatedAt`), audit `AUTO_ARCHIVE_EVENT` by `system`, `notifyRegistrationsChanged`; one failing event does not stop the others; returns the count |
+| `startArchiveScheduler()`, `stopArchiveScheduler()` | one run right away, then the interval (`unref`'d); started by `server.js`. Rules: [event-lifecycle](../concepts/event-lifecycle.md) |
 
 ## utils/profileEvents.js (pure)
 
