@@ -32,10 +32,12 @@ import './polls/admin.js';
 import './polls/polls.js';
 import { initActions } from './core/actions.js';
 import { createParticles, finishLoading, runBootAnimation } from './core/boot.js';
+import { initDialogMotion } from './core/motion.js';
 import { checkUpdates } from './core/updates.js';
 import { showUserData } from './pages/info.js';
 
 initActions(document);
+initDialogMotion(document);
 
 document.addEventListener('DOMContentLoaded', () => {
     const lastBoot = localStorage.getItem('dems_boot_ts');

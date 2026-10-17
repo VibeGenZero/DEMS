@@ -128,3 +128,27 @@ export function growMeter(meter, { from = 0, duration = 0.8, delay = 0 } = {}) {
     const to = Number(meter.value) || 0;
     gsap.fromTo(meter, { value: from }, { value: to, duration, delay, ease: SPRING });
 }
+
+/**
+ * Let every Bootstrap dialog spring open and shrink away, and the toast glide
+ * out. Bootstrap keeps its short fade; GSAP moves the dialog box. Called once
+ * at startup from main.js.
+ *
+ * @param {Document} root -> Usually document; the Bootstrap events bubble up to it.
+ * @returns {void}
+ */
+export function initDialogMotion(root) {
+    const dialogOf = (event) => event.target?.querySelector?.('.modal-dialog') || null;
+    root.addEventListener('show.bs.modal', (event) => {
+        const dialog = dialogOf(event);
+        if (dialog) animateFromTo(dialog, { scale: 0.86, y: 12, opacity: 0 }, { scale: 1, y: 0, opacity: 1, duration: 0.45, ease: SPRING });
+    });
+    // Bootstrap removes a dialog and a toast after its own 0.15 s fade
+    root.addEventListener('hide.bs.modal', (event) => {
+        const dialog = dialogOf(event);
+        if (dialog && !event.defaultPrevented) animateTo(dialog, { scale: 0.94, opacity: 0, duration: 0.15, ease: 'power2.in' });
+    });
+    root.addEventListener('hide.bs.toast', (event) => {
+        if (event.target && !event.defaultPrevented) animateTo(event.target, { x: 40, opacity: 0, duration: 0.15, ease: 'power2.in' });
+    });
+}

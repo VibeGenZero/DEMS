@@ -306,6 +306,12 @@ a {
   --bs-modal-zindex: var(--z-dialog);
 }
 
+/* GSAP springs the dialog box (initDialogMotion in core/motion.js); Bootstrap only fades */
+.modal.fade .modal-dialog {
+  transform: none;
+  transition: none;
+}
+
 /* ═══════════════════════════════════════════ */
 /* TABS                                        */
 /* .nav.nav-pills as segments; scrolls         */

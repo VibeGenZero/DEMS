@@ -85,3 +85,61 @@ test('the section fade has no movement under reduced motion', () => {
     assert.ok(frames.length > 0, 'keyframes sectionFadeInCalm missing');
     assert.ok(frames.every(frame => frame.declarations.every(entry => entry.property === 'opacity')));
 });
+
+/** A root that keeps one listener per event type, and a modal around a dialog element. */
+function fakeRoot() {
+    const listeners = {};
+    return { listeners, addEventListener: (type, listener) => { listeners[type] = listener; } };
+}
+
+test('every dialog springs open and shrinks away', async () => {
+    const { app, animations } = await loadFrontendApp({});
+    const root = fakeRoot();
+    const dialog = { name: 'dialog' };
+    const modal = { querySelector: (selector) => (selector === '.modal-dialog' ? dialog : null) };
+    app.initDialogMotion(root);
+
+    root.listeners['show.bs.modal']({ target: modal });
+    const open = animations.at(-1);
+    assert.equal(open.method, 'fromTo');
+    assert.equal(open.targets, dialog);
+    assert.deepEqual(JSON.parse(JSON.stringify(open.fromVars)), { scale: 0.86, y: 12, opacity: 0 });
+    assert.equal(open.vars.ease, 'back.out(1.4)');
+    assert.equal(open.vars.duration, 0.45);
+
+    root.listeners['hide.bs.modal']({ target: modal });
+    const close = animations.at(-1);
+    assert.equal(close.method, 'to');
+    assert.equal(close.vars.scale, 0.94);
+    assert.equal(close.vars.duration, 0.15);
+
+    // A hide another handler refused keeps the dialog as it is
+    const before = animations.length;
+    root.listeners['hide.bs.modal']({ target: modal, defaultPrevented: true });
+    assert.equal(animations.length, before);
+});
+
+test('a toast springs in from the right and glides out', async () => {
+    const { app, animations, element } = await loadFrontendApp({});
+    app.showToast('Gespeichert', 'success');
+    const shown = animations.at(-1);
+    assert.equal(shown.targets, element('app-toast'));
+    assert.equal(shown.fromVars.x, 40);
+    assert.equal(shown.vars.ease, 'back.out(1.4)');
+    assert.equal(shown.vars.duration, 0.5);
+
+    const root = fakeRoot();
+    app.initDialogMotion(root);
+    root.listeners['hide.bs.toast']({ target: element('app-toast') });
+    assert.equal(animations.at(-1).vars.x, 40);
+    assert.equal(animations.at(-1).vars.duration, 0.15);
+});
+
+test('with reduced motion a toast only fades in', async () => {
+    const { app, animations } = await loadFrontendApp({}, { reducedMotion: true });
+    app.showToast('Gespeichert', 'success');
+    const shown = animations.at(-1);
+    assert.equal(shown.method, 'fromTo');
+    assert.equal('x' in shown.fromVars, false);
+    assert.equal('x' in shown.vars, false);
+});
