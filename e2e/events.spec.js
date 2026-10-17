@@ -93,3 +93,14 @@ test('banners load, a broken one gives way to the event colour', async ({ page }
     const background = await broken.locator('.event-card-media').evaluate(media => getComputedStyle(media).backgroundImage);
     expect(background).toContain('gradient');
 });
+
+test('an ended event says so and offers no registration', async ({ page }) => {
+    const errors = watchErrors(page);
+    await loginAs(page, 'member');
+    await page.goto('/#event/dev-event-ended');
+    await expect(page.locator('#detail-ended')).toBeVisible();
+    await expect(page.locator('#detail-ended')).toContainText('Dieses Event ist vorbei.');
+    await expect(page.locator('#detail-register-area')).toBeHidden();
+    await expect(page.locator('#detail-countdown-area')).toBeHidden();
+    expect(errors).toEqual([]);
+});
