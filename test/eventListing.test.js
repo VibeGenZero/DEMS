@@ -66,3 +66,9 @@ test('an own rejected registration does not hide a guest place', () => {
     ];
     assert.equal(myRegistrationStatus(registrations, 'u-1'), 'guest');
 });
+
+test('an end before the start counts as missing', () => {
+    assert.equal(eventEndTime({ startDate: '2026-10-10T18:00:00.000Z', endDate: '2026-10-09T23:00:00.000Z' }).toISOString(), '2026-10-10T20:00:00.000Z');
+    // A future event with an old end date is not over before it starts
+    assert.equal(isEventOver({ startDate: '2026-10-20T18:00:00.000Z', endDate: '2026-10-01T18:00:00.000Z' }, new Date('2026-10-15T12:00:00.000Z')), false);
+});

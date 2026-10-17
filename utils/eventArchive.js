@@ -1,0 +1,88 @@
+/**
+ * Automatic archive of ended events (W-01): an active event is archived 24
+ * hours after its end (endDate, else start + 2 hours, see eventEndTime). The
+ * scheduler runs once at start, so events that ended during a pause are
+ * caught up, then every 5 minutes. Channels and the event role stay (B-10).
+ */
+const { db, collection, doc, getDocs, query, updateDoc, where } = require('../firebaseAdmin');
+const { eventEndTime } = require('./eventListing');
+const { addAuditLog } = require('./eventUtils');
+const { notifyRegistrationsChanged } = require('./announcementRefresh');
+
+const ARCHIVE_DELAY_MS = 24 * 60 * 60 * 1000;
+const ARCHIVE_INTERVAL_MS = 5 * 60 * 1000;
+
+let archiveTimer = null;
+
+/**
+ * Whether the scheduler archives an event now.
+ *
+ * @param {Object} event -> Event data.
+ * @param {Date} now -> Reference time.
+ * @returns {boolean} -> True for an active event whose end lies at least 24 hours back.
+ */
+function isDueForArchive(event, now) {
+    if (!event || event.status !== 'active') return false;
+    const end = eventEndTime(event);
+    return end !== null && now.getTime() >= end.getTime() + ARCHIVE_DELAY_MS;
+}
+
+/**
+ * Archive every active event that is due, log each one as done by the system
+ * and refresh its stored announcements (their buttons go away).
+ *
+ * @param {Object} [options] -> Overrides for tests.
+ * @param {Date} [options.now] -> Reference time.
+ * @returns {Promise<number>} -> Number of archived events.
+ */
+async function archiveEndedEvents({ now = new Date() } = {}) {
+    const snapshot = await getDocs(query(collection(db, 'events'), where('status', '==', 'active')));
+    let count = 0;
+    for (const eventDoc of snapshot.docs) {
+        const event = eventDoc.data();
+        if (!isDueForArchive(event, now)) continue;
+        try {
+            await updateDoc(doc(db, 'events', eventDoc.id), { status: 'archived', updatedAt: now.toISOString() });
+            await addAuditLog('AUTO_ARCHIVE_EVENT', 'system', `Archived "${event.title}" 24 hours after its end`, eventDoc.id);
+            notifyRegistrationsChanged(eventDoc.id);
+            count++;
+        } catch (err) {
+            console.error('Auto archive failed for', eventDoc.id, err.message);
+        }
+    }
+    if (count > 0) console.log(`🗄️ Archived ${count} ended event(s)`);
+    return count;
+}
+
+/**
+ * Start the archive scheduler: one run now, then every 5 minutes.
+ *
+ * @returns {void}
+ */
+function startArchiveScheduler() {
+    stopArchiveScheduler();
+    const run = () => archiveEndedEvents().catch(err => console.error('Archive scheduler failed:', err.message));
+    run();
+    archiveTimer = setInterval(run, ARCHIVE_INTERVAL_MS);
+    if (typeof archiveTimer.unref === 'function') archiveTimer.unref();
+    console.log('🗄️ Archive scheduler started (checks every 5 min)');
+}
+
+/**
+ * Stop the archive scheduler.
+ *
+ * @returns {void}
+ */
+function stopArchiveScheduler() {
+    if (archiveTimer) clearInterval(archiveTimer);
+    archiveTimer = null;
+}
+
+module.exports = {
+    ARCHIVE_DELAY_MS,
+    ARCHIVE_INTERVAL_MS,
+    isDueForArchive,
+    archiveEndedEvents,
+    startArchiveScheduler,
+    stopArchiveScheduler
+};

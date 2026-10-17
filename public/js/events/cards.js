@@ -52,12 +52,13 @@ export function eventStart(event) {
  * End of an event.
  *
  * @param {Object} event -> Event with `startDate` and optional `endDate`.
- * @returns {Date|null} -> `endDate`, else start + 2 hours; null without a valid start.
+ * @returns {Date|null} -> `endDate`, else start + 2 hours; null without a valid start. An end before the start counts as missing (mirrors eventEndTime in utils/eventListing.js).
  */
 export function eventEnd(event) {
     const start = parseDate(event.startDate);
     if (!start) return null;
-    return parseDate(event.endDate) || new Date(start.getTime() + DEFAULT_DURATION_MS);
+    const end = parseDate(event.endDate);
+    return end && end >= start ? end : new Date(start.getTime() + DEFAULT_DURATION_MS);
 }
 
 /**
