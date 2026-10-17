@@ -9,6 +9,7 @@ import { state } from '../core/state.js';
 import { escapeHtml, showElement } from '../core/ui.js';
 import { forgetCalendarEvents, showCalendar } from './calendar.js';
 import { renderEventCard, renderEventCardSkeletons } from './cards.js';
+import { filterOverview } from './overview-motion.js';
 
 export const UPCOMING_EVENTS_URL = '/api/events?upcoming=1&limit=100';
 
@@ -179,7 +180,15 @@ export async function showEventsSection() {
  */
 export function filterByCategory(category) {
     activeCategory = category;
-    return renderOverview();
+    return applyFilter();
+}
+
+// A new filter in the card view lets the cards glide; the calendar just redraws
+function applyFilter() {
+    const grid = document.getElementById('events-grid');
+    if (currentView !== 'grid' || !grid) return renderOverview();
+    const nextIds = filterEvents(upcomingEvents, { category: activeCategory, search: searchText() }).map(event => String(event.id ?? ''));
+    filterOverview(grid, nextIds, () => renderOverview());
 }
 
 /**
@@ -191,7 +200,7 @@ export function resetEventFilters() {
     activeCategory = '';
     const search = document.getElementById('events-search');
     if (search) search.value = '';
-    return renderOverview();
+    return applyFilter();
 }
 
 /**
@@ -225,7 +234,7 @@ export async function switchView(view) {
 registerActions({
     showEventsSection: () => showEventsSection(),
     filterByCategory: (el) => filterByCategory(el.dataset.category),
-    searchEvents: () => renderOverview(),
+    searchEvents: () => applyFilter(),
     resetEventFilters: () => resetEventFilters(),
     switchView: (el) => switchView(el.dataset.view)
 });

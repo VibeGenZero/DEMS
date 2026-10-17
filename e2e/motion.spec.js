@@ -189,3 +189,62 @@ test('a resized window lands the card at its new place', async ({ page }, testIn
     expect(Math.abs(landed.width - card.width)).toBeLessThanOrEqual(4);
     expect(errors).toEqual([]);
 });
+
+// ── Filtering ──────────────────────────────────────────────────────────────
+
+// Real cards only: the skeletons while loading carry no event id
+const gridCards = (page) => page.locator('#events-grid .event-card[data-event-id]');
+
+/** Every card rests: no transform left, fully opaque, and no CSS animation (the section fade) runs. */
+async function cardsAtRest(page) {
+    return page.evaluate(() => document.getAnimations().every(animation => animation.playState !== 'running') && [...document.querySelectorAll('#events-grid .event-card')].every((card) => {
+        if (!card.dataset.eventId) return false;
+        const style = getComputedStyle(card);
+        return (style.transform === 'none' || style.transform === 'matrix(1, 0, 0, 1, 0, 0)') && style.opacity === '1';
+    }));
+}
+
+test('filtering glides the remaining cards into place', async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== 'desktop', 'desktop first; the phone runs the same code');
+    const errors = watchErrors(page);
+    await loginAs(page, 'member');
+    await expect.poll(() => cardsAtRest(page)).toBe(true);
+    const total = await gridCards(page).count();
+
+    await page.locator('#category-filter-bar [data-category="Raid"]').click();
+    await expect(gridCards(page)).toHaveCount(1);
+    await expect.poll(() => cardsAtRest(page)).toBe(true);
+    // The raid card glided into the first cell of the grid (the scrollbar may be gone now)
+    const firstPlace = await page.locator('#events-grid').evaluate((grid) => {
+        const box = grid.getBoundingClientRect();
+        const style = getComputedStyle(grid);
+        return { x: box.left + parseFloat(style.paddingLeft), y: box.top + parseFloat(style.paddingTop) };
+    });
+    await expect.poll(async () => {
+        const raid = await gridCards(page).first().boundingBox();
+        return Math.abs(raid.x - firstPlace.x) <= 1 && Math.abs(raid.y - firstPlace.y) <= 1;
+    }).toBe(true);
+
+    await page.locator('#category-filter-bar [data-category=""]').click();
+    await expect(gridCards(page)).toHaveCount(total);
+    await expect.poll(() => cardsAtRest(page)).toBe(true);
+    expect(errors).toEqual([]);
+});
+
+test('fast typing leaves every card at its grid place', async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== 'desktop', 'desktop first; the phone runs the same code');
+    const errors = watchErrors(page);
+    await loginAs(page, 'member');
+    await expect.poll(() => cardsAtRest(page)).toBe(true);
+    const total = await gridCards(page).count();
+    const places = await gridCards(page).evaluateAll(cards => cards.map(card => card.getBoundingClientRect().top));
+
+    const search = page.locator('#events-search');
+    await search.pressSequentially('raid', { delay: 0 });
+    await search.fill('');
+    await expect(gridCards(page)).toHaveCount(total);
+    await page.waitForTimeout(1000);
+    expect(await cardsAtRest(page)).toBe(true);
+    expect(await gridCards(page).evaluateAll(cards => cards.map(card => card.getBoundingClientRect().top))).toEqual(places);
+    expect(errors).toEqual([]);
+});
