@@ -7,6 +7,7 @@ import { checkMaintenanceStatus } from '../admin/maintenance.js';
 import { checkAuth } from './auth.js';
 import { handleRoute, restorePendingRoute } from './router.js';
 import { getErrorMessage, showError, showToast } from './ui.js';
+import { avatar } from './components.js';
 
 
 export function createParticles() {
@@ -125,11 +126,10 @@ export async function loadServerInfo() {
         const data = await res.json();
         if (window.VERBOSE_LOG) console.log('[VERBOSE] GET /api/server-info', data);
         state.serverName = data.serverName || 'DEMS';
+        state.serverIconUrl = data.iconUrl || null;
         window._demsGuildId = data.guildId || '';
+        // The styleguide link (#nav-debug) appears with the login, see showLoggedIn()
         window.DEBUG_MODE = data.debugMode === true;
-        if (window.DEBUG_MODE) {
-            document.getElementById('nav-debug').style.display = 'block';
-        }
         if (!window.DEBUG_MODE) {
             localStorage.removeItem('dems_verbose_log');
             window.VERBOSE_LOG = false;
@@ -142,10 +142,13 @@ export async function loadServerInfo() {
 }
 
 export function updateServerNameInUI() {
-    // Update navbar brand
-    document.querySelectorAll('.navbar-brand').forEach(el => {
-        el.innerHTML = `<i class="bi bi-moon-stars-fill me-2"></i>${state.serverName}`;
-    });
+    // The name comes from Discord -> always as text, never as markup
+    for (const id of ['nav-brand-name', 'login-server-name', 'login-server-ref']) {
+        const el = document.getElementById(id);
+        if (el) el.textContent = state.serverName;
+    }
+    const icon = document.getElementById('login-server-icon');
+    if (icon) icon.innerHTML = avatar({ url: state.serverIconUrl, name: state.serverName, size: 'xl' });
 
     // Update page title
     document.title = `DEMS — ${state.serverName} Event Management`;
@@ -154,12 +157,6 @@ export function updateServerNameInUI() {
     const metaDesc = document.querySelector('meta[name="description"]');
     if (metaDesc) {
         metaDesc.setAttribute('content', `Dein Event-Management-System für den ${state.serverName} Server`);
-    }
-
-    // Update login card heading (if visible)
-    const loginCardHeading = document.querySelector('.login-card .brand-text');
-    if (loginCardHeading) {
-        loginCardHeading.textContent = state.serverName;
     }
 
     // Update events section description

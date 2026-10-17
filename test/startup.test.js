@@ -2,7 +2,7 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');
 const path = require('path');
-const { loadFrontendApp, frontendSources, REPO_ROOT } = require('./helpers');
+const { loadFrontendApp, frontendSources, isHidden, REPO_ROOT } = require('./helpers');
 
 // setImmediate runs after the microtask queue is drained
 const settle = () => new Promise(resolve => setImmediate(resolve));
@@ -49,7 +49,8 @@ test('a logged-in user stays logged in whatever answer arrives last', async () =
 
     assert.equal(state.currentUser?.username, 'tom');
     assert.equal(element('user-info').style.display, 'flex');
-    assert.equal(element('login-btn-container').style.display, 'none');
+    // The events link appears with the login; the only login button sits in the login card
+    assert.equal(isHidden(element('nav-events')), false);
 });
 
 test('showUserData exists once, the unused user data modal is gone', () => {

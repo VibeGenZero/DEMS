@@ -28,7 +28,7 @@ see_also: [form-fields, registration-flow, reminders-presence, configuration]
 | Scheduled event sync | admin "Mit Discord synchronisieren" | `createScheduledEvent` (voice channel if `discordChannelId`, else external location "TBD"; guild-only; banner image) |
 | Scheduled event import | admin import dialog | `getGuildScheduledEvents` → prefills the create wizard |
 | Reminders / start DMs / presence | scheduler, bot settings | [reminders-presence](reminders-presence.md) |
-| Guild data for the UI | role pickers, channel pickers, server name | `getGuildRoles`, `getGuildChannels`, `getPublicGuildChannels`, `getGuildName` |
+| Guild data for the UI | role pickers, channel pickers, server name and icon | `getGuildRoles`, `getGuildChannels`, `getPublicGuildChannels`, `getGuildName`, `getGuildIconUrl` |
 
 ## Discord application setup
 

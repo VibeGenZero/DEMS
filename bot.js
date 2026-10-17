@@ -2074,6 +2074,23 @@ async function getGuildName(guildId) {
 }
 
 /**
+ * Icon of the Discord server for the login page.
+ *
+ * @param {string} guildId -> Discord server ID.
+ * @returns {Promise<string|null>} -> Image URL, null without an icon or while the bot is not ready.
+ */
+async function getGuildIconUrl(guildId) {
+    if (!isReady) return null;
+    try {
+        const guild = await client.guilds.fetch(guildId);
+        return guild.iconURL({ size: 256 }) || null;
+    } catch (err) {
+        console.error('Failed to get guild icon:', err.message);
+        return null;
+    }
+}
+
+/**
  * Get all roles from the guild (for admin dropdown)
  */
 async function getGuildRoles(guildId) {
@@ -2907,6 +2924,7 @@ module.exports = {
     fetchMemberRoleIds,
     isGuildMember,
     getGuildName,
+    getGuildIconUrl,
     getGuildRoles,
     getGuildChannels,
     getPublicGuildChannels,

@@ -49,14 +49,16 @@ export async function checkAuth() {
 }
 
 export function showLoggedIn() {
-    document.getElementById('login-btn-container').style.display = 'none';
     const userInfo = document.getElementById('user-info');
     userInfo.style.display = 'flex';
 
     document.getElementById('user-avatar').innerHTML = avatar({ url: state.currentUser.avatar, name: state.currentUser.displayName });
     document.getElementById('user-name').textContent = state.currentUser.displayName;
+    document.getElementById('nav-events').style.display = 'block';
     document.getElementById('nav-profile').style.display = 'block';
     document.getElementById('nav-polls').style.display = 'block';
+    // Styleguide only in debug mode (DEBUG_MODE from /api/server-info)
+    if (window.DEBUG_MODE) document.getElementById('nav-debug').style.display = 'block';
     refreshPollBadge();
 
     if (state.currentUser.isAdmin) {
@@ -66,12 +68,13 @@ export function showLoggedIn() {
 }
 
 export function showLoggedOut() {
-    document.getElementById('login-btn-container').style.display = 'block';
     document.getElementById('user-info').style.display = 'none';
     document.getElementById('nav-admin').style.display = 'none';
     document.getElementById('nav-bot-control').style.display = 'none';
+    document.getElementById('nav-events').style.display = 'none';
     document.getElementById('nav-profile').style.display = 'none';
     document.getElementById('nav-polls').style.display = 'none';
+    document.getElementById('nav-debug').style.display = 'none';
 
     // Clear sensitive data from UI
     document.getElementById('user-avatar').innerHTML = '';
