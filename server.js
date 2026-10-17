@@ -14,6 +14,7 @@ const cors = require('cors');
 const rateLimit = require('express-rate-limit');
 const { startBot, startReminderScheduler, stopBot, getGuildName, getGuildIconUrl, fetchMemberRoleIds } = require('./bot');
 const { startPollScheduler, stopPollScheduler } = require('./utils/pollStore');
+const { startArchiveScheduler, stopArchiveScheduler } = require('./utils/eventArchive');
 const { createCsrfToken, createRoleRefresh } = require('./middleware/auth');
 const { PersistentSessionStore } = require('./utils/sessionStore');
 
@@ -287,6 +288,8 @@ startBot(process.env.DISCORD_BOT_TOKEN);
 // Start reminder scheduler (checks every 5 min)
 startReminderScheduler();
 startPollScheduler();
+// Archives events a day after their end; the first run catches up after a pause (W-01)
+startArchiveScheduler();
 
 // ── Graceful Shutdown ───────────────────────────────────────────────────
 function gracefulShutdown(signal) {
@@ -295,6 +298,7 @@ function gracefulShutdown(signal) {
         console.log('✅ HTTP Server geschlossen.');
         stopBot();
         stopPollScheduler();
+        stopArchiveScheduler();
         console.log('✅ Bot & Scheduler gestoppt. Auf Wiedersehen!');
         process.exit(0);
     });

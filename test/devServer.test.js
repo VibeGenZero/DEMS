@@ -201,6 +201,7 @@ test('the routes read the mock Discord server', async () => {
 
 // The profile tests read the seed as it is, so they run before the tests below register, check in and duplicate
 test('the profile lists upcoming events by start and the history newest first', async () => {
+    await server.waitForOutput('Archived 1 ended event(s)');
     const res = await (await loginAs('member')).request('/api/user/profile');
     assert.equal(res.status, 200);
     const profile = await res.json();
@@ -217,13 +218,14 @@ test('the profile lists upcoming events by start and the history newest first', 
     assert.equal(profile.upcoming[1].event.checkinEnabled, false);
 
     assert.deepEqual(profile.history.map(entry => [entry.event.id, entry.event.status, entry.checkedIn]), [
-        [EVENT_ID.PAST, 'active', true],
+        [EVENT_ID.PAST, 'archived', true],
         [EVENT_ID.CANCELLED, 'cancelled', false],
         [EVENT_ID.ARCHIVED, 'archived', false]
     ]);
 });
 
 test('a profile entry carries only what the page shows', async () => {
+    await server.waitForOutput('Archived 1 ended event(s)');
     const profile = await (await (await loginAs('raider')).request('/api/user/profile')).json();
     const entries = [...profile.upcoming, ...profile.history];
     assert.equal(entries.length, profile.stats.total);
@@ -343,7 +345,7 @@ test('the overview gets only events that are not over, each with the own status'
 
     // Without the parameter the list stays as before, past events included
     const { data: all } = await (await (await loginAs('member')).request('/api/events?limit=500')).json();
-    assert.ok(all.some(event => event.id === EVENT_ID.PAST));
+    assert.ok(all.some(event => event.id === EVENT_ID.ENDED));
     assert.ok(all.every(event => !('checkinCode' in event)));
 });
 
@@ -562,6 +564,31 @@ test('the preview of a saved event counts its registrations, also after a slot w
     const fewer = await admin.send('POST', '/api/admin/events/preview', { ...raid, id: EVENT_ID.ROLE, slots: raid.slots.slice(1) });
     assert.equal(fewer.status, 200);
     assert.ok((await fewer.json()).places.taken >= 1);
+});
+
+test('the scheduler archives an event a day after its end and logs it', async () => {
+    await server.waitForOutput('Archived 1 ended event(s)');
+    const admin = await loginAs('admin');
+    const status = Object.fromEntries((await (await admin.request('/api/admin/all-events')).json()).map(event => [event.id, event.status]));
+    assert.deepEqual([status[EVENT_ID.PAST], status[EVENT_ID.ENDED]], ['archived', 'active']);
+    const { data: logs } = await (await admin.request('/api/admin/audit-log?limit=100')).json();
+    assert.ok(logs.some(log => log.action === 'AUTO_ARCHIVE_EVENT' && log.adminId === 'system' && log.targetId === EVENT_ID.PAST));
+    assert.equal((await (await loginAs('member')).request(`/api/events/${EVENT_ID.PAST}`)).status, 404);
+});
+
+test('an ended event takes no registration', async () => {
+    const member = await loginAs('member');
+    const res = await member.send('POST', `/api/events/${EVENT_ID.ENDED}/register`, {});
+    assert.equal(res.status, 400);
+    assert.equal((await res.json()).error, 'Das Event ist schon vorbei.');
+});
+
+test('the running events of the bot control center leave ended events out', async () => {
+    await server.waitForOutput('Archived 1 ended event(s)');
+    const admin = await loginAs('admin');
+    const ids = (await (await admin.request('/api/admin/bot/running-events')).json()).map(event => event.id);
+    assert.ok(ids.includes(EVENT_ID.RUNNING));
+    assert.ok(!ids.includes(EVENT_ID.PAST) && !ids.includes(EVENT_ID.ENDED));
 });
 
 test('an event cannot end before it starts', async () => {
