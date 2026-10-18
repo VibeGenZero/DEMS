@@ -17,7 +17,7 @@ const allRules = () => STYLED.flatMap(rulesOf);
 const selectorsOf = (name) => new Set(rulesOf(name).flatMap(rule => rule.selector.split(', ')));
 // Selectors that components.css must define
 const COMPONENT_SELECTORS = [
-    '[data-bs-theme="dark"]', 'a',
+    '[data-bs-theme]', 'a',
     '.text-secondary', '.text-primary', '.text-success', '.text-warning', '.text-danger', '.text-info',
     '.bg-primary', '.text-bg-primary', '.bg-success', '.text-bg-success', '.bg-warning', '.text-bg-warning', '.bg-danger', '.text-bg-danger', '.bg-info', '.text-bg-info',
     '.btn', '.btn-primary', '.btn-accent', '.btn-secondary', '.btn-outline-light', '.btn-outline-secondary', '.btn-ghost', '.btn-danger', '.btn-discord', '.btn-warning',
