@@ -30,10 +30,10 @@ export async function fetchDiscordEvents() {
                 ${ev.image ? `<img src="${escapeHtml(ev.image)}" alt="Event Image" width="48" height="48" class="rounded-circle flex-shrink-0 object-fit-cover">` : '<div class="rounded-circle bg-secondary d-flex align-items-center justify-content-center flex-shrink-0 discord-event-thumb"><i class="bi bi-discord"></i></div>'}
                 <div class="d-flex gap-2 w-100 justify-content-between">
                     <div>
-                        <h6 class="mb-0 text-white">${escapeHtml(ev.name)}</h6>
-                        <p class="mb-0 opacity-75 small text-white-50">${ev.description ? escapeHtml(markdownPreview(ev.description, 100)) : 'Keine Beschreibung'}</p>
+                        <h6 class="mb-0">${escapeHtml(ev.name)}</h6>
+                        <p class="mb-0 opacity-75 small text-secondary">${ev.description ? escapeHtml(markdownPreview(ev.description, 100)) : 'Keine Beschreibung'}</p>
                     </div>
-                    <small class="opacity-50 text-nowrap text-white-50">${new Date(ev.scheduledStartTimestamp).toLocaleDateString()}</small>
+                    <small class="opacity-50 text-nowrap text-secondary">${new Date(ev.scheduledStartTimestamp).toLocaleDateString()}</small>
                 </div>
             </a>
         `).join('');

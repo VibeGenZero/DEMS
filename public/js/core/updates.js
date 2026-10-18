@@ -30,7 +30,7 @@ export async function checkUpdates() {
             contentDiv.innerHTML = data.news.map(item => `
                 <div class="mb-4">
                     <h6 class="text-accent fw-bold mb-2">${escapeHtml(item.title)}</h6>
-                    <p class="text-white-50 mb-0">${escapeHtml(item.content)}</p>
+                    <p class="text-secondary mb-0">${escapeHtml(item.content)}</p>
                 </div>
             `).join('');
 

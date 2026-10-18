@@ -919,12 +919,13 @@ body {
 /* ═══════════════════════════════════════════ */
 /* TABLE                                       */
 /* ═══════════════════════════════════════════ */
-.table-dark {
+.table {
+  --bs-table-color: var(--text-primary);
   --bs-table-bg: transparent;
   --bs-table-border-color: var(--border-subtle);
 }
 
-.table-dark th {
+.table th {
   font-weight: 600;
   font-size: var(--font-size-sm);
   text-transform: uppercase;
@@ -3003,6 +3004,12 @@ a.profile-history-row:hover {
 }
 
 .guest-search-results {
+  --bs-list-group-bg: var(--bg-card);
+  --bs-list-group-color: var(--text-primary);
+  --bs-list-group-border-color: var(--border-subtle);
+  --bs-list-group-action-color: var(--text-primary);
+  --bs-list-group-action-hover-color: var(--text-primary);
+  --bs-list-group-action-hover-bg: var(--bg-tint-2);
   max-height: 200px;
   overflow-y: auto;
 }

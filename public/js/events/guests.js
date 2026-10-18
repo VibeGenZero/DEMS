@@ -34,13 +34,13 @@ export async function searchGuests() {
         const filtered = users.filter(u => !state.selectedGuests.some(g => g.id === u.id));
 
         if (!filtered.length) {
-            resultsEl.innerHTML = '<div class="list-group-item bg-dark text-muted small">Keine Nutzer gefunden</div>';
+            resultsEl.innerHTML = '<div class="list-group-item text-muted small">Keine Nutzer gefunden</div>';
             resultsEl.style.display = 'block';
             return;
         }
 
         resultsEl.innerHTML = filtered.map(u => `
-            <button type="button" class="list-group-item list-group-item-action bg-dark text-white border-secondary d-flex align-items-center gap-2"
+            <button type="button" class="list-group-item list-group-item-action border-secondary d-flex align-items-center gap-2"
                 data-click="addGuestToList" data-user-id="${escapeHtml(u.id)}" data-display-name="${escapeHtml(u.displayName)}" data-avatar="${escapeHtml(u.avatar || '')}">
                 ${avatar({ url: u.avatar, name: u.displayName, size: 'sm' })}
                 <span>${escapeHtml(u.displayName)}</span>
@@ -81,7 +81,7 @@ export function renderSelectedGuests() {
         <div class="badge guest-chip d-flex align-items-center gap-1 p-2">
             ${avatar({ url: g.avatar, name: g.displayName, size: 'sm' })}
             <span>${escapeHtml(g.displayName)}</span>
-            <button type="button" class="btn-close btn-close-white ms-1"
+            <button type="button" class="btn-close ms-1"
                 data-click="removeGuestFromList" data-user-id="${escapeHtml(g.id)}"></button>
         </div>
     `).join('');

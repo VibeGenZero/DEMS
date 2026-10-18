@@ -140,7 +140,7 @@ export async function showUserData() {
 
                 <div class="info-data-group">
                     <h6><i class="bi bi-person-fill me-1"></i>Profildaten</h6>
-                    <table class="table table-dark table-sm">
+                    <table class="table table-sm">
                         <tbody>
                             <tr><td class="text-muted info-data-key">Discord ID</td><td><code>${escapeHtml(profile.id)}</code></td></tr>
                             <tr><td class="text-muted">Username</td><td>${escapeHtml(profile.username)}</td></tr>
@@ -156,7 +156,7 @@ export async function showUserData() {
                     <h6><i class="bi bi-card-checklist me-1"></i>Event-Registrierungen (${Array.isArray(registrations) ? registrations.length : 0})</h6>
                     ${Array.isArray(registrations) && registrations.length > 0 ? `
                         <div class="table-responsive">
-                            <table class="table table-dark table-sm">
+                            <table class="table table-sm">
                                 <thead>
                                     <tr>
                                         <th>Event</th>

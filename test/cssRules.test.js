@@ -128,6 +128,15 @@ test('the dead class glass-modal is gone', () => {
     for (const source of [INDEX_HTML, ...frontendSources().map(entry => entry.source)]) assert.doesNotMatch(source, /glass-modal/);
 });
 
+// Bootstrap classes that force light text or a dark surface; in the light scheme they would be unreadable
+const DARK_ONLY_CLASS = /(?<![-\w])(navbar-dark|text-light|text-white|text-white-50|bg-dark|table-dark|btn-close-white)(?![-\w])/g;
+
+test('no dark-only Bootstrap class is left in the markup or the modules', () => {
+    const found = [{ file: 'index.html', source: INDEX_HTML }, ...frontendSources()].flatMap(({ file, source }) =>
+        source.split(/\r?\n/).flatMap((line, index) => [...line.matchAll(DARK_ONLY_CLASS)].map(match => `${file}:${index + 1} ${match[1]}`)));
+    assert.deepEqual(found, []);
+});
+
 test('colour values only live in tokens.css', () => {
     const raw = allRules().flatMap(rule => rule.declarations.filter(declaration => RAW_COLOR.test(declaration.value)).map(declaration => describe(rule, declaration)));
     assert.deepEqual(raw, []);
