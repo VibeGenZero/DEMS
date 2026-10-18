@@ -367,9 +367,12 @@ test('the countdown flips only the digits that change', async ({ page }, testInf
     // Each flip touched one cell; seconds tick, so not every digit changed
     expect(changed).toBeLessThan(count);
     expect(await page.evaluate(() => window.flipped)).toBeGreaterThan(0);
-    // Once landed every cell holds one digit again
-    await expect.poll(() => page.locator('#detail-countdown-area .countdown-digit-next').count()).toBe(0);
-    expect(await page.locator('#detail-countdown-area .countdown-digit > span').count()).toBe(count);
+    // Once landed every cell holds one digit again. One read for both: the next
+    // second may start a new flip between two separate queries.
+    await expect.poll(() => page.evaluate(() => {
+        const area = document.getElementById('detail-countdown-area');
+        return area.querySelector('.countdown-digit-next') ? -1 : area.querySelectorAll('.countdown-digit > span').length;
+    })).toBe(count);
     expect(errors).toEqual([]);
 });
 
