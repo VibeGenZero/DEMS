@@ -7,6 +7,7 @@ import { state } from '../core/state.js';
 import { navigateTo } from '../core/router.js';
 import { registerActions } from '../core/actions.js';
 import { emptyState } from '../core/components.js';
+import { syncThemeRadios } from '../core/theme.js';
 import { applyStyleData, showConfirmDialog, showToast, toggleElement } from '../core/ui.js';
 import {
     renderBadgeList, renderBadgeSkeleton, renderHistoryRow, renderProfileCard, renderProfileSkeleton, renderUpcomingRow
@@ -32,6 +33,7 @@ export function canOpenEvent(event) {
 export async function showProfileSection() {
     document.getElementById('profile-section').style.display = 'block';
     if (!state.currentUser) return navigateTo('events');
+    syncThemeRadios();
 
     const upcomingEl = document.getElementById('profile-upcoming');
     const badgesEl = document.getElementById('profile-badges');

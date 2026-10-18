@@ -143,3 +143,39 @@ test('index.html loads the boot script before the first stylesheet', () => {
     assert.ok(script < firstStylesheet, 'the boot script comes after a stylesheet');
     assert.match(INDEX_HTML, /<link[^>]*id="flatpickr-dark-css"[^>]*href="\/vendor\/flatpickr\/dark\.css"|<link[^>]*href="\/vendor\/flatpickr\/dark\.css"[^>]*id="flatpickr-dark-css"/);
 });
+
+const MEMBER = { id: 'u-member', username: 'tom', displayName: 'Tom', avatar: '', roles: [], isAdmin: false };
+// The settings card of the profile, up to the debug card that follows it
+const SETTINGS_CARD = INDEX_HTML.slice(INDEX_HTML.indexOf('id="account-settings-card"'), INDEX_HTML.indexOf('<!-- Debug Card'));
+const THEME_RADIOS = [...SETTINGS_CARD.matchAll(/<input[^>]*name="theme-choice"[^>]*>/g)].map(match => match[0]);
+
+test('the profile offers light, dark and system as one radio group', () => {
+    assert.equal(SETTINGS_CARD.match(/role="radiogroup"/g)?.length, 1);
+    assert.equal(THEME_RADIOS.length, 3);
+    THEME_RADIOS.forEach((radio, index) => {
+        const value = ['light', 'dark', 'system'][index];
+        assert.match(radio, /type="radio"/);
+        assert.match(radio, new RegExp(`value="${value}"`));
+        assert.match(radio, new RegExp(`id="theme-choice-${value}"`));
+        assert.match(radio, /data-change="setThemeChoice"/);
+    });
+    for (const text of ['Darstellung', 'Gilt nur in diesem Browser.', '>Hell<', '>Dunkel<', '>System<']) assert.ok(SETTINGS_CARD.includes(text), text);
+    assert.ok(SETTINGS_CARD.indexOf('Darstellung') < SETTINGS_CARD.indexOf('accept-invitations-toggle'), 'Darstellung is not the first row');
+});
+
+test('each preview tile carries its own scheme', () => {
+    const previews = [...SETTINGS_CARD.matchAll(/<label class="theme-choice-option"[\s\S]*?<\/label>/g)].map(match => match[0]);
+    assert.equal(previews.length, 3);
+    assert.match(previews[0], /class="theme-choice-preview"[^>]*data-bs-theme="light"/);
+    assert.match(previews[1], /class="theme-choice-preview"[^>]*data-bs-theme="dark"/);
+    assert.match(previews[2], /class="theme-choice-half"[^>]*data-bs-theme="light"[\s\S]*class="theme-choice-half"[^>]*data-bs-theme="dark"/);
+});
+
+test('opening the profile marks the stored choice', async () => {
+    const { app, state, element } = await loadFrontendApp({ '/api/user/profile': {} }, { storage: { dems_theme: 'dark' } });
+    state.currentUser = MEMBER;
+    await app.showProfileSection();
+    assert.equal(element('theme-choice-dark').checked, true);
+    assert.equal(element('theme-choice-light').checked, false);
+    assert.equal(element('theme-choice-system').checked, false);
+});

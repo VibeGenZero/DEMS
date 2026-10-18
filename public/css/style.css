@@ -1367,6 +1367,92 @@ body {
   font-weight: 400;
 }
 
+/* Colour scheme choice (core/theme.js). Each preview sets data-bs-theme,
+   so its tokens show that scheme whatever the page shows. */
+.theme-choice {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-8);
+  margin-top: var(--space-12);
+}
+
+.theme-choice-option {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  padding: var(--space-8);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--bg-tint-1);
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+  text-align: center;
+  cursor: pointer;
+  transition: border-color var(--duration-fast) var(--ease-standard), background-color var(--duration-fast) var(--ease-standard);
+}
+
+.theme-choice-option:hover {
+  border-color: var(--border-accent);
+}
+
+.theme-choice-option:has(.theme-choice-input:checked) {
+  border-color: var(--accent);
+  background: var(--accent-tint-1);
+  color: var(--accent-text);
+  font-weight: 600;
+}
+
+.theme-choice-option:has(.theme-choice-input:focus-visible) {
+  box-shadow: var(--shadow-ring);
+}
+
+/* Hidden but focusable: the label is the visible control */
+.theme-choice-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.theme-choice-preview {
+  display: flex;
+  flex-direction: column;
+  height: var(--space-48);
+  overflow: hidden;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--bg-primary);
+}
+
+.theme-choice-preview:has(.theme-choice-half) {
+  flex-direction: row;
+}
+
+.theme-choice-half {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  background: var(--bg-primary);
+}
+
+.theme-choice-bar {
+  flex-shrink: 0;
+  height: var(--space-8);
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--bg-card);
+}
+
+.theme-choice-surface {
+  flex: 1;
+  margin: var(--space-4) var(--space-8);
+  border: 1px solid var(--border-subtle);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius-sm);
+  background: var(--bg-card);
+}
+
 .profile-list {
   display: flex;
   flex-direction: column;

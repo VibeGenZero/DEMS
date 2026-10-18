@@ -482,6 +482,28 @@
           <!-- Account Settings -->
           <div class="glass-card profile-area-settings profile-panel" id="account-settings-card">
             <h3 class="profile-heading"><i class="bi bi-gear"></i>Einstellungen</h3>
+            <div class="theme-setting">
+              <div class="fw-semibold" id="theme-choice-label">Darstellung</div>
+              <small class="text-muted d-block">Gilt nur in diesem Browser.</small>
+              <div class="theme-choice" role="radiogroup" aria-labelledby="theme-choice-label">
+                <label class="theme-choice-option">
+                  <input class="theme-choice-input" type="radio" name="theme-choice" id="theme-choice-light" value="light" data-change="setThemeChoice">
+                  <span class="theme-choice-preview" data-bs-theme="light" aria-hidden="true"><span class="theme-choice-bar"></span><span class="theme-choice-surface"></span></span>
+                  <span class="theme-choice-name">Hell</span>
+                </label>
+                <label class="theme-choice-option">
+                  <input class="theme-choice-input" type="radio" name="theme-choice" id="theme-choice-dark" value="dark" data-change="setThemeChoice">
+                  <span class="theme-choice-preview" data-bs-theme="dark" aria-hidden="true"><span class="theme-choice-bar"></span><span class="theme-choice-surface"></span></span>
+                  <span class="theme-choice-name">Dunkel</span>
+                </label>
+                <label class="theme-choice-option">
+                  <input class="theme-choice-input" type="radio" name="theme-choice" id="theme-choice-system" value="system" data-change="setThemeChoice">
+                  <span class="theme-choice-preview" aria-hidden="true"><span class="theme-choice-half" data-bs-theme="light"><span class="theme-choice-bar"></span><span class="theme-choice-surface"></span></span><span class="theme-choice-half" data-bs-theme="dark"><span class="theme-choice-bar"></span><span class="theme-choice-surface"></span></span></span>
+                  <span class="theme-choice-name">System</span>
+                </label>
+              </div>
+            </div>
+            <hr class="border-secondary">
             <div class="d-flex align-items-center justify-content-between gap-3">
               <div>
                 <div class="fw-semibold">Einladungen erhalten</div>
