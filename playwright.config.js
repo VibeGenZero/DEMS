@@ -19,9 +19,11 @@ module.exports = defineConfig({
         baseURL: `http://localhost:${PORT}`,
         trace: 'retain-on-failure'
     },
+    // Dark scheme pinned: the app follows the system scheme (D-15) and Playwright
+    // emulates light by default. e2e/theme.spec.js sets the scheme itself.
     projects: [
-        { name: 'desktop', use: { ...devices['Desktop Chrome'], viewport: { width: 1440, height: 900 } } },
-        { name: 'mobile', use: { ...devices['Desktop Chrome'], viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 3 } }
+        { name: 'desktop', use: { ...devices['Desktop Chrome'], viewport: { width: 1440, height: 900 }, colorScheme: 'dark' } },
+        { name: 'mobile', use: { ...devices['Desktop Chrome'], viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 3, colorScheme: 'dark' } }
     ],
     webServer: {
         // Own port and a fresh database per run -> never touches data/dems.dev.sqlite

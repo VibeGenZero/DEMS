@@ -49,7 +49,8 @@ test('the member sees every status by start, the history below and can go to the
     await loginAs(page, 'member');
     await navigate(page, 'profile');
 
-    await expect(upcoming(page)).toHaveCount(4);
+    // Other specs share the database and register the member for their own "E2E …" events for a moment
+    await expect(upcoming(page).filter({ hasNotText: /E2E / })).toHaveCount(4);
     await expect(upcoming(page).nth(0)).toContainText('Live: Speedrun-Marathon');
     await expect(upcoming(page).nth(0)).toContainText('Läuft gerade');
     await expect(row(page, 'Koop-Abend (5 Plätze)')).toContainText('Warteliste');

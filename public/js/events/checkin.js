@@ -133,7 +133,7 @@ export async function submitCheckin(eventId) {
                         <div class="modal-content">
                             <div class="modal-header border-0">
                                 <h5 class="modal-title"><i class="bi bi-info-circle me-2"></i>Event-Information</h5>
-                                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                             </div>
                             <div class="modal-body markdown-body"></div>
                             <div class="modal-footer border-0">

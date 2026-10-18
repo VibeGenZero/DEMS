@@ -7,6 +7,9 @@
   <title>DEMS — Event Management</title>
   <meta name="description" content="Dein Event-Management-System">
 
+  <!-- Colour scheme before the first paint (light, dark or system; core/theme.js) -->
+  <script src="/theme-boot.js"></script>
+
   <!-- All libraries and fonts are served from /vendor (pinned versions, no CDN) -->
 
   <!-- Fonts: Inter + UnifrakturCook (Local) -->
@@ -15,7 +18,7 @@
   <!-- FontAwesome 6.0.0 for EasyMDE (Local) -->
   <link rel="stylesheet" href="/vendor/fontawesome/css/all.min.css">
 
-  <!-- Bootstrap 5.3.2 Dark + Bootstrap Icons 1.11.2 (Local) -->
+  <!-- Bootstrap 5.3.2 + Bootstrap Icons 1.11.2 (Local) -->
   <link href="/vendor/bootstrap/bootstrap.min.css" rel="stylesheet">
   <link href="/vendor/bootstrap-icons/bootstrap-icons.css" rel="stylesheet">
 
@@ -25,7 +28,7 @@
 
   <!-- Flatpickr (Local) -->
   <link rel="stylesheet" href="/vendor/flatpickr/flatpickr.min.css">
-  <link rel="stylesheet" href="/vendor/flatpickr/dark.css">
+  <link rel="stylesheet" href="/vendor/flatpickr/dark.css" id="flatpickr-dark-css">
   <script src="/vendor/flatpickr/flatpickr.min.js"></script>
   <script src="/vendor/flatpickr/de.js"></script>
 
@@ -75,7 +78,7 @@
   <div class="is-hidden" id="app">
 
     <!-- NAVBAR -->
-    <nav class="navbar navbar-expand-lg navbar-dark fixed-top" id="main-navbar">
+    <nav class="navbar navbar-expand-lg fixed-top" id="main-navbar">
       <div class="container">
         <a class="navbar-brand brand-text" href="#events">
           <i class="bi bi-moon-stars-fill me-2"></i><span id="nav-brand-name">DEMS</span>
@@ -128,7 +131,7 @@
             <!-- Logged in -->
             <div id="user-info" class="align-items-center gap-2 is-hidden">
               <span id="user-avatar" class="d-flex"></span>
-              <span id="user-name" class="text-light fw-medium"></span>
+              <span id="user-name" class="fw-medium"></span>
               <button type="button" class="btn btn-sm btn-outline-light ms-2" id="logout-btn" data-click="logout" aria-label="Abmelden">
                 <i class="bi bi-box-arrow-right"></i>
               </button>
@@ -165,7 +168,7 @@
       <div class="panic-lockdown-content text-center">
         <i class="bi bi-shield-exclamation panic-lockdown-icon"></i>
         <h1 class="text-danger mb-3">SYSTEM GESPERRT</h1>
-        <p class="text-white-50 mb-4">Das System befindet sich im Notfall-Lockdown.<br>
+        <p class="text-secondary mb-4">Das System befindet sich im Notfall-Lockdown.<br>
           Bitte wende dich an einen Administrator.</p>
         <div id="panic-lockdown-message" class="text-warning mb-4"></div>
         <a href="/auth/discord" class="btn btn-outline-light btn-sm">
@@ -198,7 +201,7 @@
                   Login mit Discord
                 </a>
                 <br>
-                <button type="button" class="btn btn-link text-white-50 text-decoration-none btn-sm"
+                <button type="button" class="btn btn-link text-secondary text-decoration-none btn-sm"
                   data-bs-toggle="modal" data-bs-target="#dataPrivacyModal">
                   <i class="bi bi-shield-lock me-1"></i>Warum rufen wir diese Daten ab?
                 </button>
@@ -479,6 +482,28 @@
           <!-- Account Settings -->
           <div class="glass-card profile-area-settings profile-panel" id="account-settings-card">
             <h3 class="profile-heading"><i class="bi bi-gear"></i>Einstellungen</h3>
+            <div class="theme-setting">
+              <div class="fw-semibold" id="theme-choice-label">Darstellung</div>
+              <small class="text-muted d-block">Gilt nur in diesem Browser.</small>
+              <div class="theme-choice" role="radiogroup" aria-labelledby="theme-choice-label">
+                <label class="theme-choice-option">
+                  <input class="theme-choice-input" type="radio" name="theme-choice" id="theme-choice-light" value="light" data-change="setThemeChoice">
+                  <span class="theme-choice-preview" data-bs-theme="light" aria-hidden="true"><span class="theme-choice-bar"></span><span class="theme-choice-surface"></span></span>
+                  <span class="theme-choice-name">Hell</span>
+                </label>
+                <label class="theme-choice-option">
+                  <input class="theme-choice-input" type="radio" name="theme-choice" id="theme-choice-dark" value="dark" data-change="setThemeChoice">
+                  <span class="theme-choice-preview" data-bs-theme="dark" aria-hidden="true"><span class="theme-choice-bar"></span><span class="theme-choice-surface"></span></span>
+                  <span class="theme-choice-name">Dunkel</span>
+                </label>
+                <label class="theme-choice-option">
+                  <input class="theme-choice-input" type="radio" name="theme-choice" id="theme-choice-system" value="system" data-change="setThemeChoice">
+                  <span class="theme-choice-preview" aria-hidden="true"><span class="theme-choice-half" data-bs-theme="light"><span class="theme-choice-bar"></span><span class="theme-choice-surface"></span></span><span class="theme-choice-half" data-bs-theme="dark"><span class="theme-choice-bar"></span><span class="theme-choice-surface"></span></span></span>
+                  <span class="theme-choice-name">System</span>
+                </label>
+              </div>
+            </div>
+            <hr class="border-secondary">
             <div class="d-flex align-items-center justify-content-between gap-3">
               <div>
                 <div class="fw-semibold">Einladungen erhalten</div>
@@ -913,7 +938,7 @@
       <div class="modal-content">
         <div class="modal-header border-0">
           <h5 class="modal-title"><i class="bi bi-discord me-2"></i>Event aus Discord importieren</h5>
-          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
         </div>
         <div class="modal-body">
           <div id="discord-events-list" class="list-group">
@@ -937,7 +962,7 @@
 
         <div class="modal-header border-0 pb-0">
           <h5 class="modal-title" id="eventModalTitle">Neues Event erstellen</h5>
-          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
         </div>
 
         <!-- Wizard Step Indicator and the switch between editing and preview -->
@@ -1290,10 +1315,10 @@
         <div class="modal-header border-0">
           <h5 class="modal-title text-danger"><i class="bi bi-exclamation-triangle-fill me-2"></i>System Reset (Danger
             Zone)</h5>
-          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
         </div>
         <div class="modal-body">
-          <p class="text-white-50 mb-3">Wähle die Bereiche aus, die <strong>unwiderruflich</strong> gelöscht werden
+          <p class="text-secondary mb-3">Wähle die Bereiche aus, die <strong>unwiderruflich</strong> gelöscht werden
             sollen.</p>
 
           <div class="d-flex flex-column gap-2 mb-4">
@@ -1324,7 +1349,7 @@
           </div>
 
           <div class="mb-3">
-            <label class="form-label text-white-50">Admin Reset Passwort</label>
+            <label class="form-label text-secondary">Admin Reset Passwort</label>
             <input type="password" class="form-control glass-input" id="reset-password" placeholder="Passwort eingeben">
           </div>
         </div>
@@ -1344,7 +1369,7 @@
       <div class="modal-content border-warning">
         <div class="modal-header border-0">
           <h5 class="modal-title text-warning"><i class="bi bi-tools me-2"></i>Wartungsmodus</h5>
-          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
         </div>
         <div class="modal-body">
 
@@ -1355,7 +1380,7 @@
               <strong>PANIC MODE AKTIV</strong>
             </div>
             <p class="mb-2">Das System ist im Notfall-Lockdown. Alle Logins und Registrierungen sind gesperrt.</p>
-            <p class="mb-2 small text-white-50">Aktiviert: <span id="panic-activated-at"></span> von <span id="panic-activated-by"></span></p>
+            <p class="mb-2 small text-secondary">Aktiviert: <span id="panic-activated-at"></span> von <span id="panic-activated-by"></span></p>
             <div class="d-flex gap-2 align-items-end">
               <div class="flex-grow-1">
                 <label class="form-label small">Admin-Reset-Passwort zum Deaktivieren:</label>
@@ -1444,11 +1469,11 @@
       <div class="modal-content">
         <div class="modal-header border-0">
           <h5 class="modal-title">Anmeldungen — <span id="reg-event-title"></span></h5>
-          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
         </div>
         <div class="modal-body">
           <div class="table-responsive">
-            <table class="table table-dark table-hover">
+            <table class="table table-hover">
               <thead>
                 <tr>
                   <th>User</th>
@@ -1478,7 +1503,7 @@
       <div class="modal-content">
         <div class="modal-header border-0">
           <h5 class="modal-title"><i class="bi bi-chat-dots me-2"></i>Bot-Nachrichten bearbeiten</h5>
-          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
         </div>
         <div class="modal-body">
           <div class="alert alert-secondary small">
@@ -1514,7 +1539,7 @@
       <div class="modal-content">
         <div class="modal-header border-0">
           <h5 class="modal-title"><i class="bi bi-megaphone me-2"></i>Event ankündigen</h5>
-          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
         </div>
         <div class="modal-body">
           <input type="hidden" id="announce-event-id" value="">
@@ -1565,7 +1590,7 @@
       <div class="modal-content">
         <div class="modal-header border-0">
           <h5 class="modal-title"><i class="bi bi-shield-lock me-2"></i>Daten & Datenschutz</h5>
-          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
         </div>
         <div class="modal-body">
           <p>Um DEMS nutzerfreundlich und sicher zu gestalten, benötigen wir Zugriff auf einige Informationen deines
@@ -1625,8 +1650,8 @@
       <div class="modal-content">
         <div class="modal-header border-0">
           <h5 class="modal-title"><i class="bi bi-megaphone me-2"></i>Neuigkeiten & Updates <span
-              id="updates-version-badge" class="badge bg-accent ms-2"></span></h5>
-          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+              id="updates-version-badge" class="badge text-bg-primary ms-2"></span></h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
         </div>
         <div class="modal-body">
           <div id="updates-content">
@@ -1657,7 +1682,7 @@
       <div class="modal-content">
         <div class="modal-header border-0">
           <h5 class="modal-title" id="poll-editor-title">Neue Abstimmung</h5>
-          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
         </div>
         <div class="modal-body">
           <input type="hidden" id="poll-edit-id">
@@ -1726,7 +1751,7 @@
       <div class="modal-content">
         <div class="modal-header border-0">
           <h5 class="modal-title"><i class="bi bi-discord me-2"></i>In Discord posten</h5>
-          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
         </div>
         <div class="modal-body">
           <input type="hidden" id="poll-announce-id">
@@ -1753,7 +1778,7 @@
       <div class="modal-content">
         <div class="modal-header border-0">
           <h5 class="modal-title"><i class="bi bi-calendar-plus me-2"></i>Termin für das Event wählen</h5>
-          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
         </div>
         <div class="modal-body">
           <div id="poll-decide-options" class="d-flex flex-column gap-2"></div>
@@ -1920,7 +1945,7 @@
       <div class="d-flex align-items-center">
         <i id="toast-icon" class="toast-icon bi bi-info-circle-fill ms-3"></i>
         <div class="toast-body" id="toast-message"></div>
-        <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+        <button type="button" class="btn-close me-2 m-auto" data-bs-dismiss="toast"></button>
       </div>
     </div>
   </div>
@@ -1928,7 +1953,7 @@
   <!-- First-Login Modal -->
   <div class="modal fade" id="firstLoginModal" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
-      <div class="modal-content bg-dark border border-secondary">
+      <div class="modal-content border border-secondary">
         <div class="modal-header border-secondary">
           <h5 class="modal-title"><i class="bi bi-envelope-heart me-2"></i>Willkommen bei DEMS!</h5>
         </div>

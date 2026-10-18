@@ -82,20 +82,40 @@ function parseRules(css) {
 }
 
 /**
- * Custom properties of every :root rule.
+ * Custom properties of one colour scheme. Dark: the top-level rules whose
+ * selector list holds :root or [data-bs-theme="dark"]. Light: dark, overlaid
+ * with the rules for [data-bs-theme="light"]. Rules in @media and other
+ * selectors (e.g. :root.is-theme-switching) do not count.
  *
  * @param {string} css -> Stylesheet source.
+ * @param {'dark'|'light'} scheme -> Colour scheme.
  * @returns {Map<string, string>} -> Token name -> value as written.
  */
-function readTokens(css) {
+function readSchemeTokens(css, scheme) {
+    const selectors = scheme === 'light'
+        ? [[':root', '[data-bs-theme="dark"]'], ['[data-bs-theme="light"]']]
+        : [[':root', '[data-bs-theme="dark"]']];
+    const rules = parseRules(css).filter(rule => rule.context === '');
     const tokens = new Map();
-    for (const rule of parseRules(css)) {
-        if (rule.selector !== ':root') continue;
-        for (const { property, value } of rule.declarations) {
-            if (property.startsWith('--')) tokens.set(property, value);
+    for (const wanted of selectors) {
+        for (const rule of rules) {
+            if (!rule.selector.split(', ').some(selector => wanted.includes(selector))) continue;
+            for (const { property, value } of rule.declarations) {
+                if (property.startsWith('--')) tokens.set(property, value);
+            }
         }
     }
     return tokens;
 }
 
-module.exports = { readCss, stripComments, parseRules, readTokens };
+/**
+ * Custom properties of the dark (default) scheme.
+ *
+ * @param {string} css -> Stylesheet source.
+ * @returns {Map<string, string>} -> Token name -> value as written.
+ */
+function readTokens(css) {
+    return readSchemeTokens(css, 'dark');
+}
+
+module.exports = { readCss, stripComments, parseRules, readTokens, readSchemeTokens };

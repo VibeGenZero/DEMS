@@ -43,6 +43,7 @@ sources: [scripts/wiki-graph.js, docs/wiki/graph.json, CLAUDE.md]
 | login, sessions, admin rights | auth-session, routes-auth |
 | maintenance / panic mode | maintenance-mode |
 | frontend UI change | frontend-app, frontend-markup |
+| colours, light/dark scheme | frontend-markup (tokens), frontend-app (`core/theme.js`) |
 | database / new collection | data-layer, data-model, add-collection |
 | run locally / debug | run-and-debug, dev-mock-mode |
 | write tests | testing |
@@ -71,7 +72,7 @@ sources: [scripts/wiki-graph.js, docs/wiki/graph.json, CLAUDE.md]
 | `utils/eventUrl.js` | utils, discord-integration |
 | `utils/eventUtils.js`, `utils/eventListing.js`, `utils/profileEvents.js`, `utils/userProfile.js`, `utils/avatar.js`, `utils/botPermissions.js`, `utils/csv.js`, `utils/template.js`, `utils/sessionStore.js`, `utils/debugLog.js` | utils |
 | `utils/reminders.js` | utils, reminders-presence |
-| `public/js/**` | frontend-app |
+| `public/js/**`, `public/theme-boot.js` | frontend-app |
 | `public/index.html`, `public/css/tokens.css`, `public/css/components.css`, `public/css/style.css` | frontend-markup |
 | `dev/*` | dev-mock-mode |
 | `test/*` | testing |

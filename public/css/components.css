@@ -9,12 +9,16 @@
 /* ═══════════════════════════════════════════ */
 /* BOOTSTRAP BRIDGE                            */
 /* ═══════════════════════════════════════════ */
-[data-bs-theme="dark"] {
+/* Both schemes: the tokens already differ per scheme (tokens.css) */
+[data-bs-theme] {
   --bs-body-bg: var(--bg-primary);
   --bs-body-color: var(--text-primary);
   --bs-body-font-family: var(--font-body);
+  --bs-emphasis-color: var(--text-primary);
   --bs-secondary-color: var(--text-secondary);
+  --bs-secondary-bg: var(--bg-secondary);
   --bs-tertiary-color: var(--text-muted);
+  --bs-tertiary-bg: var(--bg-tint-1);
   --bs-border-color: var(--border-strong);
   --bs-border-radius: var(--radius-sm);
   --bs-border-radius-sm: var(--radius-sm);

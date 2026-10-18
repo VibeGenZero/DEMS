@@ -34,6 +34,8 @@ import { initActions } from './core/actions.js';
 import { createParticles, finishLoading, runBootAnimation } from './core/boot.js';
 import { initDialogMotion } from './core/motion.js';
 import { initTabGlider } from './core/tab-glider.js';
+import { initTheme, onThemeChange } from './core/theme.js';
+import { refreshStyleguideTokens } from './pages/debug.js';
 import { initCardFlight } from './events/card-flight.js';
 import { checkUpdates } from './core/updates.js';
 import { showUserData } from './pages/info.js';
@@ -41,6 +43,9 @@ import { showUserData } from './pages/info.js';
 initActions(document);
 // Dialogs and toasts only open once the page is there
 document.addEventListener('DOMContentLoaded', () => {
+    // theme-boot.js already set the scheme; this adds the date picker theme and the live system switch
+    onThemeChange(refreshStyleguideTokens);
+    initTheme();
     initDialogMotion(document);
     initCardFlight(document);
     initTabGlider(document);

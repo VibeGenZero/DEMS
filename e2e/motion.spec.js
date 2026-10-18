@@ -276,9 +276,11 @@ test('bars and numbers end at their values', async ({ page }, testInfo) => {
     await expect.poll(async () => (await readBars()).every(([width, expected]) => width === expected)).toBe(true);
 
     // Admin: the numbers count up to the statistics
+    // Compare with the answer the page rendered: other specs create and delete events in the same database meanwhile
+    const statsAnswer = page.waitForResponse(response => new URL(response.url()).pathname === '/api/admin/stats');
     await navigate(page, 'admin');
     await expect(page.locator('#admin-stats .stat-value').first()).toBeVisible();
-    const stats = await page.evaluate(async () => (await fetch('/api/admin/stats')).json());
+    const stats = await (await statsAnswer).json();
     await expect.poll(() => page.locator('#admin-stats .stat-value').allTextContents()).toEqual([stats.events.total, stats.events.active, stats.registrations.total, stats.registrations.pending, stats.registrations.accepted, stats.registrations.waitlisted].map(String));
     expect(errors).toEqual([]);
 });

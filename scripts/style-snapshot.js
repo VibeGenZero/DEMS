@@ -144,7 +144,8 @@ async function takeSnapshot() {
         await waitForServer();
         const snapshot = {};
         for (const [name, viewport] of Object.entries(VIEWPORTS)) {
-            const context = await browser.newContext({ viewport });
+            // Dark scheme: the snapshot compares against the dark look of origin/main
+            const context = await browser.newContext({ viewport, colorScheme: 'dark' });
             // Skip the boot animation and the "Neuigkeiten" dialog, like e2e/helpers.js
             await context.addInitScript((currentVersion) => {
                 localStorage.setItem('dems_boot_ts', String(Date.now()));

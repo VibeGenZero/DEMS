@@ -177,7 +177,7 @@ export async function loadAuditLog() {
             return;
         }
 
-        let html = `<div class="table-responsive"><table class="table table-sm table-dark table-hover">
+        let html = `<div class="table-responsive"><table class="table table-sm table-hover">
             <thead><tr>
                 <th>Zeitpunkt</th>
                 <th>Aktion</th>

@@ -919,12 +919,13 @@ body {
 /* ═══════════════════════════════════════════ */
 /* TABLE                                       */
 /* ═══════════════════════════════════════════ */
-.table-dark {
+.table {
+  --bs-table-color: var(--text-primary);
   --bs-table-bg: transparent;
   --bs-table-border-color: var(--border-subtle);
 }
 
-.table-dark th {
+.table th {
   font-weight: 600;
   font-size: var(--font-size-sm);
   text-transform: uppercase;
@@ -1365,6 +1366,93 @@ body {
   color: var(--text-muted);
   font-size: var(--font-size-sm);
   font-weight: 400;
+}
+
+/* Colour scheme choice (core/theme.js). Each preview sets data-bs-theme,
+   so its tokens show that scheme whatever the page shows. */
+.theme-choice {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-8);
+  margin-top: var(--space-12);
+}
+
+.theme-choice-option {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  padding: var(--space-8);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--bg-tint-1);
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+  text-align: center;
+  cursor: pointer;
+  transition: border-color var(--duration-fast) var(--ease-standard), background-color var(--duration-fast) var(--ease-standard);
+}
+
+.theme-choice-option:hover {
+  border-color: var(--border-accent);
+}
+
+.theme-choice-option:has(.theme-choice-input:checked) {
+  border-color: var(--accent);
+  background: var(--accent-tint-1);
+  color: var(--accent-text);
+  font-weight: 600;
+}
+
+.theme-choice-option:has(.theme-choice-input:focus-visible) {
+  box-shadow: var(--shadow-ring);
+}
+
+/* Hidden but focusable: the label is the visible control */
+.theme-choice-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.theme-choice-preview {
+  display: flex;
+  flex-direction: column;
+  height: var(--space-48);
+  overflow: hidden;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--bg-primary);
+}
+
+.theme-choice-preview:has(.theme-choice-half) {
+  flex-direction: row;
+}
+
+.theme-choice-half {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  background: var(--bg-primary);
+}
+
+/* Header strip with the accent on the left, like the navbar with the logo */
+.theme-choice-bar {
+  flex-shrink: 0;
+  height: var(--space-8);
+  border-bottom: 1px solid var(--border-subtle);
+  background: linear-gradient(90deg, var(--accent) 0 30%, var(--bg-card) 30% 100%);
+}
+
+.theme-choice-surface {
+  flex: 1;
+  margin: var(--space-4) var(--space-8);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--bg-card);
+  box-shadow: var(--shadow-sm);
 }
 
 .profile-list {
@@ -2917,12 +3005,20 @@ a.profile-history-row:hover {
 }
 
 .guest-search-results {
+  --bs-list-group-bg: var(--bg-card);
+  --bs-list-group-color: var(--text-primary);
+  --bs-list-group-border-color: var(--border-subtle);
+  --bs-list-group-action-color: var(--text-primary);
+  --bs-list-group-action-hover-color: var(--text-primary);
+  --bs-list-group-action-hover-bg: var(--bg-tint-2);
   max-height: 200px;
   overflow-y: auto;
 }
 
 /* Guest picked for a registration */
 .guest-chip {
+  /* Bootstrap's .badge is white text, unreadable on the light tint */
+  --bs-badge-color: var(--text-primary);
   border: 1px solid var(--accent-glow);
   background: var(--accent-tint-2);
   font-size: var(--font-size-sm);

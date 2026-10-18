@@ -17,7 +17,7 @@ const allRules = () => STYLED.flatMap(rulesOf);
 const selectorsOf = (name) => new Set(rulesOf(name).flatMap(rule => rule.selector.split(', ')));
 // Selectors that components.css must define
 const COMPONENT_SELECTORS = [
-    '[data-bs-theme="dark"]', 'a',
+    '[data-bs-theme]', 'a',
     '.text-secondary', '.text-primary', '.text-success', '.text-warning', '.text-danger', '.text-info',
     '.bg-primary', '.text-bg-primary', '.bg-success', '.text-bg-success', '.bg-warning', '.text-bg-warning', '.bg-danger', '.text-bg-danger', '.bg-info', '.text-bg-info',
     '.btn', '.btn-primary', '.btn-accent', '.btn-secondary', '.btn-outline-light', '.btn-outline-secondary', '.btn-ghost', '.btn-danger', '.btn-discord', '.btn-warning',
@@ -126,6 +126,31 @@ test('!important in components.css is limited to the colour helpers', () => {
 
 test('the dead class glass-modal is gone', () => {
     for (const source of [INDEX_HTML, ...frontendSources().map(entry => entry.source)]) assert.doesNotMatch(source, /glass-modal/);
+});
+
+// Bootstrap classes that force light text or a dark surface; in the light scheme they would be unreadable
+const DARK_ONLY_CLASS = /(?<![-\w])(navbar-dark|text-light|text-white|text-white-50|bg-dark|table-dark|btn-close-white)(?![-\w])/g;
+
+test('no dark-only Bootstrap class is left in the markup or the modules', () => {
+    const found = [{ file: 'index.html', source: INDEX_HTML }, ...frontendSources()].flatMap(({ file, source }) =>
+        source.split(/\r?\n/).flatMap((line, index) => [...line.matchAll(DARK_ONLY_CLASS)].map(match => `${file}:${index + 1} ${match[1]}`)));
+    assert.deepEqual(found, []);
+});
+
+test('every badge in the markup and the modules names its text colour', () => {
+    // Bootstrap's .badge is white text; on a light surface it needs a colour of its own (D-15)
+    const coloured = new Set(allRules()
+        .filter(rule => rule.declarations.some(declaration => declaration.property === 'color' || declaration.property === '--bs-badge-color'))
+        .flatMap(rule => rule.selector.split(', '))
+        .filter(selector => /^\.[\w-]+$/.test(selector))
+        .map(selector => selector.slice(1)));
+    const names = (list) => list.split(/\s+/);
+    const missing = [{ file: 'index.html', source: INDEX_HTML }, ...frontendSources()].flatMap(({ file, source }) =>
+        [...source.matchAll(/class="([^"]*)"/g)]
+            .filter(match => names(match[1]).includes('badge'))
+            .filter(match => !names(match[1]).some(name => /^text-bg-[a-z]+$/.test(name) || /^text-[a-z]+-emphasis$/.test(name) || coloured.has(name)))
+            .map(match => `${file}: ${match[1]}`));
+    assert.deepEqual(missing, []);
 });
 
 test('colour values only live in tokens.css', () => {
