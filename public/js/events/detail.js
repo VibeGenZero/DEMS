@@ -4,7 +4,7 @@
 import { state } from '../core/state.js';
 import { navigateTo } from '../core/router.js';
 import { registerActions } from '../core/actions.js';
-import { applyStyleData, escapeHtml, isValidBannerUrl, renderMarkdownSafe, showElement, showToast } from '../core/ui.js';
+import { applyStyleData, escapeHtml, isValidBannerUrl, renderMarkdownSafe, showElement, showToast, toggleElement } from '../core/ui.js';
 import { avatar } from '../core/components.js';
 import { renderCheckinSection } from './checkin.js';
 import { loadComments } from './comments.js';
@@ -103,43 +103,44 @@ export function renderSidebarDetails(event) {
     renderSidebarCapacity(event);
 }
 
-export function renderSidebarAction(mode, event = null) {
-    const area = document.getElementById('sidebar-action-area');
-    if (!area) return;
+// Disabled status button of the action area per state
+const STATUS_ACTIONS = {
+    registered: { html: '<i class="bi bi-check-circle me-2"></i>Angemeldet', cls: 'btn-outline-success' },
+    noaccess: { html: '<i class="bi bi-lock me-2"></i>Kein Zugang', cls: 'btn-outline-danger' }
+};
 
-    // Slot events need the role picker in the form -> the sidebar scrolls there instead of submitting
-    const hasFormFields = event && ((Array.isArray(event.formFields) && event.formFields.length > 0) || eventHasSlots(event));
-
-    if (mode === 'register' || mode === 'waitlist') {
-        const isWaitlist = mode === 'waitlist';
-        const label = isWaitlist
-            ? '<i class="bi bi-list-nested me-2"></i>Auf Warteliste setzen'
-            : '<i class="bi bi-pencil-square me-2"></i>Jetzt anmelden';
-        const cls = isWaitlist ? 'btn-outline-secondary w-100' : 'btn-accent w-100';
-
-        if (hasFormFields) {
-            // Scroll to form so required fields can be filled
-            area.innerHTML = `<button class="btn ${cls} mt-2" data-click="scrollTo" data-target="detail-register-area">${label}</button>`;
-        } else {
-            // No custom fields — submit directly from sidebar
-            const btnId = 'sidebar-register-btn';
-            const formContainer = isWaitlist ? 'waitlist-form-fields' : 'dynamic-form-fields';
-            area.innerHTML = `<button id="${btnId}" class="btn ${cls} mt-2">${label}</button>`;
-            document.getElementById(btnId).addEventListener('click', () => {
-                submitRegistration(event.id, event, btnId, formContainer);
-            });
-        }
-        return;
+/**
+ * Show the one action of the event page (D-05). #register-btn and #waitlist-btn
+ * submit their form through the form attribute; on phones the action area is
+ * a bar at the bottom while one of them shows (.has-action-bar).
+ *
+ * @param {'register'|'waitlist'|'registered'|'noaccess'|'none'} mode -> State of the page.
+ * @returns {void}
+ */
+export function renderSidebarAction(mode) {
+    for (const [id, visible] of [['register-btn', mode === 'register'], ['waitlist-btn', mode === 'waitlist']]) {
+        const button = document.getElementById(id);
+        if (button) toggleElement(button, visible);
     }
+    const statusButton = document.getElementById('sidebar-status-btn');
+    if (statusButton) {
+        const status = STATUS_ACTIONS[mode];
+        statusButton.className = `btn w-100 ${status ? status.cls : ''}`.trim();
+        statusButton.innerHTML = status ? status.html : '';
+        toggleElement(statusButton, Boolean(status));
+    }
+    document.getElementById('event-detail-section')?.classList.toggle('has-action-bar', mode === 'register' || mode === 'waitlist');
+}
 
-    const configs = {
-        registered: { label: '<i class="bi bi-check-circle me-2"></i>Angemeldet', cls: 'btn-outline-success w-100', disabled: true },
-        noaccess:   { label: '<i class="bi bi-lock me-2"></i>Kein Zugang',         cls: 'btn-outline-danger w-100',  disabled: true },
-        none:       { label: '',                                                    cls: '',                          disabled: true }
-    };
-    const cfg = configs[mode] || configs.none;
-    if (!cfg.label) { area.innerHTML = ''; return; }
-    area.innerHTML = `<button class="btn ${cfg.cls} mt-2" disabled>${cfg.label}</button>`;
+/**
+ * Whether the registration needs the "Anmeldung" card: form fields, a role
+ * picker or guests to add. Without any, the action button alone registers.
+ *
+ * @param {Object} event -> Event of the page.
+ * @returns {boolean}
+ */
+export function hasRegistrationInputs(event) {
+    return (Array.isArray(event.formFields) && event.formFields.length > 0) || eventHasSlots(event) || event.allowGuests !== false;
 }
 
 export function renderSidebarCapacity(event) {
@@ -218,6 +219,7 @@ export function resetEventDetailAreas() {
         const el = document.getElementById(id);
         if (el) el.innerHTML = '';
     });
+    renderSidebarAction('none');
 }
 
 /**
@@ -407,10 +409,11 @@ export async function showEventDetail(eventId, { celebrate, fromTaken } = {}) {
                 e.preventDefault();
                 await submitRegistration(eventId, event, 'waitlist-btn', 'waitlist-form-fields');
             };
-            renderSidebarAction('waitlist', event);
+            renderSidebarAction('waitlist');
         } else {
             // Show registration form
-            registerArea.style.display = 'block';
+            // Without fields, roles or guests the action button alone registers (D-05)
+            registerArea.style.display = hasRegistrationInputs(event) ? 'block' : 'none';
             renderFormFields(event.formFields || []);
             renderSlotPicker(event);
 
@@ -432,7 +435,7 @@ export async function showEventDetail(eventId, { celebrate, fromTaken } = {}) {
                 e.preventDefault();
                 await submitRegistration(eventId, event, 'register-btn', 'dynamic-form-fields');
             };
-            renderSidebarAction('register', event);
+            renderSidebarAction('register');
         }
 
         revealDetail();

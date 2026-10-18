@@ -291,8 +291,16 @@
                 <div id="sidebar-capacity-content"></div>
               </div>
 
-              <!-- Action button -->
-              <div id="sidebar-action-area"></div>
+              <!-- The one action button (D-05): submits its form through the form attribute; on phones a bar at the bottom -->
+              <div id="sidebar-action-area" class="detail-action">
+                <button type="submit" form="registration-form" class="btn btn-accent w-100 is-hidden" id="register-btn">
+                  <i class="bi bi-check-circle me-2"></i>Teilnehmen
+                </button>
+                <button type="submit" form="waitlist-form" class="btn btn-secondary w-100 is-hidden" id="waitlist-btn">
+                  <i class="bi bi-list-nested me-2"></i>Auf Warteliste setzen
+                </button>
+                <button type="button" class="btn w-100 is-hidden" id="sidebar-status-btn" disabled></button>
+              </div>
 
             </div>
           </div>
@@ -377,9 +385,6 @@
                     <small class="text-muted">Suche nach Servernutzern — sie erhalten eine Discord-Einladung und müssen bestätigen. Jeder Gast belegt einen Event-Platz.</small>
                   </div>
 
-                  <button type="submit" class="btn btn-accent btn-lg mt-3" id="register-btn">
-                    <i class="bi bi-check-circle me-2"></i>Teilnehmen
-                  </button>
                 </form>
               </div>
             </div>
@@ -396,9 +401,6 @@
                 </div>
                 <form id="waitlist-form">
                   <div id="waitlist-form-fields"></div>
-                  <button type="submit" class="btn btn-outline-light btn-lg mt-2" id="waitlist-btn">
-                    <i class="bi bi-list-nested me-2"></i>Auf Warteliste setzen
-                  </button>
                 </form>
               </div>
             </div>
