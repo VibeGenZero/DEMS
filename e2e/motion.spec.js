@@ -367,9 +367,12 @@ test('the countdown flips only the digits that change', async ({ page }, testInf
     // Each flip touched one cell; seconds tick, so not every digit changed
     expect(changed).toBeLessThan(count);
     expect(await page.evaluate(() => window.flipped)).toBeGreaterThan(0);
-    // Once landed every cell holds one digit again
-    await expect.poll(() => page.locator('#detail-countdown-area .countdown-digit-next').count()).toBe(0);
-    expect(await page.locator('#detail-countdown-area .countdown-digit > span').count()).toBe(count);
+    // Once landed every cell holds one digit again. One read for both: the next
+    // second may start a new flip between two separate queries.
+    await expect.poll(() => page.evaluate(() => {
+        const area = document.getElementById('detail-countdown-area');
+        return area.querySelector('.countdown-digit-next') ? -1 : area.querySelectorAll('.countdown-digit > span').length;
+    })).toBe(count);
     expect(errors).toEqual([]);
 });
 
@@ -398,7 +401,7 @@ test('registering celebrates in place', async ({ page, browser }, testInfo) => {
         await expect(page.locator('#detail-title')).toHaveText(title);
         await page.locator('#register-btn').click();
         await expect(page.locator('#detail-registered')).toBeVisible();
-        await expect(page.locator('#sidebar-action-area .btn')).toContainText('Angemeldet');
+        await expect(page.locator('#sidebar-status-btn')).toContainText('Angemeldet');
         await expect.poll(() => page.locator('#sidebar-capacity-content .capacity-meter').evaluate(meter => meter.value)).toBe(1);
         // The spring leaves nothing behind
         await expect.poll(async () => isIdentity(await transformOf(page.locator('#detail-registered')))).toBe(true);

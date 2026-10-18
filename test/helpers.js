@@ -301,7 +301,10 @@ function createFakeElement(registry, id = '', classNames = []) {
             listeners.delete(type);
             for (const listener of waiting) listener({ type });
         },
-        focus() {},
+        /** Calls of focus() and scrollIntoView(), e.g. [['scrollIntoView', { block: 'center' }], ['focus']]. */
+        calls: [],
+        focus() { this.calls.push(['focus']); },
+        scrollIntoView(options) { this.calls.push(['scrollIntoView', options]); },
         setAttribute(name, value) { attributes.set(name, String(value)); },
         getAttribute: (name) => (attributes.has(name) ? attributes.get(name) : null),
         appendChild: register,

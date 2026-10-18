@@ -254,91 +254,58 @@
       <!-- Full-width banner (outside container) -->
       <div id="detail-banner-area" class="event-detail-banner-header"></div>
 
-      <div class="container section-container">
-        <button class="btn btn-sm btn-outline-light mt-3 mb-4" data-click="closeEventPage">
+      <div class="container section-container event-page-container">
+        <button class="btn btn-sm btn-outline-light mb-3" data-click="closeEventPage">
           <i class="bi bi-arrow-left me-1"></i>Zurück zur Übersicht
         </button>
-
-        <div class="row g-4">
-
-          <!-- ── LEFT: Main Content ── -->
-          <div class="col-lg-8">
-
+        <!-- Areas (D-05): phone head → side → status → main; from 992 px main on the left, side on the right -->
+        <div class="event-page">
+          <div class="event-page-head" id="detail-head">
             <!-- Tags + Title + Countdown -->
             <div class="d-flex flex-wrap gap-2 mb-2 align-items-center">
               <span id="detail-category-tag"></span>
               <span id="detail-status-tag"></span>
             </div>
             <h2 id="detail-title" class="mb-3 fw-bold"></h2>
-            <div id="detail-countdown-area" class="countdown countdown-detail countdown-live mb-4 is-hidden"></div>
+            <div id="detail-countdown-area" class="countdown countdown-detail countdown-live mb-3 is-hidden"></div>
+          </div>
+          <!-- Facts, places and the one action button -->
+          <div class="event-page-side" id="detail-side">
+            <div class="event-detail-sidebar">
 
-            <!-- Description -->
-            <div class="glass-card p-4 mb-4">
-              <h6 class="section-label mb-3"><i class="bi bi-text-left me-2"></i>BESCHREIBUNG</h6>
-              <div id="detail-description"></div>
-            </div>
-
-            <!-- Participants (only shown when logged in) -->
-            <div id="detail-participants-section" class="glass-card p-4 mb-4 is-hidden">
-              <h6 class="section-label mb-3">
-                <i class="bi bi-people me-2"></i><span id="detail-participants-title">TEILNEHMER</span>
-              </h6>
-              <div id="detail-participants-avatars" class="participants-avatar-stack"></div>
-              <div class="is-hidden" id="detail-roster"></div>
-            </div>
-
-            <!-- Series dates (rendered by JS) -->
-            <div id="detail-series-section"></div>
-
-            <!-- Registration Form -->
-            <div id="detail-register-area">
-              <div class="glass-card p-4 mb-4">
-                <h5 class="mb-3"><i class="bi bi-pencil-square me-2"></i>Anmeldung</h5>
-                <form id="registration-form">
-                  <div id="slot-picker-area" class="mb-3 is-hidden"></div>
-                  <div id="dynamic-form-fields"></div>
-
-                  <div class="mt-3 mb-2" id="guest-tickets-area">
-                    <label class="form-label mb-1"><i class="bi bi-person-plus me-1"></i>Gäste hinzufügen (optional)</label>
-                    <div class="input-group mb-2">
-                      <input type="text" class="form-control" id="guest-search-input"
-                        placeholder="Name oder Benutzername suchen..."
-                        data-input="debounceGuestSearch" autocomplete="off">
-                      <span class="input-group-text bg-transparent border-secondary">
-                        <i class="bi bi-search text-muted"></i>
-                      </span>
-                    </div>
-                    <div id="guest-search-results" class="list-group guest-search-results mb-2 is-hidden"></div>
-                    <div id="selected-guests" class="d-flex flex-wrap gap-2 mb-1"></div>
-                    <small class="text-muted">Suche nach Servernutzern — sie erhalten eine Discord-Einladung und müssen bestätigen. Jeder Gast belegt einen Event-Platz.</small>
-                  </div>
-
-                  <button type="submit" class="btn btn-accent btn-lg mt-3" id="register-btn">
-                    <i class="bi bi-check-circle me-2"></i>Teilnehmen
-                  </button>
-                </form>
-              </div>
-            </div>
-
-            <!-- Waitlist -->
-            <div class="is-hidden" id="detail-waitlist">
-              <div class="glass-card p-4 mb-4">
-                <div class="d-flex align-items-center gap-3 mb-3">
-                  <i class="bi bi-hourglass-split text-info icon-xl"></i>
-                  <div>
-                    <h5 class="mb-1">Event ist voll</h5>
-                    <p class="text-secondary mb-0">Du kannst dich auf die Warteliste setzen. <span id="detail-waitlist-count"></span></p>
-                  </div>
+              <!-- Details panel -->
+              <div class="glass-card event-side-card">
+                <div class="sidebar-section-title">DETAILS</div>
+                <div class="sidebar-detail-rows">
+                  <div id="sidebar-date-row" class="sidebar-detail-row is-hidden"></div>
+                  <div id="sidebar-time-row" class="sidebar-detail-row is-hidden"></div>
+                  <div id="sidebar-duration-row" class="sidebar-detail-row is-hidden"></div>
+                  <div id="sidebar-location-row" class="sidebar-detail-row is-hidden"></div>
+                  <div id="sidebar-creator-row" class="sidebar-detail-row is-hidden"></div>
                 </div>
-                <form id="waitlist-form">
-                  <div id="waitlist-form-fields"></div>
-                  <button type="submit" class="btn btn-outline-light btn-lg mt-2" id="waitlist-btn">
-                    <i class="bi bi-list-nested me-2"></i>Auf Warteliste setzen
-                  </button>
-                </form>
               </div>
-            </div>
 
+              <!-- Capacity panel -->
+              <div class="glass-card event-side-card is-hidden" id="sidebar-capacity-panel">
+                <div class="sidebar-section-title">KAPAZITÄT</div>
+                <div id="sidebar-capacity-content"></div>
+              </div>
+
+              <!-- The one action button (D-05): submits its form through the form attribute; on phones a bar at the bottom -->
+              <div id="sidebar-action-area" class="detail-action">
+                <button type="submit" form="registration-form" class="btn btn-accent w-100 is-hidden" id="register-btn">
+                  <i class="bi bi-check-circle me-2"></i>Teilnehmen
+                </button>
+                <button type="submit" form="waitlist-form" class="btn btn-secondary w-100 is-hidden" id="waitlist-btn">
+                  <i class="bi bi-list-nested me-2"></i>Auf Warteliste setzen
+                </button>
+                <button type="button" class="btn w-100 is-hidden" id="sidebar-status-btn" disabled></button>
+              </div>
+
+            </div>
+          </div>
+          <!-- Own registration, no access, over; check-in box is appended here -->
+          <div class="event-page-status" id="detail-status">
             <!-- Already registered -->
             <div class="is-hidden" id="detail-registered">
               <div class="glass-card p-4 mb-4">
@@ -375,36 +342,70 @@
                 <p class="text-secondary mb-0"><i class="bi bi-flag me-2"></i>Dieses Event ist vorbei.</p>
               </div>
             </div>
-
-          </div><!-- /col-lg-8 -->
-
-          <!-- ── RIGHT: Sidebar ── -->
-          <div class="col-lg-4">
-            <div class="event-detail-sidebar">
-
-              <!-- Details panel -->
-              <div class="glass-card p-4 mb-3">
-                <div class="sidebar-section-title">DETAILS</div>
-                <div id="sidebar-date-row" class="sidebar-detail-row is-hidden"></div>
-                <div id="sidebar-time-row" class="sidebar-detail-row is-hidden"></div>
-                <div id="sidebar-duration-row" class="sidebar-detail-row is-hidden"></div>
-                <div id="sidebar-location-row" class="sidebar-detail-row is-hidden"></div>
-                <div id="sidebar-creator-row" class="sidebar-detail-row is-hidden"></div>
-              </div>
-
-              <!-- Capacity panel -->
-              <div class="glass-card p-4 mb-3 is-hidden" id="sidebar-capacity-panel">
-                <div class="sidebar-section-title">KAPAZITÄT</div>
-                <div id="sidebar-capacity-content"></div>
-              </div>
-
-              <!-- Action button -->
-              <div id="sidebar-action-area"></div>
-
+          </div>
+          <!-- Description, line-up, series, registration details; comments are appended here -->
+          <div class="event-page-main" id="detail-main">
+            <!-- Description -->
+            <div class="glass-card p-4 mb-4">
+              <h6 class="section-label mb-3"><i class="bi bi-text-left me-2"></i>BESCHREIBUNG</h6>
+              <div id="detail-description"></div>
             </div>
-          </div><!-- /col-lg-4 -->
+            <!-- Participants (only shown when logged in) -->
+            <div id="detail-participants-section" class="glass-card p-4 mb-4 is-hidden">
+              <h6 class="section-label mb-3">
+                <i class="bi bi-people me-2"></i><span id="detail-participants-title">TEILNEHMER</span>
+              </h6>
+              <div id="detail-participants-avatars" class="participants-avatar-stack"></div>
+              <div class="is-hidden" id="detail-roster"></div>
+            </div>
 
-        </div><!-- /row -->
+            <!-- Series dates (rendered by JS) -->
+            <div id="detail-series-section"></div>
+
+            <!-- Registration Form -->
+            <div id="detail-register-area">
+              <div class="glass-card p-4 mb-4">
+                <h5 class="mb-3"><i class="bi bi-pencil-square me-2"></i>Anmeldung</h5>
+                <form id="registration-form">
+                  <div id="slot-picker-area" class="mb-3 is-hidden"></div>
+                  <div id="dynamic-form-fields"></div>
+
+                  <div class="mt-3 mb-2" id="guest-tickets-area">
+                    <label class="form-label mb-1"><i class="bi bi-person-plus me-1"></i>Gäste hinzufügen (optional)</label>
+                    <div class="input-group mb-2">
+                      <input type="text" class="form-control" id="guest-search-input"
+                        placeholder="Name oder Benutzername suchen..."
+                        data-input="debounceGuestSearch" autocomplete="off">
+                      <span class="input-group-text bg-transparent border-secondary">
+                        <i class="bi bi-search text-muted"></i>
+                      </span>
+                    </div>
+                    <div id="guest-search-results" class="list-group guest-search-results mb-2 is-hidden"></div>
+                    <div id="selected-guests" class="d-flex flex-wrap gap-2 mb-1"></div>
+                    <small class="text-muted">Suche nach Servernutzern — sie erhalten eine Discord-Einladung und müssen bestätigen. Jeder Gast belegt einen Event-Platz.</small>
+                  </div>
+
+                </form>
+              </div>
+            </div>
+
+            <!-- Waitlist -->
+            <div class="is-hidden" id="detail-waitlist">
+              <div class="glass-card p-4 mb-4">
+                <div class="d-flex align-items-center gap-3 mb-3">
+                  <i class="bi bi-hourglass-split text-info icon-xl"></i>
+                  <div>
+                    <h5 class="mb-1">Event ist voll</h5>
+                    <p class="text-secondary mb-0">Du kannst dich auf die Warteliste setzen. <span id="detail-waitlist-count"></span></p>
+                  </div>
+                </div>
+                <form id="waitlist-form">
+                  <div id="waitlist-form-fields"></div>
+                </form>
+              </div>
+            </div>
+          </div>
+        </div><!-- /event-page -->
       </div><!-- /container -->
     </section>
 

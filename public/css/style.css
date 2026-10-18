@@ -3035,12 +3035,136 @@ a.profile-history-row:hover {
 }
 
 /* ═══════════════════════════════════════════ */
+/* EVENT DETAIL — PAGE AREAS (D-05)           */
+/* ═══════════════════════════════════════════ */
+/* The banner already sits under the navbar: no navbar gap here */
+.event-page-container {
+  padding-top: var(--space-16);
+}
+
+/* Fade only: a transform on the section, even while it animates, would make
+   it the frame of the fixed phone action bar. The content slides in on its
+   own (detail-motion.js). */
+#event-detail-section {
+  animation-name: sectionFadeInCalm;
+}
+
+/* Phone: facts first. The cards bring their own bottom margins, so an
+   empty status area leaves no gap. */
+.event-page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas:
+    "head"
+    "side"
+    "status"
+    "main";
+}
+
+.event-page-head {
+  grid-area: head;
+}
+
+.event-page-side {
+  grid-area: side;
+  margin-bottom: var(--space-24);
+}
+
+.event-page-status {
+  grid-area: status;
+}
+
+.event-page-main {
+  grid-area: main;
+  min-width: 0;
+}
+
+/* Phone: date | time, duration | place */
+.sidebar-detail-rows {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: var(--space-16);
+}
+
+/* Details and places; tighter on phones so both fit the first screen */
+.event-side-card {
+  margin-bottom: var(--space-12);
+  padding: var(--space-16);
+}
+
+/* The one action button (detail.js renderSidebarAction) */
+.detail-action {
+  margin-top: var(--space-8);
+}
+
+/* Phone: while one can register, the button is a bar at the bottom */
+@media (max-width: 991.98px) {
+  /* Every row names itself and the places sentence explains itself; the
+     card titles would push the places under the bar */
+  .event-side-card .sidebar-section-title {
+    display: none;
+  }
+
+  #event-detail-section.has-action-bar {
+    padding-bottom: calc(var(--space-64) + env(safe-area-inset-bottom));
+  }
+
+  /* Toasts stand above the bar: after an error one presses the button
+     again. translate, because Bootstrap's bottom-0 carries !important. */
+  body:has(#event-detail-section.has-action-bar) .toast-container {
+    translate: 0 calc(-1 * (var(--space-64) + env(safe-area-inset-bottom)));
+  }
+
+  #event-detail-section.has-action-bar .detail-action {
+    position: fixed;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    z-index: var(--z-sticky);
+    margin: 0;
+    padding: var(--space-12) var(--space-16) calc(var(--space-12) + env(safe-area-inset-bottom));
+    /* Opaque: the waitlist button is translucent itself */
+    background: var(--bg-secondary);
+    /* The top line is a shadow, not a border: the bar stays exactly
+       12 + 40 + 12 = 64 px high, the room the page and the toasts keep free */
+    box-shadow: 0 -1px 0 var(--border-subtle), var(--shadow-md);
+  }
+}
+
+@media (min-width: 992px) {
+  .event-page {
+    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+    grid-template-rows: auto auto 1fr;
+    grid-template-areas:
+      "head side"
+      "status side"
+      "main side";
+    column-gap: var(--space-24);
+  }
+
+  .event-page-side {
+    align-self: stretch;
+    margin-bottom: 0;
+  }
+
+  .sidebar-detail-rows {
+    display: block;
+  }
+
+  .event-side-card {
+    margin-bottom: var(--space-16);
+    padding: var(--space-24);
+  }
+
+  .event-detail-sidebar {
+    position: sticky;
+    top: 80px;
+  }
+}
+
+/* ═══════════════════════════════════════════ */
 /* EVENT DETAIL — SIDEBAR                     */
 /* ═══════════════════════════════════════════ */
-.event-detail-sidebar {
-  position: sticky;
-  top: 80px;
-}
 
 .sidebar-section-title {
   font-size: var(--font-size-xs);

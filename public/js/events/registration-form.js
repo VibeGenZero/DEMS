@@ -20,18 +20,21 @@ export async function submitRegistration(eventId, event, btnId, formContainerId)
     const formFields = event.formFields || [];
     const prefix = formContainerId === 'dynamic-form-fields' ? 'form-field' : 'wl-field';
     const missingFields = [];
+    let firstMissing = null;
     formFields.forEach((field, i) => {
         if (!field.required) return;
         const el = document.getElementById(`${prefix}-${i}`);
         if (!el) return;
-        if (normalizeFieldType(field.type) === 'checkbox') {
-            if (!el.checked) missingFields.push(field.label);
-        } else {
-            if (!el.value || !el.value.trim()) missingFields.push(field.label);
-        }
+        const empty = normalizeFieldType(field.type) === 'checkbox' ? !el.checked : (!el.value || !el.value.trim());
+        if (!empty) return;
+        missingFields.push(field.label);
+        firstMissing = firstMissing || el;
     });
     if (missingFields.length > 0) {
         showToast(`Bitte fülle alle Pflichtfelder aus: ${missingFields.join(', ')}`, 'danger');
+        // The button may sit far from the form (sidebar, phone bar): bring the field to the user
+        firstMissing.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        firstMissing.focus({ preventScroll: true });
         return;
     }
 

@@ -25,16 +25,16 @@ test('a registration springs the status box, the button and the bar', async () =
     state.currentUser = { id: 'u1', displayName: 'Tom', roles: [] };
     await app.showEventDetail('e1', { celebrate: 'registered', fromTaken: 4 });
     assert.ok(animations.some(entry => entry.targets === element('detail-registered') && entry.vars.ease === 'back.out(2)'), 'status box');
-    assert.ok(animations.some(entry => entry.targets === '#sidebar-action-area .btn' && entry.vars.ease === 'back.out(2.2)'), 'sidebar button');
+    assert.ok(animations.some(entry => entry.targets === '#sidebar-status-btn' && entry.vars.ease === 'back.out(2.2)'), 'sidebar button');
     assert.ok(animations.some(entry => entry.fromVars && entry.fromVars.value === 4), 'bar from the old places');
-    assert.equal(animations.some(entry => entry.targets === '.col-lg-8'), false, 'no slide-in');
+    assert.equal(animations.some(entry => entry.targets === '#detail-main'), false, 'no slide-in');
 });
 
 test('a page opened normally still slides in', async () => {
     const { app, animations, state } = await loadFrontendApp(routes({ registered: false }));
     state.currentUser = { id: 'u1', displayName: 'Tom', roles: [] };
     await app.showEventDetail('e1');
-    assert.equal(animations.filter(entry => entry.targets === '.col-lg-8').length, 1);
+    assert.equal(animations.filter(entry => entry.targets === '#detail-main').length, 1);
     assert.ok(animations.some(entry => entry.fromVars && entry.fromVars.value === 0), 'sidebar bar grows from 0');
 });
 
@@ -43,7 +43,7 @@ test('a check-in springs the check-in box', async () => {
     state.currentUser = { id: 'u1', displayName: 'Tom', roles: [] };
     await app.showEventDetail('e1', { celebrate: 'checkedin' });
     assert.ok(animations.some(entry => entry.targets === element('checkin-section') && entry.vars.ease === 'back.out(2)'));
-    assert.equal(animations.some(entry => entry.targets === '.col-lg-8'), false);
+    assert.equal(animations.some(entry => entry.targets === '#detail-main'), false);
 });
 
 test('with reduced motion the success moment only fades', async () => {
