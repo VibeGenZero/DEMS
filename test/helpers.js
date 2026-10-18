@@ -390,6 +390,7 @@ async function loadFrontendApp(routes, { storage = {}, confirm = true, reducedMo
     const root = createFakeElement(registry);
     const document = {
         documentElement: root,
+        styleSheets: [],
         getElementById: (id) => registry.get(id) || null,
         createElement: () => createFakeElement(registry),
         querySelector: () => container,
@@ -447,6 +448,7 @@ async function loadFrontendApp(routes, { storage = {}, confirm = true, reducedMo
         URL, URLSearchParams,
         setTimeout: noop, clearTimeout: noop, setInterval: () => 0, clearInterval: noop,
         matchMedia,
+        getComputedStyle: () => ({ getPropertyValue: () => '' }),
         requestAnimationFrame: (callback) => { if (animationFrames) callback(0); return 0; },
         gsap,
         marked: { parse: (text) => text },

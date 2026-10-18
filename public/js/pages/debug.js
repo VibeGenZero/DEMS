@@ -95,24 +95,30 @@ export function contrastNote(name, valueOf) {
     return `${label} auf ${surface === CONTRAST_SURFACE ? 'Karte' : surface}`;
 }
 
-// Names of the custom properties that tokens.css defines on :root
-function readTokenNames() {
-    for (const sheet of document.styleSheets) {
+/**
+ * Names of the custom properties that tokens.css defines, over all its rules
+ * (shared tokens, dark and light scheme), each once in source order.
+ *
+ * @param {Iterable<{ href: string|null, cssRules: Iterable<{ selectorText?: string, style?: Iterable<string> }> }>} sheets -> document.styleSheets.
+ * @returns {string[]} -> Token names; [] when tokens.css is not loaded.
+ */
+export function tokenNamesOf(sheets) {
+    for (const sheet of sheets) {
         if (!sheet.href || !sheet.href.includes('/css/tokens.css')) continue;
-        const names = [];
+        const names = new Set();
         for (const rule of sheet.cssRules) {
-            if (rule.selectorText !== ':root') continue;
+            if (!rule.style) continue;
             for (const name of rule.style) {
-                if (name.startsWith('--')) names.push(name);
+                if (name.startsWith('--')) names.add(name);
             }
         }
-        return names;
+        return [...names];
     }
     return [];
 }
 
 function renderTokens(container) {
-    const names = readTokenNames();
+    const names = tokenNamesOf(document.styleSheets);
     const root = getComputedStyle(document.documentElement);
     const valueOf = (name) => root.getPropertyValue(name).trim();
     container.innerHTML = TOKEN_GROUPS.map(group => `
@@ -187,6 +193,17 @@ export function showDebugSection() {
     if (typeof gsap !== 'undefined') {
         gsap.from('.sg-section-title', { y: 15, opacity: 0, duration: 0.3, stagger: 0.05, ease: 'power3.out' });
     }
+}
+
+/**
+ * Show the token values of the scheme that is now active, if the styleguide
+ * was opened; values and contrasts come from the computed styles.
+ *
+ * @returns {void}
+ */
+export function refreshStyleguideTokens() {
+    const container = document.getElementById('sg-tokens');
+    if (container && container.innerHTML) renderTokens(container);
 }
 
 export function sgRunAnimation(index) {

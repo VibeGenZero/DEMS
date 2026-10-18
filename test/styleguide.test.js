@@ -53,3 +53,31 @@ test('a contrast note names the pair that matters for the token', async () => {
     // A fill that is missing gives no number instead of a wrong one
     assert.equal(app.contrastNote('--on-success', valueOf), '');
 });
+
+test('the styleguide lists the tokens of every rule in tokens.css once', async () => {
+    const { app } = await loadFrontendApp({});
+    const sheets = [
+        { href: 'http://localhost/vendor/bootstrap/bootstrap.min.css', cssRules: [{ selectorText: ':root', style: ['--bs-body-bg'] }] },
+        {
+            href: 'http://localhost/css/tokens.css?v=3',
+            cssRules: [
+                { selectorText: ':root', style: ['--font-body', '--discord'] },
+                { selectorText: ':root.is-theme-switching', style: ['--duration-fast'] },
+                { selectorText: ':root, [data-bs-theme="dark"]', style: ['--bg-card', '--text-muted', 'color'] },
+                { selectorText: '[data-bs-theme="light"]', style: ['--bg-card', '--text-muted'] }
+            ]
+        }
+    ];
+    assert.deepEqual([...app.tokenNamesOf(sheets)], ['--font-body', '--discord', '--duration-fast', '--bg-card', '--text-muted']);
+});
+
+test('the styleguide re-renders its tokens after a scheme change only once it was opened', async () => {
+    const { app, element, fire } = await loadFrontendApp({}, { storage: { dems_boot_ts: String(Date.now()) } });
+    fire('DOMContentLoaded');
+    const tokens = element('sg-tokens');
+    app.applyTheme('light');
+    assert.equal(tokens.innerHTML, '');
+    tokens.innerHTML = 'alt';
+    app.applyTheme('dark');
+    assert.notEqual(tokens.innerHTML, 'alt');
+});
