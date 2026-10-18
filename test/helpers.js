@@ -280,6 +280,7 @@ function createFakeElement(registry, id = '', classNames = []) {
     const classes = new Set(classNames);
     const register = (child) => { if (child.id) registry.set(child.id, child); return child; };
     const listeners = new Map();
+    const attributes = new Map();
     let html = '';
     return {
         id, textContent: '', className: '', value: '', disabled: false,
@@ -301,8 +302,8 @@ function createFakeElement(registry, id = '', classNames = []) {
             for (const listener of waiting) listener({ type });
         },
         focus() {},
-        setAttribute() {},
-        getAttribute: () => null,
+        setAttribute(name, value) { attributes.set(name, String(value)); },
+        getAttribute: (name) => (attributes.has(name) ? attributes.get(name) : null),
         appendChild: register,
         prepend: register,
         insertAdjacentElement: (_position, child) => register(child),
@@ -370,10 +371,14 @@ async function loadFrontendModules(entryFile, context) {
  * @param {Object} [options] -> Harness options.
  * @param {Object<string, string>} [options.storage] -> Initial localStorage entries.
  * @param {boolean|string} [options.confirm] -> Answer of the confirm dialog: true (default) confirms, false dismisses, 'too-early' clicks the confirm button while the dialog still fades in and dismisses it afterwards.
+ * @param {Object<string, string>|'throws'} [options.storage] -> Initial localStorage entries; 'throws' gives a storage whose every method throws a SecurityError (blocked site data).
+ * @param {boolean|string} [options.confirm] -> Answer of the confirm dialog: true (default) confirms, false dismisses, 'too-early' clicks the confirm button while the dialog still fades in and dismisses it afterwards.
  * @param {boolean} [options.reducedMotion] -> true answers matchMedia('(prefers-reduced-motion: reduce)') with a match.
- * @returns {Promise<Object>} -> `{ app, state, element, toasts, dialogs, requests, location, fire }`: app holds every export of every module, state is core/state.js (`state.currentUser = persona` logs a user in), element(id) returns the fake element or null, toasts lists the shown messages, dialogs lists the confirm dialogs shown (`{ text, label, danger }`; the dialog answers at once), requests the fetch calls `{ url, method, headers, body }`, location is window.location, fire(type) runs the recorded document listeners.
+ * @param {boolean} [options.prefersLight] -> true answers matchMedia('(prefers-color-scheme: light)') with a match.
+ * @param {boolean} [options.animationFrames] -> true runs requestAnimationFrame callbacks at once; by default they never run.
+ * @returns {Promise<Object>} -> `{ app, state, element, toasts, dialogs, requests, location, fire, root, setSystemLight }`: app holds every export of every module, state is core/state.js (`state.currentUser = persona` logs a user in), element(id) returns the fake element or null, toasts lists the shown messages, dialogs lists the confirm dialogs shown (`{ text, label, danger }`; the dialog answers at once), requests the fetch calls `{ url, method, headers, body }`, location is window.location, fire(type) runs the recorded document listeners, root is document.documentElement, setSystemLight(bool) changes the system colour scheme and tells the matchMedia listeners.
  */
-async function loadFrontendApp(routes, { storage = {}, confirm = true, reducedMotion = false } = {}) {
+async function loadFrontendApp(routes, { storage = {}, confirm = true, reducedMotion = false, prefersLight = false, animationFrames = false } = {}) {
     const registry = new Map();
     registerHtmlIds(registry, fs.readFileSync(path.join(REPO_ROOT, 'public', 'index.html'), 'utf8'));
     const toasts = [];
@@ -382,7 +387,9 @@ async function loadFrontendApp(routes, { storage = {}, confirm = true, reducedMo
     const animations = [];
     const container = createFakeElement(registry);
     const listeners = [];
+    const root = createFakeElement(registry);
     const document = {
+        documentElement: root,
         getElementById: (id) => registry.get(id) || null,
         createElement: () => createFakeElement(registry),
         querySelector: () => container,
@@ -390,6 +397,10 @@ async function loadFrontendApp(routes, { storage = {}, confirm = true, reducedMo
         addEventListener: (type, listener) => listeners.push({ type, listener })
     };
     const createStorage = (initial) => {
+        if (initial === 'throws') {
+            const blocked = () => { throw new Error('SecurityError: The operation is insecure.'); };
+            return { getItem: blocked, setItem: blocked, removeItem: blocked };
+        }
         const items = new Map(Object.entries(initial));
         return {
             getItem: (key) => (items.has(key) ? items.get(key) : null),
@@ -406,6 +417,25 @@ async function loadFrontendApp(routes, { storage = {}, confirm = true, reducedMo
     };
     const noop = () => {};
     const gsap = createGsapRecorder(animations);
+    let systemLight = prefersLight;
+    const mediaListeners = [];
+    const matchMedia = (query) => {
+        const answer = () => (/prefers-reduced-motion:\s*reduce/.test(query) && reducedMotion)
+            || (/prefers-color-scheme:\s*light/.test(query) && systemLight)
+            || (/prefers-color-scheme:\s*dark/.test(query) && !systemLight);
+        return {
+            media: query,
+            get matches() { return answer(); },
+            addEventListener: (type, listener) => mediaListeners.push({ query, type, listener }),
+            removeEventListener: noop
+        };
+    };
+    const setSystemLight = (light) => {
+        systemLight = light;
+        for (const entry of mediaListeners.filter(item => item.type === 'change' && /prefers-color-scheme/.test(item.query))) {
+            entry.listener({ matches: /light/.test(entry.query) ? light : !light, media: entry.query });
+        }
+    };
     const context = vm.createContext({
         document, fetch, console,
         location: { hash: '', search: '' },
@@ -416,7 +446,8 @@ async function loadFrontendApp(routes, { storage = {}, confirm = true, reducedMo
         // isValidBannerUrl() parses with URL, as the browser does
         URL, URLSearchParams,
         setTimeout: noop, clearTimeout: noop, setInterval: () => 0, clearInterval: noop,
-        matchMedia: (query) => ({ matches: reducedMotion && /prefers-reduced-motion:\s*reduce/.test(query) }),
+        matchMedia,
+        requestAnimationFrame: (callback) => { if (animationFrames) callback(0); return 0; },
         gsap,
         marked: { parse: (text) => text },
         DOMPurify: { sanitize: (text) => text },
@@ -477,7 +508,7 @@ async function loadFrontendApp(routes, { storage = {}, confirm = true, reducedMo
         }
     }
     const fire = (type) => listeners.filter(entry => entry.type === type).forEach(entry => entry.listener({ type }));
-    return { app, state: app.state, element: (id) => registry.get(id) || null, toasts, dialogs, requests, animations, location: context.location, fire };
+    return { app, state: app.state, element: (id) => registry.get(id) || null, toasts, dialogs, requests, animations, location: context.location, fire, root, setSystemLight };
 }
 
 /**
