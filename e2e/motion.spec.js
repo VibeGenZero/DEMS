@@ -398,7 +398,7 @@ test('registering celebrates in place', async ({ page, browser }, testInfo) => {
         await expect(page.locator('#detail-title')).toHaveText(title);
         await page.locator('#register-btn').click();
         await expect(page.locator('#detail-registered')).toBeVisible();
-        await expect(page.locator('#sidebar-action-area .btn')).toContainText('Angemeldet');
+        await expect(page.locator('#sidebar-status-btn')).toContainText('Angemeldet');
         await expect.poll(() => page.locator('#sidebar-capacity-content .capacity-meter').evaluate(meter => meter.value)).toBe(1);
         // The spring leaves nothing behind
         await expect.poll(async () => isIdentity(await transformOf(page.locator('#detail-registered')))).toBe(true);

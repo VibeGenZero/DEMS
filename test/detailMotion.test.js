@@ -25,7 +25,7 @@ test('a registration springs the status box, the button and the bar', async () =
     state.currentUser = { id: 'u1', displayName: 'Tom', roles: [] };
     await app.showEventDetail('e1', { celebrate: 'registered', fromTaken: 4 });
     assert.ok(animations.some(entry => entry.targets === element('detail-registered') && entry.vars.ease === 'back.out(2)'), 'status box');
-    assert.ok(animations.some(entry => entry.targets === '#sidebar-action-area .btn' && entry.vars.ease === 'back.out(2.2)'), 'sidebar button');
+    assert.ok(animations.some(entry => entry.targets === '#sidebar-status-btn' && entry.vars.ease === 'back.out(2.2)'), 'sidebar button');
     assert.ok(animations.some(entry => entry.fromVars && entry.fromVars.value === 4), 'bar from the old places');
     assert.equal(animations.some(entry => entry.targets === '#detail-main'), false, 'no slide-in');
 });

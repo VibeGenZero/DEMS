@@ -38,7 +38,7 @@ export function revealDetail(celebrate, { fromTaken } = {}) {
     const meter = sidebarMeter();
     if (celebrate === 'registered') {
         animateFromTo(document.getElementById('detail-registered'), { scale: 0.92, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.5, ease: 'back.out(2)' });
-        animateFromTo('#sidebar-action-area .btn', { scale: 0.94 }, { scale: 1, duration: 0.5, ease: 'back.out(2.2)' });
+        animateFromTo('#sidebar-status-btn', { scale: 0.94 }, { scale: 1, duration: 0.5, ease: 'back.out(2.2)' });
         if (meter) growMeter(meter, { from: fromTaken ?? 0, duration: 0.6 });
         return;
     }
