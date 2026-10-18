@@ -1438,20 +1438,21 @@ body {
   background: var(--bg-primary);
 }
 
+/* Header strip with the accent on the left, like the navbar with the logo */
 .theme-choice-bar {
   flex-shrink: 0;
   height: var(--space-8);
   border-bottom: 1px solid var(--border-subtle);
-  background: var(--bg-card);
+  background: linear-gradient(90deg, var(--accent) 0 30%, var(--bg-card) 30% 100%);
 }
 
 .theme-choice-surface {
   flex: 1;
   margin: var(--space-4) var(--space-8);
   border: 1px solid var(--border-subtle);
-  border-left: 3px solid var(--accent);
   border-radius: var(--radius-sm);
   background: var(--bg-card);
+  box-shadow: var(--shadow-sm);
 }
 
 .profile-list {
