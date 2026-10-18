@@ -72,4 +72,24 @@ test('a raider without a role gets sent to the role picker', async ({ page }, te
     await page.locator('#register-btn').click();
     await expect(page.locator('#toast-message')).toHaveText('Bitte wähle eine Rolle aus.');
     await expect(page.locator('#slot-picker-area')).toBeInViewport();
+    // The toast stands above the bar: the user wants to press the button again right away
+    const toast = await box(page, '.toast-container');
+    const bar = await box(page, '#sidebar-action-area');
+    expect(toast.y + toast.height).toBeLessThanOrEqual(bar.y);
+});
+
+test('an empty required field stops the registration at that field', async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== 'mobile', 'the browser check is the same on the desktop');
+    const registrations = [];
+    page.on('request', request => { if (request.method() === 'POST' && request.url().endsWith('/register')) registrations.push(request.url()); });
+    await openEvent(page, 'newbie', 'dev-event-form');
+    await page.locator('#register-btn').click();
+    // The browser's own check of the required fields runs first: it focuses the first empty one
+    const field = page.locator('#form-field-0');
+    await expect(field).toBeFocused();
+    await expect(field).toBeInViewport();
+    const fieldBox = await field.boundingBox();
+    const bar = await box(page, '#sidebar-action-area');
+    expect(fieldBox.y + fieldBox.height).toBeLessThanOrEqual(bar.y);
+    expect(registrations).toEqual([]);
 });

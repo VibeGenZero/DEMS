@@ -83,6 +83,8 @@ export function handleRoute() {
     const closingFlight = beginCardClose(route);
 
     document.querySelectorAll('.app-section').forEach(s => s.style.display = 'none');
+    // The phone action bar of the event page also lifts the toasts; an event route sets it again
+    document.getElementById('event-detail-section')?.classList.remove('has-action-bar');
 
     // Only the navbar: the tabs component (.nav.nav-pills) uses .nav-link too
     document.querySelectorAll('#main-navbar .nav-link').forEach(link => {

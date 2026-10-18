@@ -74,17 +74,16 @@ test('the register buttons submit their form from the action area', () => {
 
 test('each state shows exactly one action and the bar only for register and waitlist', async () => {
     const { app, element } = await loadFrontendApp({});
-    const event = { id: 'ev', formFields: [] };
     const actions = ['register-btn', 'waitlist-btn', 'sidebar-status-btn'];
     const expected = { register: ['register-btn'], registered: ['sidebar-status-btn'], waitlist: ['waitlist-btn'], noaccess: ['sidebar-status-btn'], none: [] };
     for (const mode of ['register', 'registered', 'waitlist', 'noaccess', 'none', 'register']) {
-        app.renderSidebarAction(mode, event);
+        app.renderSidebarAction(mode);
         assert.deepEqual(actions.filter(id => !isHidden(element(id))), expected[mode], mode);
         assert.equal(element('event-detail-section').classList.contains('has-action-bar'), mode === 'register' || mode === 'waitlist', mode);
     }
-    app.renderSidebarAction('registered', event);
+    app.renderSidebarAction('registered');
     assert.match(element('sidebar-status-btn').innerHTML, /Angemeldet/);
-    app.renderSidebarAction('noaccess', event);
+    app.renderSidebarAction('noaccess');
     assert.match(element('sidebar-status-btn').innerHTML, /Kein Zugang/);
 });
 
@@ -119,5 +118,13 @@ test('opening another event clears the action of the previous one', async () => 
     app.renderSidebarAction('register');
     app.resetEventDetailAreas();
     assert.deepEqual(['register-btn', 'waitlist-btn', 'sidebar-status-btn'].filter(id => !isHidden(element(id))), []);
+    assert.equal(element('event-detail-section').classList.contains('has-action-bar'), false);
+});
+
+test('leaving the event page drops the phone action bar', async () => {
+    const { app, element, location } = await loadFrontendApp({});
+    app.renderSidebarAction('register');
+    location.hash = '#info';
+    app.handleRoute();
     assert.equal(element('event-detail-section').classList.contains('has-action-bar'), false);
 });

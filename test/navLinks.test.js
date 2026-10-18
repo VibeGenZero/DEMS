@@ -27,7 +27,7 @@ test('a route change marks the navbar link of the page and leaves tab links alon
     const noop = () => {};
     const storage = { getItem: () => null, setItem: noop, removeItem: noop };
     const document = {
-        getElementById: () => ({ style: {} }),
+        getElementById: () => ({ style: {}, classList: { add: noop, remove: noop, toggle: noop, contains: () => false } }),
         addEventListener: noop,
         querySelector: () => null,
         // Answers like a page with a navbar and one tab outside of it

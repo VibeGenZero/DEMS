@@ -3109,6 +3109,12 @@ a.profile-history-row:hover {
     padding-bottom: calc(var(--space-64) + env(safe-area-inset-bottom));
   }
 
+  /* Toasts stand above the bar: after an error one presses the button
+     again. translate, because Bootstrap's bottom-0 carries !important. */
+  body:has(#event-detail-section.has-action-bar) .toast-container {
+    translate: 0 calc(-1 * (var(--space-64) + env(safe-area-inset-bottom)));
+  }
+
   #event-detail-section.has-action-bar .detail-action {
     position: fixed;
     right: 0;
@@ -3117,10 +3123,11 @@ a.profile-history-row:hover {
     z-index: var(--z-sticky);
     margin: 0;
     padding: var(--space-12) var(--space-16) calc(var(--space-12) + env(safe-area-inset-bottom));
-    border-top: 1px solid var(--border-subtle);
     /* Opaque: the waitlist button is translucent itself */
     background: var(--bg-secondary);
-    box-shadow: var(--shadow-md);
+    /* The top line is a shadow, not a border: the bar stays exactly
+       12 + 40 + 12 = 64 px high, the room the page and the toasts keep free */
+    box-shadow: 0 -1px 0 var(--border-subtle), var(--shadow-md);
   }
 }
 
