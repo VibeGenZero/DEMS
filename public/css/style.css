@@ -3017,6 +3017,8 @@ a.profile-history-row:hover {
 
 /* Guest picked for a registration */
 .guest-chip {
+  /* Bootstrap's .badge is white text, unreadable on the light tint */
+  --bs-badge-color: var(--text-primary);
   border: 1px solid var(--accent-glow);
   background: var(--accent-tint-2);
   font-size: var(--font-size-sm);

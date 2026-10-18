@@ -179,3 +179,16 @@ test('opening the profile marks the stored choice', async () => {
     assert.equal(element('theme-choice-light').checked, false);
     assert.equal(element('theme-choice-system').checked, false);
 });
+
+test('with blocked storage a choice holds until the reload', async () => {
+    const { app, root, element, setSystemLight } = await loadFrontendApp({}, { storage: 'throws' });
+    app.initTheme();
+    app.setThemeChoice('light');
+    // The system stays dark and tells so: an explicit choice must not follow it
+    setSystemLight(false);
+    assert.equal(scheme(root), 'light');
+    assert.equal(app.readThemeChoice(), 'light');
+    app.syncThemeRadios();
+    assert.equal(element('theme-choice-light').checked, true);
+    assert.equal(element('theme-choice-system').checked, false);
+});

@@ -12,6 +12,8 @@ export const THEME_CHOICES = ['light', 'dark', 'system'];
 const LIGHT_QUERY = '(prefers-color-scheme: light)';
 
 const themeListeners = [];
+// Choice of this page while the storage is blocked; null = none made
+let pageChoice = null;
 
 /**
  * @param {*} value -> Stored or chosen value.
@@ -32,13 +34,13 @@ export function resolveTheme(choice, prefersLight) {
 }
 
 /**
- * @returns {'light'|'dark'|'system'} -> Stored choice; 'system' when nothing or nonsense is stored or the storage is blocked.
+ * @returns {'light'|'dark'|'system'} -> Stored choice; 'system' when nothing or nonsense is stored. With a blocked storage the choice made on this page, else 'system'.
  */
 export function readThemeChoice() {
     try {
         return normalizeThemeChoice(localStorage.getItem(THEME_STORAGE_KEY));
     } catch {
-        return 'system';
+        return pageChoice ?? 'system';
     }
 }
 
@@ -52,7 +54,8 @@ export function saveThemeChoice(choice) {
     try {
         localStorage.setItem(THEME_STORAGE_KEY, normalizeThemeChoice(choice));
     } catch {
-        // Blocked site data: the scheme still applies until the next reload
+        // Blocked site data: the choice holds for this page until the next reload
+        pageChoice = normalizeThemeChoice(choice);
     }
 }
 

@@ -137,6 +137,22 @@ test('no dark-only Bootstrap class is left in the markup or the modules', () => 
     assert.deepEqual(found, []);
 });
 
+test('every badge in the markup and the modules names its text colour', () => {
+    // Bootstrap's .badge is white text; on a light surface it needs a colour of its own (D-15)
+    const coloured = new Set(allRules()
+        .filter(rule => rule.declarations.some(declaration => declaration.property === 'color' || declaration.property === '--bs-badge-color'))
+        .flatMap(rule => rule.selector.split(', '))
+        .filter(selector => /^\.[\w-]+$/.test(selector))
+        .map(selector => selector.slice(1)));
+    const names = (list) => list.split(/\s+/);
+    const missing = [{ file: 'index.html', source: INDEX_HTML }, ...frontendSources()].flatMap(({ file, source }) =>
+        [...source.matchAll(/class="([^"]*)"/g)]
+            .filter(match => names(match[1]).includes('badge'))
+            .filter(match => !names(match[1]).some(name => /^text-bg-[a-z]+$/.test(name) || /^text-[a-z]+-emphasis$/.test(name) || coloured.has(name)))
+            .map(match => `${file}: ${match[1]}`));
+    assert.deepEqual(missing, []);
+});
+
 test('colour values only live in tokens.css', () => {
     const raw = allRules().flatMap(rule => rule.declarations.filter(declaration => RAW_COLOR.test(declaration.value)).map(declaration => describe(rule, declaration)));
     assert.deepEqual(raw, []);

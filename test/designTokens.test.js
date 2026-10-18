@@ -36,7 +36,7 @@ const REQUIRED = [
 const COLOR_TOKEN = /^--(bg-|text-|border-|accent|on-|success|warning|danger|info|discord)/;
 // --bg-glass and --bg-glass-hover are translucent and lie on the page background
 const BASE_SURFACES = ['--bg-primary', '--bg-secondary', '--bg-card', '--bg-glass', '--bg-glass-hover'];
-const TEXT_COLORS = ['--text-primary', '--text-secondary', '--text-muted', '--accent-text', '--success', '--warning', '--danger', '--info'];
+const TEXT_COLORS = ['--text-primary', '--text-secondary', '--text-muted', '--accent-text', '--accent-light', '--success', '--warning', '--danger', '--info'];
 const STRONG_TEXT = ['--text-primary', '--text-secondary'];
 const OWN_TINT = { '--success': '--success-bg', '--warning': '--warning-bg', '--danger': '--danger-bg', '--info': '--info-bg', '--accent-text': '--accent-tint-2' };
 const FILLS = {
@@ -154,6 +154,26 @@ test('the Discord preview reaches AA contrast on both Discord surfaces', async (
         }
     }
     assert.deepEqual(failures, []);
+});
+
+test('every token used as a text colour is covered by a contrast check', () => {
+    // A token in `color:` that no check above covers can miss AA unnoticed (D-15: --accent-light in light)
+    const checked = new Set([
+        ...TEXT_COLORS, ...Object.keys(FILLS),
+        '--discord-text', '--discord-heading', '--discord-muted', '--discord-link',
+        // Confetti pieces (.update-effect-tone-6) colour shapes, not text; the brand violet test covers 3:1
+        '--accent'
+    ]);
+    const used = new Set();
+    for (const file of ['components.css', 'style.css']) {
+        for (const rule of parseRules(readCss(file))) {
+            for (const { property, value } of rule.declarations) {
+                if (property !== 'color') continue;
+                for (const [, name] of value.matchAll(/var\((--[a-z0-9-]+)\)/g)) if (DARK_TOKENS.has(name)) used.add(name);
+            }
+        }
+    }
+    assert.deepEqual([...used].filter(name => !checked.has(name)), []);
 });
 
 test('the light scheme only overrides colour and shadow tokens', () => {
