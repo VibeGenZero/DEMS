@@ -24,7 +24,9 @@ test('the phone shows the facts before the description, in the first screen', as
     const date = await box(page, '#sidebar-date-row');
     const description = await box(page, '#detail-description');
     expect(date.y).toBeLessThan(description.y);
-    expect(facts.y + facts.height).toBeLessThan(page.viewportSize().height);
+    // The places stand fully above the button bar
+    const bar = await box(page, '#sidebar-action-area');
+    expect(facts.y + facts.height).toBeLessThanOrEqual(bar.y);
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(page.viewportSize().width);
     expect(errors).toEqual([]);
 });

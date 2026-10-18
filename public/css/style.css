@@ -3099,6 +3099,12 @@ a.profile-history-row:hover {
 
 /* Phone: while one can register, the button is a bar at the bottom */
 @media (max-width: 991.98px) {
+  /* Every row names itself and the places sentence explains itself; the
+     card titles would push the places under the bar */
+  .event-side-card .sidebar-section-title {
+    display: none;
+  }
+
   #event-detail-section.has-action-bar {
     padding-bottom: calc(var(--space-64) + env(safe-area-inset-bottom));
   }
@@ -3112,9 +3118,9 @@ a.profile-history-row:hover {
     margin: 0;
     padding: var(--space-12) var(--space-16) calc(var(--space-12) + env(safe-area-inset-bottom));
     border-top: 1px solid var(--border-subtle);
-    background: var(--bg-glass);
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
+    /* Opaque: the waitlist button is translucent itself */
+    background: var(--bg-secondary);
+    box-shadow: var(--shadow-md);
   }
 }
 
