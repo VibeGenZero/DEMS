@@ -254,16 +254,13 @@
       <!-- Full-width banner (outside container) -->
       <div id="detail-banner-area" class="event-detail-banner-header"></div>
 
-      <div class="container section-container">
-        <button class="btn btn-sm btn-outline-light mt-3 mb-4" data-click="closeEventPage">
+      <div class="container section-container event-page-container">
+        <button class="btn btn-sm btn-outline-light mb-4" data-click="closeEventPage">
           <i class="bi bi-arrow-left me-1"></i>Zurück zur Übersicht
         </button>
-
-        <div class="row g-4">
-
-          <!-- ── LEFT: Main Content ── -->
-          <div class="col-lg-8">
-
+        <!-- Areas (D-05): phone head → side → status → main; from 992 px main on the left, side on the right -->
+        <div class="event-page">
+          <div class="event-page-head" id="detail-head">
             <!-- Tags + Title + Countdown -->
             <div class="d-flex flex-wrap gap-2 mb-2 align-items-center">
               <span id="detail-category-tag"></span>
@@ -271,13 +268,80 @@
             </div>
             <h2 id="detail-title" class="mb-3 fw-bold"></h2>
             <div id="detail-countdown-area" class="countdown countdown-detail countdown-live mb-4 is-hidden"></div>
+          </div>
+          <!-- Facts, places and the one action button -->
+          <div class="event-page-side" id="detail-side">
+            <div class="event-detail-sidebar">
 
+              <!-- Details panel -->
+              <div class="glass-card p-4 mb-3">
+                <div class="sidebar-section-title">DETAILS</div>
+                <div class="sidebar-detail-rows">
+                  <div id="sidebar-date-row" class="sidebar-detail-row is-hidden"></div>
+                  <div id="sidebar-time-row" class="sidebar-detail-row is-hidden"></div>
+                  <div id="sidebar-duration-row" class="sidebar-detail-row is-hidden"></div>
+                  <div id="sidebar-location-row" class="sidebar-detail-row is-hidden"></div>
+                  <div id="sidebar-creator-row" class="sidebar-detail-row is-hidden"></div>
+                </div>
+              </div>
+
+              <!-- Capacity panel -->
+              <div class="glass-card p-4 mb-3 is-hidden" id="sidebar-capacity-panel">
+                <div class="sidebar-section-title">KAPAZITÄT</div>
+                <div id="sidebar-capacity-content"></div>
+              </div>
+
+              <!-- Action button -->
+              <div id="sidebar-action-area"></div>
+
+            </div>
+          </div>
+          <!-- Own registration, no access, over; check-in box is appended here -->
+          <div class="event-page-status" id="detail-status">
+            <!-- Already registered -->
+            <div class="is-hidden" id="detail-registered">
+              <div class="glass-card p-4 mb-4">
+                <div class="d-flex align-items-center gap-3">
+                  <i class="bi bi-check-circle-fill text-success icon-xl"></i>
+                  <div class="flex-grow-1">
+                    <h5 class="mb-1">Bereits registriert</h5>
+                    <p class="text-secondary mb-0">Status: <span id="detail-reg-status" class="fw-bold"></span></p>
+                    <div id="detail-reg-slot" class="mt-2"></div>
+                  </div>
+                  <button class="btn btn-outline-danger" data-click="unregisterFromEvent" id="unregister-btn">
+                    <i class="bi bi-x-circle me-1"></i>Abmelden
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- No access -->
+            <div class="is-hidden" id="detail-no-access">
+              <div class="glass-card p-4 mb-4">
+                <div class="d-flex align-items-center gap-3">
+                  <i class="bi bi-lock-fill text-warning icon-xl"></i>
+                  <div>
+                    <h5 class="mb-1">Zugriff eingeschränkt</h5>
+                    <p class="text-secondary mb-0" id="no-access-text">Du hast nicht die erforderliche Rolle für dieses Event.</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Ended: no registration any more; archived a day after the end (W-01) -->
+            <div class="is-hidden" id="detail-ended">
+              <div class="glass-card p-4 mb-4">
+                <p class="text-secondary mb-0"><i class="bi bi-flag me-2"></i>Dieses Event ist vorbei.</p>
+              </div>
+            </div>
+          </div>
+          <!-- Description, line-up, series, registration details; comments are appended here -->
+          <div class="event-page-main" id="detail-main">
             <!-- Description -->
             <div class="glass-card p-4 mb-4">
               <h6 class="section-label mb-3"><i class="bi bi-text-left me-2"></i>BESCHREIBUNG</h6>
               <div id="detail-description"></div>
             </div>
-
             <!-- Participants (only shown when logged in) -->
             <div id="detail-participants-section" class="glass-card p-4 mb-4 is-hidden">
               <h6 class="section-label mb-3">
@@ -338,73 +402,8 @@
                 </form>
               </div>
             </div>
-
-            <!-- Already registered -->
-            <div class="is-hidden" id="detail-registered">
-              <div class="glass-card p-4 mb-4">
-                <div class="d-flex align-items-center gap-3">
-                  <i class="bi bi-check-circle-fill text-success icon-xl"></i>
-                  <div class="flex-grow-1">
-                    <h5 class="mb-1">Bereits registriert</h5>
-                    <p class="text-secondary mb-0">Status: <span id="detail-reg-status" class="fw-bold"></span></p>
-                    <div id="detail-reg-slot" class="mt-2"></div>
-                  </div>
-                  <button class="btn btn-outline-danger" data-click="unregisterFromEvent" id="unregister-btn">
-                    <i class="bi bi-x-circle me-1"></i>Abmelden
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            <!-- No access -->
-            <div class="is-hidden" id="detail-no-access">
-              <div class="glass-card p-4 mb-4">
-                <div class="d-flex align-items-center gap-3">
-                  <i class="bi bi-lock-fill text-warning icon-xl"></i>
-                  <div>
-                    <h5 class="mb-1">Zugriff eingeschränkt</h5>
-                    <p class="text-secondary mb-0" id="no-access-text">Du hast nicht die erforderliche Rolle für dieses Event.</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <!-- Ended: no registration any more; archived a day after the end (W-01) -->
-            <div class="is-hidden" id="detail-ended">
-              <div class="glass-card p-4 mb-4">
-                <p class="text-secondary mb-0"><i class="bi bi-flag me-2"></i>Dieses Event ist vorbei.</p>
-              </div>
-            </div>
-
-          </div><!-- /col-lg-8 -->
-
-          <!-- ── RIGHT: Sidebar ── -->
-          <div class="col-lg-4">
-            <div class="event-detail-sidebar">
-
-              <!-- Details panel -->
-              <div class="glass-card p-4 mb-3">
-                <div class="sidebar-section-title">DETAILS</div>
-                <div id="sidebar-date-row" class="sidebar-detail-row is-hidden"></div>
-                <div id="sidebar-time-row" class="sidebar-detail-row is-hidden"></div>
-                <div id="sidebar-duration-row" class="sidebar-detail-row is-hidden"></div>
-                <div id="sidebar-location-row" class="sidebar-detail-row is-hidden"></div>
-                <div id="sidebar-creator-row" class="sidebar-detail-row is-hidden"></div>
-              </div>
-
-              <!-- Capacity panel -->
-              <div class="glass-card p-4 mb-3 is-hidden" id="sidebar-capacity-panel">
-                <div class="sidebar-section-title">KAPAZITÄT</div>
-                <div id="sidebar-capacity-content"></div>
-              </div>
-
-              <!-- Action button -->
-              <div id="sidebar-action-area"></div>
-
-            </div>
-          </div><!-- /col-lg-4 -->
-
-        </div><!-- /row -->
+          </div>
+        </div><!-- /event-page -->
       </div><!-- /container -->
     </section>
 

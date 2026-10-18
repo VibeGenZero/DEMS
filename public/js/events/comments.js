@@ -13,7 +13,7 @@ export async function loadComments(eventId) {
         commentSection = document.createElement('div');
         commentSection.id = 'comments-section';
         commentSection.className = 'comments-section';
-        document.querySelector('.col-lg-8')?.appendChild(commentSection);
+        document.getElementById('detail-main')?.appendChild(commentSection);
     }
     if (!commentSection) return;
 

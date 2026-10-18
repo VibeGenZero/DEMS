@@ -3035,12 +3035,79 @@ a.profile-history-row:hover {
 }
 
 /* ═══════════════════════════════════════════ */
+/* EVENT DETAIL — PAGE AREAS (D-05)           */
+/* ═══════════════════════════════════════════ */
+/* The banner already sits under the navbar: no navbar gap here */
+.event-page-container {
+  padding-top: var(--space-24);
+}
+
+/* Phone: facts first. The cards bring their own bottom margins, so an
+   empty status area leaves no gap. */
+.event-page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas:
+    "head"
+    "side"
+    "status"
+    "main";
+}
+
+.event-page-head {
+  grid-area: head;
+}
+
+.event-page-side {
+  grid-area: side;
+  margin-bottom: var(--space-24);
+}
+
+.event-page-status {
+  grid-area: status;
+}
+
+.event-page-main {
+  grid-area: main;
+  min-width: 0;
+}
+
+/* Phone: date | time, duration | place */
+.sidebar-detail-rows {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: var(--space-16);
+}
+
+@media (min-width: 992px) {
+  .event-page {
+    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+    grid-template-rows: auto auto 1fr;
+    grid-template-areas:
+      "head side"
+      "status side"
+      "main side";
+    column-gap: var(--space-24);
+  }
+
+  .event-page-side {
+    align-self: stretch;
+    margin-bottom: 0;
+  }
+
+  .sidebar-detail-rows {
+    display: block;
+  }
+
+  .event-detail-sidebar {
+    position: sticky;
+    top: 80px;
+  }
+}
+
+/* ═══════════════════════════════════════════ */
 /* EVENT DETAIL — SIDEBAR                     */
 /* ═══════════════════════════════════════════ */
-.event-detail-sidebar {
-  position: sticky;
-  top: 80px;
-}
 
 .sidebar-section-title {
   font-size: var(--font-size-xs);

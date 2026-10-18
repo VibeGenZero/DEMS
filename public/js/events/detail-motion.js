@@ -46,7 +46,7 @@ export function revealDetail(celebrate, { fromTaken } = {}) {
         animateFromTo(document.getElementById('checkin-section'), { scale: 0.92, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.5, ease: 'back.out(2)' });
         return;
     }
-    animateFromTo('.col-lg-8', { y: 20, opacity: 0 }, { y: 0, opacity: 1, duration: 0.4, ease: 'power3.out' });
+    animateFromTo('#detail-main', { y: 20, opacity: 0 }, { y: 0, opacity: 1, duration: 0.4, ease: 'power3.out' });
     if (meter) growMeter(meter);
 }
 

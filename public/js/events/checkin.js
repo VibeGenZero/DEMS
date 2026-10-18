@@ -11,8 +11,8 @@ export async function renderCheckinSection(eventId, event, registration) {
     if (!container) {
         container = document.createElement('div');
         container.id = 'checkin-section';
-        container.className = 'mt-4 glass-card is-tinted p-4';
-        document.getElementById('detail-register-area')?.insertAdjacentElement('afterend', container);
+        container.className = 'mb-4 glass-card is-tinted p-4';
+        document.getElementById('detail-status')?.appendChild(container);
     }
     showElement(container);
 
