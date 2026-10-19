@@ -32,7 +32,7 @@ function bannerOf(value) {
  * Event as the preview builders need it.
  *
  * @param {Object} [body] -> Draft of collectEventDraft() (public/js/admin/wizard.js), may be incomplete.
- * @returns {Object} -> `{ title, description, startDate, endDate, bannerUrl, category, status, accessMode, allowGuests, formFields, accentColor, slots, maxParticipants }`; broken slots are left out (the wizard reports them).
+ * @returns {Object} -> `{ title, description, startDate, endDate, registrationDeadline, unregisterDeadline, bannerUrl, category, status, accessMode, allowGuests, formFields, accentColor, slots, maxParticipants }`; broken slots are left out (the wizard reports them).
  */
 function buildPreviewEvent(body = {}) {
     const slotResult = normalizeSlots(body.slots);
@@ -42,6 +42,8 @@ function buildPreviewEvent(body = {}) {
         description: textOf(body.description, DESCRIPTION_MAX),
         startDate: textOf(body.startDate, 40),
         endDate: textOf(body.endDate, 40),
+        registrationDeadline: textOf(body.registrationDeadline, 40),
+        unregisterDeadline: textOf(body.unregisterDeadline, 40),
         bannerUrl: bannerOf(body.bannerUrl),
         category: textOf(body.category, 100),
         status: STATUSES.includes(body.status) ? body.status : 'active',

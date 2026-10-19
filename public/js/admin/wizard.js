@@ -87,7 +87,39 @@ export function wizardGoTo(step) {
                 enableTime: true, dateFormat: 'Y-m-d H:i', time_24hr: true, locale: 'de'
             });
         }
+        DEADLINE_PICKERS.forEach(({ key, selector }) => ensureDeadlinePicker(key, selector));
     }
+}
+
+// Optional deadlines of step 2 (W-03): state key of the picker and its input
+const DEADLINE_PICKERS = [
+    { key: 'registrationDeadlinePicker', field: 'registrationDeadline', selector: '#event-registration-deadline' },
+    { key: 'unregisterDeadlinePicker', field: 'unregisterDeadline', selector: '#event-unregister-deadline' }
+];
+
+/**
+ * Create a deadline picker once.
+ *
+ * @param {string} key -> State key of the picker.
+ * @param {string} selector -> Its input.
+ * @returns {Object} -> The flatpickr instance.
+ */
+function ensureDeadlinePicker(key, selector) {
+    if (!state[key]) {
+        state[key] = flatpickr(selector, { enableTime: true, dateFormat: 'Y-m-d H:i', time_24hr: true, locale: 'de' });
+    }
+    return state[key];
+}
+
+/**
+ * ISO value of a deadline picker.
+ *
+ * @param {string} key -> State key of the picker.
+ * @returns {string} -> ISO date, '' when empty or not created yet.
+ */
+function deadlineValue(key) {
+    const picker = state[key];
+    return picker && picker.selectedDates[0] ? picker.selectedDates[0].toISOString() : '';
 }
 
 export function wizardNext() {
@@ -172,6 +204,10 @@ export async function showCreateEventModal() {
 
     if (state.startDatePicker) state.startDatePicker.clear();
     if (state.endDatePicker) state.endDatePicker.clear();
+    DEADLINE_PICKERS.forEach(({ key, selector }) => {
+        if (state[key]) state[key].clear();
+        else document.querySelector(selector).value = '';
+    });
 
     // Banner Preview Setup
     const bannerInput = document.getElementById('event-banner-url');
@@ -258,6 +294,7 @@ export async function editEvent(eventId) {
         else { state.startDatePicker = flatpickr("#event-start-date", { enableTime: true, dateFormat: "Y-m-d H:i", time_24hr: true, locale: "de" }); state.startDatePicker.setDate(_startDate); }
         if (state.endDatePicker) state.endDatePicker.setDate(_endDate);
         else { state.endDatePicker = flatpickr("#event-end-date", { enableTime: true, dateFormat: "Y-m-d H:i", time_24hr: true, locale: "de" }); state.endDatePicker.setDate(_endDate); }
+        DEADLINE_PICKERS.forEach(({ key, field, selector }) => ensureDeadlinePicker(key, selector).setDate(event[field] || null));
 
         // Banner Preview
         const bannerInput = document.getElementById('event-banner-url');
@@ -348,6 +385,8 @@ export function collectEventDraft() {
         bannerUrl: document.getElementById('event-banner-url').value,
         startDate: state.startDatePicker && state.startDatePicker.selectedDates[0] ? state.startDatePicker.selectedDates[0].toISOString() : '',
         endDate: state.endDatePicker && state.endDatePicker.selectedDates[0] ? state.endDatePicker.selectedDates[0].toISOString() : '',
+        registrationDeadline: deadlineValue('registrationDeadlinePicker'),
+        unregisterDeadline: deadlineValue('unregisterDeadlinePicker'),
         maxParticipants: document.getElementById('event-max').value,
         category: document.getElementById('event-category').value,
         accessMode: document.getElementById('event-access').value,

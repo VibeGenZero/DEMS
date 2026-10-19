@@ -15,6 +15,8 @@ see_also: [data-model, conventions]
 | Event, Veranstaltung | `events` document | [data-model](../concepts/data-model.md) |
 | Anmeldung / Registrierung | registration (`registrations`) | [registration-flow](../concepts/registration-flow.md) |
 | Abmeldung | unregister (`DELETE /api/events/:id/register`, `/unregister`) | routes/events.js, bot.js |
+| Anmeldeschluss, „Anmeldung bis“, „Anmeldung geschlossen“ | `registrationDeadline`, `isRegistrationClosed`, code `registration_closed` | [registration-flow](../concepts/registration-flow.md) |
+| Abmeldeschluss, „Abmeldung bis“ | `unregisterDeadline`, `isUnregisterClosed`, code `unregister_closed` | [registration-flow](../concepts/registration-flow.md) |
 | Anfrage (wartet auf Bestätigung) | status `pending` | registration |
 | Angenommen / bestätigt | status `accepted` | registration |
 | Abgelehnt | status `rejected` | registration |

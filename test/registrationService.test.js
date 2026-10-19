@@ -218,3 +218,48 @@ test('nobody moves up into an event that is over', async () => {
     assert.equal((await moveRegistrationToSlot({ registrationId: ana.id, slotId: 'heal' })).ok, true);
     assert.equal((await registrationOf(slotEventId, 'Ben')).status, 'waitlisted');
 });
+
+test('registration and own slot switch close at the registration deadline (W-03)', async () => {
+    const MINUTE = 60 * 1000;
+    const inTwoDays = new Date(Date.now() + 2 * 24 * 60 * MINUTE).toISOString();
+    const passed = new Date(Date.now() - MINUTE).toISOString();
+    const CLOSED = { ok: false, code: 'registration_closed', httpStatus: 400, error: 'Die Anmeldung für dieses Event ist geschlossen.' };
+    const pick = (result) => ({ ok: result.ok, code: result.code, httpStatus: result.httpStatus, error: result.error });
+
+    const eventId = await createEvent({ startDate: inTwoDays, registrationDeadline: passed });
+    assert.deepEqual(pick(await register(eventId, 'Zuspät')), CLOSED);
+    assert.equal(await registrationOf(eventId, 'Zuspät'), undefined);
+
+    const openId = await createEvent({ startDate: inTwoDays, registrationDeadline: new Date(Date.now() + MINUTE).toISOString() });
+    assert.equal((await register(openId, 'Knapp')).ok, true);
+
+    const slotEventId = await createEvent({ startDate: inTwoDays, registrationDeadline: passed, slots: SLOTS, maxParticipants: 4 });
+    await setDoc(doc(db, 'registrations', `${slotEventId}-ana`), {
+        eventId: slotEventId, userId: user('Ana').id, userName: 'Ana', status: 'accepted', slotId: 'tank', preferredSlotId: 'tank',
+        altSlotIds: [], guests: [], pendingGuests: [], formAnswers: {}, source: 'web', createdAt: new Date().toISOString()
+    });
+    assert.deepEqual(pick(await switchOwnSlot({ eventId: slotEventId, userId: user('Ana').id, slotId: 'heal' })), CLOSED);
+    assert.equal((await registrationOf(slotEventId, 'Ana')).slotId, 'tank');
+});
+
+test('members cannot unregister after the unregister deadline (W-03)', async () => {
+    const MINUTE = 60 * 1000;
+    const inTwoDays = new Date(Date.now() + 2 * 24 * 60 * MINUTE).toISOString();
+    const eventId = await createEvent({ startDate: inTwoDays, unregisterDeadline: new Date(Date.now() - MINUTE).toISOString() });
+    await register(eventId, 'Fest');
+
+    const result = await unregisterUserFromEvent({ eventId, userId: user('Fest').id });
+    assert.deepEqual(
+        { ok: result.ok, code: result.code, httpStatus: result.httpStatus, error: result.error },
+        { ok: false, code: 'unregister_closed', httpStatus: 400, error: 'Abmelden ist nicht mehr möglich. Wende dich an einen Admin.' }
+    );
+    assert.equal((await registrationOf(eventId, 'Fest')).status, 'accepted');
+
+    // Without an unregister deadline it stays open, even after the end
+    const ended = await createEvent({ startDate: new Date(Date.now() - 180 * MINUTE).toISOString(), endDate: new Date(Date.now() - MINUTE).toISOString() });
+    await setDoc(doc(db, 'registrations', `${ended}-frei`), {
+        eventId: ended, userId: user('Frei').id, userName: 'Frei', status: 'accepted', guests: [], pendingGuests: [],
+        formAnswers: {}, source: 'web', createdAt: new Date().toISOString()
+    });
+    assert.equal((await unregisterUserFromEvent({ eventId: ended, userId: user('Frei').id })).ok, true);
+});

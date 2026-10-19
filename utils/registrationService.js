@@ -9,7 +9,7 @@ const { buildEventUrl } = require('./eventUrl');
 const { withEventLock } = require('./eventLock');
 const { notifyRegistrationsChanged } = require('./announcementRefresh');
 const { OCCUPYING_STATUSES, countOccupiedPlaces } = require('./capacity');
-const { isEventOver } = require('./eventListing');
+const { isEventOver, isRegistrationClosed, isUnregisterClosed, REGISTRATION_CLOSED_MESSAGE, UNREGISTER_CLOSED_MESSAGE } = require('./eventListing');
 const {
     getSlots, findSlot, formatSlotLabel, sanitizeAltSlotIds, countSlotOccupancy, hasFreePlace, pickSlot
 } = require('./slotService');
@@ -35,6 +35,8 @@ const REGISTRATION_ERROR = {
     NOT_FOUND: 'event_not_found',
     INACTIVE: 'event_inactive',
     ENDED: 'event_ended',
+    CLOSED: 'registration_closed',
+    UNREGISTER_CLOSED: 'unregister_closed',
     ALREADY_REGISTERED: 'already_registered',
     MISSING_ROLE: 'missing_role',
     GUESTS_NOT_ALLOWED: 'guests_not_allowed',
@@ -51,6 +53,8 @@ const ERROR_HTTP_STATUS = {
     [REGISTRATION_ERROR.NOT_FOUND]: 404,
     [REGISTRATION_ERROR.INACTIVE]: 400,
     [REGISTRATION_ERROR.ENDED]: 400,
+    [REGISTRATION_ERROR.CLOSED]: 400,
+    [REGISTRATION_ERROR.UNREGISTER_CLOSED]: 400,
     [REGISTRATION_ERROR.ALREADY_REGISTERED]: 400,
     [REGISTRATION_ERROR.MISSING_ROLE]: 403,
     [REGISTRATION_ERROR.GUESTS_NOT_ALLOWED]: 400,
@@ -201,6 +205,9 @@ async function createRegistration({ eventId, user, formAnswers, guests, source, 
     // The end closes registration; the scheduler archives the event a day later (W-01)
     if (isEventOver(event)) {
         return buildFailure(REGISTRATION_ERROR.ENDED, 'Das Event ist schon vorbei.');
+    }
+    if (isRegistrationClosed(event)) {
+        return buildFailure(REGISTRATION_ERROR.CLOSED, REGISTRATION_CLOSED_MESSAGE);
     }
 
     const registrations = await loadEventRegistrations(eventId);
@@ -367,6 +374,10 @@ async function switchOwnSlot({ eventId, userId, slotId }) {
         if (isEventOver(event)) {
             return buildFailure(REGISTRATION_ERROR.ENDED, 'Das Event ist schon vorbei.');
         }
+        // The line-up is fixed once registration has closed (W-03)
+        if (isRegistrationClosed(event)) {
+            return buildFailure(REGISTRATION_ERROR.CLOSED, REGISTRATION_CLOSED_MESSAGE);
+        }
 
         const slots = getSlots(event);
         const target = findSlot(slots, slotId);
@@ -504,6 +515,11 @@ async function unregisterUserFromEvent({ eventId, userId }) {
         const registration = registrations.find(entry => entry.userId === userId);
         if (!registration) {
             return buildFailure(REGISTRATION_ERROR.NOT_REGISTERED, 'Du bist für dieses Event nicht angemeldet.');
+        }
+        // After the unregister deadline only admins change the list (W-03)
+        const lockedEventSnap = await getDoc(doc(db, 'events', eventId));
+        if (lockedEventSnap.exists() && isUnregisterClosed(lockedEventSnap.data())) {
+            return buildFailure(REGISTRATION_ERROR.UNREGISTER_CLOSED, UNREGISTER_CLOSED_MESSAGE);
         }
         await deleteDoc(doc(db, 'registrations', registration.id));
         return { ok: true, registration };

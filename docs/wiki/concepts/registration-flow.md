@@ -14,7 +14,7 @@ see_also: [discord-integration, routes-events, event-lifecycle, role-slots]
 ## Checks in order (`registerUserForEvent`)
 
 1. Event exists → else `event_not_found` (404).
-2. `status === 'active'` (or unset) → else `event_inactive`; then the event must not be over (`isEventOver`: end, else start + 2 h) → else `event_ended` (400, "Das Event ist schon vorbei.", W-01).
+2. `status === 'active'` (or unset) → else `event_inactive`; then the event must not be over (`isEventOver`: end, else start + 2 h) → else `event_ended` (400, "Das Event ist schon vorbei.", W-01); then the optional `registrationDeadline` must not be reached (`isRegistrationClosed` in `utils/eventListing.js`) → else `registration_closed` (400, "Die Anmeldung für dieses Event ist geschlossen.", W-03).
 3. No registration with same `eventId` + `userId` → else `already_registered`.
 4. `accessMode === 'role-required'` → user must have one of `requiredRoles` (`missing_role`, 403). Web: roles from the session; Discord: live member roles.
 5. Guests sent but `allowGuests === false` → `guests_not_allowed`.
@@ -44,9 +44,9 @@ stateDiagram-v2
   pending --> [*]: unregister (promotes waitlist)
 ```
 
-Admin changes go through `PUT /api/admin/registrations/:id/status` (allowed targets: `accepted`, `rejected`, `waitlisted`). On slot events, accepting a registration without a slot picks a free wanted slot or overbooks the main role (response `warning`); rejecting and waitlisting clear `slotId`. Slots change via `PUT /api/admin/registrations/:id/slot` (admin, may overbook) and `PUT /api/events/:id/register/slot` (member, free slots only, `event_ended` once the event is over).
+Admin changes go through `PUT /api/admin/registrations/:id/status` (allowed targets: `accepted`, `rejected`, `waitlisted`). On slot events, accepting a registration without a slot picks a free wanted slot or overbooks the main role (response `warning`); rejecting and waitlisting clear `slotId`. Slots change via `PUT /api/admin/registrations/:id/slot` (admin, may overbook) and `PUT /api/events/:id/register/slot` (member, free slots only, `event_ended` once the event is over, `registration_closed` once the registration deadline is reached).
 
-Discord after the end: `canRegisterViaDiscord` is false, so a refreshed announcement keeps only "Zum Event"; an old button (`checkRegistrationConditions`) and a modal sent after the end (`handleEventRegisterModal`, `handleEventSlotModal`) answer ephemerally "Das Event ist schon vorbei.".
+Discord after the end: `canRegisterViaDiscord` is false, so a refreshed announcement keeps only "Zum Event"; an old button (`checkRegistrationConditions`) and a modal sent after the end (`handleEventRegisterModal`, `handleEventSlotModal`) answer ephemerally "Das Event ist schon vorbei.". After the registration deadline the same places answer "Die Anmeldung für dieses Event ist geschlossen." (W-03).
 
 ## Entry points
 
@@ -55,7 +55,7 @@ Discord after the end: `canRegisterViaDiscord` is false, so a refreshed announce
 | Web | `POST /api/events/:id/register` → `submitRegistration()` in `public/js/events/registration-form.js` |
 | Discord button | `event_register:<eventId>` → `handleEventRegisterButton` → pre-checks → modal if the event has form fields that fit (≤5) → `handleEventRegisterModal` → `completeDiscordRegistration` → `registerUserForEvent({ source: 'discord' })` → `ensureUserProfile` |
 | Discord slot button | `event_slot:<eventId>:<slotId>` → `handleEventSlotButton` → slot modal (`alt_slots` select + form) → `handleEventSlotModal` → `completeDiscordRegistration({ slotId, altSlotIds })` |
-| Unregister | `unregisterUserFromEvent`: web `DELETE /api/events/:id/register`, Discord `/unregister` and the "Abmelden" button |
+| Unregister | `unregisterUserFromEvent`: web `DELETE /api/events/:id/register`, Discord `/unregister` and the "Abmelden" button; refused with `unregister_closed` (400, "Abmelden ist nicht mehr möglich. Wende dich an einen Admin.") once the optional `unregisterDeadline` is reached (`isUnregisterClosed`). Without that deadline members can unregister any time, even after the end. |
 
 ## Guests
 
@@ -72,3 +72,4 @@ DM texts come from `event.customBotMessages[status]`, else `botMessages/template
 
 - Registrations of one event are serialized by `withEventLock` (in memory, single process); a second server process would need a real transaction.
 - Promotion moves up every waitlisted registration that still fits (guests counted), oldest first — but never once the event is over (`promoteFromWaitlistLocked` returns no promotion, W-01).
+- The registration deadline (W-03) only stops new registrations and own slot switches; waitlist promotion, guest invitation answers and admin changes go on until the end. The unregister deadline only stops members; admins still reject, waitlist or move registrations.

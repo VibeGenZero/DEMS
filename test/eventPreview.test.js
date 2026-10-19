@@ -4,7 +4,7 @@ const { buildPreviewEvent } = require('../utils/eventPreview');
 
 test('the preview event takes the defaults of a new event', () => {
     assert.deepEqual(buildPreviewEvent({ title: 'Raidnacht' }), {
-        title: 'Raidnacht', description: '', startDate: '', endDate: '', bannerUrl: '', category: '',
+        title: 'Raidnacht', description: '', startDate: '', endDate: '', registrationDeadline: '', unregisterDeadline: '', bannerUrl: '', category: '',
         status: 'active', accessMode: 'open', allowGuests: true, formFields: [], accentColor: '', slots: [], maxParticipants: 0
     });
     assert.equal(buildPreviewEvent().title, '');
@@ -35,4 +35,10 @@ test('only values the Discord builders accept reach them', () => {
         assert.equal(buildPreviewEvent({ bannerUrl }).bannerUrl, '', bannerUrl);
     }
     assert.equal(buildPreviewEvent({ bannerUrl: 'https://example.com/raid.png' }).bannerUrl, 'https://example.com/raid.png');
+});
+
+test('the preview carries both deadlines, so the announcement shows them (W-03)', () => {
+    const event = buildPreviewEvent({ title: 'Raid', registrationDeadline: '2026-10-23T18:00:00.000Z', unregisterDeadline: 'x'.repeat(100) });
+    assert.equal(event.registrationDeadline, '2026-10-23T18:00:00.000Z');
+    assert.equal(event.unregisterDeadline.length, 40);
 });

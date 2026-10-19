@@ -105,3 +105,15 @@ test('nothing moves while every place is taken', async () => {
     assert.deepEqual(await promoteFromWaitlist(id, event), []);
     assert.equal((await registration(waiting)).status, 'waitlisted');
 });
+
+test('places still move up after the registration deadline (W-03)', async () => {
+    const { id, event } = await createEvent({
+        maxParticipants: 1,
+        startDate: new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString(),
+        registrationDeadline: new Date(Date.now() - 60 * 1000).toISOString()
+    });
+    const waiting = await addRegistration(id, 'waitlisted', '2026-10-01T10:00:00.000Z');
+    const promotions = await promoteFromWaitlist(id, event);
+    assert.equal(promotions.length, 1);
+    assert.equal((await registration(waiting)).status, 'accepted');
+});

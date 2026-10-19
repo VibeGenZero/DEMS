@@ -11,7 +11,7 @@ import { loadComments } from './comments.js';
 import { resetGuestSelection } from './guests.js';
 import { renderFormFields, submitRegistration } from './registration-form.js';
 import { eventHasSlots, renderOwnSlot, renderRoster, renderSlotPicker } from './slots.js';
-import { eventEnd } from './cards.js';
+import { eventEnd, isRegistrationClosed, isUnregisterClosed } from './cards.js';
 import { startCountdown } from './countdown.js';
 import { revealDetail } from './detail-motion.js';
 
@@ -89,6 +89,9 @@ export function renderSidebarDetails(event) {
         }
     }
 
+    renderDeadlineRow('sidebar-registration-deadline-row', 'bi-alarm', 'Anmeldung bis', event.registrationDeadline);
+    renderDeadlineRow('sidebar-unregister-deadline-row', 'bi-door-closed', 'Abmeldung bis', event.unregisterDeadline);
+
     if (event.location && event.location.text) {
         const locHtml = event.location.channelId && guildId
             ? `<a href="discord://channels/${guildId}/${escapeHtml(event.location.channelId)}">${escapeHtml(event.location.text)}</a>`
@@ -101,6 +104,26 @@ export function renderSidebarDetails(event) {
     }
 
     renderSidebarCapacity(event);
+}
+
+/**
+ * Sidebar row of an optional deadline (W-03); hidden without one, so the row of a previous event does not stay.
+ *
+ * @param {string} rowId -> Id of the row.
+ * @param {string} icon -> Bootstrap icon class.
+ * @param {string} label -> German label.
+ * @param {string} value -> ISO date or ''.
+ * @returns {void}
+ */
+function renderDeadlineRow(rowId, icon, label, value) {
+    const date = value ? new Date(String(value).replace(' ', 'T')) : null;
+    if (!date || Number.isNaN(date.getTime())) {
+        const row = document.getElementById(rowId);
+        if (row) row.style.display = 'none';
+        return;
+    }
+    const text = date.toLocaleString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) + ' Uhr';
+    setSidebarRow(rowId, icon, label, text);
 }
 
 // Disabled status button of the action area per state
@@ -209,7 +232,7 @@ export async function loadDetailParticipants(eventId) {
 // Clears what the previously opened event left on the page; the early returns
 // below (no access, not logged in) never reach the code that refills it
 export function resetEventDetailAreas() {
-    ['detail-register-area', 'detail-registered', 'detail-no-access', 'detail-waitlist', 'detail-ended',
+    ['detail-register-area', 'detail-registered', 'detail-no-access', 'detail-waitlist', 'detail-ended', 'detail-registration-closed',
         'detail-participants-section', 'comments-section', 'checkin-section'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.style.display = 'none';
@@ -352,6 +375,10 @@ export async function showEventDetail(eventId, { celebrate, fromTaken } = {}) {
                 : (statusTexts[regData.status] || regData.status);
             statusEl.className = 'fw-bold text-' + (statusColors[regData.status] || 'secondary');
             renderOwnSlot(event, regData);
+            // After the unregister deadline only an admin takes the registration back (W-03)
+            const unregisterClosed = isUnregisterClosed(event);
+            toggleElement(document.getElementById('unregister-btn'), !unregisterClosed);
+            toggleElement(document.getElementById('detail-unregister-closed'), unregisterClosed);
 
             renderSidebarAction('registered');
             // The check-in box exists after this call: the success moment of a check-in springs it
@@ -365,6 +392,15 @@ export async function showEventDetail(eventId, { celebrate, fromTaken } = {}) {
         // Over: the form is closed, the scheduler archives the event a day later (W-01)
         if (isOver) {
             document.getElementById('detail-ended').style.display = 'block';
+            renderSidebarAction('none');
+            loadDetailParticipants(eventId);
+            loadComments(eventId);
+            return;
+        }
+
+        // Registration deadline passed: the form is closed, the event still comes (W-03)
+        if (isRegistrationClosed(event)) {
+            document.getElementById('detail-registration-closed').style.display = 'block';
             renderSidebarAction('none');
             loadDetailParticipants(eventId);
             loadComments(eventId);

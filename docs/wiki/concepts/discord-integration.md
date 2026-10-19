@@ -40,7 +40,7 @@ see_also: [form-fields, registration-flow, reminders-presence, configuration]
 
 ## Announcement buttons
 
-`buildEventComponents(event, id, roster)`: slot events get one button per slot (5 per row, "(voll)" when full) instead of "Anmelden"; otherwise "Anmelden" (`event_register:<id>`, only if `canRegisterViaDiscord(event)`: active and form fits into a modal) + "Zum Event" link button. The admin dialog previews this via `renderAnnounceButtonsPreview` (`public/js/admin/event-actions.js`).
+`buildEventComponents(event, id, roster)`: slot events get one button per slot (5 per row, "(voll)" when full) instead of "Anmelden"; otherwise "Anmelden" (`event_register:<id>`, only if `canRegisterViaDiscord(event)`: active, neither over nor past its registration deadline, and form fits into a modal) + "Zum Event" link button. The embed shows "⏰ Anmeldung bis" / "⏰ Abmeldung bis" for the optional deadlines (W-03); once the registration deadline passes, the scheduler refreshes the stored announcements once so only "Zum Event" stays, and old buttons or modals answer "Die Anmeldung für dieses Event ist geschlossen.". The ephemeral slot status answer drops the switch button after the registration deadline and "Abmelden" after the unregister deadline. The admin dialog previews this via `renderAnnounceButtonsPreview` (`public/js/admin/event-actions.js`).
 
 ## Gotchas
 

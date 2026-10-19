@@ -1,5 +1,6 @@
 /**
- * Pure helpers for listing events: when an event is over and how the
+ * Pure helpers for listing events: when an event is over, when its deadlines
+ * close registration and unregistering (W-03), and how the
  * signed-in member takes part. No database or bot access, so the routes
  * and bot.js share them without a require cycle. The overview cards in
  * public/js/events/cards.js apply the same end rule in the browser.
@@ -11,6 +12,9 @@ const DEFAULT_DURATION_MS = 2 * 60 * 60 * 1000;
 const OWN_STATUSES = ['accepted', 'pending', 'waitlisted'];
 // Registrations whose guests count as taking part
 const HOST_STATUSES = ['accepted', 'pending'];
+// German answers once a deadline has passed (W-03), shared by the service and the bot
+const REGISTRATION_CLOSED_MESSAGE = 'Die Anmeldung für dieses Event ist geschlossen.';
+const UNREGISTER_CLOSED_MESSAGE = 'Abmelden ist nicht mehr möglich. Wende dich an einen Admin.';
 
 /**
  * Parse a stored date; older events use a space instead of the T.
@@ -50,6 +54,42 @@ function isEventOver(event, now = new Date()) {
 }
 
 /**
+ * Whether members can no longer register (W-03).
+ *
+ * @param {Object} event -> Event data with optional `registrationDeadline`.
+ * @param {Date} [now] -> Reference time.
+ * @returns {boolean} -> True once the event is over or its registration deadline is reached; an invalid deadline counts as none.
+ */
+function isRegistrationClosed(event, now = new Date()) {
+    if (isEventOver(event, now)) return true;
+    const deadline = parseDate(event.registrationDeadline);
+    return deadline !== null && deadline <= now;
+}
+
+/**
+ * Whether members can no longer unregister themselves (W-03).
+ *
+ * @param {Object} event -> Event data with optional `unregisterDeadline`.
+ * @param {Date} [now] -> Reference time.
+ * @returns {boolean} -> True once the unregister deadline is reached; without one unregistering stays open, even after the end.
+ */
+function isUnregisterClosed(event, now = new Date()) {
+    const deadline = parseDate(event.unregisterDeadline);
+    return deadline !== null && deadline <= now;
+}
+
+/**
+ * Whether an edited event keeps its "announcement refreshed at the deadline" flag (W-03).
+ *
+ * @param {Object} oldEvent -> Stored event before the edit.
+ * @param {string} registrationDeadline -> Deadline after the edit ('' = none).
+ * @returns {boolean} -> True only while the deadline stays the same, so a moved deadline refreshes again.
+ */
+function keepDeadlineRefreshFlag(oldEvent, registrationDeadline) {
+    return oldEvent.registrationClosedRefreshed === true && (oldEvent.registrationDeadline || '') === (registrationDeadline || '');
+}
+
+/**
  * The date that stands for a series in the event list.
  *
  * @param {Array<Object>} seriesEvents -> Events of one series, sorted by start.
@@ -76,4 +116,4 @@ function myRegistrationStatus(registrations, userId) {
     return host ? 'guest' : null;
 }
 
-module.exports = { DEFAULT_DURATION_MS, parseDate, eventEndTime, isEventOver, pickSeriesRepresentative, myRegistrationStatus };
+module.exports = { DEFAULT_DURATION_MS, parseDate, eventEndTime, isEventOver, isRegistrationClosed, isUnregisterClosed, keepDeadlineRefreshFlag, REGISTRATION_CLOSED_MESSAGE, UNREGISTER_CLOSED_MESSAGE, pickSeriesRepresentative, myRegistrationStatus };

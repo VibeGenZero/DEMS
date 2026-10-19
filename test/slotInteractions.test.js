@@ -113,3 +113,74 @@ test('a slot button of an ended event answers that it is over', async () => {
     const answers = interaction.calls.filter(([name]) => name === 'reply' || name === 'editReply').map(([, payload]) => payload.content);
     assert.ok(answers.some(content => content.includes('Das Event ist schon vorbei.')), JSON.stringify(interaction.calls));
 });
+
+// ── Deadlines (W-03) ────────────────────────────────────────────────────
+
+const MINUTE = 60 * 1000;
+const inTwoDays = () => new Date(Date.now() + 48 * 60 * MINUTE).toISOString();
+const passed = () => new Date(Date.now() - MINUTE).toISOString();
+const answersOf = (interaction) => interaction.calls
+    .filter(([name]) => ['reply', 'editReply', 'update'].includes(name))
+    .map(([, payload]) => payload.content || '');
+
+test('after the registration deadline the announcement keeps only the link', async () => {
+    const closed = { title: 'Zu', status: 'active', approvalMode: 'instant', startDate: inTwoDays(), registrationDeadline: passed() };
+    const labels = (event) => bot.buildEventComponents(event, 'int-x').flatMap(row => row.toJSON().components.map(button => button.label));
+    assert.deepEqual(labels(closed), ['Zum Event']);
+    assert.deepEqual(labels({ ...closed, slots: SLOTS, maxParticipants: 2 }), ['Zum Event']);
+    assert.deepEqual(labels({ ...closed, registrationDeadline: inTwoDays() }), ['Anmelden', 'Zum Event']);
+});
+
+test('the register button and modals answer that registration is closed', async () => {
+    await setDoc(doc(db, 'events', 'int-closed'), { title: 'Abend zu', status: 'active', approvalMode: 'instant', startDate: inTwoDays(), registrationDeadline: passed() });
+    await setDoc(doc(db, 'events', 'int-closed-slots'), {
+        title: 'Raid zu', status: 'active', approvalMode: 'instant', slots: SLOTS, maxParticipants: 2, startDate: inTwoDays(), registrationDeadline: passed()
+    });
+    const cases = [
+        { kind: 'button', customId: 'event_register:int-closed' },
+        { kind: 'button', customId: 'event_slot:int-closed-slots:tank' },
+        { kind: 'modal', customId: 'event_register_modal:int-closed' },
+        { kind: 'modal', customId: 'event_slot_modal:int-closed-slots:tank' }
+    ];
+    for (const fields of cases) {
+        const interaction = createFakeInteraction({ ...fields, userId: 'int-late' });
+        await dispatchInteraction(bot.client, interaction);
+        assert.ok(answersOf(interaction).some(content => content.includes('Die Anmeldung für dieses Event ist geschlossen.')), `${fields.customId}: ${JSON.stringify(interaction.calls)}`);
+    }
+    assert.equal((await getDoc(doc(db, 'registrations', 'int-late'))).exists(), false);
+});
+
+test('the status answer offers no switch after the registration deadline and no leave after the unregister deadline', async () => {
+    const registration = { status: 'accepted', slotId: 'tank' };
+    const buttons = (event) => {
+        const reply = bot.buildRegisteredSlotReply({ title: 'Raid', slots: SLOTS, startDate: inTwoDays(), ...event }, 'int-r', registration, SLOTS[1], [registration]);
+        return { content: reply.content, ids: reply.components.flatMap(row => row.toJSON().components.map(button => button.custom_id)) };
+    };
+    assert.deepEqual(buttons({}).ids, ['slot_switch:int-r:heal', 'slot_leave:int-r']);
+    assert.deepEqual(buttons({ registrationDeadline: passed() }).ids, ['slot_leave:int-r']);
+    const fixed = buttons({ unregisterDeadline: passed() });
+    assert.deepEqual(fixed.ids, ['slot_switch:int-r:heal']);
+    assert.match(fixed.content, /Abmelden ist nicht mehr möglich\. Wende dich an einen Admin\./);
+    assert.deepEqual(buttons({ registrationDeadline: passed(), unregisterDeadline: passed() }).ids, []);
+});
+
+test('an old leave button after the unregister deadline keeps the registration', async () => {
+    await setDoc(doc(db, 'events', 'int-fixed'), {
+        title: 'Raid fest', status: 'active', approvalMode: 'instant', slots: SLOTS, maxParticipants: 2, startDate: inTwoDays(), unregisterDeadline: passed()
+    });
+    await seedRegistration('int-fixed-reg', 'int-fixed', 'int-user-fixed', { status: 'accepted', slotId: 'tank', preferredSlotId: 'tank', altSlotIds: [] });
+    const interaction = createFakeInteraction({ kind: 'button', customId: 'slot_leave:int-fixed', userId: 'int-user-fixed' });
+    await dispatchInteraction(bot.client, interaction);
+    assert.ok(answersOf(interaction).some(content => content.includes('Abmelden ist nicht mehr möglich.')));
+    assert.equal((await getDoc(doc(db, 'registrations', 'int-fixed-reg'))).exists(), true);
+});
+
+test('the announcement tells both deadlines', async () => {
+    const event = { title: 'Raid', status: 'active', startDate: '2026-10-24T18:00:00.000Z', registrationDeadline: '2026-10-23T18:00:00.000Z', unregisterDeadline: '2026-10-24T12:00:00.000Z' };
+    const fields = bot.buildEventEmbed(event, 'https://example.com').toJSON().fields;
+    const field = (name) => fields.find(entry => entry.name === name);
+    assert.equal(field('⏰ Anmeldung bis').value, new Date(event.registrationDeadline).toLocaleString('de-DE', { timeZone: 'Europe/Berlin' }));
+    assert.equal(field('⏰ Abmeldung bis').value, new Date(event.unregisterDeadline).toLocaleString('de-DE', { timeZone: 'Europe/Berlin' }));
+    const plain = bot.buildEventEmbed({ title: 'Ohne', startDate: event.startDate }, null).toJSON().fields;
+    assert.equal(plain.some(entry => entry.name.includes('bis')), false);
+});

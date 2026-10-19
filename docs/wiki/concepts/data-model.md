@@ -30,6 +30,7 @@ erDiagram
 | `title`, `description` | string | description is Markdown (EasyMDE), ≤5000 chars |
 | `status` | `draft` \| `active` \| `archived` \| `cancelled` | only `active` is listed and accepts registrations; `draft`/`archived` answer 404 to non-admins (`isEventVisibleTo`) |
 | `startDate`, `endDate` | ISO string or `''` | |
+| `registrationDeadline`, `unregisterDeadline` | ISO string or `''` | optional Anmeldeschluss / Abmeldeschluss (W-03); `''` or missing = none; must lie before the end; series dates keep the distance to their start |
 | `maxParticipants` | int | `0` = unlimited; guests count against it |
 | `accessMode` / `requiredRoles` | `open` \| `role-required` / role id[] | role gate for registration |
 | `approvalMode` | `manual` \| `instant` | `instant` → accepted directly, `manual` → pending |
@@ -45,6 +46,7 @@ erDiagram
 | `discordChannelId`, `discordTextChannelId`, `discordScheduledEventId` | id or null | set by the bot |
 | `recurring`, `recurringInterval`, `recurringUntil`, `seriesId` | bool, `weekly`\|`biweekly`\|other=monthly, `YYYY-MM-DD`, uuid | series instances share `seriesId` |
 | `eventStartNotificationSent` | bool | start DM sent once |
+| `registrationClosedRefreshed` | bool | announcements refreshed once after the registration deadline (W-03); reset when an edit moves the deadline (`keepDeadlineRefreshFlag`) |
 | `sourcePollId` | poll id or `''` | date poll the event was created from (informative) |
 | `slots` | `[{ id, name, emoji, capacity }]` or absent | role slots, see [role-slots](role-slots.md); with slots `maxParticipants = Σ capacity` and `allowGuests = false` |
 | `announcements` | `[{ channelId, messageId }]` (max 5) | Discord announcements that are kept up to date live |

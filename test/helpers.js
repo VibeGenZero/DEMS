@@ -199,7 +199,7 @@ function createClient(baseUrl) {
  * Discord interaction double that records every answer in call order.
  * `answered` resolves with the first answer that is not a defer.
  *
- * @param {Object} options -> `{ kind: 'button'|'select'|'command', customId, userId, commandName, eventOption, values, roles }`.
+ * @param {Object} options -> `{ kind: 'button'|'select'|'command'|'modal', customId, userId, commandName, eventOption, values, roles }`; a modal answers every field empty.
  * @returns {Object} -> The fake interaction.
  */
 function createFakeInteraction({ kind, customId, userId, commandName, eventOption, values = [], roles = null }) {
@@ -214,7 +214,8 @@ function createFakeInteraction({ kind, customId, userId, commandName, eventOptio
         replied: false,
         options: { getString: () => eventOption },
         isAutocomplete: () => false,
-        isModalSubmit: () => false,
+        isModalSubmit: () => kind === 'modal',
+        fields: { getTextInputValue: () => '', getStringSelectValues: () => [], getField: () => null },
         isStringSelectMenu: () => kind === 'select',
         isButton: () => kind === 'button',
         isChatInputCommand: () => kind === 'command',

@@ -348,3 +348,12 @@ test('an end before the start counts as missing on the cards too', async () => {
     const { app } = await loadFrontendApp({});
     assert.equal(app.eventEnd({ startDate: '2026-10-10T18:00:00.000Z', endDate: '2026-10-09T23:00:00.000Z' }).toISOString(), '2026-10-10T20:00:00.000Z');
 });
+
+test('the browser deadline helpers answer like the server ones (W-03)', async () => {
+    const { app } = await loadFrontendApp({});
+    const { NOW, DEADLINE_CASES } = require('./fixtures/deadlineCases');
+    for (const [name, event, registrationClosed, unregisterClosed] of DEADLINE_CASES) {
+        assert.equal(app.isRegistrationClosed(event, NOW), registrationClosed, `registration: ${name}`);
+        assert.equal(app.isUnregisterClosed(event, NOW), unregisterClosed, `unregister: ${name}`);
+    }
+});

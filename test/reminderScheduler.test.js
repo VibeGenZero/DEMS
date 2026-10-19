@@ -113,3 +113,26 @@ test('the start notification goes out once and is marked before the DMs', async 
         await removeEvent('started');
     }
 });
+
+test('the announcement is refreshed once when the registration deadline passes (W-03)', async () => {
+    const refreshed = [];
+    const pass = () => bot.checkReminders({ now: NOW, send: async () => {}, refresh: (eventId) => refreshed.push(eventId) });
+    await storeEvent('deadline-open', { startDate: inHours(48), registrationDeadline: inHours(1), registrationClosedRefreshed: false });
+    try {
+        await pass();
+        assert.deepEqual(refreshed, [], 'not before the deadline');
+    } finally {
+        await removeEvent('deadline-open');
+    }
+
+    await storeEvent('deadline-passed', { startDate: inHours(48), registrationDeadline: inHours(-1), registrationClosedRefreshed: false });
+    try {
+        await pass();
+        assert.deepEqual(refreshed, ['deadline-passed']);
+        assert.equal((await storedEvent('deadline-passed')).registrationClosedRefreshed, true);
+        await pass();
+        assert.deepEqual(refreshed, ['deadline-passed'], 'only once');
+    } finally {
+        await removeEvent('deadline-passed');
+    }
+});
