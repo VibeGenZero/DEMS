@@ -15,7 +15,7 @@ const { buildEventUrl, buildPollUrl } = require('./utils/eventUrl');
 const { buildBotInviteUrl } = require('./utils/botPermissions');
 const { parseTemplate } = require('./utils/template');
 const { normalizeReminderHours, findDueReminders } = require('./utils/reminders');
-const { isEventOver } = require('./utils/eventListing');
+const { isEventOver, isRegistrationClosed, isUnregisterClosed, REGISTRATION_CLOSED_MESSAGE, UNREGISTER_CLOSED_MESSAGE } = require('./utils/eventListing');
 const { summarizePlaces, formatPlaces } = require('./utils/capacity');
 const { isRegistrationBlocked } = require('./middleware/maintenance');
 const {
@@ -650,6 +650,14 @@ function buildEventEmbed(event, registrationLink, roster) {
         embed.addFields({ name: '🏷️ Kategorie', value: event.category, inline: true });
     }
 
+    // Optional deadlines, in the format of the date field (W-03)
+    const deadlineFields = [['⏰ Anmeldung bis', event.registrationDeadline], ['⏰ Abmeldung bis', event.unregisterDeadline]];
+    deadlineFields.forEach(([name, value]) => {
+        if (value && !Number.isNaN(new Date(value).getTime())) {
+            embed.addFields({ name, value: new Date(value).toLocaleString('de-DE', { timeZone: TIMEZONE }), inline: true });
+        }
+    });
+
     if (registrationLink) {
         embed.addFields({ name: '📋 Anmeldung', value: `[Hier anmelden](${registrationLink})`, inline: false });
     }
@@ -727,7 +735,8 @@ function formatRosterMembers(slot) {
 function canRegisterViaDiscord(event) {
     if (!event) return false;
     if (event.status && event.status !== 'active') return false;
-    if (isEventOver(event)) return false;
+    // Closed by the end or the registration deadline (W-03)
+    if (isRegistrationClosed(event)) return false;
     return fitsIntoDiscordModal(event);
 }
 
@@ -1333,12 +1342,17 @@ function buildRegisteredSlotReply(event, eventId, registration, clickedSlot, reg
     }
 
     const current = findSlot(slots, registration.slotId);
-    const content = registration.status === 'waitlisted' || !current
+    const status = registration.status === 'waitlisted' || !current
         ? `⏳ Du stehst für **${event.title}** auf der Warteliste.`
         : `Du bist für **${event.title}** als **${formatSlotLabel(current)}** eingeplant${registration.status === 'pending' ? ' (Anfrage ausstehend)' : ''}.`;
+    // Deadlines take the switch and the leave button away (W-03)
+    const canLeave = !isUnregisterClosed(event);
+    const content = canLeave ? status : `${status}
+${UNREGISTER_CLOSED_MESSAGE}`;
 
     const row = new ActionRowBuilder();
     const canSwitch = clickedSlot.id !== registration.slotId
+        && !isRegistrationClosed(event)
         && hasFreePlace(clickedSlot, countSlotOccupancy(slots, registrations));
     if (canSwitch) {
         const switchButton = new ButtonBuilder()
@@ -1348,14 +1362,16 @@ function buildRegisteredSlotReply(event, eventId, registration, clickedSlot, reg
         if (clickedSlot.emoji) switchButton.setEmoji(clickedSlot.emoji);
         row.addComponents(switchButton);
     }
-    row.addComponents(
-        new ButtonBuilder()
-            .setCustomId(`${SLOT_LEAVE_PREFIX}:${eventId}`)
-            .setLabel('Abmelden')
-            .setStyle(ButtonStyle.Danger)
-    );
+    if (canLeave) {
+        row.addComponents(
+            new ButtonBuilder()
+                .setCustomId(`${SLOT_LEAVE_PREFIX}:${eventId}`)
+                .setLabel('Abmelden')
+                .setStyle(ButtonStyle.Danger)
+        );
+    }
 
-    return { content, components: [row], flags: MessageFlags.Ephemeral };
+    return { content, components: row.components.length > 0 ? [row] : [], flags: MessageFlags.Ephemeral };
 }
 
 /**
@@ -1566,6 +1582,10 @@ async function checkRegistrationConditions({ event, eventId, userId, roleIds }) 
         return 'Das Event ist schon vorbei.';
     }
 
+    if (isRegistrationClosed(event)) {
+        return REGISTRATION_CLOSED_MESSAGE;
+    }
+
     const existingQ = query(
         collection(db, 'registrations'),
         where('eventId', '==', eventId),
@@ -1725,6 +1745,10 @@ async function handleEventRegisterModal(interaction, eventId) {
     if (isEventOver(event)) {
         return interaction.reply({ content: 'Das Event ist schon vorbei.', flags: MessageFlags.Ephemeral });
     }
+    // The modal may have been opened before the registration deadline (W-03)
+    if (isRegistrationClosed(event)) {
+        return interaction.reply({ content: REGISTRATION_CLOSED_MESSAGE, flags: MessageFlags.Ephemeral });
+    }
 
     // The form may have been changed while the modal was open
     if (!canRegisterViaDiscord(event)) {
@@ -1846,6 +1870,10 @@ async function handleEventSlotModal(interaction, eventId, slotId) {
 
     if (isEventOver(event)) {
         return interaction.reply({ content: 'Das Event ist schon vorbei.', flags: MessageFlags.Ephemeral });
+    }
+    // The modal may have been opened before the registration deadline (W-03)
+    if (isRegistrationClosed(event)) {
+        return interaction.reply({ content: REGISTRATION_CLOSED_MESSAGE, flags: MessageFlags.Ephemeral });
     }
 
     // Slots or the form may have changed while the modal was open
@@ -2216,9 +2244,10 @@ async function messageAcceptedParticipants(eventId, message, send) {
  * @param {Object} [options] -> Overrides for tests.
  * @param {Date} [options.now] -> Current time.
  * @param {Function} [options.send] -> DM function (userId, message), default sendDM.
+ * @param {Function} [options.refresh] -> Announcement refresh (eventId), default notifyRegistrationsChanged.
  * @returns {Promise<void>}
  */
-async function checkReminders({ now = new Date(), send = sendDM } = {}) {
+async function checkReminders({ now = new Date(), send = sendDM, refresh = (eventId) => require('./utils/announcementRefresh').notifyRegistrationsChanged(eventId) } = {}) {
     try {
         const snapshot = await getDocs(query(collection(db, 'events')));
 
@@ -2227,6 +2256,13 @@ async function checkReminders({ now = new Date(), send = sendDM } = {}) {
             const eventId = docSnap.id;
 
             if (event.status !== 'active' || !event.startDate) continue;
+
+            // Registration deadline passed -> refresh once so the register buttons go away (W-03);
+            // the flag is written first, like the reminder flags, so a crash cannot repeat it
+            if (!event.registrationClosedRefreshed && !isEventOver(event, now) && isRegistrationClosed(event, now)) {
+                await updateDoc(doc(db, 'events', eventId), { registrationClosedRefreshed: true });
+                refresh(eventId);
+            }
 
             const startTime = new Date(event.startDate);
 

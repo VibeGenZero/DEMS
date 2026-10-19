@@ -1174,3 +1174,99 @@ test('deleting an account lets the waitlist move up', async () => {
     const promoted = await (await member.request(`/api/events/${event.id}/my-registration`)).json();
     assert.deepEqual([promoted.status, promoted.slotId], ['accepted', slotId]);
 });
+
+// ── Registration and unregister deadlines (W-03) ────────────────────────
+
+test('admins set, change and clear both deadlines', async () => {
+    const admin = await loginAs('admin');
+    const base = { title: 'Mit Fristen', status: 'active', startDate: futureDate(5), endDate: futureDate(5, 21) };
+    const created = await admin.send('POST', '/api/admin/events', {
+        ...base, registrationDeadline: futureDate(4), unregisterDeadline: futureDate(3)
+    });
+    assert.equal(created.status, 200);
+    const { id } = await created.json();
+    const read = async () => (await admin.request(`/api/events/${id}`)).json();
+    let event = await read();
+    assert.equal(event.registrationDeadline, futureDate(4));
+    assert.equal(event.unregisterDeadline, futureDate(3));
+
+    const changed = await admin.send('PUT', `/api/admin/events/${id}`, { ...base, registrationDeadline: futureDate(2), unregisterDeadline: '' });
+    assert.equal(changed.status, 200);
+    event = await read();
+    assert.equal(event.registrationDeadline, futureDate(2));
+    assert.equal(event.unregisterDeadline, '');
+
+    // Fields left out of an edit are cleared like every other whitelisted field
+    await admin.send('PUT', `/api/admin/events/${id}`, base);
+    assert.equal((await read()).registrationDeadline, '');
+});
+
+test('a deadline must be a date before the end of the event', async () => {
+    const admin = await loginAs('admin');
+    const base = { title: 'Falsche Frist', status: 'draft', startDate: futureDate(5), endDate: futureDate(5, 21) };
+    const late = await admin.send('POST', '/api/admin/events', { ...base, unregisterDeadline: futureDate(6) });
+    assert.equal(late.status, 400);
+    assert.equal((await late.json()).error, 'Der Abmeldeschluss liegt nach dem Ende des Events.');
+
+    const broken = await admin.send('POST', '/api/admin/events', { ...base, registrationDeadline: 'morgen' });
+    assert.equal(broken.status, 400);
+    assert.equal((await broken.json()).error, 'Der Anmeldeschluss ist kein gültiges Datum.');
+
+    // Without an end date the event lasts two hours
+    const noEnd = await admin.send('POST', '/api/admin/events', { title: 'Ohne Ende', status: 'draft', startDate: futureDate(5), registrationDeadline: futureDate(5, 21) });
+    assert.equal(noEnd.status, 400);
+    assert.equal((await noEnd.json()).error, 'Der Anmeldeschluss liegt nach dem Ende des Events.');
+});
+
+test('every date of a series keeps the distance between deadline and start', async () => {
+    const admin = await loginAs('admin');
+    const start = futureDate(3, 20);
+    const res = await admin.send('POST', '/api/admin/events', {
+        title: 'Wöchentliche Frist', status: 'draft', startDate: start,
+        registrationDeadline: futureDate(2, 20), unregisterDeadline: '',
+        recurring: true, recurringInterval: 'weekly', recurringUntil: futureDate(17).substring(0, 10)
+    });
+    assert.equal(res.status, 200);
+    const { events } = await res.json();
+    assert.ok(events.length >= 2);
+    for (const instance of events) {
+        assert.equal(new Date(instance.startDate) - new Date(instance.registrationDeadline), 24 * 60 * 60 * 1000, instance.startDate);
+        assert.equal(instance.unregisterDeadline, '');
+    }
+});
+
+test('a new event starts with an announcement that was not refreshed for its deadline', async () => {
+    const admin = await loginAs('admin');
+    const base = { title: 'Frist neu', status: 'draft', startDate: futureDate(5), registrationDeadline: futureDate(4) };
+    const { id } = await (await admin.send('POST', '/api/admin/events', base)).json();
+    assert.equal((await (await admin.request(`/api/events/${id}`)).json()).registrationClosedRefreshed, false);
+});
+
+test('members can neither register after the deadline nor unregister after theirs', async () => {
+    const admin = await loginAs('admin');
+    const passed = new Date(Date.now() - 60 * 1000).toISOString();
+    const closed = await (await admin.send('POST', '/api/admin/events', {
+        title: 'Anmeldung zu', status: 'active', approvalMode: 'instant', startDate: futureDate(5)
+    })).json();
+    // The API refuses a deadline in the past only after the end; set it directly like a deadline that passed
+    await admin.send('PUT', `/api/admin/events/${closed.id}`, {
+        title: 'Anmeldung zu', status: 'active', approvalMode: 'instant', startDate: futureDate(5), registrationDeadline: passed
+    });
+    const member = await loginAs('member');
+    const refused = await member.send('POST', `/api/events/${closed.id}/register`, { formAnswers: {} });
+    assert.equal(refused.status, 400);
+    assert.equal((await refused.json()).error, 'Die Anmeldung für dieses Event ist geschlossen.');
+
+    const fixed = await (await admin.send('POST', '/api/admin/events', {
+        title: 'Abmeldung zu', status: 'active', approvalMode: 'instant', startDate: futureDate(5)
+    })).json();
+    const raider = await loginAs('raider');
+    assert.equal((await raider.send('POST', `/api/events/${fixed.id}/register`, { formAnswers: {} })).status, 200);
+    await admin.send('PUT', `/api/admin/events/${fixed.id}`, {
+        title: 'Abmeldung zu', status: 'active', approvalMode: 'instant', startDate: futureDate(5), unregisterDeadline: passed
+    });
+    const stay = await raider.send('DELETE', `/api/events/${fixed.id}/register`);
+    assert.equal(stay.status, 400);
+    assert.equal((await stay.json()).error, 'Abmelden ist nicht mehr möglich. Wende dich an einen Admin.');
+    assert.equal((await (await raider.request(`/api/events/${fixed.id}/my-registration`)).json()).registered, true);
+});

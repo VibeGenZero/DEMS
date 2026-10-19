@@ -62,6 +62,32 @@ export function eventEnd(event) {
 }
 
 /**
+ * Whether members can no longer register (mirrors isRegistrationClosed in utils/eventListing.js, W-03).
+ *
+ * @param {Object} event -> Event with optional `registrationDeadline`.
+ * @param {Date} [now] -> Reference time.
+ * @returns {boolean} -> True once the event is over or the registration deadline is reached.
+ */
+export function isRegistrationClosed(event, now = new Date()) {
+    const end = eventEnd(event);
+    if (end && end < now) return true;
+    const deadline = parseDate(event.registrationDeadline);
+    return deadline !== null && deadline <= now;
+}
+
+/**
+ * Whether members can no longer unregister themselves (mirrors isUnregisterClosed in utils/eventListing.js, W-03).
+ *
+ * @param {Object} event -> Event with optional `unregisterDeadline`.
+ * @param {Date} [now] -> Reference time.
+ * @returns {boolean} -> True once the unregister deadline is reached.
+ */
+export function isUnregisterClosed(event, now = new Date()) {
+    const deadline = parseDate(event.unregisterDeadline);
+    return deadline !== null && deadline <= now;
+}
+
+/**
  * Whether an event is running at `now`.
  *
  * @param {Object} event -> Event.
@@ -199,6 +225,10 @@ export function renderEventCard(event, now) {
         renderStatusChip(event.myStatus),
         event.accessMode && event.accessMode !== 'open' ? '<span class="chip chip-sm"><i class="bi bi-lock"></i>Rolle nötig</span>' : '',
         event.seriesId ? `<span class="chip chip-sm"><i class="bi bi-arrow-repeat"></i>Serie · ${seriesSize} ${seriesSize === 1 ? 'Termin' : 'Termine'}</span>` : '',
+        // Closed by the deadline while the event still comes (W-03); an ended event is simply over
+        isRegistrationClosed(event, now) && !(eventEnd(event) && eventEnd(event) < now)
+            ? '<span class="chip chip-sm"><i class="bi bi-alarm"></i>Anmeldung geschlossen</span>'
+            : '',
         renderCapacity(event)
     ].join('');
     const id = escapeHtml(String(event.id ?? ''));

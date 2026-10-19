@@ -13,6 +13,7 @@ const draft = (fields = {}) => ({
     title: 'Raidnacht', description: '', bannerUrl: '', startDate: '2026-12-01T18:00:00.000Z', endDate: '2026-12-01T21:00:00.000Z',
     maxParticipants: '0', category: '', accessMode: 'open', approvalMode: 'manual', status: 'active', reminderHours: '24, 1',
     assignRoleId: '', requiredRoles: [], formFields: [], recurring: false, recurringInterval: 'weekly', recurringUntil: '',
+    registrationDeadline: '', unregisterDeadline: '',
     slots: [], ...fields
 });
 
@@ -104,7 +105,32 @@ test('step 5 has nothing to check, and every step names its fields', async () =>
     const { STEP_FIELDS } = await load();
     assert.deepEqual(check(5, { title: '' }), []);
     assert.deepEqual(JSON.parse(JSON.stringify(STEP_FIELDS)), {
-        1: ['title', 'bannerUrl'], 2: ['startDate', 'endDate', 'recurringUntil'],
+        1: ['title', 'bannerUrl'], 2: ['startDate', 'endDate', 'registrationDeadline', 'unregisterDeadline', 'recurringUntil'],
         3: ['maxParticipants', 'reminderHours', 'requiredRoles', 'slots'], 4: ['formFields'], 5: []
     });
+});
+
+test('step 2: both deadlines must lie before the end of the event (W-03)', async () => {
+    const check = await checker();
+    assert.deepEqual(check(2, { registrationDeadline: '2026-11-30T18:00:00.000Z', unregisterDeadline: '2026-12-01T12:00:00.000Z' }), []);
+    assert.deepEqual(check(2, { registrationDeadline: '2026-12-01T22:00:00.000Z' }), [{ field: 'registrationDeadline', message: 'Der Anmeldeschluss liegt nach dem Ende des Events.' }]);
+    assert.deepEqual(check(2, { unregisterDeadline: '2026-12-02T10:00:00.000Z' }), [{ field: 'unregisterDeadline', message: 'Der Abmeldeschluss liegt nach dem Ende des Events.' }]);
+    // Without an end date the event lasts two hours, like on the server
+    assert.deepEqual(check(2, { endDate: '', registrationDeadline: '2026-12-01T19:30:00.000Z' }), []);
+    assert.deepEqual(check(2, { endDate: '', registrationDeadline: '2026-12-01T20:30:00.000Z' }), [{ field: 'registrationDeadline', message: 'Der Anmeldeschluss liegt nach dem Ende des Events.' }]);
+    // Without a start there is no end to compare with
+    assert.deepEqual(check(2, { status: 'draft', startDate: '', endDate: '', registrationDeadline: '2030-01-01T00:00:00.000Z' }), []);
+});
+
+test('step 2 has an input with feedback for each deadline (W-03)', () => {
+    const html = require('fs').readFileSync(path.join(REPO_ROOT, 'public', 'index.html'), 'utf8');
+    const page = html.slice(html.indexOf('id="wizard-page-2"'), html.indexOf('id="wizard-page-3"'));
+    for (const id of ['event-registration-deadline', 'event-unregister-deadline']) {
+        assert.match(page, new RegExp(`<input[^>]*id="${id}"`), id);
+        assert.match(page, new RegExp(`id="${id}-feedback"`), `${id}-feedback`);
+        assert.match(page, new RegExp(`<label[^>]*for="${id}"`), `label of ${id}`);
+    }
+    const marks = require('fs').readFileSync(path.join(REPO_ROOT, 'public', 'js', 'admin', 'wizard-marks.js'), 'utf8');
+    assert.match(marks, /registrationDeadline: 'event-registration-deadline'/);
+    assert.match(marks, /unregisterDeadline: 'event-unregister-deadline'/);
 });

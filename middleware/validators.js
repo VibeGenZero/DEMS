@@ -3,6 +3,8 @@
  * Pure JS validation without external libraries
  */
 
+const { parseDate, eventEndTime } = require('../utils/eventListing');
+
 /**
  * Whether a value is an absolute http(s) URL of at most 2000 characters.
  *
@@ -66,6 +68,17 @@ function validateEvent(req, res, next) {
     }
     if (startDate && endDate && new Date(endDate).getTime() < new Date(startDate).getTime()) {
         errors.push('Das Ende liegt vor dem Start.');
+    }
+
+    // Deadlines are optional, but must lie before the end (end date, else start + 2 h) (W-03)
+    const end = startDate ? eventEndTime({ startDate, endDate }) : null;
+    const deadlines = [['registrationDeadline', 'Der Anmeldeschluss'], ['unregisterDeadline', 'Der Abmeldeschluss']];
+    for (const [field, name] of deadlines) {
+        const value = req.body[field];
+        if (!value) continue;
+        const deadline = parseDate(value);
+        if (!deadline) errors.push(`${name} ist kein gültiges Datum.`);
+        else if (end && deadline > end) errors.push(`${name} liegt nach dem Ende des Events.`);
     }
 
     // Description length check

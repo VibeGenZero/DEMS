@@ -1,6 +1,6 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { eventEndTime, isEventOver, myRegistrationStatus, pickSeriesRepresentative } = require('../utils/eventListing');
+const { eventEndTime, isEventOver, isRegistrationClosed, isUnregisterClosed, keepDeadlineRefreshFlag, myRegistrationStatus, pickSeriesRepresentative } = require('../utils/eventListing');
 
 const HOUR = 60 * 60 * 1000;
 const NOW = new Date('2026-10-10T15:00:00.000Z');
@@ -71,4 +71,21 @@ test('an end before the start counts as missing', () => {
     assert.equal(eventEndTime({ startDate: '2026-10-10T18:00:00.000Z', endDate: '2026-10-09T23:00:00.000Z' }).toISOString(), '2026-10-10T20:00:00.000Z');
     // A future event with an old end date is not over before it starts
     assert.equal(isEventOver({ startDate: '2026-10-20T18:00:00.000Z', endDate: '2026-10-01T18:00:00.000Z' }, new Date('2026-10-15T12:00:00.000Z')), false);
+});
+
+test('registration and unregistering close at their deadlines (W-03)', () => {
+    const { NOW: AT, DEADLINE_CASES } = require('./fixtures/deadlineCases');
+    for (const [name, event, registrationClosed, unregisterClosed] of DEADLINE_CASES) {
+        assert.equal(isRegistrationClosed(event, AT), registrationClosed, `registration: ${name}`);
+        assert.equal(isUnregisterClosed(event, AT), unregisterClosed, `unregister: ${name}`);
+    }
+});
+
+test('the deadline refresh flag survives an edit only while the deadline stays (W-03)', () => {
+    const old = { registrationDeadline: '2026-10-11T18:00:00.000Z', registrationClosedRefreshed: true };
+    assert.equal(keepDeadlineRefreshFlag(old, '2026-10-11T18:00:00.000Z'), true, 'same deadline');
+    assert.equal(keepDeadlineRefreshFlag(old, '2026-10-12T18:00:00.000Z'), false, 'moved');
+    assert.equal(keepDeadlineRefreshFlag(old, ''), false, 'cleared');
+    assert.equal(keepDeadlineRefreshFlag({ registrationDeadline: '2026-10-11T18:00:00.000Z' }, '2026-10-11T18:00:00.000Z'), false, 'never refreshed');
+    assert.equal(keepDeadlineRefreshFlag({}, ''), false, 'old event');
 });

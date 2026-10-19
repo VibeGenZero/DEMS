@@ -11,6 +11,7 @@ const { validateEvent, validateRegStatus, validateBotMessages } = require('../mi
 const { sendDM, assignRole, parseTemplate, getGuildRoles, sendChannelMessage, buildEventEmbed, buildEventComponents, getGuildScheduledEvents, createEventChannels, deleteEventChannels, createScheduledEvent, getBotStatus, getBotSettings, saveBotSettings, getRunningEvents, getGuildChannels, buildPollEmbed, buildPollComponents } = require('../bot');
 const { promoteFromWaitlist, addAuditLog, loadEventRoster, loadEventRegistrations, saveEventWithSlots } = require('../utils/eventUtils');
 const { mergeReminderHours } = require('../utils/reminders');
+const { keepDeadlineRefreshFlag } = require('../utils/eventListing');
 const { describePlaces, formatPlaces, formatWaitlist } = require('../utils/capacity');
 const { getSlots, findSlot, formatSlotLabel, normalizeSlots, sumCapacity, resolveAcceptanceSlot, buildRoster } = require('../utils/slotService');
 const { buildPreviewEvent } = require('../utils/eventPreview');
@@ -158,7 +159,7 @@ router.post('/events', validateEvent, async (req, res) => {
             startDate, endDate, bannerUrl, category, status, reminderHours,
             recurring, recurringInterval, recurringUntil, checkinMessage,
             customBotMessages, autoCreateChannels, channelConfig, allowGuests,
-            accentColor, location
+            accentColor, location, registrationDeadline, unregisterDeadline
         } = req.body;
 
         const slotResult = normalizeSlots(req.body.slots);
@@ -185,6 +186,10 @@ router.post('/events', validateEvent, async (req, res) => {
             formFields: formFields || [],
             startDate: startDate || '',
             endDate: endDate || '',
+            registrationDeadline: registrationDeadline || '',
+            unregisterDeadline: unregisterDeadline || '',
+            // Set by the scheduler once the announcement lost its buttons at the deadline (W-03)
+            registrationClosedRefreshed: false,
             bannerUrl: bannerUrl || '',
             category: category || '',
             status: status || 'active',
@@ -219,6 +224,11 @@ router.post('/events', validateEvent, async (req, res) => {
                 // Compare only the date portion (YYYY-MM-DD) so the full last day is included
                 // regardless of the event's time-of-day
                 const duration = endDate ? (new Date(endDate) - new Date(startDate)) : 0;
+                // Deadlines keep their distance to the start on every date (W-03)
+                const offsetOf = (deadline) => (deadline ? new Date(startDate) - new Date(deadline) : null);
+                const registrationOffset = offsetOf(registrationDeadline);
+                const unregisterOffset = offsetOf(unregisterDeadline);
+                const shift = (offset) => (offset === null ? '' : new Date(currentStart.getTime() - offset).toISOString());
 
                 while (currentStart.toISOString().substring(0, 10) <= recurringUntil) {
                     const instance = {
@@ -226,6 +236,8 @@ router.post('/events', validateEvent, async (req, res) => {
                         seriesId,
                         startDate: currentStart.toISOString(),
                         endDate: duration ? new Date(currentStart.getTime() + duration).toISOString() : '',
+                        registrationDeadline: shift(registrationOffset),
+                        unregisterDeadline: shift(unregisterOffset),
                     };
                     const ref = await addDoc(collection(db, 'events'), instance);
                     createdEvents.push({ id: ref.id, ...instance });
@@ -310,7 +322,7 @@ router.put('/events/:id', validateEvent, async (req, res) => {
             approvalMode, assignRoleId, formFields,
             startDate, endDate, bannerUrl, category, status, reminderHours, checkinMessage,
             customBotMessages, autoCreateChannels, channelConfig, allowGuests,
-            accentColor, location
+            accentColor, location, registrationDeadline, unregisterDeadline
         } = req.body;
 
         // Slots are validated and written under the event lock -> a parallel
@@ -326,6 +338,10 @@ router.put('/events/:id', validateEvent, async (req, res) => {
             formFields: formFields || [],
             startDate: startDate || '',
             endDate: endDate || '',
+            registrationDeadline: registrationDeadline || '',
+            unregisterDeadline: unregisterDeadline || '',
+            // A moved deadline lets the scheduler refresh the announcement again (W-03)
+            registrationClosedRefreshed: keepDeadlineRefreshFlag(oldEvent, registrationDeadline || ''),
             bannerUrl: bannerUrl || '',
             category: category || '',
             status: status || 'active',

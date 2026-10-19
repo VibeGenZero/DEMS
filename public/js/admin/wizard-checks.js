@@ -12,7 +12,7 @@ export const SLOT_CAPACITY_MAX = 100;
 // Field keys per step; "slots" and "formFields" stand for all rows of their builder
 export const STEP_FIELDS = {
     1: ['title', 'bannerUrl'],
-    2: ['startDate', 'endDate', 'recurringUntil'],
+    2: ['startDate', 'endDate', 'registrationDeadline', 'unregisterDeadline', 'recurringUntil'],
     3: ['maxParticipants', 'reminderHours', 'requiredRoles', 'slots'],
     4: ['formFields'],
     5: []
@@ -23,6 +23,8 @@ export const WIZARD_MESSAGES = {
     bannerUrl: 'Die Banner-URL muss mit http:// oder https:// beginnen.',
     startRequired: 'Aktive Events brauchen ein Startdatum.',
     endBeforeStart: 'Das Ende liegt vor dem Start.',
+    registrationDeadlineAfterEnd: 'Der Anmeldeschluss liegt nach dem Ende des Events.',
+    unregisterDeadlineAfterEnd: 'Der Abmeldeschluss liegt nach dem Ende des Events.',
     recurringUntil: 'Bis wann soll sich das Event wiederholen?',
     recurringStart: 'Eine Serie braucht ein Startdatum.',
     recurringUntilBeforeStart: '„Wiederholen bis“ liegt vor dem Start.',
@@ -37,6 +39,8 @@ export const WIZARD_MESSAGES = {
     fieldOptions: 'Ein Auswahlfeld braucht mindestens eine Option.'
 };
 
+// Without an end date an event lasts two hours (eventEndTime in utils/eventListing.js)
+const DEFAULT_DURATION_MS = 2 * 60 * 60 * 1000;
 const HTTP_URL = /^https?:\/\//i;
 const WHOLE_NUMBER = /^\d+$/;
 
@@ -63,6 +67,14 @@ function checkDates(draft, add) {
     const end = dateOf(draft.endDate);
     if (draft.status === 'active' && !start) add('startDate', WIZARD_MESSAGES.startRequired);
     if (start && end && end < start) add('endDate', WIZARD_MESSAGES.endBeforeStart);
+    // Deadlines must lie before the end, like validateEvent on the server (W-03)
+    if (start) {
+        const eventEnd = end && end >= start ? end : new Date(start.getTime() + DEFAULT_DURATION_MS);
+        const registrationDeadline = dateOf(draft.registrationDeadline);
+        const unregisterDeadline = dateOf(draft.unregisterDeadline);
+        if (registrationDeadline && registrationDeadline > eventEnd) add('registrationDeadline', WIZARD_MESSAGES.registrationDeadlineAfterEnd);
+        if (unregisterDeadline && unregisterDeadline > eventEnd) add('unregisterDeadline', WIZARD_MESSAGES.unregisterDeadlineAfterEnd);
+    }
     if (!draft.recurring) return;
     if (!start && draft.status !== 'active') add('startDate', WIZARD_MESSAGES.recurringStart);
     const until = String(draft.recurringUntil ?? '');

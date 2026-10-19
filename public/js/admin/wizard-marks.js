@@ -11,6 +11,8 @@ const FIELD_INPUTS = {
     bannerUrl: 'event-banner-url',
     startDate: 'event-start-date',
     endDate: 'event-end-date',
+    registrationDeadline: 'event-registration-deadline',
+    unregisterDeadline: 'event-unregister-deadline',
     recurringUntil: 'event-recurring-until',
     maxParticipants: 'event-max',
     reminderHours: 'event-reminder',

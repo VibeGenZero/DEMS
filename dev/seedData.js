@@ -125,6 +125,9 @@ function buildEvent(clock, fields) {
         formFields: [],
         startDate: '',
         endDate: '',
+        registrationDeadline: '',
+        unregisterDeadline: '',
+        registrationClosedRefreshed: false,
         bannerUrl: '',
         category: '',
         status: 'active',
@@ -177,6 +180,8 @@ function buildEvents(clock) {
             description: 'Kleine Runde mit nur fünf Plätzen — wer zu spät kommt, landet auf der Warteliste.',
             maxParticipants: 5,
             startDate: clock.slot(2, 20),
+            // Registration closed two hours ago: the closed state in mock mode (W-03)
+            registrationDeadline: clock.offset(-2 * HOUR),
             endDate: clock.slot(2, 23),
             category: 'Gaming'
         }),
@@ -193,6 +198,8 @@ function buildEvents(clock) {
             accessMode: 'role-required',
             requiredRoles: [ROLE_ID.RAID_TEAM],
             startDate: clock.slot(5, 20),
+            // Members can drop out until the evening before (W-03)
+            unregisterDeadline: clock.slot(4, 20),
             endDate: clock.slot(5, 23),
             category: 'Raid',
             accentColor: '#22c55e',

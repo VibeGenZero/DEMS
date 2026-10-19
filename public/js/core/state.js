@@ -10,6 +10,8 @@ export const state = {
     descriptionEditor: null,
     startDatePicker: null,
     endDatePicker: null,
+    registrationDeadlinePicker: null,
+    unregisterDeadlinePicker: null,
     serverName: 'DEMS', // Default, will be loaded from API
     serverIconUrl: null, // Icon of the Discord server for the login card
     selectedSlotId: null,

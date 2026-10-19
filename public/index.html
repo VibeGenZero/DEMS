@@ -280,6 +280,8 @@
                   <div id="sidebar-date-row" class="sidebar-detail-row is-hidden"></div>
                   <div id="sidebar-time-row" class="sidebar-detail-row is-hidden"></div>
                   <div id="sidebar-duration-row" class="sidebar-detail-row is-hidden"></div>
+                  <div id="sidebar-registration-deadline-row" class="sidebar-detail-row is-hidden"></div>
+                  <div id="sidebar-unregister-deadline-row" class="sidebar-detail-row is-hidden"></div>
                   <div id="sidebar-location-row" class="sidebar-detail-row is-hidden"></div>
                   <div id="sidebar-creator-row" class="sidebar-detail-row is-hidden"></div>
                 </div>
@@ -315,6 +317,7 @@
                     <h5 class="mb-1">Bereits registriert</h5>
                     <p class="text-secondary mb-0">Status: <span id="detail-reg-status" class="fw-bold"></span></p>
                     <div id="detail-reg-slot" class="mt-2"></div>
+                    <p class="text-secondary small mb-0 mt-2 is-hidden" id="detail-unregister-closed"><i class="bi bi-door-closed me-1"></i>Abmelden ist nicht mehr möglich. Wende dich an einen Admin.</p>
                   </div>
                   <button class="btn btn-outline-danger" data-click="unregisterFromEvent" id="unregister-btn">
                     <i class="bi bi-x-circle me-1"></i>Abmelden
@@ -340,6 +343,12 @@
             <div class="is-hidden" id="detail-ended">
               <div class="glass-card p-4 mb-4">
                 <p class="text-secondary mb-0"><i class="bi bi-flag me-2"></i>Dieses Event ist vorbei.</p>
+              </div>
+            </div>
+            <!-- Registration deadline passed (W-03) -->
+            <div class="is-hidden" id="detail-registration-closed">
+              <div class="glass-card p-4 mb-4">
+                <p class="text-secondary mb-0"><i class="bi bi-alarm me-2"></i>Die Anmeldung für dieses Event ist geschlossen.</p>
               </div>
             </div>
           </div>
@@ -1062,6 +1071,22 @@
                   <input type="text" class="form-control" id="event-end-date" placeholder="Datum & Uhrzeit wählen"
                     readonly>
                   <div class="invalid-feedback" id="event-end-date-feedback"></div>
+                </div>
+              </div>
+              <div class="row g-3 mb-3">
+                <div class="col-md-6">
+                  <label class="form-label" for="event-registration-deadline"><i class="bi bi-alarm me-1"></i>Anmeldeschluss</label>
+                  <input type="text" class="form-control" id="event-registration-deadline" placeholder="Optional: Datum & Uhrzeit"
+                    readonly aria-describedby="event-registration-deadline-hint">
+                  <div class="form-text" id="event-registration-deadline-hint">Leer = Anmeldung bis zum Ende des Events.</div>
+                  <div class="invalid-feedback" id="event-registration-deadline-feedback"></div>
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label" for="event-unregister-deadline"><i class="bi bi-door-closed me-1"></i>Abmeldeschluss</label>
+                  <input type="text" class="form-control" id="event-unregister-deadline" placeholder="Optional: Datum & Uhrzeit"
+                    readonly aria-describedby="event-unregister-deadline-hint">
+                  <div class="form-text" id="event-unregister-deadline-hint">Leer = Abmelden jederzeit möglich. Danach hilft nur ein Admin.</div>
+                  <div class="invalid-feedback" id="event-unregister-deadline-feedback"></div>
                 </div>
               </div>
               <div class="row g-3 mb-3">

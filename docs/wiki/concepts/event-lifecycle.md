@@ -9,7 +9,7 @@ see_also: [routes-admin, reminders-presence, registration-flow]
 ---
 # Event lifecycle — status, series, check-in
 
-> TL;DR: Events have four statuses: `draft` → `active` → `archived`, plus `cancelled`. Only `active` events are listed publicly and accept registrations, and only until their end; the server archives an active event 24 hours after its end. Admins create/edit through a 5-step wizard; recurring events are stored as independent instances sharing a `seriesId`. Check-in uses a 6-digit code the admin generates and members type in on the event page.
+> TL;DR: Events have four statuses: `draft` → `active` → `archived`, plus `cancelled`. Only `active` events are listed publicly and accept registrations, and only until their end or an optional registration deadline; the server archives an active event 24 hours after its end. Admins create/edit through a 5-step wizard; recurring events are stored as independent instances sharing a `seriesId`. Check-in uses a 6-digit code the admin generates and members type in on the event page.
 
 ## Statuses and transitions
 
@@ -37,6 +37,11 @@ Visibility: `GET /api/events` returns only `active` (admins may pass `?status=`)
 - From the end on, an event takes no registration and no slot change: web and Discord answer "Das Event ist schon vorbei." (`event_ended`, see [registration-flow](registration-flow.md)), the Discord announcement keeps only "Zum Event", the event page shows "Dieses Event ist vorbei." instead of the form and the countdown. Registered members still see their own status. Unregistering stays possible, but nobody moves up from the waitlist any more (no promotion after the end).
 - 24 h after the end the archive scheduler sets `archived` (table row above). It runs once at server start, so events that ended while the server was down are caught up, then every 5 minutes — see [reminders-presence](reminders-presence.md). Until then the admin table shows the event as "Vorbei" with the main action "Archivieren".
 - Events that never become `active` (drafts, cancelled) are not touched; an event that is already archived stays archived.
+
+## Deadlines (W-03)
+
+- Optional `registrationDeadline` (Anmeldeschluss) and `unregisterDeadline` (Abmeldeschluss), set in wizard step "Datum & Zeit"; both must lie before the end (`validateEvent` and `admin/wizard-checks.js`). A recurring event gives every date the same distance between deadline and start.
+- After the registration deadline the event behaves like an ended one for new registrations and own slot switches (`registration_closed`, "Die Anmeldung für dieses Event ist geschlossen."); the waitlist, guest answers and admin changes go on until the end. After the unregister deadline members cannot unregister themselves — see [registration-flow](registration-flow.md).
 
 ## Series (recurring events)
 
