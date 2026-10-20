@@ -66,7 +66,7 @@ export async function showRegistrations(eventId, eventTitle) {
         </td>
         <td>
           <span class="badge-pill status-${reg.status}">
-            ${statusTexts[reg.status] || reg.status}
+            ${statusTexts[reg.status] || reg.status}${reg.status === 'waitlisted' && reg.waitlistPosition ? ` · Platz ${escapeHtml(String(reg.waitlistPosition.position))}` : ''}
           </span>
         </td>
         <td>

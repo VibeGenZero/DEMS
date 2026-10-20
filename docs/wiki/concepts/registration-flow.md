@@ -28,6 +28,10 @@ Steps 1–10 up to the write run under `withEventLock(eventId)` (one registratio
 
 Maintenance: `registrationDisabled`/`panicMode` block registrations before step 1 (web: `checkRegistrationAllowed` → 503; Discord: `checkRegistrationConditions`).
 
+## Waitlist position (W-05)
+
+A waitlisted registration's place is its rank among the event's waitlisted registrations by `createdAt`, oldest first (ties by id) — `waitlistPositions` in `utils/capacity.js`, the same order the promotion walks. Slot events use the same single list, although a later registration whose wanted role frees up can move up first; the event page says so. Members see only their own place: "Platz 2 von 3 auf der Warteliste" on the event page, "Warteliste · Platz 2 von 3" in the profile's upcoming list; admins see "Warteliste · Platz 2" in the registrations dialog. Discord texts carry no place.
+
 ## Status transitions
 
 ```mermaid

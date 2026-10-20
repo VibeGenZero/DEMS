@@ -32,7 +32,7 @@ see_also: [api-index, data-model]
 | `history` | event deleted, `cancelled`, `archived` or over (`isEventOver`) | latest event start first; without an event or a start the registration's `createdAt` |
 | `upcoming` | everything else: running events, events without a date, drafts | next start first; without a start last; equal starts by `createdAt` |
 
-An entry is `{ id, status, checkedIn, createdAt, slot, event }`. `event` is `{ id, title, startDate, endDate, status, category, location, checkinEnabled }` or `null` for a deleted event: `location` is the text only, `checkinEnabled` is true when the switch is on and a code exists. `slot` is `{ name, emoji, wish }`: the slot taken (`wish: false`), for a pending or waitlisted registration without a slot its main role (`wish: true`), else `null`.
+An entry is `{ id, status, checkedIn, createdAt, slot, waitlistPosition, event }`; `waitlistPosition` is `{ position, total }` for an upcoming waitlisted registration of an active event (one `loadEventRegistrations` per such event, W-05), else `null`. `event` is `{ id, title, startDate, endDate, status, category, location, checkinEnabled }` or `null` for a deleted event: `location` is the text only, `checkinEnabled` is true when the switch is on and a code exists. `slot` is `{ name, emoji, wish }`: the slot taken (`wish: false`), for a pending or waitlisted registration without a slot its main role (`wish: true`), else `null`.
 
 ## Badges (computed on every `/profile` call, never stored)
 

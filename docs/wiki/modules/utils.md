@@ -66,12 +66,12 @@ Exports `FORM_FIELD_TYPE` (`text, textarea, dropdown, checkbox, user, role, chan
 
 | Export | Behaviour |
 |---|---|
-| `buildProfileEvents(registrations, eventsById, now)` | `{ upcoming, history }` for `GET /api/user/profile`; rules in [routes-user](routes-user.md) |
-| `toProfileEntry(registration, event)` | one entry: registration status, check-in, slot (`getSlots`/`findSlot`) and eight event fields; never the check-in code |
+| `buildProfileEvents(registrations, eventsById, now, waitlistPositionsById)` | `{ upcoming, history }` for `GET /api/user/profile`; rules in [routes-user](routes-user.md) |
+| `toProfileEntry(registration, event, waitlistPosition)` | one entry: registration status, check-in, slot (`getSlots`/`findSlot`), waitlist place (or `null`) and eight event fields; never the check-in code |
 
 ## utils/capacity.js, utils/slotService.js (pure)
 
-`capacity.js`: `OCCUPYING_STATUSES`, `placesOf`, `countOccupiedPlaces`, `byCreatedAt`, `pickCapacityPromotions`; for the display `summarizePlaces(registrations, maxParticipants)` → `{ taken, capacity, guests, pending, waitlist }` (guests include open invitations), `formatPlaces(places)` → the one places sentence for website and Discord ("5 von 20 Plätzen belegt (inkl. 1 Gast, 1 Anfrage offen)", without a limit "5 Plätze belegt") and `formatWaitlist(n)` ("3 auf der Warteliste"). `describePlaces(registrations, maxParticipants)` returns the numbers together with `text` and `waitlistText`; `GET /api/events` and `GET /api/admin/all-events` put exactly this object into `places`. `slotService.js`: `getSlots`, `hasSlots`, `findSlot`, `formatSlotLabel`, `normalizeSlots`, `countSlotOccupancy`, `hasFreePlace`, `sanitizeAltSlotIds`, `pickSlot`, `pickWaitlistPromotions`, `resolveAcceptanceSlot`, `buildSlotSummary`, `withSlotSummary`, `buildRoster`, `validateSlotChange`. Rules: [role-slots](../concepts/role-slots.md).
+`capacity.js`: `OCCUPYING_STATUSES`, `placesOf`, `countOccupiedPlaces`, `byCreatedAt`, `waitlistPositions(registrations)` (W-05: `Map` id → `{ position, total }` over the waitlisted registrations, oldest first, ties by id; slot events use the same single list), `pickCapacityPromotions`; for the display `summarizePlaces(registrations, maxParticipants)` → `{ taken, capacity, guests, pending, waitlist }` (guests include open invitations), `formatPlaces(places)` → the one places sentence for website and Discord ("5 von 20 Plätzen belegt (inkl. 1 Gast, 1 Anfrage offen)", without a limit "5 Plätze belegt") and `formatWaitlist(n)` ("3 auf der Warteliste"). `describePlaces(registrations, maxParticipants)` returns the numbers together with `text` and `waitlistText`; `GET /api/events` and `GET /api/admin/all-events` put exactly this object into `places`. `slotService.js`: `getSlots`, `hasSlots`, `findSlot`, `formatSlotLabel`, `normalizeSlots`, `countSlotOccupancy`, `hasFreePlace`, `sanitizeAltSlotIds`, `pickSlot`, `pickWaitlistPromotions`, `resolveAcceptanceSlot`, `buildSlotSummary`, `withSlotSummary`, `buildRoster`, `validateSlotChange`. Rules: [role-slots](../concepts/role-slots.md).
 
 ## utils/eventLock.js
 

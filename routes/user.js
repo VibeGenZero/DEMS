@@ -4,9 +4,9 @@ const { db, collection, doc, getDoc, getDocs, setDoc, deleteDoc, query, where, o
 const { requireAuth } = require('../middleware/auth');
 const { debugLog } = require('../utils/debugLog');
 const { deleteUserPollVotes } = require('../utils/pollStore');
-const { promoteFromWaitlist, toPublicEvent } = require('../utils/eventUtils');
+const { promoteFromWaitlist, toPublicEvent, loadEventRegistrations } = require('../utils/eventUtils');
 const { notifyRegistrationsChanged } = require('../utils/announcementRefresh');
-const { OCCUPYING_STATUSES } = require('../utils/capacity');
+const { OCCUPYING_STATUSES, waitlistPositions } = require('../utils/capacity');
 const { buildProfileEvents } = require('../utils/profileEvents');
 
 /**
@@ -269,10 +269,15 @@ router.get('/profile', requireAuth, async (req, res) => {
         });
 
         // ── Lists of the profile page ────────────────────────────
-        const { upcoming, history } = buildProfileEvents(
-            regSnap.docs.map(regDoc => ({ id: regDoc.id, ...regDoc.data() })),
-            eventsById
-        );
+        const ownRegistrations = regSnap.docs.map(regDoc => ({ id: regDoc.id, ...regDoc.data() }));
+        // Place on the waitlist (W-05): one read per active event the member waits for
+        const waitlistPositionsById = new Map();
+        for (const registration of ownRegistrations) {
+            if (registration.status !== 'waitlisted' || eventsById.get(registration.eventId)?.status !== 'active') continue;
+            const position = waitlistPositions(await loadEventRegistrations(registration.eventId)).get(registration.id);
+            if (position) waitlistPositionsById.set(registration.id, position);
+        }
+        const { upcoming, history } = buildProfileEvents(ownRegistrations, eventsById, new Date(), waitlistPositionsById);
 
         res.json({
             user: {

@@ -9,7 +9,7 @@ const { loadEventRoster, loadEventRegistrations, toPublicEvent, isEventVisibleTo
 const { isEventOver, pickSeriesRepresentative, myRegistrationStatus } = require('../utils/eventListing');
 const { registerUserForEvent, switchOwnSlot, unregisterUserFromEvent, REGISTRATION_SOURCE } = require('../utils/registrationService');
 const { hasSlots, withSlotSummary } = require('../utils/slotService');
-const { describePlaces } = require('../utils/capacity');
+const { describePlaces, waitlistPositions } = require('../utils/capacity');
 const { debugLog } = require('../utils/debugLog');
 const { avatarUrlOf, repairAvatarUrl } = require('../utils/avatar');
 
@@ -385,7 +385,17 @@ router.get('/:id/my-registration', requireAuth, async (req, res) => {
 
         if (!regSnap.empty) {
             const regDoc = regSnap.docs[0];
-            return res.json({ registered: true, id: regDoc.id, ...regDoc.data() });
+            const registration = regDoc.data();
+            // Only the own place on the waitlist leaves the server, never the others' times (W-05)
+            const waitlistPosition = registration.status === 'waitlisted'
+                ? waitlistPositions(await loadEventRegistrations(req.params.id)).get(regDoc.id) || null
+                : undefined;
+            return res.json({
+                registered: true,
+                id: regDoc.id,
+                ...registration,
+                ...(waitlistPosition !== undefined ? { waitlistPosition } : {})
+            });
         }
 
         // Check if user is an accepted guest in someone else's registration

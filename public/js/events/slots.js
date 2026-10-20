@@ -133,6 +133,18 @@ export function renderRoster(data) {
     return `<div class="roster-grid">${slotsHtml}</div>${waitlist}`;
 }
 
+/**
+ * Waitlist line of the slot area: the own place (W-05) and that a free wanted role can move others up earlier.
+ * @param {Object} registration -> Own registration, optionally with `waitlistPosition: { position, total }`.
+ * @returns {string} -> HTML of the line.
+ */
+function waitlistPlacement(registration) {
+    const place = registration.waitlistPosition;
+    if (!place) return 'Du stehst auf der Warteliste.';
+    return `Du stehst auf Platz ${escapeHtml(String(place.position))} von ${escapeHtml(String(place.total))} der Warteliste.`
+        + '<div class="text-muted">Wer eine freie Wunschrolle hat, kann früher nachrücken.</div>';
+}
+
 export function renderOwnSlot(event, registration) {
     const area = document.getElementById('detail-reg-slot');
     if (!area) return;
@@ -146,7 +158,7 @@ export function renderOwnSlot(event, registration) {
     const freeSlots = summary.filter(slot => slot.id !== registration.slotId && slot.taken < slot.capacity);
     const placement = current
         ? `Du bist als <strong>${escapeHtml(formatSlotLabel(current))}</strong> eingeplant${isAlt ? ' <span class="roster-tag roster-tag-alt">Ausweich</span>' : ''}.`
-        : 'Du stehst auf der Warteliste.';
+        : waitlistPlacement(registration);
     const switcher = freeSlots.length === 0 ? '' : `
         <div class="input-group input-group-sm mt-2">
             <select class="form-select" id="own-slot-select" aria-label="Neuer Slot">

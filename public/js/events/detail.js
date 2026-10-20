@@ -370,9 +370,13 @@ export async function showEventDetail(eventId, { celebrate, fromTaken } = {}) {
             const statusEl = document.getElementById('detail-reg-status');
             const statusTexts = { pending: 'Ausstehend', accepted: 'Angenommen', rejected: 'Abgelehnt', waitlisted: 'Warteliste' };
             const statusColors = { pending: 'warning', accepted: 'success', rejected: 'danger', waitlisted: 'info' };
+            const place = regData.status === 'waitlisted' && regData.waitlistPosition;
             statusEl.textContent = regData.asGuest
                 ? 'Angenommen (Gast)'
-                : (statusTexts[regData.status] || regData.status);
+                : place
+                    // Own place on the waitlist (W-05)
+                    ? `Platz ${place.position} von ${place.total} auf der Warteliste`
+                    : (statusTexts[regData.status] || regData.status);
             statusEl.className = 'fw-bold text-' + (statusColors[regData.status] || 'secondary');
             renderOwnSlot(event, regData);
             // After the unregister deadline only an admin takes the registration back (W-03)

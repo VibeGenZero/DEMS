@@ -53,7 +53,8 @@ test('the member sees every status by start, the history below and can go to the
     await expect(upcoming(page).filter({ hasNotText: /E2E / })).toHaveCount(4);
     await expect(upcoming(page).nth(0)).toContainText('Live: Speedrun-Marathon');
     await expect(upcoming(page).nth(0)).toContainText('Läuft gerade');
-    await expect(row(page, 'Koop-Abend (5 Plätze)')).toContainText('Warteliste');
+    // Elif, Greta and Tom wait for the full event; Tom registered last (W-05)
+    await expect(row(page, 'Koop-Abend (5 Plätze)')).toContainText('Warteliste · Platz 3 von 3');
     await expect(row(page, 'Turnier: Arena-Cup')).toContainText('Ausstehend');
     await expect(row(page, 'Workshop: Streaming-Setup')).toContainText('Abgelehnt');
     await expect(row(page, 'Workshop: Streaming-Setup')).toHaveClass(/is-muted/);
@@ -107,5 +108,13 @@ test('the admin sees the slot, a new member an invitation to the overview', asyn
     await expect(page.locator('#profile-history-block')).toBeHidden();
     await page.locator('#profile-upcoming a.btn', { hasText: 'Events ansehen' }).click();
     await expect(page.locator('#events-section')).toBeVisible();
+    expect(errors).toEqual([]);
+});
+
+test('the member reads the own place on the waitlist on the event page (W-05)', async ({ page }) => {
+    const errors = watchErrors(page);
+    await loginAs(page, 'member');
+    await page.evaluate(() => { window.location.hash = '#event/dev-event-full'; });
+    await expect(page.locator('#detail-reg-status')).toHaveText('Platz 3 von 3 auf der Warteliste');
     expect(errors).toEqual([]);
 });
