@@ -9,7 +9,7 @@ see_also: [discord-integration, routes-events, event-lifecycle, role-slots]
 ---
 # Registration flow — rules, statuses, waitlist, guests
 
-> TL;DR: Every registration (web or Discord) goes through `registerUserForEvent()` in `utils/registrationService.js`. It checks event status, duplicates, role requirement, guest permission and required form fields, then decides the status (slot events: main role, else first free fallback role, else waitlist): `waitlisted` when capacity (incl. guests) is exceeded, otherwise `accepted` (instant approval) or `pending` (manual). Admins move registrations between statuses; freed places promote the oldest waitlisted registration that fits.
+> TL;DR: Every registration by a member (web or Discord) goes through `registerUserForEvent()` in `utils/registrationService.js`; admins add members with `addRegistrationByAdmin()` (accepted at once, member rules skipped, W-06). It checks event status, duplicates, role requirement, guest permission and required form fields, then decides the status (slot events: main role, else first free fallback role, else waitlist): `waitlisted` when capacity (incl. guests) is exceeded, otherwise `accepted` (instant approval) or `pending` (manual). Admins move registrations between statuses; freed places promote the oldest waitlisted registration that fits.
 
 ## Checks in order (`registerUserForEvent`)
 
@@ -22,7 +22,7 @@ see_also: [discord-integration, routes-events, event-lifecycle, role-slots]
 7. Slot events: `slotId` must be a slot of the event (`invalid_slot`, 400) and guests are refused (`guests_not_allowed`); `pickSlot` gives the main role, else the first free fallback (`altSlotIds`, slot order), else `waitlisted` — see [role-slots](role-slots.md).
 8. Events without slots, capacity (only if `maxParticipants > 0`): occupied = `countOccupiedPlaces` (`utils/capacity.js`: 1 + guests + open guest invitations per pending/accepted registration); if `occupied + 1 + newGuests > max` → `waitlisted`. The same count is what members see: `summarizePlaces`/`formatPlaces` build the sentence "5 von 20 Plätzen belegt (inkl. 1 Gast, 1 Anfrage offen)" for the event page, the overview cards and Discord.
 9. Otherwise `approvalMode === 'instant'` → `accepted`, else `pending`.
-10. Write the registration (`source: web|discord`), send guest invitation DMs, then `notifyRegistration` (DM by status; accepted → `assignRole` + event channel access) and `notifyRegistrationsChanged` (live announcement).
+10. Write the registration (`source: web|discord`; admin entries use `admin`, see below), send guest invitation DMs, then `notifyRegistration` (DM by status; accepted → `assignRole` + event channel access) and `notifyRegistrationsChanged` (live announcement).
 
 Steps 1–10 up to the write run under `withEventLock(eventId)` (one registration per event at a time); DMs and the announcement refresh run after the lock is released.
 
@@ -55,7 +55,12 @@ Discord after the end: `canRegisterViaDiscord` is false, so a refreshed announce
 | Web | `POST /api/events/:id/register` → `submitRegistration()` in `public/js/events/registration-form.js` |
 | Discord button | `event_register:<eventId>` → `handleEventRegisterButton` → pre-checks → modal if the event has form fields that fit (≤5) → `handleEventRegisterModal` → `completeDiscordRegistration` → `registerUserForEvent({ source: 'discord' })` → `ensureUserProfile` |
 | Discord slot button | `event_slot:<eventId>:<slotId>` → `handleEventSlotButton` → slot modal (`alt_slots` select + form) → `handleEventSlotModal` → `completeDiscordRegistration({ slotId, altSlotIds })` |
+| Admin entry (W-06) | registrations dialog → `GET /api/admin/events/:id/member-search?q=` (Discord member search, hits marked `alreadyRegistered`) → `POST /api/admin/events/:id/registrations { userId, slotId? }` → `fetchGuildMember` (404 no member, 503 Discord unreachable) → `addRegistrationByAdmin` (see below) |
 | Unregister | `unregisterUserFromEvent`: web `DELETE /api/events/:id/register`, Discord `/unregister` and the "Abmelden" button; refused with `unregister_closed` (400, "Abmelden ist nicht mehr möglich. Wende dich an einen Admin.") once the optional `unregisterDeadline` is reached (`isUnregisterClosed`). Without that deadline members can unregister any time, even after the end. |
+
+## Admin entry (W-06)
+
+`addRegistrationByAdmin({ eventId, member, slotId })` in `utils/registrationService.js` is the second writer next to `registerUserForEvent`, also under `withEventLock`. It skips the member rules on purpose: no role, required-field, deadline, end or archive check. Only `draft` and `cancelled` refuse it (`admin_add_not_allowed`, 400). A member who already has a registration or is a guest (accepted or invited) of one is refused with `already_registered` ("Dieses Mitglied ist schon angemeldet."; shared check `isOnRegistrationList`). The registration is written as `status: accepted`, `source: admin`, empty `formAnswers`, no guests; slot events need an existing `slotId` (else `invalid_slot`) and keep it even when full. A full event or slot is overbooked and the answer carries `warning` ("Das Event ist jetzt überbucht (2 von 1 Plätzen)." / "Slot „Tank“ ist jetzt überbucht."). Before the end `notifyRegistration` sends the accepted message and grants role and channels; after the end nothing is sent. Always `notifyRegistrationsChanged`; the route logs `ADD_REGISTRATION`.
 
 ## Guests
 

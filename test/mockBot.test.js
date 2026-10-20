@@ -144,3 +144,17 @@ test('deleted Discord messages count as gone', () => {
     assert.equal(bot.isGoneDiscordError({ code: 50013 }), false);
     assert.equal(bot.isGoneDiscordError(null), false);
 });
+
+test('the member search finds personas and members by the start or a part of their name (W-06)', async () => {
+    const greta = await bot.searchGuildMembers('gre');
+    assert.deepEqual(greta, [{ id: '200000000000000019', username: 'greta', displayName: 'Greta', avatar: '' }]);
+    // The mock also matches inside the name; Discord itself only matches the start
+    assert.ok((await bot.searchGuildMembers('ena')).some(member => member.id === raider.userId));
+    assert.ok((await bot.searchGuildMembers('e')).length <= 10);
+    assert.deepEqual(await bot.searchGuildMembers('zzz'), []);
+});
+
+test('a member lookup returns the member or false', async () => {
+    assert.deepEqual(await bot.fetchGuildMember(raider.userId), { id: raider.userId, username: 'lena', displayName: 'Lena', avatar: '' });
+    assert.equal(await bot.fetchGuildMember('1'), false);
+});

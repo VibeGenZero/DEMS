@@ -8,7 +8,7 @@
  */
 const crypto = require('crypto');
 const { db, doc, getDoc, updateDoc } = require('../firebaseAdmin');
-const { GUILD, ROLES, CHANNELS, buildScheduledEvents, findMember } = require('./mockGuild');
+const { GUILD, ROLES, CHANNELS, PERSONAS, MEMBERS, buildScheduledEvents, findMember } = require('./mockGuild');
 const { buildEventUrl } = require('../utils/eventUrl');
 
 const LOG_PREFIX = '\x1b[35m[MOCK-DISCORD]\x1b[0m';
@@ -134,6 +134,26 @@ async function fetchMemberRoleIds(userId) {
 
 async function isGuildMember(userId) {
     return !!findMember(userId);
+}
+
+/** Member data like bot.js returns it; the mock server has no avatars. */
+const toMemberInfo = (member) => ({ id: member.userId, username: member.username, displayName: member.displayName, avatar: '' });
+
+// Discord matches only the start of a name; the mock also matches inside it, which is friendlier for the persona names
+async function searchGuildMembers(query, limit = 10) {
+    const term = String(query || '').toLowerCase();
+    const hits = [...PERSONAS, ...MEMBERS]
+        .filter(member => member.displayName.toLowerCase().includes(term) || member.username.toLowerCase().includes(term))
+        .slice(0, limit)
+        .map(toMemberInfo);
+    mockLog(`Mitgliedersuche "${query}"`, `${hits.length} Treffer`);
+    return hits;
+}
+
+async function fetchGuildMember(userId) {
+    const member = findMember(userId);
+    mockLog(`Mitglied abgefragt: ${describeUser(userId)}`);
+    return member ? toMemberInfo(member) : false;
 }
 
 function getBotStatus() {
@@ -302,6 +322,8 @@ module.exports = {
     getUserRoles,
     fetchMemberRoleIds,
     isGuildMember,
+    searchGuildMembers,
+    fetchGuildMember,
     getBotStatus,
     sendDM,
     sendChannelMessage,

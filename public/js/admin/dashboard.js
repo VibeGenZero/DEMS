@@ -32,7 +32,7 @@ const AUDIT_CHIPS = {
     CREATE_EVENT: 'chip-success', UPDATE_EVENT: 'chip-info', DELETE_EVENT: 'chip-danger',
     CANCEL_EVENT: 'chip-warning', DUPLICATE_EVENT: 'chip-accent', GENERATE_CHECKIN: 'chip-info',
     UPDATE_REGISTRATION_STATUS: 'chip-accent', ANNOUNCE_EVENT: 'chip-accent',
-    CHECKIN_REGISTRATION: 'chip-success', UNDO_CHECKIN_REGISTRATION: 'chip-warning',
+    CHECKIN_REGISTRATION: 'chip-success', ADD_REGISTRATION: 'chip-success', UNDO_CHECKIN_REGISTRATION: 'chip-warning',
     UPDATE_EVENT_STATUS: 'chip-warning', UPDATE_TEMPLATES: 'chip-info'
 };
 

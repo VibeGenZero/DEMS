@@ -20,7 +20,8 @@ const {
 /** Registration sources — where a registration was created. */
 const REGISTRATION_SOURCE = {
     WEB: 'web',
-    DISCORD: 'discord'
+    DISCORD: 'discord',
+    ADMIN: 'admin'
 };
 
 /** Status values a fresh registration can receive. */
@@ -45,6 +46,7 @@ const REGISTRATION_ERROR = {
     SLOT_FULL: 'slot_full',
     NOT_REGISTERED: 'not_registered',
     NOT_MOVABLE: 'not_movable',
+    NOT_ALLOWED: 'admin_add_not_allowed',
     FAILED: 'registration_failed'
 };
 
@@ -63,6 +65,7 @@ const ERROR_HTTP_STATUS = {
     [REGISTRATION_ERROR.SLOT_FULL]: 409,
     [REGISTRATION_ERROR.NOT_REGISTERED]: 404,
     [REGISTRATION_ERROR.NOT_MOVABLE]: 400,
+    [REGISTRATION_ERROR.NOT_ALLOWED]: 400,
     [REGISTRATION_ERROR.FAILED]: 500
 };
 
@@ -553,6 +556,115 @@ async function unregisterUserFromEvent({ eventId, userId }) {
     return { ok: true, registration, event };
 }
 
+/** Event statuses that take no admin entry (W-06). */
+const ADMIN_ENTRY_BLOCKED_STATUSES = ['draft', 'cancelled'];
+
+/**
+ * Whether a member is already on an event's list: own registration, accepted guest or invited guest.
+ *
+ * @param {Array<Object>} registrations -> Registrations of the event.
+ * @param {string} userId -> Discord user id.
+ * @returns {boolean} -> True when the member must not be added again.
+ */
+function isOnRegistrationList(registrations, userId) {
+    return registrations.some(registration =>
+        registration.userId === userId
+        || (Array.isArray(registration.guests) && registration.guests.includes(userId))
+        || (Array.isArray(registration.pendingGuests) && registration.pendingGuests.some(guest => guest.userId === userId)));
+}
+
+/**
+ * Write the admin entry under the event lock; see addRegistrationByAdmin.
+ */
+async function createAdminRegistration({ eventId, member, slotId }) {
+    const eventSnap = await getDoc(doc(db, 'events', eventId));
+    if (!eventSnap.exists()) {
+        return buildFailure(REGISTRATION_ERROR.NOT_FOUND, 'Event nicht gefunden');
+    }
+    const event = eventSnap.data();
+    if (ADMIN_ENTRY_BLOCKED_STATUSES.includes(event.status)) {
+        return buildFailure(REGISTRATION_ERROR.NOT_ALLOWED, 'Für Entwürfe und abgesagte Events kann niemand eingetragen werden.');
+    }
+
+    const registrations = await loadEventRegistrations(eventId);
+    if (isOnRegistrationList(registrations, member.id)) {
+        return buildFailure(REGISTRATION_ERROR.ALREADY_REGISTERED, 'Dieses Mitglied ist schon angemeldet.');
+    }
+
+    const slots = getSlots(event);
+    let slotFields = {};
+    let warning = null;
+    if (slots.length > 0) {
+        const slot = findSlot(slots, slotId);
+        if (!slot) {
+            return buildFailure(REGISTRATION_ERROR.INVALID_SLOT, 'Bitte wähle einen gültigen Slot.');
+        }
+        if (!hasFreePlace(slot, countSlotOccupancy(slots, registrations))) {
+            warning = `Slot „${slot.name}“ ist jetzt überbucht.`;
+        }
+        slotFields = { slotId: slot.id, preferredSlotId: slot.id, altSlotIds: [] };
+    } else if (event.maxParticipants > 0) {
+        const taken = countOccupiedPlaces(registrations) + 1;
+        if (taken > event.maxParticipants) {
+            warning = `Das Event ist jetzt überbucht (${taken} von ${event.maxParticipants} Plätzen).`;
+        }
+    }
+
+    const registration = {
+        eventId,
+        userId: member.id,
+        userName: member.displayName,
+        status: REGISTRATION_STATUS.ACCEPTED,
+        formAnswers: {},
+        guests: [],
+        pendingGuests: [],
+        source: REGISTRATION_SOURCE.ADMIN,
+        createdAt: new Date().toISOString(),
+        ...slotFields
+    };
+    const registrationRef = await addDoc(collection(db, 'registrations'), registration);
+    return { ok: true, event, registrationId: registrationRef.id, registration, warning };
+}
+
+/**
+ * An admin puts a server member on an event's list (W-06).
+ *
+ * The entry is accepted at once and skips the member rules (role, required
+ * fields, registration deadline, end, archive); drafts and cancelled events
+ * refuse it. A full event or slot is overbooked with a warning. Before the
+ * end the member gets the accepted message, role and channel access.
+ *
+ * @param {Object} params -> Entry input.
+ * @param {string} params.eventId -> The event document ID.
+ * @param {Object} params.member -> The member ({ id, displayName }).
+ * @param {string|null} [params.slotId] -> Slot of a slot event (required there).
+ * @returns {Promise<Object>} -> `{ ok: true, id, status, slotId, warning? }` or a failure.
+ */
+async function addRegistrationByAdmin({ eventId, member, slotId = null }) {
+    debugLog('registrationService.addByAdmin', { eventId, userId: member?.id, slotId });
+
+    const outcome = await withEventLock(eventId, () => createAdminRegistration({ eventId, member, slotId }));
+    if (!outcome.ok) return outcome;
+
+    const { event, registrationId, registration, warning } = outcome;
+    if (!isEventOver(event)) {
+        const slot = findSlot(getSlots(event), registration.slotId);
+        await notifyRegistration({
+            user: { id: member.id, displayName: member.displayName },
+            eventId, event, status: registration.status, slot
+        });
+    }
+    notifyRegistrationsChanged(eventId);
+
+    return {
+        ok: true,
+        id: registrationId,
+        status: registration.status,
+        slotId: registration.slotId || null,
+        ...(warning ? { warning } : {})
+    };
+}
+
 /**
  * Build a normalized failure result.
  *
@@ -571,6 +683,8 @@ function buildFailure(code, error) {
 
 module.exports = {
     registerUserForEvent,
+    addRegistrationByAdmin,
+    isOnRegistrationList,
     switchOwnSlot,
     moveRegistrationToSlot,
     unregisterUserFromEvent,

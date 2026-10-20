@@ -1,13 +1,23 @@
 /**
- * Registrations dialog: list, accept/reject, move slot.
+ * Registrations dialog: list, accept/reject, move slot, check-in, add members (W-06).
  */
 import { state } from '../core/state.js';
 import { loadAdminEvents, loadAdminStats } from './dashboard.js';
 import { registerActions } from '../core/actions.js';
-import { escapeHtml, showToast } from '../core/ui.js';
+import { escapeHtml, showToast, showElement, toggleElement } from '../core/ui.js';
+import { avatar } from '../core/components.js';
 import { formatSlotLabel } from '../events/slots.js';
 
+/** Event the dialog shows; the member entry posts to it. */
+const regDialog = { eventId: null, eventTitle: '', slots: [] };
+/** Event statuses that take an admin entry (drafts and cancelled events refuse it). */
+const ENTRY_STATUSES = ['active', 'archived'];
+let memberSearchTimer = null;
+
 export async function showRegistrations(eventId, eventTitle) {
+    if (regDialog.eventId !== eventId) clearMemberSearch();
+    Object.assign(regDialog, { eventId, eventTitle, slots: [] });
+    toggleElement(document.getElementById('reg-add'), false);
     document.getElementById('reg-event-title').textContent = eventTitle;
     const tbody = document.getElementById('registrations-tbody');
     const empty = document.getElementById('registrations-empty');
@@ -22,6 +32,7 @@ export async function showRegistrations(eventId, eventTitle) {
         const result = await res.json();
         const regs = result.data || result;
         const slots = Array.isArray(result.slots) ? result.slots : [];
+        setupMemberEntry(result.eventStatus, slots);
 
         if (!regs.length) {
             tbody.innerHTML = '';
@@ -32,6 +43,7 @@ export async function showRegistrations(eventId, eventTitle) {
         const statusTexts = { pending: '⏳ Ausstehend', accepted: '✅ Angenommen', rejected: '❌ Abgelehnt', waitlisted: '📋 Warteliste' };
 
         const sourceBadges = {
+            admin: '<span class="badge bg-info-subtle text-info-emphasis"><i class="bi bi-person-gear me-1"></i>Admin</span>',
             discord: '<span class="badge bg-primary-subtle text-primary-emphasis"><i class="bi bi-discord me-1"></i>Discord</span>',
             web: '<span class="badge bg-secondary-subtle text-secondary-emphasis"><i class="bi bi-globe2 me-1"></i>Website</span>'
         };
@@ -112,6 +124,110 @@ export async function updateRegStatus(regId, status, eventId, eventTitle) {
     } catch {
         showToast('Netzwerkfehler.', 'danger');
     }
+}
+
+/**
+ * Shows the member entry for active and archived events and fills the slot choice of slot events.
+ * @param {string|null} eventStatus -> Status the registrations list reports.
+ * @param {Array<Object>} slots -> Slots of the event, empty without slots.
+ */
+function setupMemberEntry(eventStatus, slots) {
+    regDialog.slots = slots;
+    toggleElement(document.getElementById('reg-add'), ENTRY_STATUSES.includes(eventStatus));
+    const select = document.getElementById('reg-add-slot');
+    if (slots.length === 0) {
+        toggleElement(select, false);
+        return;
+    }
+    const previous = select.value;
+    select.innerHTML = slots.map(slot =>
+        `<option value="${escapeHtml(slot.id)}"${slot.id === previous ? ' selected' : ''}>${escapeHtml(formatSlotLabel(slot))}</option>`
+    ).join('');
+    showElement(select);
+}
+
+function clearMemberSearch() {
+    clearTimeout(memberSearchTimer);
+    document.getElementById('reg-add-search').value = '';
+    document.getElementById('reg-add-results').innerHTML = '';
+}
+
+/** Search action of the input: waits for a typing pause. */
+export function debounceRegistrationMemberSearch() {
+    clearTimeout(memberSearchTimer);
+    memberSearchTimer = setTimeout(runRegistrationMemberSearch, 300);
+}
+
+/**
+ * Searches the server members for the shown event and lists them; members on the list are greyed out.
+ */
+export async function runRegistrationMemberSearch() {
+    const input = document.getElementById('reg-add-search');
+    const results = document.getElementById('reg-add-results');
+    const query = input.value.trim();
+    if (query.length < 2) {
+        results.innerHTML = '';
+        return;
+    }
+    try {
+        const res = await fetch(`/api/admin/events/${encodeURIComponent(regDialog.eventId)}/member-search?q=${encodeURIComponent(query)}`);
+        const hits = await res.json();
+        // A slower answer to an older query must not overwrite the current one
+        if (input.value.trim() !== query) return;
+        if (!res.ok) {
+            showToast(hits.error || 'Suche fehlgeschlagen.', 'danger');
+            return;
+        }
+        results.innerHTML = hits.length
+            ? hits.map(renderMemberHit).join('')
+            : '<div class="list-group-item text-muted small">Keine Mitglieder gefunden</div>';
+    } catch {
+        showToast('Netzwerkfehler.', 'danger');
+    }
+}
+
+function renderMemberHit(member) {
+    const content = `${avatar({ url: member.avatar, name: member.displayName, size: 'sm' })}
+        <span>${escapeHtml(member.displayName)}</span>
+        <small class="text-muted">@${escapeHtml(member.username)}</small>`;
+    if (member.alreadyRegistered) {
+        return `<button type="button" class="list-group-item list-group-item-action d-flex align-items-center gap-2" disabled>${content}
+            <small class="text-muted ms-auto">schon angemeldet</small></button>`;
+    }
+    return `<button type="button" class="list-group-item list-group-item-action d-flex align-items-center gap-2"
+        data-click="addRegistrationMember" data-user-id="${escapeHtml(member.id)}" data-display-name="${escapeHtml(member.displayName)}">${content}
+        <i class="bi bi-person-plus ms-auto"></i></button>`;
+}
+
+/**
+ * Puts the chosen member on the list of the shown event, then reloads the dialog, the admin table and the stats.
+ * @param {Object} dataset -> `userId`, `displayName` of the hit.
+ */
+export async function addRegistrationMember({ userId, displayName }) {
+    const { eventId, eventTitle, slots } = regDialog;
+    const body = { userId };
+    if (slots.length > 0) body.slotId = document.getElementById('reg-add-slot').value;
+    try {
+        const res = await fetch(`/api/admin/events/${encodeURIComponent(eventId)}/registrations`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': state.csrfToken },
+            body: JSON.stringify(body)
+        });
+        const result = await res.json();
+        if (!res.ok) {
+            showToast(result.error || 'Eintragen fehlgeschlagen.', 'danger');
+            return;
+        }
+        showToast(`${displayName} eingetragen.`, 'success');
+        if (result.warning) showToast(result.warning, 'warning');
+    } catch {
+        showToast('Netzwerkfehler.', 'danger');
+        return;
+    }
+    clearMemberSearch();
+    showRegistrations(eventId, eventTitle);
+    loadAdminEvents();
+    loadAdminStats();
 }
 
 /**
@@ -196,5 +312,7 @@ registerActions({
     showRegistrations: (el) => showRegistrations(el.dataset.eventId, el.dataset.eventTitle),
     updateRegStatus: (el) => updateRegStatus(el.dataset.regId, el.dataset.status, el.dataset.eventId, el.dataset.eventTitle),
     moveRegistrationSlot: (el) => moveRegistrationSlot(el),
-    toggleRegCheckin: (el) => toggleRegCheckin(el.dataset)
+    toggleRegCheckin: (el) => toggleRegCheckin(el.dataset),
+    searchRegistrationMembers: () => debounceRegistrationMemberSearch(),
+    addRegistrationMember: (el) => addRegistrationMember(el.dataset)
 });
