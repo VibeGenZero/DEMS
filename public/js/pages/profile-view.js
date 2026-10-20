@@ -72,7 +72,9 @@ export function renderUpcomingRow(entry, now, canOpen) {
     const checkedIn = entry.status === 'accepted' && entry.checkedIn === true;
     const checkinOpen = entry.status === 'accepted' && !checkedIn && event.checkinEnabled === true;
 
-    let status = renderStatusChip(entry.status);
+    // Own place on the waitlist (W-05)
+    const place = entry.status === 'waitlisted' && entry.waitlistPosition;
+    let status = renderStatusChip(entry.status, place ? `Warteliste · Platz ${place.position} von ${place.total}` : undefined);
     if (checkedIn) status = chip('Eingecheckt', CHECKED_IN);
     if (rejected) status = chip('Abgelehnt', { tone: 'danger', icon: 'x-circle' });
 

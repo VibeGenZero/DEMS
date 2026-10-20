@@ -12,7 +12,7 @@ const { sendDM, assignRole, parseTemplate, getGuildRoles, sendChannelMessage, bu
 const { promoteFromWaitlist, addAuditLog, loadEventRoster, loadEventRegistrations, saveEventWithSlots } = require('../utils/eventUtils');
 const { mergeReminderHours } = require('../utils/reminders');
 const { keepDeadlineRefreshFlag } = require('../utils/eventListing');
-const { describePlaces, formatPlaces, formatWaitlist } = require('../utils/capacity');
+const { describePlaces, formatPlaces, formatWaitlist, waitlistPositions } = require('../utils/capacity');
 const { getSlots, findSlot, formatSlotLabel, normalizeSlots, sumCapacity, resolveAcceptanceSlot, buildRoster } = require('../utils/slotService');
 const { buildPreviewEvent } = require('../utils/eventPreview');
 const { normalizePollInput, tallyPoll } = require('../utils/pollService');
@@ -703,6 +703,11 @@ router.get('/events/:id/registrations', async (req, res) => {
         snapshot.forEach(docSnap => {
             allRegs.push({ id: docSnap.id, ...docSnap.data() });
         });
+        // Place on the waitlist (W-05), counted over all registrations before paging
+        const positions = waitlistPositions(allRegs);
+        for (const registration of allRegs) {
+            if (positions.has(registration.id)) registration.waitlistPosition = positions.get(registration.id);
+        }
 
         // Pagination
         const total = allRegs.length;

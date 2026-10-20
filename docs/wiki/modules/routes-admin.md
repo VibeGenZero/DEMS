@@ -33,7 +33,7 @@ see_also: [event-lifecycle, maintenance-mode, discord-integration, api-index]
 | POST | `/events/:id/duplicate` | copy as `draft`, title `"<title> (Kopie)"`, `checkinCode`, `announcements`, reminder `sent` flags and `eventStartNotificationSent` reset | `DUPLICATE_EVENT` |
 | POST | `/events/:id/generate-checkin` | 6-digit code (`crypto.randomInt`), `checkinEnabled: true` | `GENERATE_CHECKIN` |
 | GET | `/events/:id/checkin-stats` | `{ total, checkedIn, code }` over accepted registrations | — |
-| GET | `/events/:id/registrations` | paginated (`page`, `limit` 50), newest first; plus `slots` and `eventStatus` of the event | — |
+| GET | `/events/:id/registrations` | paginated (`page`, `limit` 50), newest first; plus `slots` and `eventStatus` of the event; waitlisted entries carry `waitlistPosition` (counted before paging, W-05) | — |
 | GET | `/events/:id/member-search?q=` | `searchGuildMembers` (≥ 2 characters, max 10) → `[{ id, username, displayName, avatar, alreadyRegistered }]` (W-06) | — |
 | POST | `/events/:id/registrations` | body `{ userId, slotId? }` (digits, else 400); `fetchGuildMember` → 404 / 503; `addRegistrationByAdmin` → 201 `{ id, status, slotId, warning? }` (W-06) | `ADD_REGISTRATION` |
 | GET | `/events/:id/registrations/export` | CSV with BOM, columns incl. "Eingecheckt" (Ja/Nein), source (Website/Discord/Admin), "Slot" + "Wunschrolle" (slot events) and all form answers; every cell (headers too) through `csvCell` — quoted, `= + - @` and tab/CR starts get a leading apostrophe | `EXPORT_REGISTRATIONS` |

@@ -106,6 +106,21 @@ function byCreatedAt(a, b) {
 }
 
 /**
+ * Waitlist position of every waitlisted registration of one event (W-05):
+ * rank by registration time, oldest first, the order in which the waitlist moves up.
+ * Slot events use the same single list. Equal times are ordered by id, so the numbers stay stable.
+ *
+ * @param {Array<Object>} registrations -> All registrations of the event.
+ * @returns {Map<string, {position: number, total: number}>} -> Position per registration id; only waitlisted ones.
+ */
+function waitlistPositions(registrations) {
+    const waiting = registrations
+        .filter(registration => registration.status === 'waitlisted')
+        .sort((a, b) => byCreatedAt(a, b) || String(a.id).localeCompare(String(b.id)));
+    return new Map(waiting.map((registration, index) => [registration.id, { position: index + 1, total: waiting.length }]));
+}
+
+/**
  * Decide which waitlisted registrations of an event without slots move up.
  *
  * The waitlist is walked oldest first and every registration whose places
@@ -144,5 +159,6 @@ module.exports = {
     formatWaitlist,
     describePlaces,
     byCreatedAt,
+    waitlistPositions,
     pickCapacityPromotions
 };

@@ -230,7 +230,7 @@ test('a profile entry carries only what the page shows', async () => {
     const entries = [...profile.upcoming, ...profile.history];
     assert.equal(entries.length, profile.stats.total);
     for (const entry of entries) {
-        assert.deepEqual(Object.keys(entry).sort(), ['checkedIn', 'createdAt', 'event', 'id', 'slot', 'status']);
+        assert.deepEqual(Object.keys(entry).sort(), ['checkedIn', 'createdAt', 'event', 'id', 'slot', 'status', 'waitlistPosition']);
         assert.deepEqual(Object.keys(entry.event).sort(), ['category', 'checkinEnabled', 'endDate', 'id', 'location', 'startDate', 'status', 'title']);
     }
     assert.equal(profile.upcoming.find(entry => entry.event.id === EVENT_ID.OPEN).event.location, 'Lobby');
@@ -1516,4 +1516,40 @@ test('the registrations list tells the event status and the export names admin e
     assert.equal(list.eventStatus, 'active');
     const csv = await (await admin.request(`/api/admin/events/${event.id}/registrations/export`)).text();
     assert.match(csv, /"Greta","200000000000000019","accepted","Nein","Admin"/);
+});
+
+// ── Waitlist position (W-05) ────────────────────────────────────────────
+
+test('a waitlisted member learns their own place, everyone else none', async () => {
+    // Seed: Elif, Greta and Tom wait for the full event, Tom registered last
+    const member = await loginAs('member');
+    const mine = await (await member.request(`/api/events/${EVENT_ID.FULL}/my-registration`)).json();
+    assert.equal(mine.status, 'waitlisted');
+    assert.deepEqual(mine.waitlistPosition, { position: 3, total: 3 });
+
+    const accepted = await (await (await loginAs('raider')).request(`/api/events/${EVENT_ID.RUNNING}/my-registration`)).json();
+    assert.equal(accepted.status, 'accepted');
+    assert.equal('waitlistPosition' in accepted, false);
+
+    const profile = await (await member.request('/api/user/profile')).json();
+    const full = profile.upcoming.find(entry => entry.event.id === EVENT_ID.FULL);
+    assert.deepEqual(full.waitlistPosition, { position: 3, total: 3 });
+    assert.ok([...profile.upcoming, ...profile.history]
+        .filter(entry => entry.event.id !== EVENT_ID.FULL)
+        .every(entry => entry.waitlistPosition === null));
+});
+
+test('admins see the waitlist order, and it moves up when someone ahead is accepted', async () => {
+    const admin = await loginAs('admin');
+    const list = async () => (await (await admin.request(`/api/admin/events/${EVENT_ID.FULL}/registrations`)).json()).data;
+    const waiting = (await list())
+        .filter(entry => entry.status === 'waitlisted')
+        .sort((a, b) => a.waitlistPosition.position - b.waitlistPosition.position);
+    assert.deepEqual(waiting.map(entry => [entry.userName, entry.waitlistPosition.position, entry.waitlistPosition.total]),
+        [['Elif', 1, 3], ['Greta', 2, 3], ['Tom', 3, 3]]);
+    assert.ok((await list()).filter(entry => entry.status !== 'waitlisted').every(entry => !('waitlistPosition' in entry)));
+
+    assert.equal((await admin.send('PUT', `/api/admin/registrations/${waiting[0].id}/status`, { status: 'accepted' })).status, 200);
+    const mine = await (await (await loginAs('member')).request(`/api/events/${EVENT_ID.FULL}/my-registration`)).json();
+    assert.deepEqual(mine.waitlistPosition, { position: 2, total: 2 });
 });

@@ -185,12 +185,14 @@ export function renderCapacity(event) {
  * Chip for the member's own status.
  *
  * @param {string|null} myStatus -> `accepted`, `pending`, `waitlisted`, `guest` or anything else.
+ * @param {string} [labelOverride] -> Text instead of the status label, e.g. "Warteliste · Platz 2 von 3" (W-05); escaped here.
  * @returns {string} -> HTML of a chip, empty for every other value.
  */
-export function renderStatusChip(myStatus) {
+export function renderStatusChip(myStatus, labelOverride) {
     if (typeof myStatus !== 'string' || !Object.hasOwn(STATUS_CHIPS, myStatus)) return '';
     const { label, className, icon } = STATUS_CHIPS[myStatus];
-    return `<span class="chip chip-sm ${className}"><i class="bi bi-${icon}"></i>${label}</span>`;
+    const text = labelOverride ? escapeHtml(labelOverride) : label;
+    return `<span class="chip chip-sm ${className}"><i class="bi bi-${icon}"></i>${text}</span>`;
 }
 
 /**

@@ -115,7 +115,7 @@ test('an entry carries eight event fields and never the check-in code', () => {
     });
     const entry = toProfileEntry(registration('full', { checkedIn: true, formAnswers: { Name: 'Tom' }, guests: ['u2'], userName: 'Tom' }), full);
     assert.deepEqual(entry, {
-        id: 'reg-full', status: 'accepted', checkedIn: true, createdAt: at(-72), slot: null,
+        id: 'reg-full', status: 'accepted', checkedIn: true, createdAt: at(-72), slot: null, waitlistPosition: null,
         event: { id: 'full', title: 'Full', startDate: at(48), endDate: at(50), status: 'active', category: 'Gaming', location: 'Lobby', checkinEnabled: true }
     });
     assert.doesNotMatch(JSON.stringify(entry), /123456|Geheim|formFields|formAnswers|userName/);
@@ -141,12 +141,21 @@ test('missing and broken values do not break the lists', () => {
     // A date nobody can read counts as "no date yet"; the older format with a space is read
     assert.deepEqual(upcoming.map(entry => entry.id), ['reg-legacy', 'reg-bare', 'reg-broken']);
     assert.deepEqual(upcoming[1], {
-        id: 'reg-bare', status: '', checkedIn: false, createdAt: '', slot: null,
+        id: 'reg-bare', status: '', checkedIn: false, createdAt: '', slot: null, waitlistPosition: null,
         event: { id: 'bare', title: '', startDate: '', endDate: '', status: '', category: '', location: '', checkinEnabled: false }
     });
-    assert.deepEqual(history, [{ id: 'reg-none', status: '', checkedIn: false, createdAt: '', slot: null, event: null }]);
+    assert.deepEqual(history, [{ id: 'reg-none', status: '', checkedIn: false, createdAt: '', slot: null, waitlistPosition: null, event: null }]);
     // Only a location object with a text gives a place
     assert.equal(toProfileEntry(registration('e'), event('E', { location: 'Lobby' })).event.location, '');
     assert.equal(toProfileEntry(registration('e'), event('E', { location: { channelId: '1' } })).event.location, '');
     assert.deepEqual(buildProfileEvents([], new Map(), NOW), { upcoming: [], history: [] });
+});
+
+test('only upcoming entries carry their waitlist place (W-05)', () => {
+    const events = new Map(Object.entries({ full: event('Full'), old: event('Old', { status: 'archived' }) }));
+    const waiting = [registration('full', { status: 'waitlisted' }), registration('old', { status: 'waitlisted' })];
+    const positions = new Map([['reg-full', { position: 2, total: 3 }], ['reg-old', { position: 1, total: 1 }]]);
+    const { upcoming, history } = buildProfileEvents(waiting, events, NOW, positions);
+    assert.deepEqual(upcoming[0].waitlistPosition, { position: 2, total: 3 });
+    assert.equal(history[0].waitlistPosition, null);
 });

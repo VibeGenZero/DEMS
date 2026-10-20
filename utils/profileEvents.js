@@ -34,15 +34,17 @@ function profileSlot(registration, event) {
  *
  * @param {Object} registration -> Registration with `id` and `eventId`.
  * @param {Object|null} event -> Event data, null when the event was deleted.
- * @returns {Object} -> `{ id, status, checkedIn, createdAt, slot, event }`; `event` is `{ id, title, startDate, endDate, status, category, location, checkinEnabled }` or null. Never carries the check-in code.
+ * @param {{position: number, total: number}|null} [waitlistPosition] -> Place on the waitlist (W-05), only for upcoming waitlisted entries.
+ * @returns {Object} -> `{ id, status, checkedIn, createdAt, slot, waitlistPosition, event }`; `event` is `{ id, title, startDate, endDate, status, category, location, checkinEnabled }` or null. Never carries the check-in code.
  */
-function toProfileEntry(registration, event) {
+function toProfileEntry(registration, event, waitlistPosition = null) {
     return {
         id: registration.id,
         status: registration.status || '',
         checkedIn: registration.checkedIn === true,
         createdAt: registration.createdAt || '',
         slot: event ? profileSlot(registration, event) : null,
+        waitlistPosition,
         event: event ? {
             id: registration.eventId,
             title: event.title || '',
@@ -101,15 +103,17 @@ function byDateDescending(a, b) {
  * @param {Array<Object>} registrations -> Registrations with `id`, every status included.
  * @param {Map<string, Object>} eventsById -> Event data by id; deleted events are missing.
  * @param {Date} [now] -> Reference time.
+ * @param {Map<string, {position: number, total: number}>} [waitlistPositionsById] -> Waitlist places by registration id; only upcoming entries carry one.
  * @returns {{ upcoming: Array<Object>, history: Array<Object> }} -> Entries of toProfileEntry(). `history` holds deleted, cancelled, archived and ended events, latest first; `upcoming` everything else by start.
  */
-function buildProfileEvents(registrations, eventsById, now = new Date()) {
+function buildProfileEvents(registrations, eventsById, now = new Date(), waitlistPositionsById = new Map()) {
     const upcoming = [];
     const history = [];
     for (const registration of registrations) {
         const event = eventsById.get(registration.eventId) || null;
         const closed = !event || CLOSED_STATUSES.includes(event.status) || isEventOver(event, now);
-        (closed ? history : upcoming).push(toProfileEntry(registration, event));
+        if (closed) history.push(toProfileEntry(registration, event));
+        else upcoming.push(toProfileEntry(registration, event, waitlistPositionsById.get(registration.id) || null));
     }
     return { upcoming: upcoming.sort(byStartAscending), history: history.sort(byDateDescending) };
 }

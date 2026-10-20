@@ -1,6 +1,6 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { placesOf, countOccupiedPlaces, pickCapacityPromotions, summarizePlaces, formatPlaces, formatWaitlist, describePlaces } = require('../utils/capacity');
+const { placesOf, countOccupiedPlaces, pickCapacityPromotions, summarizePlaces, formatPlaces, formatWaitlist, describePlaces, waitlistPositions } = require('../utils/capacity');
 
 /** Registration with the fields the capacity rules read. */
 function registration(id, status, createdAt, fields = {}) {
@@ -104,4 +104,26 @@ test('describePlaces adds the sentence and the waitlist note to the numbers', ()
     assert.deepEqual(describePlaces([], 0), {
         taken: 0, capacity: 0, guests: 0, pending: 0, waitlist: 0, text: '0 Plätze belegt', waitlistText: ''
     });
+});
+
+test('waitlist positions count the waiting registrations oldest first (W-05)', () => {
+    const positions = waitlistPositions([
+        registration('new', 'waitlisted', '2026-10-03T10:00:00.000Z'),
+        registration('old', 'waitlisted', '2026-10-01T10:00:00.000Z'),
+        registration('in', 'accepted', '2026-09-01T10:00:00.000Z'),
+        registration('mid', 'waitlisted', '2026-10-02T10:00:00.000Z'),
+        registration('no', 'rejected', '2026-09-02T10:00:00.000Z')
+    ]);
+    assert.deepEqual(Object.fromEntries(positions), {
+        old: { position: 1, total: 3 },
+        mid: { position: 2, total: 3 },
+        new: { position: 3, total: 3 }
+    });
+});
+
+test('equal registration times are ordered by id, and nobody waiting gives no positions', () => {
+    const same = '2026-10-01T10:00:00.000Z';
+    const positions = waitlistPositions([registration('b', 'waitlisted', same), registration('a', 'waitlisted', same)]);
+    assert.deepEqual([positions.get('a'), positions.get('b')], [{ position: 1, total: 2 }, { position: 2, total: 2 }]);
+    assert.equal(waitlistPositions([registration('x', 'accepted', same)]).size, 0);
 });
