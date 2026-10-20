@@ -1498,6 +1498,16 @@
           <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
         </div>
         <div class="modal-body">
+          <div id="reg-add" class="mb-3 is-hidden">
+            <label for="reg-add-search" class="form-label">Mitglied eintragen</label>
+            <div class="d-flex flex-wrap gap-2">
+              <input type="search" id="reg-add-search" class="form-control flex-grow-1 w-auto" autocomplete="off"
+                placeholder="Name oder Benutzername (Anfang)" data-input="searchRegistrationMembers">
+              <select id="reg-add-slot" class="form-select w-auto is-hidden" aria-label="Slot für den Eintrag"></select>
+            </div>
+            <div class="form-text">Wird sofort angenommen, auch bei vollem Event oder nach dem Anmeldeschluss.</div>
+            <div id="reg-add-results" class="list-group mt-2"></div>
+          </div>
           <div class="table-responsive">
             <table class="table table-hover">
               <thead>

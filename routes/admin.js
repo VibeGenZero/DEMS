@@ -8,7 +8,7 @@ const {
 const { requireAuth, requireAdmin, safeEqual } = require('../middleware/auth');
 const { csvCell } = require('../utils/csv');
 const { validateEvent, validateRegStatus, validateBotMessages } = require('../middleware/validators');
-const { sendDM, assignRole, parseTemplate, getGuildRoles, sendChannelMessage, buildEventEmbed, buildEventComponents, getGuildScheduledEvents, createEventChannels, deleteEventChannels, createScheduledEvent, getBotStatus, getBotSettings, saveBotSettings, getRunningEvents, getGuildChannels, buildPollEmbed, buildPollComponents } = require('../bot');
+const { sendDM, assignRole, parseTemplate, getGuildRoles, sendChannelMessage, buildEventEmbed, buildEventComponents, getGuildScheduledEvents, createEventChannels, deleteEventChannels, createScheduledEvent, getBotStatus, getBotSettings, saveBotSettings, getRunningEvents, getGuildChannels, buildPollEmbed, buildPollComponents, searchGuildMembers, fetchGuildMember } = require('../bot');
 const { promoteFromWaitlist, addAuditLog, loadEventRoster, loadEventRegistrations, saveEventWithSlots } = require('../utils/eventUtils');
 const { mergeReminderHours } = require('../utils/reminders');
 const { keepDeadlineRefreshFlag } = require('../utils/eventListing');
@@ -20,7 +20,7 @@ const {
     loadPoll, loadPollVotes, updatePoll, closePoll, decidePollWithEvent, deletePoll
 } = require('../utils/pollStore');
 const { withEventLock } = require('../utils/eventLock');
-const { moveRegistrationToSlot, buildTemplateVars } = require('../utils/registrationService');
+const { moveRegistrationToSlot, buildTemplateVars, addRegistrationByAdmin, isOnRegistrationList } = require('../utils/registrationService');
 const { notifyRegistrationsChanged } = require('../utils/announcementRefresh');
 const { debugLog } = require('../utils/debugLog');
 const { buildEventUrl } = require('../utils/eventUrl');
@@ -712,15 +712,74 @@ router.get('/events/:id/registrations', async (req, res) => {
 
         const eventSnap = await getDoc(doc(db, 'events', req.params.id));
         const slots = eventSnap.exists() ? getSlots(eventSnap.data()) : [];
+        // The dialog offers the member entry (W-06) only for active and archived events
+        const eventStatus = eventSnap.exists() ? eventSnap.data().status || 'active' : null;
 
         res.json({
             data: paginatedRegs,
             meta: { total, page, limit, totalPages },
-            slots
+            slots,
+            eventStatus
         });
     } catch (err) {
         console.error('Get registrations error:', err);
         res.status(500).json({ error: 'Fehler beim Laden der Anmeldungen' });
+    }
+});
+
+/**
+ * GET /api/admin/events/:id/member-search?q= — Search members of the Discord server for a manual entry (W-06).
+ * Each hit says whether the member is already on this event's list.
+ */
+router.get('/events/:id/member-search', async (req, res) => {
+    try {
+        const q = String(req.query.q || '').trim();
+        if (q.length < 2) {
+            return res.json([]);
+        }
+        const [members, registrations] = await Promise.all([
+            searchGuildMembers(q, 10),
+            loadEventRegistrations(req.params.id)
+        ]);
+        res.json(members.map(member => ({ ...member, alreadyRegistered: isOnRegistrationList(registrations, member.id) })));
+    } catch (err) {
+        console.error('Member search error:', err);
+        res.status(500).json({ error: 'Fehler bei der Mitgliedersuche' });
+    }
+});
+
+/**
+ * POST /api/admin/events/:id/registrations — Admin puts a server member on the list (W-06).
+ * Body `{ userId, slotId? }`; accepted at once with source "admin", see addRegistrationByAdmin.
+ */
+router.post('/events/:id/registrations', async (req, res) => {
+    try {
+        const { userId, slotId } = req.body;
+        if (typeof userId !== 'string' || !/^\d+$/.test(userId)) {
+            return res.status(400).json({ error: 'Bitte wähle ein Mitglied aus.' });
+        }
+        const member = await fetchGuildMember(userId);
+        if (member === false) {
+            return res.status(404).json({ error: 'Mitglied nicht gefunden.' });
+        }
+        if (!member) {
+            return res.status(503).json({ error: 'Discord ist gerade nicht erreichbar. Bitte versuche es später erneut.' });
+        }
+
+        const result = await addRegistrationByAdmin({
+            eventId: req.params.id,
+            member,
+            slotId: typeof slotId === 'string' ? slotId : null
+        });
+        if (!result.ok) {
+            return res.status(result.httpStatus).json({ error: result.error });
+        }
+        await addAuditLog('ADD_REGISTRATION', req.session.user.id, `Added ${member.displayName} to the event`, req.params.id);
+        const { ok, ...body } = result;
+        res.status(201).json(body);
+    } catch (err) {
+        console.error('Admin add registration error:', err);
+        res.status(500).json({ error: 'Fehler beim Eintragen' });
     }
 });
 
@@ -765,7 +824,7 @@ router.get('/events/:id/registrations/export', async (req, res) => {
                 r.userId,
                 r.status,
                 r.checkedIn ? 'Ja' : 'Nein',
-                r.source === 'discord' ? 'Discord' : 'Website',
+                ({ discord: 'Discord', admin: 'Admin' })[r.source] || 'Website',
                 r.createdAt ? new Date(r.createdAt).toLocaleDateString('de-DE') : '',
                 guestCount,
                 guestIds

@@ -2092,6 +2092,60 @@ async function fetchMemberRoleIds(userId) {
 }
 
 /**
+ * Plain member data for the admin member search and manual registration (W-06).
+ *
+ * @param {import('discord.js').GuildMember} member -> Guild member.
+ * @returns {{id: string, username: string, displayName: string, avatar: string}} -> Member data.
+ */
+function toMemberInfo(member) {
+    return {
+        id: member.id,
+        username: member.user.username,
+        displayName: member.displayName,
+        avatar: member.displayAvatarURL() || ''
+    };
+}
+
+/**
+ * Search members of the guild by the start of their username or nickname (Discord's member search).
+ *
+ * @param {string} query -> Search text.
+ * @param {number} [limit] -> Maximum number of hits.
+ * @returns {Promise<Array<{id, username, displayName, avatar}>>} -> Members without bots; [] when the bot is not ready or Discord fails.
+ */
+async function searchGuildMembers(query, limit = 10) {
+    if (!isReady) return [];
+    try {
+        const guild = await client.guilds.fetch(process.env.DISCORD_GUILD_ID);
+        const members = await guild.members.search({ query, limit });
+        return [...members.values()].filter(member => !member.user.bot).map(toMemberInfo);
+    } catch (err) {
+        console.error('Failed to search guild members:', err.message);
+        return [];
+    }
+}
+
+/**
+ * Look up one member of the guild.
+ *
+ * @param {string} userId -> Discord user id.
+ * @returns {Promise<{id, username, displayName, avatar}|false|null>} -> The member, false when the user is no member,
+ *   null when the bot is not ready or Discord fails.
+ */
+async function fetchGuildMember(userId) {
+    if (!isReady) return null;
+    try {
+        const guild = await client.guilds.fetch(process.env.DISCORD_GUILD_ID);
+        const member = await guild.members.fetch(userId);
+        return member.user.bot ? false : toMemberInfo(member);
+    } catch (err) {
+        if (err.code === 10007 || err.code === 10013) return false; // Unknown Member / User
+        console.error(`Failed to fetch member ${userId}:`, err.message);
+        return null;
+    }
+}
+
+/**
  * Check if user is a member of the guild
  */
 async function isGuildMember(userId, guildId) {
@@ -2998,6 +3052,8 @@ module.exports = {
     getUserRoles,
     fetchMemberRoleIds,
     isGuildMember,
+    searchGuildMembers,
+    fetchGuildMember,
     getGuildName,
     getGuildIconUrl,
     getGuildRoles,

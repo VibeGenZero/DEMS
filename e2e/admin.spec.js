@@ -244,3 +244,26 @@ test('admins tick a registration off in the registrations dialog and take it bac
     await expect(toggle).toHaveText(/Abhaken/);
     expect(errors).toEqual([]);
 });
+
+test('admins add a server member in the registrations dialog (W-06)', async ({ page }, testInfo) => {
+    const errors = watchErrors(page);
+    await loginAs(page, 'admin');
+    const { title } = await createEvent(page, testInfo, { status: 'active', approvalMode: 'manual' });
+    await navigate(page, 'admin');
+    await row(page, title).locator('.data-table-buttons > .btn').click();
+    const dialog = await waitForDialog(page, '#registrationsModal');
+
+    await dialog.locator('#reg-add-search').fill('dennis');
+    const hit = dialog.locator('#reg-add-results [data-click="addRegistrationMember"]', { hasText: 'Dennis' });
+    await hit.click();
+    await expect(toast(page)).toContainText('Dennis eingetragen.');
+    const added = dialog.locator('#registrations-tbody tr', { hasText: 'Dennis' });
+    await expect(added).toContainText('Admin');
+    await expect(added).toContainText('Angenommen');
+
+    // A second search marks the member as already on the list
+    await dialog.locator('#reg-add-search').fill('dennis');
+    await expect(dialog.locator('#reg-add-results')).toContainText('schon angemeldet');
+    await expect(hit).toHaveCount(0);
+    expect(errors).toEqual([]);
+});

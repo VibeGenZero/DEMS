@@ -1385,3 +1385,135 @@ test('the export says who is checked in', async () => {
     assert.match(await rowOf('dev-reg-archived-lena'), /,"accepted","Ja",/);
     assert.match(await rowOf('dev-reg-archived-tom'), /,"accepted","Nein",/);
 });
+
+// ── Admin adds members (W-06) ───────────────────────────────────────────
+
+const MEMBER_ID = { DENNIS: '200000000000000016', ELIF: '200000000000000017', GRETA: '200000000000000019' };
+const memberSearch = async (client, eventId, q) => client.request(`/api/admin/events/${eventId}/member-search?q=${encodeURIComponent(q)}`);
+const addMember = (admin, eventId, body) => admin.send('POST', `/api/admin/events/${eventId}/registrations`, body);
+const dmCount = (name) => server.output().split(`DM an ${name}`).length - 1;
+
+async function createEventAs(admin, fields) {
+    const res = await admin.send('POST', '/api/admin/events', {
+        title: 'Nachtrag', status: 'active', accessMode: 'open', approvalMode: 'instant', startDate: futureDate(5), ...fields
+    });
+    const body = await res.json();
+    assert.equal(res.status, 200, JSON.stringify(body));
+    return body;
+}
+
+test('admins search server members, also those who never logged in, and see who is on the list', async () => {
+    const admin = await loginAs('admin');
+    const fresh = await createEventAs(admin, { title: 'Suche' });
+
+    const hits = await (await memberSearch(admin, fresh.id, 'gre')).json();
+    assert.deepEqual(hits, [{ id: MEMBER_ID.GRETA, username: 'greta', displayName: 'Greta', avatar: '', alreadyRegistered: false }]);
+
+    const running = await (await memberSearch(admin, EVENT_ID.RUNNING, 'jon')).json();
+    assert.equal(running.find(hit => hit.username === 'jonas').alreadyRegistered, true);
+    // Greta is Jonas' guest at the open event
+    const guest = await (await memberSearch(admin, EVENT_ID.OPEN, 'gre')).json();
+    assert.equal(guest[0].alreadyRegistered, true);
+
+    assert.deepEqual(await (await memberSearch(admin, fresh.id, 'g')).json(), []);
+    assert.equal((await memberSearch(await loginAs('member'), fresh.id, 'gre')).status, 403);
+});
+
+test('an admin entry is accepted at once, with source admin, a DM and an audit entry', async () => {
+    const admin = await loginAs('admin');
+    const event = await createEventAs(admin, { title: 'Freigabe nötig', approvalMode: 'manual' });
+    const before = dmCount('Elif');
+
+    const res = await addMember(admin, event.id, { userId: MEMBER_ID.ELIF });
+    const body = await res.json();
+    assert.equal(res.status, 201, JSON.stringify(body));
+    assert.equal(body.status, 'accepted');
+    assert.equal(body.warning, undefined);
+    const stored = await storedRegistration(admin, event.id, body.id);
+    assert.deepEqual([stored.userId, stored.userName, stored.status, stored.source], [MEMBER_ID.ELIF, 'Elif', 'accepted', 'admin']);
+    assert.deepEqual([stored.formAnswers, stored.guests], [{}, []]);
+    assert.equal(dmCount('Elif'), before + 1);
+
+    const { data: logs } = await (await admin.request('/api/admin/audit-log?limit=100')).json();
+    assert.ok(logs.some(log => log.action === 'ADD_REGISTRATION' && log.adminId === personaById('admin').userId
+        && log.targetId === event.id && log.details.includes('Elif')));
+
+    const again = await addMember(admin, event.id, { userId: MEMBER_ID.ELIF });
+    assert.equal(again.status, 400);
+    assert.equal((await again.json()).error, 'Dieses Mitglied ist schon angemeldet.');
+});
+
+test('an admin entry overrides role, required fields, deadline, end and archive', async () => {
+    const admin = await loginAs('admin');
+    const fields = {
+        title: 'Nur VIP', accessMode: 'role-required', requiredRoles: [ROLE_ID.VIP],
+        formFields: [{ label: 'Ingame-Name', type: 'text', required: true }]
+    };
+    const event = await createEventAs(admin, fields);
+    const deadline = await admin.send('PUT', `/api/admin/events/${event.id}`, {
+        status: 'active', approvalMode: 'instant', startDate: futureDate(5), ...fields,
+        registrationDeadline: new Date(Date.now() - 60 * 1000).toISOString()
+    });
+    assert.equal(deadline.status, 200, await deadline.clone().text());
+    const closed = await addMember(admin, event.id, { userId: MEMBER_ID.DENNIS });
+    assert.equal(closed.status, 201, await closed.clone().text());
+
+    const archived = await addMember(admin, EVENT_ID.ARCHIVED, { userId: MEMBER_ID.DENNIS });
+    assert.equal(archived.status, 201, await archived.clone().text());
+
+    // After the end only the entry is written, no DM
+    const before = dmCount('Greta');
+    const ended = await addMember(admin, EVENT_ID.ENDED, { userId: MEMBER_ID.GRETA });
+    assert.equal(ended.status, 201, await ended.clone().text());
+    assert.equal(dmCount('Greta'), before);
+});
+
+test('drafts, cancelled events, unknown users and missing ids take no admin entry', async () => {
+    const admin = await loginAs('admin');
+    const draft = await createEventAs(admin, { title: 'Entwurf', status: 'draft' });
+    for (const eventId of [draft.id, EVENT_ID.CANCELLED]) {
+        const res = await addMember(admin, eventId, { userId: MEMBER_ID.DENNIS });
+        assert.equal(res.status, 400, eventId);
+        assert.equal((await res.json()).error, 'Für Entwürfe und abgesagte Events kann niemand eingetragen werden.');
+    }
+    const fresh = await createEventAs(admin, { title: 'Fremde' });
+    const unknown = await addMember(admin, fresh.id, { userId: '1' });
+    assert.equal(unknown.status, 404);
+    assert.equal((await unknown.json()).error, 'Mitglied nicht gefunden.');
+    for (const body of [{}, { userId: '' }, { userId: 'abc' }]) {
+        const res = await addMember(admin, fresh.id, body);
+        assert.equal(res.status, 400, JSON.stringify(body));
+        assert.equal((await res.json()).error, 'Bitte wähle ein Mitglied aus.');
+    }
+    assert.equal((await addMember(await loginAs('member'), fresh.id, { userId: MEMBER_ID.DENNIS })).status, 403);
+    const { data } = await (await admin.request(`/api/admin/events/${fresh.id}/registrations`)).json();
+    assert.deepEqual(data, []);
+});
+
+test('a full event or slot is overbooked with a warning', async () => {
+    const admin = await loginAs('admin');
+    const full = await createEventAs(admin, { title: 'Ein Platz', maxParticipants: 1 });
+    assert.equal((await (await loginAs('raider')).send('POST', `/api/events/${full.id}/register`, { formAnswers: {} })).status, 200);
+    const over = await (await addMember(admin, full.id, { userId: MEMBER_ID.DENNIS })).json();
+    assert.equal(over.status, 'accepted');
+    assert.equal(over.warning, 'Das Event ist jetzt überbucht (2 von 1 Plätzen).');
+
+    const raid = await createSlotEvent(admin, 'Raid-Nachtrag', RAID_SLOTS);
+    const [tank] = raid.slots;
+    await (await loginAs('raider')).send('POST', `/api/events/${raid.id}/register`, { slotId: tank.id });
+    const noSlot = await addMember(admin, raid.id, { userId: MEMBER_ID.DENNIS });
+    assert.equal(noSlot.status, 400);
+    assert.equal((await noSlot.json()).error, 'Bitte wähle einen gültigen Slot.');
+    const slotted = await (await addMember(admin, raid.id, { userId: MEMBER_ID.DENNIS, slotId: tank.id })).json();
+    assert.deepEqual([slotted.status, slotted.slotId, slotted.warning], ['accepted', tank.id, 'Slot „Tank“ ist jetzt überbucht.']);
+});
+
+test('the registrations list tells the event status and the export names admin entries', async () => {
+    const admin = await loginAs('admin');
+    const event = await createEventAs(admin, { title: 'Quelle' });
+    await addMember(admin, event.id, { userId: MEMBER_ID.GRETA });
+    const list = await (await admin.request(`/api/admin/events/${event.id}/registrations`)).json();
+    assert.equal(list.eventStatus, 'active');
+    const csv = await (await admin.request(`/api/admin/events/${event.id}/registrations/export`)).text();
+    assert.match(csv, /"Greta","200000000000000019","accepted","Nein","Admin"/);
+});
