@@ -76,7 +76,7 @@ see_also: [request-lifecycle, add-api-endpoint]
 | POST | `/api/admin/events/:id/start`, `/events/:id/end`, `/events/:id/duplicate`, `/events/:id/generate-checkin`, `/events/:id/announce`, `/events/:id/sync-discord` |
 | DELETE | `/api/admin/events/:id`, `/events/series/:seriesId` |
 | GET | `/api/admin/events/:id/checkin-stats`, `/events/:id/registrations`, `/events/:id/registrations/export` |
-| PUT | `/api/admin/registrations/:id/status`, `/registrations/:id/slot` |
+| PUT | `/api/admin/registrations/:id/status`, `/registrations/:id/slot`, `/registrations/:id/checkin` |
 | POST | `/api/admin/polls`, `/polls/:id/close`, `/polls/:id/announce` |
 | PUT | `/api/admin/polls/:id` |
 | DELETE | `/api/admin/polls/:id` |

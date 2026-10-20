@@ -9,7 +9,7 @@ see_also: [routes-admin, reminders-presence, registration-flow]
 ---
 # Event lifecycle — status, series, check-in
 
-> TL;DR: Events have four statuses: `draft` → `active` → `archived`, plus `cancelled`. Only `active` events are listed publicly and accept registrations, and only until their end or an optional registration deadline; the server archives an active event 24 hours after its end. Admins create/edit through a 5-step wizard; recurring events are stored as independent instances sharing a `seriesId`. Check-in uses a 6-digit code the admin generates and members type in on the event page.
+> TL;DR: Events have four statuses: `draft` → `active` → `archived`, plus `cancelled`. Only `active` events are listed publicly and accept registrations, and only until their end or an optional registration deadline; the server archives an active event 24 hours after its end. Admins create/edit through a 5-step wizard; recurring events are stored as independent instances sharing a `seriesId`. Check-in uses a 6-digit code the admin generates and members type in on the event page, or admins tick members off in the registrations dialog.
 
 ## Statuses and transitions
 
@@ -54,7 +54,8 @@ Visibility: `GET /api/events` returns only `active` (admins may pass `?status=`)
 
 1. Admin: `POST /api/admin/events/:id/generate-checkin` → `checkinCode` (6 digits) + `checkinEnabled: true`; `GET .../checkin-stats` shows `{ total, checkedIn, code }`.
 2. Member with an `accepted` registration: event page → `POST /api/events/:id/checkin { code }` → `checkedIn: true`, `checkedInAt`; optional `checkinMessage` shown.
-3. Check-ins feed the profile badge `perfect-attendance`.
+3. Admin (W-07): registrations dialog, column "Check-in" → `PUT /api/admin/registrations/:id/checkin { checkedIn }` ticks an `accepted` registration off or takes it back — at any time (also after the end and for archived events), without a code; audit log `CHECKIN_REGISTRATION` / `UNDO_CHECKIN_REGISTRATION`. It writes the same fields as the code check-in.
+4. Check-ins (code or admin) feed the profile number "Check-ins", the badge `perfect-attendance`, the "Eingecheckt" chips and `checkin-stats`.
 
 ## Time handling
 
