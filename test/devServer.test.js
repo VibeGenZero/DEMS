@@ -1270,3 +1270,118 @@ test('members can neither register after the deadline nor unregister after their
     assert.equal((await stay.json()).error, 'Abmelden ist nicht mehr möglich. Wende dich an einen Admin.');
     assert.equal((await (await raider.request(`/api/events/${fixed.id}/my-registration`)).json()).registered, true);
 });
+
+// ── Admin check-in (W-07) ───────────────────────────────────────────────
+
+const setCheckin = (admin, registrationId, checkedIn) =>
+    admin.send('PUT', `/api/admin/registrations/${registrationId}/checkin`, { checkedIn });
+
+async function storedRegistration(admin, eventId, registrationId) {
+    const result = await (await admin.request(`/api/admin/events/${eventId}/registrations`)).json();
+    return result.data.find(entry => entry.id === registrationId);
+}
+
+test('admins check an accepted registration in and out without a code', async () => {
+    const admin = await loginAs('admin');
+    const id = 'dev-reg-running-jonas';
+
+    const first = await setCheckin(admin, id, true);
+    assert.equal(first.status, 200, await first.clone().text());
+    const body = await first.json();
+    assert.equal(body.checkedIn, true);
+    assert.ok(body.checkedInAt);
+    assert.equal((await storedRegistration(admin, EVENT_ID.RUNNING, id)).checkedIn, true);
+
+    // A repeat keeps the state and the time
+    const again = await (await setCheckin(admin, id, true)).json();
+    assert.deepEqual([again.checkedIn, again.checkedInAt], [true, body.checkedInAt]);
+
+    const back = await setCheckin(admin, id, false);
+    assert.equal(back.status, 200);
+    const stored = await storedRegistration(admin, EVENT_ID.RUNNING, id);
+    assert.deepEqual([stored.checkedIn, stored.checkedInAt], [false, null]);
+
+    const { data: logs } = await (await admin.request('/api/admin/audit-log?limit=100')).json();
+    const adminId = personaById('admin').userId;
+    for (const action of ['CHECKIN_REGISTRATION', 'UNDO_CHECKIN_REGISTRATION']) {
+        assert.ok(logs.some(log => log.action === action && log.adminId === adminId && log.targetId === id), action);
+    }
+});
+
+test('admins can check in to an archived event', async () => {
+    const admin = await loginAs('admin');
+    const res = await setCheckin(admin, 'dev-reg-archived-kira', true);
+    assert.equal(res.status, 200);
+    assert.equal((await storedRegistration(admin, EVENT_ID.ARCHIVED, 'dev-reg-archived-kira')).checkedIn, true);
+});
+
+test('the admin check-in refuses open requests, unknown ids and missing values', async () => {
+    const admin = await loginAs('admin');
+
+    const pending = await setCheckin(admin, 'dev-reg-form-tom', true);
+    assert.equal(pending.status, 400);
+    assert.equal((await pending.json()).error, 'Nur angenommene Anmeldungen können eingecheckt werden.');
+    assert.notEqual((await storedRegistration(admin, EVENT_ID.FORM, 'dev-reg-form-tom')).checkedIn, true);
+
+    const unknown = await setCheckin(admin, 'dev-reg-does-not-exist', true);
+    assert.equal(unknown.status, 404);
+    assert.equal((await unknown.json()).error, 'Anmeldung nicht gefunden');
+
+    for (const value of [undefined, 'true', 1]) {
+        const res = await admin.send('PUT', '/api/admin/registrations/dev-reg-running-jonas/checkin', value === undefined ? {} : { checkedIn: value });
+        assert.equal(res.status, 400, String(value));
+        assert.equal((await res.json()).error, 'Bitte gib an, ob eingecheckt werden soll.');
+    }
+});
+
+test('members cannot use the admin check-in', async () => {
+    const member = await loginAs('member');
+    assert.equal((await setCheckin(member, 'dev-reg-running-jonas', true)).status, 403);
+    const admin = await loginAs('admin');
+    assert.notEqual((await storedRegistration(admin, EVENT_ID.RUNNING, 'dev-reg-running-jonas')).checkedIn, true);
+});
+
+test('an admin check-in counts like a code check-in and can be redone with the code', async () => {
+    const admin = await loginAs('admin');
+    const member = await loginAs('member');
+    const checkins = async () => (await (await member.request('/api/user/profile')).json()).stats.checkedIn;
+
+    const before = await checkins();
+    assert.equal((await setCheckin(admin, 'dev-reg-archived-tom', true)).status, 200);
+    assert.equal(await checkins(), before + 1);
+    assert.equal((await setCheckin(admin, 'dev-reg-archived-tom', false)).status, 200);
+    assert.equal(await checkins(), before);
+
+    assert.equal((await setCheckin(admin, 'dev-reg-running-tom', true)).status, 200);
+    const mine = await (await member.request(`/api/events/${EVENT_ID.RUNNING}/my-registration`)).json();
+    assert.equal(mine.checkedIn, true);
+
+    assert.equal((await setCheckin(admin, 'dev-reg-running-tom', false)).status, 200);
+    const code = await member.send('POST', `/api/events/${EVENT_ID.RUNNING}/checkin`, { code: CHECKIN_CODE });
+    assert.equal(code.status, 200);
+    assert.equal((await code.json()).alreadyCheckedIn, undefined);
+});
+
+test('leaving the accepted status clears the check-in', async () => {
+    const admin = await loginAs('admin');
+    for (const [id, eventId, status] of [['dev-reg-series1-lena', SERIES_EVENT_IDS[0], 'waitlisted'], ['dev-reg-series1-ben', SERIES_EVENT_IDS[0], 'rejected']]) {
+        assert.equal((await setCheckin(admin, id, true)).status, 200);
+        assert.equal((await admin.send('PUT', `/api/admin/registrations/${id}/status`, { status })).status, 200);
+        const stored = await storedRegistration(admin, eventId, id);
+        assert.deepEqual([stored.status, stored.checkedIn, stored.checkedInAt], [status, false, null], status);
+    }
+});
+
+test('the export says who is checked in', async () => {
+    const admin = await loginAs('admin');
+    assert.equal((await setCheckin(admin, 'dev-reg-archived-lena', true)).status, 200);
+    assert.equal((await setCheckin(admin, 'dev-reg-archived-tom', false)).status, 200);
+    const lines = (await (await admin.request(`/api/admin/events/${EVENT_ID.ARCHIVED}/registrations/export`)).text()).split('\n');
+    assert.ok(lines[0].includes('"Status","Eingecheckt","Quelle"'), lines[0]);
+    const rowOf = async (id) => {
+        const { userName } = await storedRegistration(admin, EVENT_ID.ARCHIVED, id);
+        return lines.find(line => line.replace('﻿', '').startsWith(`"${userName}",`));
+    };
+    assert.match(await rowOf('dev-reg-archived-lena'), /,"accepted","Ja",/);
+    assert.match(await rowOf('dev-reg-archived-tom'), /,"accepted","Nein",/);
+});

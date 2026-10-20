@@ -756,7 +756,7 @@ router.get('/events/:id/registrations/export', async (req, res) => {
 
         // Build CSV
         const slotHeaders = slots.length > 0 ? ['Slot', 'Wunschrolle'] : [];
-        const headers = ['User', 'UserID', 'Status', 'Quelle', 'Datum', 'Gäste (Anzahl)', 'Gäste IDs', ...slotHeaders, ...formKeysArr].map(csvCell);
+        const headers = ['User', 'UserID', 'Status', 'Eingecheckt', 'Quelle', 'Datum', 'Gäste (Anzahl)', 'Gäste IDs', ...slotHeaders, ...formKeysArr].map(csvCell);
         const rows = registrations.map(r => {
             const guestCount = Array.isArray(r.guests) ? r.guests.length : 0;
             const guestIds = Array.isArray(r.guests) ? r.guests.join('; ') : '';
@@ -764,6 +764,7 @@ router.get('/events/:id/registrations/export', async (req, res) => {
                 r.userName || '',
                 r.userId,
                 r.status,
+                r.checkedIn ? 'Ja' : 'Nein',
                 r.source === 'discord' ? 'Discord' : 'Website',
                 r.createdAt ? new Date(r.createdAt).toLocaleDateString('de-DE') : '',
                 guestCount,
@@ -811,6 +812,11 @@ router.put('/registrations/:id/status', validateRegStatus, async (req, res) => {
             // Waitlisted and rejected registrations give up their place -> a later acceptance picks a slot again
             if (slots.length > 0 && (status === 'waitlisted' || status === 'rejected')) {
                 update.slotId = null;
+            }
+            // Only accepted registrations carry a check-in (badges count every checkedIn)
+            if (status !== 'accepted' && reg.checkedIn) {
+                update.checkedIn = false;
+                update.checkedInAt = null;
             }
             if (slots.length > 0 && status === 'accepted' && !findSlot(slots, reg.slotId)) {
                 const registrations = await loadEventRegistrations(reg.eventId);
@@ -864,6 +870,43 @@ router.put('/registrations/:id/status', validateRegStatus, async (req, res) => {
     } catch (err) {
         console.error('Update registration status error:', err);
         res.status(500).json({ error: 'Fehler beim Aktualisieren des Status' });
+    }
+});
+
+/**
+ * PUT /api/admin/registrations/:id/checkin — Admin sets or clears the check-in of an accepted registration.
+ * Body `{ checkedIn: boolean }`; works at any time and without a check-in code.
+ */
+router.put('/registrations/:id/checkin', async (req, res) => {
+    try {
+        const { checkedIn } = req.body;
+        if (typeof checkedIn !== 'boolean') {
+            return res.status(400).json({ error: 'Bitte gib an, ob eingecheckt werden soll.' });
+        }
+        const regRef = doc(db, 'registrations', req.params.id);
+        const regSnap = await getDoc(regRef);
+        if (!regSnap.exists()) {
+            return res.status(404).json({ error: 'Anmeldung nicht gefunden' });
+        }
+        const reg = regSnap.data();
+        if (reg.status !== 'accepted') {
+            return res.status(400).json({ error: 'Nur angenommene Anmeldungen können eingecheckt werden.' });
+        }
+
+        // A repeated check-in keeps the original time
+        const checkedInAt = checkedIn ? (reg.checkedIn && reg.checkedInAt) || new Date().toISOString() : null;
+        await updateDoc(regRef, { checkedIn, checkedInAt });
+
+        await addAuditLog(
+            checkedIn ? 'CHECKIN_REGISTRATION' : 'UNDO_CHECKIN_REGISTRATION',
+            req.session.user.id,
+            checkedIn ? `Checked in ${reg.userName}` : `Took back check-in of ${reg.userName}`,
+            req.params.id
+        );
+        res.json({ id: req.params.id, checkedIn, checkedInAt });
+    } catch (err) {
+        console.error('Admin check-in error:', err);
+        res.status(500).json({ error: 'Fehler beim Speichern des Check-ins' });
     }
 });
 

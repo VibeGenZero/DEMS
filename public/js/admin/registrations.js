@@ -11,7 +11,7 @@ export async function showRegistrations(eventId, eventTitle) {
     document.getElementById('reg-event-title').textContent = eventTitle;
     const tbody = document.getElementById('registrations-tbody');
     const empty = document.getElementById('registrations-empty');
-    tbody.innerHTML = '<tr><td colspan="7" class="text-center py-4"><div class="spinner-border spinner-border-sm text-secondary"></div></td></tr>';
+    tbody.innerHTML = '<tr><td colspan="8" class="text-center py-4"><div class="spinner-border spinner-border-sm text-secondary"></div></td></tr>';
     empty.style.display = 'none';
 
     const modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('registrationsModal'));
@@ -46,7 +46,7 @@ export async function showRegistrations(eventId, eventTitle) {
       <tr>
         <td>
           <strong>${escapeHtml(reg.userName)}</strong>
-          <br><small class="text-muted">${reg.userId}</small>
+          <br><small class="text-muted">${escapeHtml(reg.userId)}</small>
           <br>${sourceBadge}
         </td>
         <td>
@@ -56,6 +56,9 @@ export async function showRegistrations(eventId, eventTitle) {
           <span class="badge-pill status-${reg.status}">
             ${statusTexts[reg.status] || reg.status}
           </span>
+        </td>
+        <td>
+          ${renderRegistrationCheckinCell(reg, eventId, eventTitle)}
         </td>
         <td>
           ${renderRegistrationSlotCell(reg, slots, eventId, eventTitle)}
@@ -80,7 +83,7 @@ export async function showRegistrations(eventId, eventTitle) {
     `;
         }).join('');
     } catch {
-        tbody.innerHTML = '<tr><td colspan="7" class="text-center text-danger">Fehler</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="8" class="text-center text-danger">Fehler</td></tr>';
     }
 }
 
@@ -109,6 +112,47 @@ export async function updateRegStatus(regId, status, eventId, eventTitle) {
     } catch {
         showToast('Netzwerkfehler.', 'danger');
     }
+}
+
+/**
+ * Check-in cell: one toggle for accepted registrations, nothing for the others.
+ * @param {Object} reg -> Registration with `id`, `status`, `checkedIn`.
+ * @returns {string} -> HTML of the cell content.
+ */
+export function renderRegistrationCheckinCell(reg, eventId, eventTitle) {
+    if (reg.status !== 'accepted') return '<span class="text-muted">—</span>';
+    const checkedIn = reg.checkedIn === true;
+    const look = checkedIn
+        ? { button: 'btn-success', icon: 'bi-check2-square', label: 'Eingecheckt' }
+        : { button: 'btn-outline-secondary', icon: 'bi-square', label: 'Abhaken' };
+    return `<button type="button" class="btn btn-sm ${look.button} text-nowrap" data-click="toggleRegCheckin"
+        data-reg-id="${escapeHtml(reg.id)}" data-checked-in="${checkedIn}" data-event-id="${escapeHtml(eventId)}" data-event-title="${escapeHtml(eventTitle)}"
+        aria-pressed="${checkedIn}"><i class="bi ${look.icon} me-1"></i>${look.label}</button>`;
+}
+
+/**
+ * Sets or takes back the check-in of one registration, then reloads the dialog.
+ * @param {Object} dataset -> `regId`, `checkedIn` ('true'|'false', the current state), `eventId`, `eventTitle`.
+ */
+export async function toggleRegCheckin({ regId, checkedIn, eventId, eventTitle }) {
+    const target = checkedIn !== 'true';
+    try {
+        const res = await fetch(`/api/admin/registrations/${encodeURIComponent(regId)}/checkin`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': state.csrfToken },
+            body: JSON.stringify({ checkedIn: target })
+        });
+        const result = await res.json();
+        if (!res.ok) {
+            showToast(result.error || 'Check-in konnte nicht gespeichert werden.', 'danger');
+            return;
+        }
+        showToast(target ? 'Eingecheckt.' : 'Check-in zurückgenommen.', target ? 'success' : 'info');
+    } catch {
+        showToast('Netzwerkfehler.', 'danger');
+        return;
+    }
+    showRegistrations(eventId, eventTitle);
 }
 
 export function renderRegistrationSlotCell(reg, slots, eventId, eventTitle) {
@@ -151,5 +195,6 @@ export async function moveRegistrationSlot(select) {
 registerActions({
     showRegistrations: (el) => showRegistrations(el.dataset.eventId, el.dataset.eventTitle),
     updateRegStatus: (el) => updateRegStatus(el.dataset.regId, el.dataset.status, el.dataset.eventId, el.dataset.eventTitle),
-    moveRegistrationSlot: (el) => moveRegistrationSlot(el)
+    moveRegistrationSlot: (el) => moveRegistrationSlot(el),
+    toggleRegCheckin: (el) => toggleRegCheckin(el.dataset)
 });

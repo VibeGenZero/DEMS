@@ -220,3 +220,27 @@ test('the bot control center lists no ended event', async ({ page }, testInfo) =
     await expect(running).not.toContainText('Feierabend-Runde');
     expect(errors).toEqual([]);
 });
+
+test('admins tick a registration off in the registrations dialog and take it back (W-07)', async ({ page }, testInfo) => {
+    const errors = watchErrors(page);
+    await loginAs(page, 'admin');
+    const { id, title } = await createEvent(page, testInfo, { status: 'active' });
+    // The admin registers for the own event; instant approval -> accepted
+    await adminRequest(page, 'POST', `/api/events/${id}/register`, { formAnswers: {} });
+    await navigate(page, 'admin');
+    await row(page, title).locator('.data-table-buttons > .btn').click();
+    const dialog = await waitForDialog(page, '#registrationsModal');
+
+    const toggle = dialog.locator('[data-click="toggleRegCheckin"]');
+    await expect(toggle).toHaveText(/Abhaken/);
+    await expect(toggle).toHaveAttribute('aria-pressed', 'false');
+    await toggle.click();
+    await expect(toast(page)).toContainText('Eingecheckt.');
+    await expect(toggle).toHaveText(/Eingecheckt/);
+    await expect(toggle).toHaveAttribute('aria-pressed', 'true');
+
+    await toggle.click();
+    await expect(toast(page)).toContainText('Check-in zurückgenommen.');
+    await expect(toggle).toHaveText(/Abhaken/);
+    expect(errors).toEqual([]);
+});
