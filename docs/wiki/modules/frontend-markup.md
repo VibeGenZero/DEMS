@@ -40,7 +40,7 @@ No CDN: every library and font is a pinned copy with its license next to it.
 | `bootstrap-icons/` | Bootstrap Icons 1.11.2 (CSS + `fonts/`) | all `bi bi-*` icons |
 | `fontawesome/` | Font Awesome Free 6.0.0 (`css/all.min.css` + `webfonts/`) | EasyMDE toolbar only |
 | `marked/` | marked 15.0.12 | `renderMarkdownSafe` |
-| `dompurify/` | DOMPurify 3.2.4 | `renderMarkdownSafe` |
+| `dompurify/` | DOMPurify 3.4.17 | `renderMarkdownSafe` |
 | `gsap/` | GSAP 3.12.5 | boot animation and UI animations (the boot sequence needs it to show the app) |
 | `easymde/`, `flatpickr/` | EasyMDE 2.20.0, Flatpickr 4.6.13 (+ German locale, dark theme; the light scheme uses Flatpickr's base style) | event description editor, date pickers |
 | `fonts/` | Inter (variable, 300–700, 7 subsets) + UnifrakturCook 700, mirrored from Google Fonts; `fonts.css` declares the `@font-face` rules | `--font-body`, `--font-logo` |
