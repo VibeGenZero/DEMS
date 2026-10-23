@@ -1,0 +1,30 @@
+# Tasks
+
+## 1. Change detection, DM text and recipients
+
+- [x] 1.1 Write failing unit tests in a new `test/eventChangeNotice.test.js` (node:test + node:assert/strict): `describeEventChanges` reports a moved start, an added end ("nicht festgelegt" → date), a removed location and a location with only a new channel; it reports nothing for the same instant in another ISO notation and for changes of title, description, capacity or deadlines; order Beginn, Ende, Ort. `buildEventChangeMessage` names the title, lists only changed fields with before → after in German date format (`TIMEZONE`) and ends with the `buildEventUrl` link. `changeRecipients` returns accepted registrants plus their `guests`, each once, and leaves out pending, waitlisted and rejected registrations and `pendingGuests`. `notifyEventChange` with an injected `send` that fails for one user counts only the delivered DMs. Verify they fail.
+- [x] 1.2 Implement `utils/eventChangeNotice.js` as in design decision 1 and 3 (data access only through `firebaseAdmin.js`, one `where('eventId', '==', …)`, status filtered in memory, `sendDM` from `../bot` as default `send`). Verify 1.1 passes.
+- [x] 1.3 Update `docs/wiki/modules/utils.md` (new module) and `docs/wiki/ops/testing.md` (new test file); run `npm run wiki` and verify `node --test test/wiki.test.js` is green.
+
+## 2. Save endpoint
+
+- [x] 2.1 Write failing server tests in `test/devServer.test.js` on an event the test creates itself (so seeded events used by other tests stay untouched), with accepted registrations, one accepted guest, one open invitation, one pending and one waitlisted registration: `PUT /api/admin/events/:id` with `notifyParticipants: true` and a new start answers `notifiedCount` = accepted registrants + accepted guest, `GET /api/admin/bot/status` `dmsSent` grows by the same number and the audit log has `NOTIFY_EVENT_CHANGE` by the admin persona for that event; the same edit without the flag, with `notifyParticipants: false` or with `"true"` as string answers `notifiedCount: 0` and writes no such entry; a flagged edit of only the title sends nothing; a flagged edit that sets `status: 'draft'` sends nothing; the stored event (`GET /api/events/:id?status=all` as admin) has no `notifyParticipants`. Verify they fail.
+- [x] 2.2 Implement in `routes/admin.js` `PUT /events/:id` as in design decision 2 (after `promoteFromWaitlist`, strict `=== true`, status `active`, at least one change; `addAuditLog('NOTIFY_EVENT_CHANGE', …)`; response `notifiedCount`). Verify 2.1 passes and `node --test test/devServer.test.js test/eventUpdate.test.js` is green.
+- [x] 2.3 Update `docs/wiki/modules/routes-admin.md` (`PUT /events/:id` body flag, response, audit action), `docs/wiki/concepts/event-lifecycle.md` (Edit row: optional change DM), `docs/wiki/concepts/discord-integration.md` (status DMs: event changed), `docs/wiki/concepts/data-model.md` (audit action `NOTIFY_EVENT_CHANGE`); run `npm run wiki` and verify `node --test test/wiki.test.js`.
+
+## 3. Switch in the wizard
+
+- [x] 3.1 Write failing fake-DOM tests in `test/wizardFlow.test.js` (run with `node --experimental-vm-modules --test`): editing an active event and changing its start shows `#wizard-notify` on step 5 with `#event-notify-participants` checked; setting the start back hides it; the same date in another ISO notation keeps it hidden; status "Entwurf" keeps it hidden; creating an event never shows it; switching it off, going back and returning to step 5 keeps it off; `saveEvent` sends `notifyParticipants: true` only in a `PUT` with the visible, checked switch (and `false` when switched off); the toast reads "Event aktualisiert – 5 Teilnehmer benachrichtigt." for `notifiedCount: 5` and "Event aktualisiert!" for `0`; the audit log row of `NOTIFY_EVENT_CHANGE` gets the chip `chip-info`. Verify they fail for the right reason.
+- [x] 3.2 Add the switch markup to the wizard footer in `public/index.html` (Bootstrap `form-check form-switch`, start state `.is-hidden`, no `style` attribute, no emoji), create `public/js/admin/wizard-notify.js` (design decision 4) and wire it into `editEvent`, `showCreateEventModal`, `wizardGoTo` and `saveEvent` in `public/js/admin/wizard.js`; add `NOTIFY_EVENT_CHANGE: 'chip-info'` to `AUDIT_CHIPS` in `public/js/admin/dashboard.js`. Verify 3.1 passes and `test/cssRules.test.js`, `test/actionAttributes.test.js`, `test/frontendCsp.test.js`, `test/frontendModules.test.js` stay green.
+- [x] 3.3 Add an e2e check to `e2e/wizard.spec.js`: the admin persona edits "Community-Spieleabend", changes the location (not the start: `e2e/admin.spec.js` sorts the table by it; one place per project so the desktop and mobile runs both change it), sees "Teilnehmer benachrichtigen" switched on next to "Speichern", saves and gets the toast with "Teilnehmer benachrichtigt"; the footer has no horizontal overflow at phone width. Verify with `npx playwright test e2e/wizard.spec.js`.
+- [x] 3.4 Update `docs/wiki/modules/frontend-app.md` (new module `admin/wizard-notify.js`, changes to `editEvent`/`wizardGoTo`/`saveEvent`) and `docs/wiki/ops/testing.md`; run `npm run wiki` and verify `node --test test/wiki.test.js`.
+
+## 4. Integration
+
+- [x] 4.1 Mock mode check on a scratch DB (`npm run dev:mock`): as admin edit "Community-Spieleabend", move the start and change the location from "Lobby", save with the switch on; verify the mock log shows 5 DMs (Lena, Kira, Jonas, Aylin, guest Greta; not Elif with the open invitation) with Beginn and Ort before → after and the event link, the toast says 5, and the audit log shows the entry. Confirm `dev/seedData.js` needs no change (else extend it and re-run `test/seed.test.js`).
+- [x] 4.2 Run `npm test` and `npm run test:e2e` and verify both are green.
+
+## Workflow follow-up
+
+- Commit planning and code separately on `feature/68-w-04-teilnehmer-bei-anderungen-informieren`, push, open the MR "W-04: Teilnehmer bei Änderungen informieren" (German: Problem / Ursache / Änderung / Verifikation, `Closes #68`).
+- After the merge: `/opsx:archive` on a `chore/` branch from `origin/main`.
