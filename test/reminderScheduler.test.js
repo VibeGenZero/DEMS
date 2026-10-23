@@ -136,3 +136,49 @@ test('the announcement is refreshed once when the registration deadline passes (
         await removeEvent('deadline-passed');
     }
 });
+
+// ── DM choices (W-16) ───────────────────────────────────────────────────
+
+const OPTED_OUT = '200000000000000011';
+
+/** A second accepted participant who switched reminders off. */
+async function storeOptedOut(eventId) {
+    await setDoc(doc(db, 'users', OPTED_OUT), { id: OPTED_OUT, notifications: { reminders: false } });
+    await setDoc(doc(db, 'registrations', `reg-${eventId}-off`), { eventId, userId: OPTED_OUT, status: 'accepted' });
+}
+
+test('a member with reminders off gets neither the reminder nor the start DM (W-16)', async () => {
+    await storeEvent('w16-due', { startDate: inHours(2), reminderHours: [{ hours: 24, sent: false }] });
+    await storeOptedOut('w16-due');
+    try {
+        const reminder = await runPass();
+        assert.deepEqual(reminder.map(dm => dm.userId), [PARTICIPANT]);
+        assert.deepEqual((await storedEvent('w16-due')).reminderHours, [{ hours: 24, sent: true }]);
+    } finally {
+        await removeEvent('w16-due');
+        await deleteDoc(doc(db, 'registrations', 'reg-w16-due-off'));
+    }
+
+    await storeEvent('w16-start', { startDate: inHours(-0.02), reminderHours: [] });
+    await storeOptedOut('w16-start');
+    try {
+        const start = await runPass();
+        assert.deepEqual(start.map(dm => dm.userId), [PARTICIPANT]);
+        assert.equal((await storedEvent('w16-start')).eventStartNotificationSent, true);
+    } finally {
+        await removeEvent('w16-start');
+        await deleteDoc(doc(db, 'registrations', 'reg-w16-start-off'));
+    }
+});
+
+test('a reminder counts as sent even when every participant switched reminders off (W-16)', async () => {
+    await storeEvent('w16-all', { startDate: inHours(2), reminderHours: [{ hours: 24, sent: false }] });
+    await setDoc(doc(db, 'users', PARTICIPANT), { id: PARTICIPANT, notifications: { reminders: false } });
+    try {
+        assert.deepEqual(await runPass(), []);
+        assert.deepEqual((await storedEvent('w16-all')).reminderHours, [{ hours: 24, sent: true }]);
+    } finally {
+        await removeEvent('w16-all');
+        await deleteDoc(doc(db, 'users', PARTICIPANT));
+    }
+});

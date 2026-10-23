@@ -3,14 +3,14 @@ id: routes-user
 title: routes/user.js — profile, badges, settings, account
 type: module
 tags: [api, user, profile, badges, settings, guests, gdpr]
-sources: [routes/user.js, utils/profileEvents.js]
+sources: [routes/user.js, utils/profileEvents.js, utils/notificationPrefs.js]
 part_of: [architecture]
 depends_on: [middleware, data-layer]
 see_also: [api-index, data-model]
 ---
 # routes/user.js — profile, badges, settings, account
 
-> TL;DR: Mounted at `/api/user`, every route needs a logged-in user. Provides the user's registrations, a profile with stats, computed badges and the member's events split into upcoming and history, a user search for guest invitations, the `acceptInvitations` setting and full account deletion.
+> TL;DR: Mounted at `/api/user`, every route needs a logged-in user. Provides the user's registrations, a profile with stats, computed badges and the member's events split into upcoming and history, a user search for guest invitations, the settings (`acceptInvitations` and the DM choices of W-16) and full account deletion.
 
 ## Endpoints
 
@@ -19,8 +19,8 @@ see_also: [api-index, data-model]
 | GET | `/registrations` | own registrations with embedded `event` (via `toPublicEvent`, no `checkinCode`), newest first |
 | GET | `/profile` | `{ user, upcoming, history, stats, badges, unlockedBadges, totalBadges }`; see "Profile lists" |
 | GET | `/search?q=` | ≥2 chars; users matching `displayName`/`username`, excluding self and users with `acceptInvitations === false`; max 10 |
-| GET | `/settings` | `{ acceptInvitations }` (default true) |
-| PUT | `/settings` | body `{ acceptInvitations }` |
+| GET | `/settings` | `{ acceptInvitations, notifications: { reminders, changes, waitlist } }`; every value defaults to true (`normalizeNotificationPrefs`) |
+| PUT | `/settings` | body `{ acceptInvitations?, notifications?: { reminders?, changes?, waitlist? } }`; changes only boolean values it receives (text, numbers and unknown kinds are ignored, a missing `acceptInvitations` no longer resets it), answers the new settings like `GET`; 404 without a users document |
 | DELETE | `/account` | batch-deletes own registrations + `users/{id}`, promotes waitlists, deletes own date poll votes (`deleteUserPollVotes`), destroys session |
 
 ## Profile lists (`utils/profileEvents.js`)

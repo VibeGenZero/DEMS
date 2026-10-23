@@ -167,6 +167,10 @@ export async function loadAccountSettings() {
         const settings = await res.json();
         const toggle = document.getElementById('accept-invitations-toggle');
         if (toggle) toggle.checked = settings.acceptInvitations !== false;
+        for (const kind of Object.keys(NOTIFICATION_LABELS)) {
+            const notifyToggle = document.getElementById(`notify-${kind}-toggle`);
+            if (notifyToggle) notifyToggle.checked = settings.notifications?.[kind] !== false;
+        }
     } catch (err) {
         console.error('Failed to load account settings:', err);
     }
@@ -186,6 +190,33 @@ export async function saveAccountSettings() {
         }
     } catch (err) {
         console.error('Failed to save account settings:', err);
+    }
+}
+
+// DM kinds of the profile switches (W-16) and how the toast names them
+const NOTIFICATION_LABELS = { reminders: 'Erinnerungen', changes: 'Änderungen', waitlist: 'Warteliste' };
+
+/**
+ * Save one DM switch of the profile; a failed save puts the switch back.
+ *
+ * @param {HTMLInputElement} toggle -> The switch, with `data-kind`.
+ * @returns {Promise<void>}
+ */
+export async function saveNotificationSetting(toggle) {
+    const kind = toggle.dataset.kind;
+    const wanted = toggle.checked;
+    try {
+        const res = await fetch('/api/user/settings', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': state.csrfToken },
+            body: JSON.stringify({ notifications: { [kind]: wanted } })
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        showToast(`${NOTIFICATION_LABELS[kind]} per DM ${wanted ? 'an' : 'aus'}.`, 'success');
+    } catch (err) {
+        console.error('Failed to save DM choice:', err);
+        toggle.checked = !wanted;
+        showToast('Einstellung konnte nicht gespeichert werden.', 'danger');
     }
 }
 
@@ -233,6 +264,7 @@ export async function confirmInvitationPreference(accept) {
 
 registerActions({
     saveAccountSettings: () => saveAccountSettings(),
+    saveNotificationSetting: (el) => saveNotificationSetting(el),
     deleteUserAccount: () => deleteUserAccount(),
     toggleVerboseLog: (el) => toggleVerboseLog(el.checked),
     confirmInvitationPreference: (el) => confirmInvitationPreference(el.dataset.accept === 'true'),

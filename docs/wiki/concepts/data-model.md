@@ -60,7 +60,7 @@ Slot fields exist only on slot events: `slotId` = the slot actually taken (`null
 
 ## users (id = Discord user id) — written by `utils/userProfile.js`, `bot.js#ensureUserProfile`
 
-`{ id, username, displayName, avatar (URL), acceptInvitations (bool), createdAt, updatedAt }`
+`{ id, username, displayName, avatar (URL), acceptInvitations (bool), notifications?: { reminders, changes, waitlist } (bool each, W-16; missing field or key = on), createdAt, updatedAt }`
 
 ## comments (auto id) — `POST /api/events/:id/comments`
 

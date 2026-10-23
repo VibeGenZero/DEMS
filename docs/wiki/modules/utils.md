@@ -3,14 +3,14 @@ id: utils
 title: utils/ — domain helpers
 type: module
 tags: [utils, registration, form-fields, waitlist, audit-log, profile, debug, change-notice]
-sources: [utils/registrationService.js, utils/formFields.js, utils/eventUtils.js, utils/eventListing.js, utils/profileEvents.js, utils/eventUrl.js, utils/userProfile.js, utils/avatar.js, utils/botPermissions.js, utils/csv.js, utils/template.js, utils/sessionStore.js, utils/reminders.js, utils/debugLog.js, utils/capacity.js, utils/slotService.js, utils/eventLock.js, utils/announcementRefresh.js, utils/pollService.js, utils/pollStore.js, utils/eventPreview.js, utils/eventArchive.js, utils/eventChangeNotice.js]
+sources: [utils/registrationService.js, utils/formFields.js, utils/eventUtils.js, utils/eventListing.js, utils/profileEvents.js, utils/eventUrl.js, utils/userProfile.js, utils/avatar.js, utils/botPermissions.js, utils/csv.js, utils/template.js, utils/sessionStore.js, utils/reminders.js, utils/debugLog.js, utils/capacity.js, utils/slotService.js, utils/eventLock.js, utils/announcementRefresh.js, utils/pollService.js, utils/pollStore.js, utils/eventPreview.js, utils/eventArchive.js, utils/eventChangeNotice.js, utils/notificationPrefs.js]
 part_of: [architecture]
 depends_on: [data-layer, bot]
 see_also: [registration-flow, form-fields, role-slots]
 ---
 # utils/ — domain helpers
 
-> TL;DR: Shared domain logic used by routes and the bot: `registrationService.js` (the single source of truth for creating registrations), `formFields.js` (field types and answer format), `eventUtils.js` (loading registrations/line-ups, waitlist promotion, audit log), `capacity.js` and `slotService.js` (pure place and slot rules), `eventLock.js` (per-event lock), `announcementRefresh.js` (debounced live announcements), `eventUrl.js` (links to event pages), `eventChangeNotice.js` (change DMs after an edit, W-04), `profileEvents.js` (upcoming and history lists of the profile), `userProfile.js` (users upsert after login) and `debugLog.js` (`DEBUG_MODE` logger).
+> TL;DR: Shared domain logic used by routes and the bot: `registrationService.js` (the single source of truth for creating registrations), `formFields.js` (field types and answer format), `eventUtils.js` (loading registrations/line-ups, waitlist promotion, audit log), `capacity.js` and `slotService.js` (pure place and slot rules), `eventLock.js` (per-event lock), `announcementRefresh.js` (debounced live announcements), `eventUrl.js` (links to event pages), `eventChangeNotice.js` (change DMs after an edit, W-04), `notificationPrefs.js` (which DMs a member wants, W-16), `profileEvents.js` (upcoming and history lists of the profile), `userProfile.js` (users upsert after login) and `debugLog.js` (`DEBUG_MODE` logger).
 
 ## utils/registrationService.js
 
@@ -70,6 +70,15 @@ Exports `FORM_FIELD_TYPE` (`text, textarea, dropdown, checkbox, user, role, chan
 | `buildEventChangeMessage(title, changes, url)` | German DM: title, one line per change `~~before~~ → **after**` ("nicht festgelegt" not struck through), then "Alle Infos: <url>" |
 | `changeRecipients(registrations)` | user ids of `accepted` registrations plus their `guests`, each once; pending, waitlisted, rejected and `pendingGuests` left out |
 | `notifyEventChange({ eventId, title, changes, send = sendDM })` | loads the registrations of the event (one `where`, status filtered in memory), sends one DM per recipient one after another → `{ recipients, notified }` (only delivered DMs counted); nothing without changes. Used by `PUT /api/admin/events/:id` — see [event-lifecycle](../concepts/event-lifecycle.md) |
+
+## utils/notificationPrefs.js (W-16)
+
+| Export | Behaviour |
+|---|---|
+| `NOTIFICATION_KINDS` | `reminders` (reminders + start DM), `changes` (change DM of W-04 + cancellation DM), `waitlist` ("put on the waitlist" DM; the move-up DM is always sent) |
+| `normalizeNotificationPrefs(raw)` | all three kinds; only an explicit `false` turns one off (missing field, `null`, text → on) |
+| `filterByPreference(userIds, kind)` | `{ userIds, optedOut }`: unique ids in order that want `kind`, and how many switched it off; one `getDoc(users/{id})` per user, a missing document = on |
+| `wantsDm(userId, kind)` | bool for one user. A read error is logged and counts as on (the DM goes out) |
 
 ## utils/profileEvents.js (pure)
 

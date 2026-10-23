@@ -71,6 +71,7 @@ sources: [scripts/wiki-graph.js, docs/wiki/graph.json, CLAUDE.md]
 | `utils/formFields.js` | form-fields, utils |
 | `utils/eventUrl.js` | utils, discord-integration |
 | `utils/eventChangeNotice.js` | utils, event-lifecycle, discord-integration |
+| `utils/notificationPrefs.js` | utils, routes-user, discord-integration |
 | `utils/eventUtils.js`, `utils/eventListing.js`, `utils/profileEvents.js`, `utils/userProfile.js`, `utils/avatar.js`, `utils/botPermissions.js`, `utils/csv.js`, `utils/template.js`, `utils/sessionStore.js`, `utils/debugLog.js` | utils |
 | `utils/reminders.js` | utils, reminders-presence |
 | `public/js/**`, `public/theme-boot.js` | frontend-app |

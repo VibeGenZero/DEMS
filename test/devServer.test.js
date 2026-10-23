@@ -1388,7 +1388,7 @@ test('the export says who is checked in', async () => {
 
 // ── Admin adds members (W-06) ───────────────────────────────────────────
 
-const MEMBER_ID = { DENNIS: '200000000000000016', ELIF: '200000000000000017', GRETA: '200000000000000019' };
+const MEMBER_ID = { KIRA: '200000000000000011', DENNIS: '200000000000000016', ELIF: '200000000000000017', GRETA: '200000000000000019' };
 const memberSearch = async (client, eventId, q) => client.request(`/api/admin/events/${eventId}/member-search?q=${encodeURIComponent(q)}`);
 const addMember = (admin, eventId, body) => admin.send('POST', `/api/admin/events/${eventId}/registrations`, body);
 const dmCount = (name) => server.output().split(`DM an ${name}`).length - 1;
@@ -1650,7 +1650,9 @@ test('a new location of the seeded open event reaches the accepted guest but not
     const expected = new Set(registrations.filter(entry => entry.status === 'accepted').flatMap(entry => [entry.userId, ...(entry.guests || [])]));
     assert.ok(expected.has(MEMBER_ID.GRETA));
     assert.equal(expected.has(MEMBER_ID.ELIF), false);
-    const before = { greta: dmCount('Greta'), elif: dmCount('Elif') };
+    // Kira switched change DMs off in the seed data (W-16)
+    assert.ok(expected.delete(MEMBER_ID.KIRA));
+    const before = { greta: dmCount('Greta'), elif: dmCount('Elif'), kira: dmCount('Kira') };
 
     const moved = await admin.send('PUT', `/api/admin/events/${EVENT_ID.OPEN}`, { ...event, location: { text: 'Garten', channelId: '', channelType: '' }, notifyParticipants: true });
     const body = await moved.json();
@@ -1658,9 +1660,129 @@ test('a new location of the seeded open event reaches the accepted guest but not
     assert.equal(body.notifiedCount, expected.size);
     assert.equal(dmCount('Greta'), before.greta + 1);
     assert.equal(dmCount('Elif'), before.elif);
+    assert.equal(dmCount('Kira'), before.kira);
     assert.match(server.output(), /\*\*Ort:\*\* ~~Lobby~~ → \*\*Garten\*\*/);
 
     // Back to the seeded place, silently
     const restored = await admin.send('PUT', `/api/admin/events/${EVENT_ID.OPEN}`, event);
     assert.equal((await restored.json()).notifiedCount, 0);
+});
+
+// ── DM choices (W-16) ───────────────────────────────────────────────────
+
+const ALL_DMS = { reminders: true, changes: true, waitlist: true };
+const settingsOf = async (client) => (await client.request('/api/user/settings')).json();
+const saveSettings = (client, body) => client.send('PUT', '/api/user/settings', body);
+
+test('settings report every DM kind as on until the member chooses', async () => {
+    const newbie = await loginAs('newbie');
+    assert.deepEqual(await settingsOf(newbie), { acceptInvitations: true, notifications: ALL_DMS });
+});
+
+test('saving one DM kind keeps invitations and the other kinds', async () => {
+    const newbie = await loginAs('newbie');
+    const off = await saveSettings(newbie, { notifications: { waitlist: false } });
+    assert.equal(off.status, 200);
+    const expected = { acceptInvitations: true, notifications: { ...ALL_DMS, waitlist: false } };
+    assert.deepEqual(await off.json(), expected);
+    assert.deepEqual(await settingsOf(newbie), expected);
+
+    // The first-login dialog sends only acceptInvitations
+    await saveSettings(newbie, { acceptInvitations: false });
+    assert.deepEqual(await settingsOf(newbie), { acceptInvitations: false, notifications: { ...ALL_DMS, waitlist: false } });
+
+    // Saving a kind no longer turns invitations back on
+    await saveSettings(newbie, { notifications: { changes: false } });
+    assert.deepEqual(await settingsOf(newbie), { acceptInvitations: false, notifications: { reminders: true, changes: false, waitlist: false } });
+
+    // Text values and unknown kinds change nothing
+    const ignored = await saveSettings(newbie, { acceptInvitations: 'true', notifications: { changes: 'true', waitlist: 1, polls: false } });
+    assert.equal(ignored.status, 200);
+    assert.deepEqual(await settingsOf(newbie), { acceptInvitations: false, notifications: { reminders: true, changes: false, waitlist: false } });
+
+    // Back to the defaults for the tests that follow
+    await saveSettings(newbie, { acceptInvitations: true, notifications: ALL_DMS });
+    assert.deepEqual(await settingsOf(newbie), { acceptInvitations: true, notifications: ALL_DMS });
+});
+
+test('saving DM choices needs the CSRF token', async () => {
+    const newbie = await loginAs('newbie');
+    const res = await newbie.request('/api/user/settings', {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ notifications: { changes: false } })
+    });
+    assert.equal(res.status, 403);
+    assert.equal((await settingsOf(newbie)).notifications.changes, true);
+});
+
+const RAIDER_ID = personaById('raider').userId;
+const MEMBER_PERSONA_ID = personaById('member').userId;
+
+test('a member with change DMs off gets neither the change DM nor the cancellation (W-16)', async () => {
+    const admin = await loginAs('admin');
+    const raider = await loginAs('raider');
+    await saveSettings(raider, { notifications: { changes: false } });
+    try {
+        const fields = { title: 'Wackelkandidat', status: 'active', accessMode: 'open', approvalMode: 'instant', startDate: futureDate(5) };
+        const event = await createEventAs(admin, fields);
+        assert.equal((await addMember(admin, event.id, { userId: MEMBER_ID.DENNIS })).status, 201);
+        assert.equal((await addMember(admin, event.id, { userId: RAIDER_ID })).status, 201);
+        const before = { dennis: dmCount('Dennis'), lena: dmCount('Lena') };
+
+        const moved = await admin.send('PUT', `/api/admin/events/${event.id}`, { ...fields, startDate: futureDate(6), notifyParticipants: true });
+        assert.equal((await moved.json()).notifiedCount, 1);
+        assert.deepEqual([dmCount('Dennis'), dmCount('Lena')], [before.dennis + 1, before.lena]);
+        const [notice] = await changeNotices(admin, event.id);
+        assert.match(notice.details, /^Notified 1 of 1 participants about changed Beginn; 1 opted out$/);
+
+        const cancelled = await admin.send('PUT', `/api/admin/events/${event.id}/cancel`);
+        assert.equal((await cancelled.json()).notifiedCount, 1);
+        assert.deepEqual([dmCount('Dennis'), dmCount('Lena')], [before.dennis + 2, before.lena]);
+        assert.equal((await (await admin.request(`/api/events/${event.id}?status=all`)).json()).status, 'cancelled');
+        const { data: logs } = await (await admin.request('/api/admin/audit-log?limit=500')).json();
+        assert.ok(logs.some(log => log.action === 'CANCEL_EVENT' && log.targetId === event.id && /notified 1 users; 1 opted out$/.test(log.details)));
+    } finally {
+        await saveSettings(raider, { notifications: ALL_DMS });
+    }
+});
+
+test('waitlist DMs off: no DM for the waitlist, but the move-up DM still comes (W-16)', async () => {
+    const admin = await loginAs('admin');
+    const member = await loginAs('member');
+    await saveSettings(member, { notifications: { waitlist: false } });
+    try {
+        const event = await createEventAs(admin, { title: 'Ein Platz', maxParticipants: 1 });
+        const taken = await (await addMember(admin, event.id, { userId: MEMBER_ID.DENNIS })).json();
+        const before = dmCount('Tom');
+
+        const waiting = await (await member.send('POST', `/api/events/${event.id}/register`, {})).json();
+        assert.equal(waiting.status, 'waitlisted', JSON.stringify(waiting));
+        assert.equal(dmCount('Tom'), before);
+
+        assert.equal((await admin.send('PUT', `/api/admin/registrations/${taken.id}/status`, { status: 'rejected' })).status, 200);
+        const mine = await (await member.request(`/api/events/${event.id}/my-registration`)).json();
+        assert.equal(mine.status, 'accepted');
+        assert.equal(dmCount('Tom'), before + 1);
+        assert.match(server.output().split(`DM an Tom (${MEMBER_PERSONA_ID})`).at(-1), /Ein Platz wurde frei/);
+    } finally {
+        await saveSettings(member, { notifications: ALL_DMS });
+    }
+});
+
+test('status DMs still come with every DM kind switched off (W-16)', async () => {
+    const admin = await loginAs('admin');
+    const newbie = await loginAs('newbie');
+    await saveSettings(newbie, { notifications: { reminders: false, changes: false, waitlist: false } });
+    try {
+        const event = await createEventAs(admin, { title: 'Mit Freigabe', approvalMode: 'manual' });
+        const before = dmCount('Neo');
+        const pending = await (await newbie.send('POST', `/api/events/${event.id}/register`, {})).json();
+        assert.equal(pending.status, 'pending', JSON.stringify(pending));
+        assert.equal(dmCount('Neo'), before + 1);
+
+        assert.equal((await admin.send('PUT', `/api/admin/registrations/${pending.id}/status`, { status: 'accepted' })).status, 200);
+        assert.equal(dmCount('Neo'), before + 2);
+        assert.match(server.output().split('DM an Neo').at(-1), /du bist bei \*\*Mit Freigabe\*\* dabei/);
+    } finally {
+        await saveSettings(newbie, { notifications: ALL_DMS });
+    }
 });

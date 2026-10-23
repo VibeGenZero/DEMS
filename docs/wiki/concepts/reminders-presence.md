@@ -3,7 +3,7 @@ id: reminders-presence
 title: Reminders, start notifications and bot presence
 type: concept
 tags: [reminders, scheduler, archive, presence, activity, bot-settings, bot-control]
-sources: [bot.js, utils/reminders.js, utils/eventListing.js, utils/eventArchive.js, routes/admin.js, server.js, public/js/admin/bot-control.js]
+sources: [bot.js, utils/reminders.js, utils/notificationPrefs.js, utils/eventListing.js, utils/eventArchive.js, routes/admin.js, server.js, public/js/admin/bot-control.js]
 depends_on: [bot, data-model]
 see_also: [event-lifecycle, discord-integration]
 ---
@@ -15,8 +15,8 @@ see_also: [event-lifecycle, discord-integration]
 
 - Interval: 5 min (`setInterval`, first run 5 min after start). Started by `server.js`; `applyBotSettings` stops/starts it according to `reminderEnabled`.
 - For every event with `status === 'active'` and `startDate`:
-  - `findDueReminders(event, now)` (`utils/reminders.js`): reminders with `sent !== true`, `now >= start - hours` and `now < start`. If any are due, they are stored as `sent: true` first (a legacy number becomes `[{ hours, sent }]` on the way), then **one** DM goes to all `accepted` registrations: "⏰ Erinnerung! ..." — several reminders due at once (after a downtime) do not send several DMs.
-  - Start notification: within 5 minutes after `startDate`, if `eventStartNotificationSent` is false → set the flag, then DM accepted participants.
+  - `findDueReminders(event, now)` (`utils/reminders.js`): reminders with `sent !== true`, `now >= start - hours` and `now < start`. If any are due, they are stored as `sent: true` first (a legacy number becomes `[{ hours, sent }]` on the way), then **one** DM goes to all `accepted` registrations: "⏰ Erinnerung! ..." — several reminders due at once (after a downtime) do not send several DMs. Members who switched "Erinnerungen" off in the profile are left out (`messageAcceptedParticipants` → `filterByPreference(…, 'reminders')`, W-16); the reminder still counts as sent.
+  - Start notification: within 5 minutes after `startDate`, if `eventStartNotificationSent` is false → set the flag, then DM accepted participants (also without those who switched "Erinnerungen" off).
   - Registration deadline (W-03): once `registrationDeadline` has passed (event not over yet) and `registrationClosedRefreshed` is false → set the flag, then refresh the stored announcements (`notifyRegistrationsChanged`) so the register buttons go away. Editing the deadline resets the flag.
 - Duplicate protection lives only in the database: a restart, or a crash while sending, never repeats a DM (at most once; a crash mid-send can leave some participants without the DM).
 - Event form: the text field `#event-reminder` takes several hours ("24, 1"; comma, semicolon or space; empty = none). `editEvent` fills it with `reminderHoursOf(event.reminderHours).join(', ')`, `saveEvent` sends the text, the server normalizes it.

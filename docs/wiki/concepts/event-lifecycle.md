@@ -20,7 +20,7 @@ see_also: [routes-admin, reminders-presence, registration-flow]
 | Change status | `PUT /api/admin/events/:id/status` | any of the 4 statuses; channel create/delete |
 | Start | `POST /api/admin/events/:id/start` | `active`, `startDate = now` if empty |
 | End | `POST /api/admin/events/:id/end` | `archived`, `endDate = now`, channels deleted |
-| Cancel | `PUT /api/admin/events/:id/cancel` | `cancelled`, DM to accepted + pending, channels deleted |
+| Cancel | `PUT /api/admin/events/:id/cancel` | `cancelled`, DM to accepted + pending except members with "Änderungen" off (W-16), channels deleted |
 | Duplicate | `POST /api/admin/events/:id/duplicate` | new `draft` "(Kopie)", check-in code cleared |
 | Delete | `DELETE /api/admin/events/:id` | event + registrations deleted (comments stay) |
 | Archive (automatic) | scheduler `archiveEndedEvents` (`utils/eventArchive.js`) | `archived` 24 h after the end; audit log `AUTO_ARCHIVE_EVENT` with adminId `system` (shown as "System"); stored announcements refreshed (buttons go away); channels and event role stay |
@@ -41,8 +41,8 @@ Visibility: `GET /api/events` returns only `active` (admins may pass `?status=`)
 ## Change DMs (W-04)
 
 - When an admin edits an event and start, end or location differ from the loaded values while the status "Aktiv" is selected, the wizard shows "Teilnehmer benachrichtigen" next to "Speichern" (last step), switched on (`admin/wizard-notify.js`). Creating an event never shows it.
-- Saving with the switch on sends `notifyParticipants: true`. The server checks again: event `active` after the save and at least one change by `describeEventChanges` (dates as points in time, location by text + channel; other fields never count). Then every accepted registrant and every accepted guest gets one DM: event title, each change as ~~before~~ → **after** ("nicht festgelegt" for a missing value), link via `buildEventUrl`. Pending, waitlisted and invited guests get nothing.
-- The toast says "Event aktualisiert – n Teilnehmer benachrichtigt."; the audit log gets `NOTIFY_EVENT_CHANGE` ("Notified n of m participants about changed Beginn, Ort"). DMs that fail are not counted and never fail the save.
+- Saving with the switch on sends `notifyParticipants: true`. The server checks again: event `active` after the save and at least one change by `describeEventChanges` (dates as points in time, location by text + channel; other fields never count). Then every accepted registrant and every accepted guest gets one DM, unless they switched "Änderungen" off in the profile (W-16): event title, each change as ~~before~~ → **after** ("nicht festgelegt" for a missing value), link via `buildEventUrl`. Pending, waitlisted and invited guests get nothing.
+- The toast says "Event aktualisiert – n Teilnehmer benachrichtigt."; the audit log gets `NOTIFY_EVENT_CHANGE` ("Notified n of m participants about changed Beginn, Ort", plus "; k opted out" when members switched change DMs off; no entry without any participant). DMs that fail are not counted and never fail the save.
 - Status changes, start/end buttons and cancellations do not send this DM (cancelling has its own).
 
 ## Deadlines (W-03)
