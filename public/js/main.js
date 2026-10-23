@@ -9,6 +9,8 @@ import './admin/discord-import.js';
 import './admin/event-actions.js';
 import './admin/event-rows.js';
 import './admin/event-table.js';
+import './admin/insights-view.js';
+import './admin/insights.js';
 import './admin/maintenance.js';
 import './admin/member-rows.js';
 import './admin/member-view.js';

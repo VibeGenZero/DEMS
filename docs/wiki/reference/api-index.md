@@ -77,6 +77,7 @@ see_also: [request-lifecycle, add-api-endpoint]
 | DELETE | `/api/admin/events/:id`, `/events/series/:seriesId` |
 | GET | `/api/admin/events/:id/checkin-stats`, `/events/:id/registrations`, `/events/:id/registrations/export`, `/events/:id/member-search` |
 | GET | `/api/admin/members`, `/members/:id` (W-15, read-only) |
+| GET | `/api/admin/insights?range=30\|90\|365\|all` (W-14, read-only) |
 | POST | `/api/admin/events/:id/registrations` (W-06) |
 | PUT | `/api/admin/registrations/:id/status`, `/registrations/:id/slot`, `/registrations/:id/checkin` |
 | POST | `/api/admin/polls`, `/polls/:id/close`, `/polls/:id/announce` |

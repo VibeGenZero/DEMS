@@ -762,6 +762,9 @@
             <a class="btn btn-outline-light" href="#members">
               <i class="bi bi-people me-1"></i>Mitglieder
             </a>
+            <a class="btn btn-outline-light" href="#insights">
+              <i class="bi bi-graph-up me-1"></i>Auswertungen
+            </a>
             <button class="btn btn-outline-light" data-click="showBotMessagesModal">
               <i class="bi bi-chat-dots me-1"></i>Bot-Nachrichten
             </button>
@@ -836,6 +839,32 @@
           </div>
         </div>
         <div id="members-table"></div>
+      </div>
+    </section>
+
+    <!-- Evaluations for admins (W-14): admin/insights.js -->
+    <section id="insights-section" class="app-section is-hidden">
+      <div class="container section-container">
+        <div class="section-header d-flex justify-content-between align-items-center flex-wrap gap-3">
+          <div>
+            <h2><i class="bi bi-graph-up me-2"></i>Auswertungen</h2>
+            <p class="text-secondary mb-0">Vergangene Events: Anwesenheit, Auslastung, aktive Mitglieder und Kategorien.</p>
+          </div>
+          <ul class="nav nav-pills" id="insights-ranges" role="tablist" aria-label="Zeitraum"></ul>
+        </div>
+        <div class="stats-grid" id="insights-totals"></div>
+        <div class="insights-grid" id="insights-lists">
+          <div class="glass-card p-4">
+            <h3 class="insights-card-title"><i class="bi bi-trophy me-2"></i>Aktivste Mitglieder</h3>
+            <div id="insights-members"></div>
+          </div>
+          <div class="glass-card p-4">
+            <h3 class="insights-card-title"><i class="bi bi-tags me-2"></i>Beliebte Kategorien</h3>
+            <div id="insights-categories"></div>
+          </div>
+        </div>
+        <h3 class="insights-card-title mt-4">Ausgewertete Events</h3>
+        <div id="insights-table"></div>
       </div>
     </section>
 

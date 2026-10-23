@@ -322,3 +322,48 @@ test('members see no member overview and are sent away from it', async ({ page }
     await expect(page.locator('#events-section')).toBeVisible();
     await expect(page.locator('#members-section')).toBeHidden();
 });
+
+// ── Evaluations (W-14) ────────────────────────────────────────
+
+async function openInsights(page) {
+    await loginAs(page, 'admin');
+    await navigate(page, 'admin');
+    await page.locator('#admin-section a[href="#insights"]').click();
+    await expect(page.locator('#insights-section')).toBeVisible();
+    await expect(page.locator('#insights-totals .stat-card')).toHaveCount(4);
+}
+
+test('admins open the evaluations and switch the time range', async ({ page }) => {
+    const errors = watchErrors(page);
+    await openInsights(page);
+    await expect(page.locator('#insights-ranges .nav-link.active')).toHaveText('90 Tage');
+    await expect(page.locator('#insights-totals')).toContainText('Teilnahmequote');
+    await expect(page.locator('#insights-totals')).toContainText('Auslastung');
+
+    await page.locator('#insights-ranges [data-range="all"]').click();
+    await expect(page.locator('#insights-ranges .nav-link.active')).toHaveText('Alles');
+    await expect(page.locator('#insights-table')).toContainText('Sommerfest');
+    await expect(page.locator('#insights-categories .insights-category').first()).toBeVisible();
+    await expect(page.locator('#insights-categories progress.capacity-meter').first()).toBeVisible();
+    expect(errors).toEqual([]);
+});
+
+test('the evaluated events sort by quote', async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name === 'mobile', 'the column heads are only read by screen readers on phones');
+    await openInsights(page);
+    await page.locator('#insights-ranges [data-range="all"]').click();
+    await expect(page.locator('#insights-table tbody tr').first()).toBeVisible();
+    const head = page.locator('#insights-table th', { hasText: 'Quote' });
+    await head.locator('button').click();
+    await expect(head).toHaveAttribute('aria-sort', 'descending');
+    const quotes = (await page.locator('#insights-table td[data-label="Quote"]').allTextContents())
+        .filter(text => text !== '–').map(text => parseInt(text, 10));
+    expect(quotes).toEqual([...quotes].sort((a, b) => b - a));
+});
+
+test('members are sent away from the evaluations', async ({ page }) => {
+    await loginAs(page, 'member');
+    await page.goto('/#insights');
+    await expect(page.locator('#events-section')).toBeVisible();
+    await expect(page.locator('#insights-section')).toBeHidden();
+});

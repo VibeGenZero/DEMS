@@ -182,6 +182,7 @@ function buildMemberHistory(registrations, eventsById, tracked, now = new Date()
 }
 
 module.exports = {
+    isOver,
     trackedEventIds,
     memberStats,
     lastActivity,

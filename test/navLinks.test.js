@@ -77,3 +77,29 @@ test('a member page marks the navbar link of the member list', async () => {
     assert.deepEqual([...membersLink.classes], ['active']);
     assert.deepEqual([...adminLink.classes], []);
 });
+
+// The evaluations page has no link of its own; it belongs to the admin area (W-14)
+test('the evaluations page marks the navbar link of the admin area', async () => {
+    const adminLink = fakeLink('admin-section', []);
+    const eventsLink = fakeLink('events-section', ['active']);
+    const noop = () => {};
+    const storage = { getItem: () => null, setItem: noop, removeItem: noop };
+    const document = {
+        getElementById: () => ({ style: {}, classList: { add: noop, remove: noop, toggle: noop, contains: () => false } }),
+        addEventListener: noop,
+        querySelector: () => null,
+        querySelectorAll: (selector) => (selector === '#main-navbar .nav-link' ? [adminLink, eventsLink] : [])
+    };
+    const context = vm.createContext({
+        document, console, location: { hash: '#insights', search: '' }, history: { replaceState: noop, pushState: noop },
+        localStorage: storage, sessionStorage: storage,
+        setTimeout: noop, clearTimeout: noop, setInterval: () => 0, clearInterval: noop
+    });
+    context.window = context;
+    const router = (await loadFrontendModules(ROUTER_FILE, context)).get('router.js');
+
+    router.handleRoute();
+
+    assert.deepEqual([...adminLink.classes], ['active']);
+    assert.deepEqual([...eventsLink.classes], []);
+});
