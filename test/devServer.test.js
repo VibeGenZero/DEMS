@@ -1882,3 +1882,74 @@ test('an unknown range is refused', async () => {
     assert.equal(res.status, 400);
     assert.deepEqual(await res.json(), { error: 'Ungültiger Zeitraum.' });
 });
+
+// ── Message to all participants (W-09) ────────────────────────
+
+test('the recipient counts are for admins and contain only numbers', async () => {
+    const member = await loginAs('member');
+    assert.equal((await member.request(`/api/admin/events/${EVENT_ID.OPEN}/message-recipients`)).status, 403);
+    const admin = await loginAs('admin');
+    const res = await admin.request(`/api/admin/events/${EVENT_ID.OPEN}/message-recipients`);
+    assert.equal(res.status, 200);
+    const counts = await res.json();
+    assert.deepEqual(Object.keys(counts).sort(), ['accepted', 'all']);
+    assert.ok(Number.isInteger(counts.accepted) && counts.accepted > 0);
+    assert.ok(counts.all >= counts.accepted);
+    assert.equal((await admin.request('/api/admin/events/gibt-es-nicht/message-recipients')).status, 404);
+});
+
+test('sending a message is refused without CSRF token, for members and for bad input', async () => {
+    const url = `/api/admin/events/${EVENT_ID.OPEN}/message`;
+    const member = await loginAs('member');
+    assert.equal((await member.send('POST', url, { text: 'Hi', group: 'accepted' })).status, 403);
+    const admin = await loginAs('admin');
+    const noToken = await admin.request(url, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: 'Hi', group: 'accepted' })
+    });
+    assert.equal(noToken.status, 403);
+
+    const badGroup = await admin.send('POST', url, { text: 'Hi', group: 'x' });
+    assert.equal(badGroup.status, 400);
+    assert.deepEqual(await badGroup.json(), { error: 'Ungültige Empfängerauswahl.' });
+    const blank = await admin.send('POST', url, { text: '   ', group: 'accepted' });
+    assert.equal(blank.status, 400);
+    assert.deepEqual(await blank.json(), { error: 'Bitte gib eine Nachricht ein.' });
+    const missing = await admin.send('POST', '/api/admin/events/gibt-es-nicht/message', { text: 'Hi', group: 'accepted' });
+    assert.equal(missing.status, 404);
+});
+
+test('a message to an event without accepted participants is refused and not logged', async () => {
+    const admin = await loginAs('admin');
+    const before = (await (await admin.request('/api/admin/audit-log?limit=100')).json()).data
+        .filter(entry => entry.action === 'MESSAGE_PARTICIPANTS').length;
+    const res = await admin.send('POST', `/api/admin/events/${EVENT_ID.DRAFT}/message`, { text: 'Niemand da?', group: 'accepted' });
+    assert.equal(res.status, 400);
+    assert.deepEqual(await res.json(), { error: 'Niemand in dieser Auswahl.' });
+    const after = (await (await admin.request('/api/admin/audit-log?limit=100')).json()).data
+        .filter(entry => entry.action === 'MESSAGE_PARTICIPANTS').length;
+    assert.equal(after, before);
+});
+
+test('a message reaches every accepted participant, also with DM choices off, and is logged (W-09)', async () => {
+    const admin = await loginAs('admin');
+    const counts = await (await admin.request(`/api/admin/events/${EVENT_ID.OPEN}/message-recipients`)).json();
+    const text = `Treffpunkt ist heute Tor 2 (${Date.now()}).`;
+    const outputBefore = server.output().length;
+
+    const res = await admin.send('POST', `/api/admin/events/${EVENT_ID.OPEN}/message`, { text, group: 'accepted' });
+    assert.equal(res.status, 200);
+    assert.deepEqual(await res.json(), { recipients: counts.accepted, delivered: counts.accepted });
+
+    const log = server.output().slice(outputBefore);
+    assert.equal(log.split('DM an ').length - 1, counts.accepted);
+    assert.match(log, /DM an Kira/, 'Kira switched change DMs off and still gets the message');
+    assert.ok(log.includes(text));
+    assert.match(log, /Nachricht zum Event/);
+    assert.match(log, /Mori \(Admin\)/);
+
+    const { data: logs } = await (await admin.request('/api/admin/audit-log?limit=100')).json();
+    const entry = logs.find(item => item.action === 'MESSAGE_PARTICIPANTS' && item.details.includes(text.slice(0, 20)));
+    assert.ok(entry, 'audit entry written');
+    assert.equal(entry.targetId, EVENT_ID.OPEN);
+    assert.match(entry.details, new RegExp(`${counts.accepted}/${counts.accepted} zugestellt`));
+});

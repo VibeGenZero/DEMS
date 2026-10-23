@@ -3144,6 +3144,73 @@ a.profile-history-row:hover {
 }
 
 /* ═══════════════════════════════════════════ */
+/* PARTICIPANT MESSAGE                         */
+/* #participantMessageModal (W-09), markup in  */
+/* index.html, logic in                        */
+/* admin/participant-message.js; the preview   */
+/* reuses DISCORD PREVIEW                      */
+/* ═══════════════════════════════════════════ */
+.participant-message-groups {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-8);
+}
+
+.participant-message-count {
+  margin-left: auto;
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+}
+
+.participant-message-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-12);
+  margin-top: var(--space-4);
+  color: var(--text-muted);
+  font-size: var(--font-size-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.participant-message-hint {
+  color: var(--warning);
+  font-weight: 600;
+}
+
+/* Plain text DM: Discord keeps single line breaks, Markdown would join them */
+.discord-message-text p {
+  margin-bottom: var(--space-8);
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+.discord-message-text p:last-child {
+  margin-bottom: 0;
+}
+
+/* Own class instead of Bootstrap's d-flex: its !important would keep the row visible during the confirmation */
+.participant-message-actions {
+  display: flex;
+  gap: var(--space-8);
+}
+
+.participant-message-confirm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-8);
+  width: 100%;
+}
+
+.participant-message-confirm span {
+  margin-right: auto;
+  font-weight: 600;
+}
+
+/* ═══════════════════════════════════════════ */
 /* WIZARD PREVIEW                              */
 /* setWizardMode() in admin/wizard.js,         */
 /* renderWizardPreview() in wizard-preview.js  */

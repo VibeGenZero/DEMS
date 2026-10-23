@@ -3,7 +3,7 @@ id: routes-admin
 title: routes/admin.js — admin API
 type: module
 tags: [api, admin, events, registrations, discord, bot-control, maintenance, audit-log, csv]
-sources: [routes/admin.js, middleware/validators.js, utils/eventUtils.js, utils/capacity.js, utils/memberOverview.js, utils/insights.js]
+sources: [routes/admin.js, middleware/validators.js, utils/eventUtils.js, utils/capacity.js, utils/memberOverview.js, utils/insights.js, utils/participantMessage.js]
 part_of: [architecture]
 depends_on: [middleware, utils, data-layer, bot]
 see_also: [event-lifecycle, maintenance-mode, discord-integration, api-index]
@@ -40,6 +40,8 @@ see_also: [event-lifecycle, maintenance-mode, discord-integration, api-index]
 | PUT | `/registrations/:id/status` | `validateRegStatus` (`accepted`\|`rejected`\|`waitlisted`); accepted → DM template + `assignRole`; rejected → DM + `promoteFromWaitlist`; slot events: accepting a slot-less registration picks a wanted free slot or overbooks the main role (`warning`), rejecting/waitlisting clears `slotId`; leaving `accepted` also clears a check-in (`checkedIn: false`, `checkedInAt: null`) | `UPDATE_REGISTRATION_STATUS` |
 | PUT | `/registrations/:id/checkin` | body `{ checkedIn: boolean }` (else 400); only `accepted` registrations (else 400), any time, no code needed; sets `checkedIn` + `checkedInAt` (a repeat keeps the time) or `checkedIn: false, checkedInAt: null` | `CHECKIN_REGISTRATION` / `UNDO_CHECKIN_REGISTRATION` |
 | PUT | `/registrations/:id/slot` | body `{ slotId }` → `moveRegistrationToSlot` (may overbook → `warning`), promotes the waitlist | `MOVE_REGISTRATION_SLOT` |
+| GET | `/events/:id/message-recipients` | W-09: `{ accepted, all }` = how many people each group of the participant message reaches (numbers only); 404 "Event nicht gefunden" | — |
+| POST | `/events/:id/message` | W-09: body `{ text, group }`; group not `accepted`/`all` → 400 "Ungültige Empfängerauswahl.", text empty or > 1500 after trimming → 400, unknown event → 404, nobody addressed → 400 "Niemand in dieser Auswahl." (no audit entry); else `sendParticipantMessage` with `sendDM` (DM choices of W-16 do not apply), answers `{ recipients, delivered }` | `MESSAGE_PARTICIPANTS` (details "<group>: delivered/recipients zugestellt – „<first 100 chars>“", target = event) |
 | POST | `/events/:id/announce` | body `{ text, roleIds, pingEveryone }` → `sendChannelMessage` to `DISCORD_ANNOUNCE_CHANNEL_ID` with embed + buttons (live line-up); stores `{ channelId, messageId }` in `event.announcements` (max 5) | `ANNOUNCE_EVENT` |
 | POST | `/events/:id/sync-discord` | creates a Discord scheduled event once, stores `discordScheduledEventId` | `SYNC_DISCORD_EVENT` |
 | GET / PUT | `/bot-messages` | templates `registration`, `accepted`, `rejected` (`validateBotMessages`, ≤2000 chars) | `UPDATE_TEMPLATES` |

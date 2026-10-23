@@ -174,7 +174,8 @@ export function adminEventActions(event, state, { inSeries = false, seriesRow = 
         main,
         general: [
             ...(main === 'registrations' ? [] : ['registrations']),
-            'edit', 'announce', 'duplicate', 'export',
+            // A message needs participants, so a draft does not offer one (W-09)
+            'edit', 'announce', ...(state === 'draft' ? [] : ['message']), 'duplicate', 'export',
             ...(event.discordScheduledEventId ? [] : ['syncDiscord'])
         ],
         status,

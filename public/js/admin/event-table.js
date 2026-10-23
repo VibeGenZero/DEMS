@@ -31,6 +31,7 @@ const ACTIONS = {
     registrations: { icon: 'list-check', label: 'Anmeldungen', attributes: (t) => `data-click="showRegistrations" data-event-id="${t.id}" data-event-title="${t.label}"` },
     edit: { icon: 'pencil', label: 'Bearbeiten', attributes: (t) => `data-click="editEvent" data-event-id="${t.id}"` },
     announce: { icon: 'megaphone', label: 'Ankündigen', attributes: (t) => `data-click="announceEvent" data-event-id="${t.id}"` },
+    message: { icon: 'chat-text', label: 'Nachricht an Teilnehmer …', attributes: (t) => `data-click="showParticipantMessage" data-event-id="${t.id}" data-event-title="${t.label}"` },
     duplicate: { icon: 'copy', label: 'Duplizieren', attributes: (t) => `data-click="duplicateEvent" data-event-id="${t.id}"` },
     export: { icon: 'download', label: 'CSV-Export', attributes: (t) => `data-click="exportRegistrations" data-event-id="${t.id}"` },
     syncDiscord: { icon: 'discord', label: 'In Discord eintragen …', attributes: (t) => `data-click="syncDiscordEvent" data-event-id="${t.id}" data-event-title="${t.label}"` },

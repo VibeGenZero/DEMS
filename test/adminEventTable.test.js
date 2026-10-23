@@ -89,8 +89,9 @@ test('the main action follows the state and shows open requests', async () => {
 test('the menu has three groups and is the only place to delete', async () => {
     const { table } = await openTable();
     const row = rowOf(table(), '>Spieleabend<');
-    assert.deepEqual(menuLabels(row), ['Bearbeiten', 'Ankündigen', 'Duplizieren', 'CSV-Export', 'In Discord eintragen …', 'Zurück in Entwürfe', 'Archivieren', 'Löschen …']);
+    assert.deepEqual(menuLabels(row), ['Bearbeiten', 'Ankündigen', 'Nachricht an Teilnehmer …', 'Duplizieren', 'CSV-Export', 'In Discord eintragen …', 'Zurück in Entwürfe', 'Archivieren', 'Löschen …']);
     assert.equal((row.match(/dropdown-divider/g) || []).length, 2);
+    assert.match(row, /data-click="showParticipantMessage" data-event-id="[^"]+" data-event-title="Spieleabend[^"]*"/);
     assert.match(row, /<h6 class="dropdown-header">Status<\/h6>/);
     assert.match(row, /class="dropdown-item is-danger" data-click="deleteEvent"/);
     // Outside the menu nothing deletes

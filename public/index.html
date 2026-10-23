@@ -1595,7 +1595,10 @@
       <div class="modal-content">
         <div class="modal-header border-0">
           <h5 class="modal-title">Anmeldungen — <span id="reg-event-title"></span></h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+          <button type="button" class="btn btn-sm btn-outline-light ms-auto me-2" id="reg-message-btn" data-click="showParticipantMessage">
+            <i class="bi bi-chat-text me-1"></i>Nachricht an Teilnehmer
+          </button>
+          <button type="button" class="btn-close ms-0" data-bs-dismiss="modal"></button>
         </div>
         <div class="modal-body">
           <div id="reg-add" class="mb-3 is-hidden">
@@ -1671,6 +1674,52 @@
   </div>
 
   <!-- Announce Event Modal -->
+  <!-- Message of the team to the participants (W-09): admin/participant-message.js -->
+  <div class="modal fade" id="participantMessageModal" tabindex="-1" aria-labelledby="participant-message-heading">
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+      <div class="modal-content">
+        <div class="modal-header border-0">
+          <h5 class="modal-title" id="participant-message-heading"><i class="bi bi-chat-text me-2"></i>Nachricht an Teilnehmer — <span id="participant-message-title"></span></h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="participant-message-groups mb-3" role="radiogroup" aria-label="Empfänger">
+            <input type="radio" class="btn-check" name="participant-group" id="participant-group-accepted" data-change="setParticipantGroup" data-group="accepted" checked>
+            <label class="btn btn-sm btn-outline-light" for="participant-group-accepted">Nur Angenommene</label>
+            <input type="radio" class="btn-check" name="participant-group" id="participant-group-all" data-change="setParticipantGroup" data-group="all">
+            <label class="btn btn-sm btn-outline-light" for="participant-group-all">Alle Anmeldungen</label>
+            <span class="participant-message-count" id="participant-message-count" aria-live="polite"></span>
+          </div>
+          <label for="participant-message-text" class="form-label">Nachricht</label>
+          <textarea class="form-control" id="participant-message-text" rows="6" maxlength="1500"
+            placeholder="z. B. Treffpunkt ist heute Tor 2." data-input="updateParticipantMessage"></textarea>
+          <div class="participant-message-meta">
+            <span id="participant-message-hint" class="participant-message-hint"></span>
+            <span id="participant-message-chars"></span>
+          </div>
+          <div class="form-text mb-3">Geht als Discord-DM an jede Person einzeln, auch an Mitglieder, die Erinnerungen oder Änderungen ausgeschaltet haben. Abgelehnte Anmeldungen bekommen nichts.</div>
+          <div class="form-label">Vorschau</div>
+          <div id="participant-message-preview" class="participant-message-preview" inert></div>
+        </div>
+        <div class="modal-footer border-0">
+          <div id="participant-message-actions" class="participant-message-actions">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Abbrechen</button>
+            <button type="button" class="btn btn-accent" id="participant-message-send" data-click="askSendParticipantMessage" disabled>
+              <i class="bi bi-send me-1"></i>Senden
+            </button>
+          </div>
+          <div id="participant-message-confirm" class="participant-message-confirm is-hidden">
+            <span id="participant-message-question"></span>
+            <button type="button" class="btn btn-secondary" data-click="cancelSendParticipantMessage">Zurück</button>
+            <button type="button" class="btn btn-accent" id="participant-message-yes" data-click="sendParticipantMessage">
+              <i class="bi bi-send me-1"></i>Ja, senden
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div class="modal fade" id="announceModal" tabindex="-1">
     <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
       <div class="modal-content">
