@@ -19,6 +19,8 @@ export async function showRegistrations(eventId, eventTitle) {
     Object.assign(regDialog, { eventId, eventTitle, slots: [] });
     toggleElement(document.getElementById('reg-add'), false);
     document.getElementById('reg-event-title').textContent = eventTitle;
+    // The message button opens the participant message for this event (W-09)
+    Object.assign(document.getElementById('reg-message-btn').dataset, { eventId, eventTitle });
     const tbody = document.getElementById('registrations-tbody');
     const empty = document.getElementById('registrations-empty');
     tbody.innerHTML = '<tr><td colspan="8" class="text-center py-4"><div class="spinner-border spinner-border-sm text-secondary"></div></td></tr>';

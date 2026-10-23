@@ -367,3 +367,45 @@ test('members are sent away from the evaluations', async ({ page }) => {
     await expect(page.locator('#events-section')).toBeVisible();
     await expect(page.locator('#insights-section')).toBeHidden();
 });
+
+// ── Message to all participants (W-09) ────────────────────────
+
+test('admins write to the participants of an event from the menu', async ({ page }) => {
+    const errors = watchErrors(page);
+    await openAdmin(page);
+    const spieleabend = row(page, 'Community-Spieleabend');
+    await spieleabend.locator('[data-bs-toggle="dropdown"]').click();
+    await spieleabend.locator('.dropdown-menu.show [data-click="showParticipantMessage"]').click();
+    const dialog = await waitForDialog(page, '#participantMessageModal');
+    await expect(dialog.locator('#participant-message-title')).toHaveText('Community-Spieleabend');
+    await expect(dialog.locator('#participant-message-count')).toHaveText(/^an \d+ Person(en)?$/);
+    const accepted = await dialog.locator('#participant-message-count').textContent();
+    await expect(dialog.locator('#participant-message-send')).toBeDisabled();
+
+    await dialog.locator('label[for="participant-group-all"]').click();
+    await expect(dialog.locator('#participant-message-count')).toHaveText(/^an \d+ Person(en)?$/);
+    await dialog.locator('label[for="participant-group-accepted"]').click();
+    await expect(dialog.locator('#participant-message-count')).toHaveText(accepted);
+
+    await dialog.locator('#participant-message-text').fill('Treffpunkt ist heute Tor 2.\nBitte pünktlich sein.');
+    await expect(dialog.locator('#participant-message-preview')).toContainText('Treffpunkt ist heute Tor 2.');
+    await expect(dialog.locator('#participant-message-preview')).toContainText('Nachricht zum Event „Community-Spieleabend“');
+    await dialog.locator('#participant-message-send').click();
+    await expect(dialog.locator('#participant-message-question')).toHaveText(`Nachricht ${accepted} senden?`);
+    // The question replaces the first buttons (Bootstrap utilities with !important must not keep them)
+    await expect(dialog.locator('#participant-message-actions')).toBeHidden();
+    await dialog.locator('#participant-message-yes').click();
+    await expect(dialog).toBeHidden();
+    await expect(toast(page)).toContainText(/Nachricht an \d+ von \d+ Personen zugestellt\./);
+    expect(errors).toEqual([]);
+});
+
+test('the registrations dialog hands over to the message dialog', async ({ page }) => {
+    await openAdmin(page);
+    await row(page, 'Community-Spieleabend').locator('[data-click="showRegistrations"]').first().click();
+    await waitForDialog(page, '#registrationsModal');
+    await page.locator('#reg-message-btn').click();
+    await expect(page.locator('#registrationsModal')).toBeHidden();
+    const dialog = await waitForDialog(page, '#participantMessageModal');
+    await expect(dialog.locator('#participant-message-title')).toHaveText('Community-Spieleabend');
+});

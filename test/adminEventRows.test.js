@@ -184,10 +184,12 @@ test('the menu names the status changes that fit the state', () => {
 
 test('the general entries leave out the main action and a finished Discord entry', () => {
     const general = (state, fields = {}) => [...app.adminEventActions(event('e', fields), state).general];
-    assert.deepEqual(general('upcoming'), ['edit', 'announce', 'duplicate', 'export', 'syncDiscord']);
-    assert.deepEqual(general('past'), ['registrations', 'edit', 'announce', 'duplicate', 'export', 'syncDiscord']);
+    assert.deepEqual(general('upcoming'), ['edit', 'announce', 'message', 'duplicate', 'export', 'syncDiscord']);
+    assert.deepEqual(general('past'), ['registrations', 'edit', 'announce', 'message', 'duplicate', 'export', 'syncDiscord']);
+    assert.deepEqual(general('archived'), ['edit', 'announce', 'message', 'duplicate', 'export', 'syncDiscord']);
+    assert.deepEqual(general('running'), ['edit', 'announce', 'message', 'duplicate', 'export', 'syncDiscord']);
     assert.deepEqual(general('draft'), ['registrations', 'edit', 'announce', 'duplicate', 'export', 'syncDiscord']);
-    assert.deepEqual(general('upcoming', { discordScheduledEventId: '123' }), ['edit', 'announce', 'duplicate', 'export']);
+    assert.deepEqual(general('upcoming', { discordScheduledEventId: '123' }), ['edit', 'announce', 'message', 'duplicate', 'export']);
 });
 
 test('deleting names the date inside a series and offers the whole series on its row', () => {

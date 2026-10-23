@@ -16,6 +16,7 @@ const { describeEventChanges, notifyEventChange } = require('../utils/eventChang
 const { filterByPreference, normalizeNotificationPrefs } = require('../utils/notificationPrefs');
 const { trackedEventIds, memberStats, memberBase, buildMemberList, buildMemberHistory } = require('../utils/memberOverview');
 const { DEFAULT_RANGE, isValidRange, buildInsights } = require('../utils/insights');
+const { MESSAGE_GROUPS, messageRecipients, recipientCounts, validateMessageText, sendParticipantMessage } = require('../utils/participantMessage');
 const { describePlaces, formatPlaces, formatWaitlist, waitlistPositions } = require('../utils/capacity');
 const { getSlots, findSlot, formatSlotLabel, normalizeSlots, sumCapacity, resolveAcceptanceSlot, buildRoster } = require('../utils/slotService');
 const { buildPreviewEvent } = require('../utils/eventPreview');
@@ -1012,6 +1013,66 @@ router.put('/registrations/:id/slot', async (req, res) => {
     } catch (err) {
         console.error('Move registration slot error:', err);
         res.status(500).json({ error: 'Fehler beim Verschieben' });
+    }
+});
+
+/**
+ * GET /api/admin/events/:id/message-recipients — How many people each group of the
+ * participant message reaches (W-09). Numbers only.
+ */
+router.get('/events/:id/message-recipients', async (req, res) => {
+    try {
+        const eventSnap = await getDoc(doc(db, 'events', req.params.id));
+        if (!eventSnap.exists()) return res.status(404).json({ error: 'Event nicht gefunden' });
+        res.json(recipientCounts(await loadEventRegistrations(req.params.id)));
+    } catch (err) {
+        console.error('Message recipients error:', err);
+        res.status(500).json({ error: 'Fehler beim Zählen der Empfänger' });
+    }
+});
+
+/**
+ * POST /api/admin/events/:id/message — DM of the team to the participants (W-09).
+ * Body `{ text, group }` (group "accepted" | "all"); DM choices (W-16) do not apply.
+ * Answers `{ recipients, delivered }`.
+ */
+router.post('/events/:id/message', async (req, res) => {
+    try {
+        const { group } = req.body;
+        if (typeof group !== 'string' || !Object.hasOwn(MESSAGE_GROUPS, group)) {
+            return res.status(400).json({ error: 'Ungültige Empfängerauswahl.' });
+        }
+        const checked = validateMessageText(req.body.text);
+        if (checked.error) return res.status(400).json({ error: checked.error });
+
+        const eventSnap = await getDoc(doc(db, 'events', req.params.id));
+        if (!eventSnap.exists()) return res.status(404).json({ error: 'Event nicht gefunden' });
+        const registrations = await loadEventRegistrations(req.params.id);
+        if (messageRecipients(registrations, group).length === 0) {
+            return res.status(400).json({ error: 'Niemand in dieser Auswahl.' });
+        }
+
+        const admin = req.session.user;
+        const result = await sendParticipantMessage({
+            registrations,
+            group,
+            title: eventSnap.data().title || '',
+            text: checked.text,
+            sender: admin.displayName || admin.username || 'Admin',
+            url: buildEventUrl(req.params.id),
+            send: sendDM
+        });
+        const groupLabel = group === 'all' ? 'Alle Anmeldungen' : 'Nur Angenommene';
+        await addAuditLog(
+            'MESSAGE_PARTICIPANTS',
+            admin.id,
+            `${groupLabel}: ${result.delivered}/${result.recipients} zugestellt – „${checked.text.slice(0, 100)}“`,
+            req.params.id
+        );
+        res.json(result);
+    } catch (err) {
+        console.error('Participant message error:', err);
+        res.status(500).json({ error: 'Fehler beim Senden der Nachricht' });
     }
 });
 
