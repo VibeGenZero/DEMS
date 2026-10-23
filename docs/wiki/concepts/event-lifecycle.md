@@ -3,7 +3,7 @@ id: event-lifecycle
 title: Event lifecycle — status, series, check-in
 type: concept
 tags: [events, status, draft, archive, auto-archive, ended, cancel, series, recurring, checkin, duplicate]
-sources: [routes/admin.js, routes/events.js, public/js/admin/event-actions.js, public/js/admin/wizard.js, utils/eventArchive.js, utils/eventListing.js]
+sources: [routes/admin.js, routes/events.js, public/js/admin/event-actions.js, public/js/admin/wizard.js, public/js/admin/wizard-notify.js, utils/eventArchive.js, utils/eventListing.js, utils/eventChangeNotice.js]
 depends_on: [data-model]
 see_also: [routes-admin, reminders-presence, registration-flow]
 ---
@@ -16,7 +16,7 @@ see_also: [routes-admin, reminders-presence, registration-flow]
 | Action (admin) | Endpoint | Result / side effects |
 |---|---|---|
 | Create | `POST /api/admin/events` | status from wizard (default `active`); channels if `autoCreateChannels` + active |
-| Edit | `PUT /api/admin/events/:id` | full replace of whitelisted fields; channels created/deleted on activation changes |
+| Edit | `PUT /api/admin/events/:id` | full replace of whitelisted fields; channels created/deleted on activation changes; optional change DM (see below) |
 | Change status | `PUT /api/admin/events/:id/status` | any of the 4 statuses; channel create/delete |
 | Start | `POST /api/admin/events/:id/start` | `active`, `startDate = now` if empty |
 | End | `POST /api/admin/events/:id/end` | `archived`, `endDate = now`, channels deleted |
@@ -37,6 +37,13 @@ Visibility: `GET /api/events` returns only `active` (admins may pass `?status=`)
 - From the end on, an event takes no registration and no slot change: web and Discord answer "Das Event ist schon vorbei." (`event_ended`, see [registration-flow](registration-flow.md)), the Discord announcement keeps only "Zum Event", the event page shows "Dieses Event ist vorbei." instead of the form and the countdown. Registered members still see their own status. Unregistering stays possible, but nobody moves up from the waitlist any more (no promotion after the end).
 - 24 h after the end the archive scheduler sets `archived` (table row above). It runs once at server start, so events that ended while the server was down are caught up, then every 5 minutes — see [reminders-presence](reminders-presence.md). Until then the admin table shows the event as "Vorbei" with the main action "Archivieren".
 - Events that never become `active` (drafts, cancelled) are not touched; an event that is already archived stays archived.
+
+## Change DMs (W-04)
+
+- When an admin edits an event and start, end or location differ from the loaded values while the status "Aktiv" is selected, the wizard shows "Teilnehmer benachrichtigen" next to "Speichern" (last step), switched on (`admin/wizard-notify.js`). Creating an event never shows it.
+- Saving with the switch on sends `notifyParticipants: true`. The server checks again: event `active` after the save and at least one change by `describeEventChanges` (dates as points in time, location by text + channel; other fields never count). Then every accepted registrant and every accepted guest gets one DM: event title, each change as ~~before~~ → **after** ("nicht festgelegt" for a missing value), link via `buildEventUrl`. Pending, waitlisted and invited guests get nothing.
+- The toast says "Event aktualisiert – n Teilnehmer benachrichtigt."; the audit log gets `NOTIFY_EVENT_CHANGE` ("Notified n of m participants about changed Beginn, Ort"). DMs that fail are not counted and never fail the save.
+- Status changes, start/end buttons and cancellations do not send this DM (cancelling has its own).
 
 ## Deadlines (W-03)
 

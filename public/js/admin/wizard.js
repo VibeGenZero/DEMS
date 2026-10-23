@@ -1,6 +1,7 @@
 /**
  * Event wizard: steps with their checks, create/edit/save, roles.
- * Location field: wizard-location.js; rules: wizard-checks.js; marks: wizard-marks.js.
+ * Location field: wizard-location.js; rules: wizard-checks.js; marks: wizard-marks.js;
+ * switch "Teilnehmer benachrichtigen": wizard-notify.js.
  */
 import { state } from '../core/state.js';
 import { glideTabs } from '../core/tab-glider.js';
@@ -8,6 +9,7 @@ import { loadAdminEvents, loadAdminStats } from './dashboard.js';
 import { addFormField, getFormFieldsFromBuilder, getSlotsFromEditor, renderSlotEditor } from './wizard-builders.js';
 import { checkWizardStep } from './wizard-checks.js';
 import { clearAllMarks, showStepErrors } from './wizard-marks.js';
+import { notifyRequested, rememberLoadedEvent, updateNotifySwitch } from './wizard-notify.js';
 import { cancelWizardPreview, renderWizardPreview } from './wizard-preview.js';
 import { navigateTo } from '../core/router.js';
 import { registerActions } from '../core/actions.js';
@@ -68,6 +70,7 @@ export function wizardGoTo(step) {
     toggleElement(document.getElementById('wizard-btn-back'), step > 1);
     toggleElement(document.getElementById('wizard-btn-next'), step < WIZARD_TOTAL_STEPS);
     toggleElement(document.getElementById('wizard-btn-save'), step === WIZARD_TOTAL_STEPS);
+    updateNotifySwitch(step === WIZARD_TOTAL_STEPS ? collectEventDraft() : null);
     document.getElementById('wizard-step-counter').textContent = `Schritt ${step} von ${WIZARD_TOTAL_STEPS}`;
 
     // Refresh EasyMDE when returning to step 1
@@ -159,6 +162,7 @@ export function reminderHoursOf(value) {
 
 export async function showCreateEventModal() {
     state.pendingPollDecision = null;
+    rememberLoadedEvent(null);
     document.getElementById('eventModalTitle').textContent = 'Neues Event erstellen';
     document.getElementById('event-edit-id').value = '';
     document.getElementById('event-title').value = '';
@@ -257,6 +261,7 @@ export async function editEvent(eventId) {
         const event = await res.json();
 
         document.getElementById('eventModalTitle').textContent = 'Event bearbeiten';
+        rememberLoadedEvent(event);
         document.getElementById('event-edit-id').value = eventId;
         document.getElementById('event-title').value = event.title || '';
 
@@ -456,12 +461,15 @@ export async function saveEvent() {
                 'Content-Type': 'application/json',
                 'X-CSRF-TOKEN': state.csrfToken
             },
-            body: JSON.stringify(draft)
+            // Change DMs only on request and only for edits (W-04)
+            body: JSON.stringify(editId ? { ...draft, notifyParticipants: notifyRequested() } : draft)
         });
 
         if (res.ok) {
-            bootstrap.Modal.getInstance(document.getElementById('eventModal')).hide();
-            showToast(editId ? 'Event aktualisiert!' : 'Event erstellt!', 'success');
+            const { notifiedCount } = await res.json();
+            bootstrap.Modal.getOrCreateInstance(document.getElementById('eventModal')).hide();
+            const notified = notifiedCount > 0 ? ` – ${notifiedCount} Teilnehmer benachrichtigt.` : '!';
+            showToast(editId ? `Event aktualisiert${notified}` : 'Event erstellt!', 'success');
             loadAdminEvents();
             loadAdminStats();
             if (!editId && state.pendingPollDecision) {

@@ -2,15 +2,15 @@
 id: utils
 title: utils/ — domain helpers
 type: module
-tags: [utils, registration, form-fields, waitlist, audit-log, profile, debug]
-sources: [utils/registrationService.js, utils/formFields.js, utils/eventUtils.js, utils/eventListing.js, utils/profileEvents.js, utils/eventUrl.js, utils/userProfile.js, utils/avatar.js, utils/botPermissions.js, utils/csv.js, utils/template.js, utils/sessionStore.js, utils/reminders.js, utils/debugLog.js, utils/capacity.js, utils/slotService.js, utils/eventLock.js, utils/announcementRefresh.js, utils/pollService.js, utils/pollStore.js, utils/eventPreview.js, utils/eventArchive.js]
+tags: [utils, registration, form-fields, waitlist, audit-log, profile, debug, change-notice]
+sources: [utils/registrationService.js, utils/formFields.js, utils/eventUtils.js, utils/eventListing.js, utils/profileEvents.js, utils/eventUrl.js, utils/userProfile.js, utils/avatar.js, utils/botPermissions.js, utils/csv.js, utils/template.js, utils/sessionStore.js, utils/reminders.js, utils/debugLog.js, utils/capacity.js, utils/slotService.js, utils/eventLock.js, utils/announcementRefresh.js, utils/pollService.js, utils/pollStore.js, utils/eventPreview.js, utils/eventArchive.js, utils/eventChangeNotice.js]
 part_of: [architecture]
 depends_on: [data-layer, bot]
 see_also: [registration-flow, form-fields, role-slots]
 ---
 # utils/ — domain helpers
 
-> TL;DR: Shared domain logic used by routes and the bot: `registrationService.js` (the single source of truth for creating registrations), `formFields.js` (field types and answer format), `eventUtils.js` (loading registrations/line-ups, waitlist promotion, audit log), `capacity.js` and `slotService.js` (pure place and slot rules), `eventLock.js` (per-event lock), `announcementRefresh.js` (debounced live announcements), `eventUrl.js` (links to event pages), `profileEvents.js` (upcoming and history lists of the profile), `userProfile.js` (users upsert after login) and `debugLog.js` (`DEBUG_MODE` logger).
+> TL;DR: Shared domain logic used by routes and the bot: `registrationService.js` (the single source of truth for creating registrations), `formFields.js` (field types and answer format), `eventUtils.js` (loading registrations/line-ups, waitlist promotion, audit log), `capacity.js` and `slotService.js` (pure place and slot rules), `eventLock.js` (per-event lock), `announcementRefresh.js` (debounced live announcements), `eventUrl.js` (links to event pages), `eventChangeNotice.js` (change DMs after an edit, W-04), `profileEvents.js` (upcoming and history lists of the profile), `userProfile.js` (users upsert after login) and `debugLog.js` (`DEBUG_MODE` logger).
 
 ## utils/registrationService.js
 
@@ -61,6 +61,15 @@ Exports `FORM_FIELD_TYPE` (`text, textarea, dropdown, checkbox, user, role, chan
 | `isDueForArchive(event, now)` | `status === 'active'` and `now` at least 24 h after `eventEndTime`; false without a start |
 | `archiveEndedEvents({ now })` | archives every due event (`status`, `updatedAt`), audit `AUTO_ARCHIVE_EVENT` by `system`, `notifyRegistrationsChanged`; one failing event does not stop the others; returns the count |
 | `startArchiveScheduler({ waitFor })`, `stopArchiveScheduler()` | first run once `waitFor` settles (`server.js` passes `whenBotSettled()`, so the announcement refresh of the catch-up run finds a ready bot), then the interval (`unref`'d); a stop before that cancels the first run. Rules: [event-lifecycle](../concepts/event-lifecycle.md) |
+
+## utils/eventChangeNotice.js (W-04)
+
+| Export | Behaviour |
+|---|---|
+| `describeEventChanges(oldEvent, newEvent)` | `[{ field, label, before, after }]` for `startDate` ("Beginn"), `endDate` ("Ende"), `location` ("Ort") in this order; dates compare as points in time (empty or invalid = no value), the location by trimmed `text` + `channelId`; display strings in German format (`TIMEZONE`), a missing value is "nicht festgelegt"; every other field is ignored |
+| `buildEventChangeMessage(title, changes, url)` | German DM: title, one line per change `~~before~~ → **after**` ("nicht festgelegt" not struck through), then "Alle Infos: <url>" |
+| `changeRecipients(registrations)` | user ids of `accepted` registrations plus their `guests`, each once; pending, waitlisted, rejected and `pendingGuests` left out |
+| `notifyEventChange({ eventId, title, changes, send = sendDM })` | loads the registrations of the event (one `where`, status filtered in memory), sends one DM per recipient one after another → `{ recipients, notified }` (only delivered DMs counted); nothing without changes. Used by `PUT /api/admin/events/:id` — see [event-lifecycle](../concepts/event-lifecycle.md) |
 
 ## utils/profileEvents.js (pure)
 

@@ -1553,3 +1553,114 @@ test('admins see the waitlist order, and it moves up when someone ahead is accep
     const mine = await (await (await loginAs('member')).request(`/api/events/${EVENT_ID.FULL}/my-registration`)).json();
     assert.deepEqual(mine.waitlistPosition, { position: 2, total: 2 });
 });
+
+// ── Change DMs (W-04) ───────────────────────────────────────────────────
+
+const botDmsSent = async (admin) => (await (await admin.request('/api/admin/bot/status')).json()).dmsSent;
+const changeNotices = async (admin, eventId) => {
+    const { data: logs } = await (await admin.request('/api/admin/audit-log?limit=500')).json();
+    return logs.filter(log => log.action === 'NOTIFY_EVENT_CHANGE' && log.targetId === eventId);
+};
+
+/**
+ * Own event with one accepted (Dennis), one pending (Tom) and one waitlisted registration (Neo).
+ *
+ * @param {Object} admin -> Admin client.
+ * @returns {Promise<Object>} -> `{ id, fields }`: event id and the fields a PUT must repeat.
+ */
+async function createChangeEvent(admin) {
+    const fields = { title: 'Termin wackelt', status: 'active', accessMode: 'open', approvalMode: 'manual', maxParticipants: 2, startDate: futureDate(5) };
+    const event = await createEventAs(admin, fields);
+    assert.equal((await addMember(admin, event.id, { userId: MEMBER_ID.DENNIS })).status, 201);
+    const pending = await (await (await loginAs('member')).send('POST', `/api/events/${event.id}/register`, {})).json();
+    assert.equal(pending.status, 'pending', JSON.stringify(pending));
+    const waiting = await (await (await loginAs('newbie')).send('POST', `/api/events/${event.id}/register`, {})).json();
+    assert.equal(waiting.status, 'waitlisted', JSON.stringify(waiting));
+    return { id: event.id, fields };
+}
+
+test('a flagged new start reaches only accepted members, is counted and logged', async () => {
+    const admin = await loginAs('admin');
+    const { id, fields } = await createChangeEvent(admin);
+    const before = { dennis: dmCount('Dennis'), tom: dmCount('Tom'), neo: dmCount('Neo'), total: await botDmsSent(admin) };
+
+    const res = await admin.send('PUT', `/api/admin/events/${id}`, { ...fields, startDate: futureDate(6), notifyParticipants: true });
+    const body = await res.json();
+    assert.equal(res.status, 200, JSON.stringify(body));
+    assert.equal(body.notifiedCount, 1);
+    assert.equal(dmCount('Dennis'), before.dennis + 1);
+    assert.equal(dmCount('Tom'), before.tom);
+    assert.equal(dmCount('Neo'), before.neo);
+    assert.equal(await botDmsSent(admin), before.total + 1);
+    assert.match(server.output(), /Das Event \*\*Termin wackelt\*\* wurde geändert/);
+    assert.match(server.output(), new RegExp(`Alle Infos: http://[^\\s"]+/#event/${id}`));
+
+    const notices = await changeNotices(admin, id);
+    assert.equal(notices.length, 1);
+    assert.equal(notices[0].adminId, personaById('admin').userId);
+    assert.match(notices[0].details, /1 of 1 participants/);
+    assert.match(notices[0].details, /Beginn/);
+});
+
+test('without the flag, with false or a string nothing is sent', async () => {
+    const admin = await loginAs('admin');
+    const { id, fields } = await createChangeEvent(admin);
+    const before = dmCount('Dennis');
+
+    const variants = [{}, { notifyParticipants: false }, { notifyParticipants: 'true' }];
+    for (const [index, flag] of variants.entries()) {
+        const res = await admin.send('PUT', `/api/admin/events/${id}`, { ...fields, startDate: futureDate(6 + index), ...flag });
+        const body = await res.json();
+        assert.equal(res.status, 200, JSON.stringify(body));
+        assert.equal(body.notifiedCount, 0, JSON.stringify(flag));
+    }
+    assert.equal(dmCount('Dennis'), before);
+    assert.equal((await changeNotices(admin, id)).length, 0);
+});
+
+test('a flagged edit of other fields or into a draft sends nothing, and the flag is never stored', async () => {
+    const admin = await loginAs('admin');
+    const { id, fields } = await createChangeEvent(admin);
+    const before = dmCount('Dennis');
+
+    const titleOnly = await admin.send('PUT', `/api/admin/events/${id}`, { ...fields, title: 'Neuer Titel', maxParticipants: 3, notifyParticipants: true });
+    assert.equal((await titleOnly.json()).notifiedCount, 0);
+    const draft = await admin.send('PUT', `/api/admin/events/${id}`, { ...fields, status: 'draft', startDate: futureDate(7), notifyParticipants: true });
+    assert.equal((await draft.json()).notifiedCount, 0);
+    assert.equal(dmCount('Dennis'), before);
+    assert.equal((await changeNotices(admin, id)).length, 0);
+
+    const stored = await (await admin.request(`/api/events/${id}?status=all`)).json();
+    assert.equal('notifyParticipants' in stored, false);
+});
+
+test('a flagged change of an event without participants writes no audit entry', async () => {
+    const admin = await loginAs('admin');
+    const fields = { title: 'Noch leer', status: 'active', accessMode: 'open', approvalMode: 'instant', startDate: futureDate(5) };
+    const event = await createEventAs(admin, fields);
+    const res = await admin.send('PUT', `/api/admin/events/${event.id}`, { ...fields, startDate: futureDate(6), notifyParticipants: true });
+    assert.equal((await res.json()).notifiedCount, 0);
+    assert.equal((await changeNotices(admin, event.id)).length, 0);
+});
+
+test('a new location of the seeded open event reaches the accepted guest but not the open invitation', async () => {
+    const admin = await loginAs('admin');
+    const event = await (await admin.request(`/api/events/${EVENT_ID.OPEN}?status=all`)).json();
+    const { data: registrations } = await (await admin.request(`/api/admin/events/${EVENT_ID.OPEN}/registrations`)).json();
+    const expected = new Set(registrations.filter(entry => entry.status === 'accepted').flatMap(entry => [entry.userId, ...(entry.guests || [])]));
+    assert.ok(expected.has(MEMBER_ID.GRETA));
+    assert.equal(expected.has(MEMBER_ID.ELIF), false);
+    const before = { greta: dmCount('Greta'), elif: dmCount('Elif') };
+
+    const moved = await admin.send('PUT', `/api/admin/events/${EVENT_ID.OPEN}`, { ...event, location: { text: 'Garten', channelId: '', channelType: '' }, notifyParticipants: true });
+    const body = await moved.json();
+    assert.equal(moved.status, 200, JSON.stringify(body));
+    assert.equal(body.notifiedCount, expected.size);
+    assert.equal(dmCount('Greta'), before.greta + 1);
+    assert.equal(dmCount('Elif'), before.elif);
+    assert.match(server.output(), /\*\*Ort:\*\* ~~Lobby~~ → \*\*Garten\*\*/);
+
+    // Back to the seeded place, silently
+    const restored = await admin.send('PUT', `/api/admin/events/${EVENT_ID.OPEN}`, event);
+    assert.equal((await restored.json()).notifiedCount, 0);
+});

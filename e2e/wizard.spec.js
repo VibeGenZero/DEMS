@@ -81,3 +81,33 @@ test('"Speichern" shows the first step with problems and marks every such step',
     await expect(page.locator('#eventModal')).toBeHidden();
     expect(errors).toEqual([]);
 });
+
+test('a new location offers "Teilnehmer benachrichtigen" and the save tells how many were notified', async ({ page }, testInfo) => {
+    const errors = watchErrors(page);
+    await loginAs(page, 'admin');
+    await navigate(page, 'admin');
+    await page.locator('#admin-events-table tbody tr', { hasText: 'Community-Spieleabend' }).locator('.data-table-title').click();
+    await waitForDialog(page, '#eventModal');
+
+    // Unchanged: no switch next to "Speichern"
+    await page.locator('#eventModal [data-click="wizardGoTo"][data-step="5"]').click();
+    await expect(page.locator('#wizard-btn-save')).toBeVisible();
+    await expect(page.locator('#wizard-notify')).toBeHidden();
+
+    // The start stays: other specs sort the admin table by it; one place per project, so both runs change it
+    await page.locator('#eventModal [data-click="wizardGoTo"][data-step="1"]').click();
+    await page.locator('#event-location-text').fill(`Garten ${testInfo.project.name}`);
+    await page.locator('#eventModal [data-click="wizardGoTo"][data-step="5"]').click();
+    await expect(page.locator('#wizard-notify')).toBeVisible();
+    await expect(page.locator('#event-notify-participants')).toBeChecked();
+    await expect(page.locator('#wizard-notify')).toContainText('Teilnehmer benachrichtigen');
+
+    // The footer wraps instead of pushing the page sideways
+    const footer = page.locator('#eventModal .modal-footer');
+    expect(await footer.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
+
+    await page.locator('#wizard-btn-save').click();
+    await expect(page.locator('#eventModal')).toBeHidden();
+    await expect(page.locator('#toast-message')).toHaveText(/^Event aktualisiert – \d+ Teilnehmer benachrichtigt\.$/);
+    expect(errors).toEqual([]);
+});
