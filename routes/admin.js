@@ -12,6 +12,7 @@ const { sendDM, assignRole, parseTemplate, getGuildRoles, sendChannelMessage, bu
 const { promoteFromWaitlist, addAuditLog, loadEventRoster, loadEventRegistrations, saveEventWithSlots } = require('../utils/eventUtils');
 const { mergeReminderHours } = require('../utils/reminders');
 const { keepDeadlineRefreshFlag } = require('../utils/eventListing');
+const { describeEventChanges, notifyEventChange } = require('../utils/eventChangeNotice');
 const { describePlaces, formatPlaces, formatWaitlist, waitlistPositions } = require('../utils/capacity');
 const { getSlots, findSlot, formatSlotLabel, normalizeSlots, sumCapacity, resolveAcceptanceSlot, buildRoster } = require('../utils/slotService');
 const { buildPreviewEvent } = require('../utils/eventPreview');
@@ -379,7 +380,19 @@ router.put('/events/:id', validateEvent, async (req, res) => {
         // More places or new slots can let waitlisted members move up
         await promoteFromWaitlist(req.params.id, { ...oldEvent, ...updates });
         notifyRegistrationsChanged(req.params.id);
-        res.json({ id: req.params.id, ...updates });
+
+        // Change DM only on the admin's explicit request (W-04); the flag itself is never stored
+        let notifiedCount = 0;
+        const changes = describeEventChanges(oldEvent, updates);
+        if (req.body.notifyParticipants === true && updates.status === 'active' && changes.length > 0) {
+            const { recipients, notified } = await notifyEventChange({ eventId: req.params.id, title: updates.title, changes });
+            notifiedCount = notified;
+            if (recipients > 0) {
+                const changed = changes.map(change => change.label).join(', ');
+                await addAuditLog('NOTIFY_EVENT_CHANGE', req.session.user.id, `Notified ${notified} of ${recipients} participants about changed ${changed}`, req.params.id);
+            }
+        }
+        res.json({ id: req.params.id, ...updates, notifiedCount });
     } catch (err) {
         console.error('Update event error:', err);
         res.status(500).json({ error: 'Fehler beim Aktualisieren' });

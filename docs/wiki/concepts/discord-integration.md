@@ -3,7 +3,7 @@ id: discord-integration
 title: Discord integration — what DEMS does in Discord
 type: concept
 tags: [discord, announcements, roles, channels, scheduled-events, dm, slash-commands, permissions, intents]
-sources: [bot.js, routes/admin.js, utils/registrationService.js, utils/eventUtils.js, utils/eventUrl.js, utils/botPermissions.js]
+sources: [bot.js, routes/admin.js, utils/registrationService.js, utils/eventUtils.js, utils/eventUrl.js, utils/botPermissions.js, utils/eventChangeNotice.js]
 depends_on: [bot]
 see_also: [form-fields, registration-flow, reminders-presence, configuration]
 ---
@@ -22,6 +22,7 @@ see_also: [form-fields, registration-flow, reminders-presence, configuration]
 | Register button + modal | "Anmelden" on an announcement | `handleEventRegisterButton` / `handleEventRegisterModal` → [registration-flow](registration-flow.md), fields → [form-fields](form-fields.md) |
 | Slash commands | `/events`, `/register`, `/unregister` | `registerSlashCommands` (guild commands, on ready); handled in the `interactionCreate` dispatcher |
 | Status DMs | registration created / accepted / rejected / waitlisted / promoted / cancelled | `sendDM` with templates (`parseTemplate`) |
+| Change DMs | admin saves a new start, end or location with "Teilnehmer benachrichtigen" (W-04) | `notifyEventChange` (`utils/eventChangeNotice.js`) → `sendDM` to accepted participants and accepted guests, fixed German text with before → after — see [event-lifecycle](event-lifecycle.md) |
 | Guest invitations | registrant invites members | `sendGuestInvitation` (DM with accept/decline buttons) |
 | Event role | `event.assignRoleId` | `assignRole` on accept, `removeRole` on unregister |
 | Private event channels | `event.autoCreateChannels` + `channelConfig.type` (`voice`/`text`/`both`) | `createEventChannels` in `DISCORD_EVENT_CATEGORY_ID`, `@everyone` denied, accepted users allowed; `add/removeParticipantToEventChannels`; `deleteEventChannels(eventId)` reads the ids from the event → called before an event or series is deleted |

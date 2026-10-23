@@ -3,7 +3,7 @@ id: known-issues
 title: Known issues and pitfalls
 type: reference
 tags: [bugs, pitfalls, technical-debt, gotchas]
-sources: [public/js, bot.js, routes/events.js, routes/admin.js, utils/eventUtils.js, server.js, public/css/style.css, README.md]
+sources: [public/js, bot.js, routes/events.js, routes/admin.js, utils/eventUtils.js, server.js, public/css/style.css, README.md, e2e/motion.spec.js]
 see_also: [security, frontend-app, bot, reminders-presence]
 ---
 # Known issues and pitfalls
@@ -14,6 +14,7 @@ see_also: [security, frontend-app, bot, reminders-presence]
 
 | # | Issue | Location | Impact |
 |---|---|---|---|
+| 22 | e2e "a ctrl click opens the event in a new tab" clicks with `Control`; on macOS that opens the context menu instead of a new tab, so the test times out there | `e2e/motion.spec.js` | `npm run test:e2e` is red on a Mac although the app works; fix: `ControlOrMeta` |
 | 7 | bot settings `dmNotifications`, `eventStartNotifications`, `autoChannelCreation`, `announceChannel`, `welcomeMessage` are stored but never read | `bot.js`, `routes/admin.js` | toggles in the bot control center have no effect |
 
 ## Pitfalls (by design, easy to trip over)

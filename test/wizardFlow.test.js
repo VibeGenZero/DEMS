@@ -170,3 +170,149 @@ test('"Weiter" from the preview edits the next step, or the marked one', async (
     assert.equal(isHidden(element('wizard-page-2')), false);
     assert.ok(element('wizard-mode-edit').classList.contains('active'));
 });
+
+// ── "Teilnehmer benachrichtigen" (W-04) ─────────────────────────────────
+
+const STORED_EVENT = {
+    id: 'evt-raid', title: 'Raidnacht', status: 'active', accessMode: 'open', approvalMode: 'instant',
+    startDate: '2026-12-01T18:00:00.000Z', endDate: '', reminderHours: [],
+    location: { text: 'Lobby', channelId: '300000000000000001', channelType: 'voice' }
+};
+
+/**
+ * Open the wizard on a stored event; the PUT answers `saved`.
+ *
+ * @param {Object} [saved] -> Answer of PUT /api/admin/events/evt-raid.
+ * @returns {Promise<Object>} -> loadFrontendApp() result.
+ */
+async function editStoredEvent(saved = { id: 'evt-raid', notifiedCount: 0 }) {
+    const frontend = await loadFrontendApp({
+        '/api/events/evt-raid?status=all': STORED_EVENT,
+        '/api/admin/roles': [],
+        '/api/admin/events/evt-raid': saved
+    });
+    frontend.state.currentUser = { id: 'u-admin', username: 'mori', roles: [], isAdmin: true };
+    frontend.state.csrfToken = 'test-token';
+    await frontend.app.editEvent('evt-raid');
+    // The picker double ignores setDate -> hold the loaded start like flatpickr does
+    frontend.state.startDatePicker.selectedDates = [new Date(STORED_EVENT.startDate)];
+    return frontend;
+}
+
+const moveStart = (state, iso = '2026-12-02T18:00:00.000Z') => { state.startDatePicker.selectedDates = [new Date(iso)]; };
+const notifyShown = (element) => !isHidden(element('wizard-notify'));
+const savedBody = (requests) => JSON.parse(requests.filter(request => request.url === '/api/admin/events/evt-raid').at(-1).body);
+
+test('a new start shows "Teilnehmer benachrichtigen" switched on next to "Speichern"', async () => {
+    const { app, element, state } = await editStoredEvent();
+    app.wizardGoTo(5);
+    assert.equal(notifyShown(element), false);
+
+    moveStart(state);
+    app.wizardGoTo(4);
+    assert.equal(notifyShown(element), false);
+    app.wizardGoTo(5);
+    assert.equal(notifyShown(element), true);
+    assert.equal(element('event-notify-participants').checked, true);
+});
+
+test('the switch goes away when the start is back, also in another notation', async () => {
+    const { app, element, state } = await editStoredEvent();
+    moveStart(state);
+    app.wizardGoTo(5);
+    assert.equal(notifyShown(element), true);
+
+    moveStart(state, '2026-12-01T19:00:00+01:00');
+    app.wizardGoTo(4);
+    app.wizardGoTo(5);
+    assert.equal(notifyShown(element), false);
+});
+
+test('a new end or location shows the switch, a draft never', async () => {
+    const { app, element, state } = await editStoredEvent();
+    state.endDatePicker.selectedDates = [new Date('2026-12-01T21:00:00.000Z')];
+    app.wizardGoTo(5);
+    assert.equal(notifyShown(element), true);
+
+    state.endDatePicker.selectedDates = [];
+    element('event-location-text').value = 'Garten';
+    element('event-location-channel-id').value = '';
+    app.wizardGoTo(5);
+    assert.equal(notifyShown(element), true);
+
+    element('event-status').value = 'draft';
+    app.wizardGoTo(5);
+    assert.equal(notifyShown(element), false);
+});
+
+test('a new event never shows the switch, also after editing another one', async () => {
+    const { app, element, state } = await editStoredEvent();
+    moveStart(state);
+    app.wizardGoTo(5);
+    assert.equal(notifyShown(element), true);
+
+    await app.showCreateEventModal();
+    element('event-title').value = 'Neu';
+    moveStart(state, '2026-12-05T18:00:00.000Z');
+    app.wizardGoTo(5);
+    assert.equal(notifyShown(element), false);
+});
+
+test('a switch turned off stays off when the admin goes back and forth', async () => {
+    const { app, element, state } = await editStoredEvent();
+    moveStart(state);
+    app.wizardGoTo(5);
+    element('event-notify-participants').checked = false;
+    app.wizardGoTo(2);
+    app.wizardGoTo(5);
+    assert.equal(notifyShown(element), true);
+    assert.equal(element('event-notify-participants').checked, false);
+
+    await app.editEvent('evt-raid');
+    assert.equal(element('event-notify-participants').checked, true);
+});
+
+test('saving sends the switch and says how many participants were told', async () => {
+    const { app, element, state, requests, toasts } = await editStoredEvent({ id: 'evt-raid', notifiedCount: 5 });
+    moveStart(state);
+    app.wizardGoTo(5);
+    await app.saveEvent();
+    assert.equal(savedBody(requests).notifyParticipants, true);
+    assert.equal(requests.filter(request => request.url === '/api/admin/events/evt-raid').at(-1).method, 'PUT');
+    assert.equal(toasts.at(-1), 'Event aktualisiert – 5 Teilnehmer benachrichtigt.');
+});
+
+test('a switch turned off or hidden sends false and the usual toast', async () => {
+    const off = await editStoredEvent();
+    moveStart(off.state);
+    off.app.wizardGoTo(5);
+    off.element('event-notify-participants').checked = false;
+    await off.app.saveEvent();
+    assert.equal(savedBody(off.requests).notifyParticipants, false);
+    assert.equal(off.toasts.at(-1), 'Event aktualisiert!');
+
+    const unchanged = await editStoredEvent();
+    unchanged.app.wizardGoTo(5);
+    await unchanged.app.saveEvent();
+    assert.equal(savedBody(unchanged.requests).notifyParticipants, false);
+});
+
+test('a new event is sent without the flag', async () => {
+    const { app, element, requests } = await openWizard({ '/api/admin/events': { id: 'neu' } });
+    element('event-title').value = 'Raidnacht';
+    element('event-status').value = 'draft';
+    app.wizardGoTo(5);
+    await app.saveEvent();
+    const body = JSON.parse(requests.find(request => request.url === '/api/admin/events').body);
+    assert.equal('notifyParticipants' in body, false);
+});
+
+test('the audit log marks a change notice as information', async () => {
+    const { app, element } = await loadFrontendApp({
+        '/api/admin/audit-log?limit=100': { data: [{ action: 'NOTIFY_EVENT_CHANGE', adminId: 'u-admin', details: 'Notified 5 of 5 participants about changed Beginn', timestamp: new Date().toISOString() }], meta: { totalPages: 1 } }
+    });
+    element('audit-log-container').scrollIntoView = () => {};
+    await app.loadAuditLog();
+    const html = element('audit-log-entries').innerHTML;
+    assert.match(html, /chip-info[^>]*>NOTIFY_EVENT_CHANGE/, html);
+});

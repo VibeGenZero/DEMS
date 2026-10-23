@@ -1316,7 +1316,7 @@
         <!-- Wizard Footer -->
         <div class="modal-footer border-0 justify-content-between">
           <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Abbrechen</button>
-          <div class="d-flex gap-2 align-items-center">
+          <div class="d-flex flex-wrap justify-content-end gap-2 align-items-center">
             <span class="text-muted small me-2" id="wizard-step-counter">Schritt 1 von 5</span>
             <button type="button" class="btn btn-outline-secondary is-hidden" id="wizard-btn-back" data-click="wizardBack">
               <i class="bi bi-arrow-left me-1"></i>Zurück
@@ -1324,6 +1324,11 @@
             <button type="button" class="btn btn-accent" id="wizard-btn-next" data-click="wizardNext">
               Weiter<i class="bi bi-arrow-right ms-1"></i>
             </button>
+            <!-- Only when editing moved start, end or location (admin/wizard-notify.js, W-04) -->
+            <div class="form-check form-switch mb-0 is-hidden" id="wizard-notify">
+              <input class="form-check-input" type="checkbox" id="event-notify-participants" checked>
+              <label class="form-check-label small" for="event-notify-participants">Teilnehmer benachrichtigen</label>
+            </div>
             <button type="button" class="btn btn-accent is-hidden" id="wizard-btn-save" data-click="saveEvent">
               <i class="bi bi-save me-1"></i>Speichern
             </button>
