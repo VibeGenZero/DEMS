@@ -15,6 +15,7 @@ const { keepDeadlineRefreshFlag } = require('../utils/eventListing');
 const { describeEventChanges, notifyEventChange } = require('../utils/eventChangeNotice');
 const { filterByPreference, normalizeNotificationPrefs } = require('../utils/notificationPrefs');
 const { trackedEventIds, memberStats, memberBase, buildMemberList, buildMemberHistory } = require('../utils/memberOverview');
+const { DEFAULT_RANGE, isValidRange, buildInsights } = require('../utils/insights');
 const { describePlaces, formatPlaces, formatWaitlist, waitlistPositions } = require('../utils/capacity');
 const { getSlots, findSlot, formatSlotLabel, normalizeSlots, sumCapacity, resolveAcceptanceSlot, buildRoster } = require('../utils/slotService');
 const { buildPreviewEvent } = require('../utils/eventPreview');
@@ -1275,6 +1276,31 @@ router.get('/members', async (req, res) => {
     } catch (err) {
         console.error('Member list error:', err);
         res.status(500).json({ error: 'Fehler beim Laden der Mitglieder' });
+    }
+});
+
+/**
+ * GET /api/admin/insights?range=30|90|365|all — Evaluations of past events (W-14).
+ * Read-only; rules in utils/insights.js. Default range 90 days.
+ */
+router.get('/insights', async (req, res) => {
+    try {
+        const range = req.query.range === undefined ? DEFAULT_RANGE : req.query.range;
+        if (!isValidRange(range)) {
+            return res.status(400).json({ error: 'Ungültiger Zeitraum.' });
+        }
+        const [userSnap, regSnap, eventSnap] = await Promise.all([
+            getDocs(collection(db, 'users')),
+            getDocs(collection(db, 'registrations')),
+            getDocs(collection(db, 'events'))
+        ]);
+        const users = userSnap.docs.map(docSnap => ({ ...docSnap.data(), id: docSnap.id }));
+        const registrations = regSnap.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
+        const eventsById = new Map(eventSnap.docs.map(docSnap => [docSnap.id, docSnap.data()]));
+        res.json(buildInsights({ users, registrations, eventsById, range, now: new Date() }));
+    } catch (err) {
+        console.error('Insights error:', err);
+        res.status(500).json({ error: 'Fehler beim Laden der Auswertungen' });
     }
 });
 

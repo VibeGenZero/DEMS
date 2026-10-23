@@ -60,3 +60,9 @@ test('only admins see the member overview link, next to the other admin links (W
     assert.ok(order.every(index => index > 0) && order[0] < order[1] && order[1] < order[2], 'Mitglieder sits between Admin and Bot-Zentrale');
     assert.match(html, /<a class="btn btn-outline-light" href="#members">/);
 });
+
+test('the admin dashboard opens the evaluations; they have no navbar link (W-14)', () => {
+    const html = fs.readFileSync(path.join(REPO_ROOT, 'public', 'index.html'), 'utf8');
+    assert.match(html, /<a class="btn btn-outline-light" href="#insights">/);
+    assert.doesNotMatch(html, /class="nav-link" href="#insights"/);
+});

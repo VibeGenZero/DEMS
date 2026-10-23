@@ -1846,3 +1846,39 @@ test('an unknown member is answered with 404', async () => {
     assert.equal(res.status, 404);
     assert.deepEqual(await res.json(), { error: 'Mitglied nicht gefunden.' });
 });
+
+// ── Evaluations for admins (W-14) ─────────────────────────────
+
+test('the evaluations are for admins only', async () => {
+    assert.equal((await createClient(server.baseUrl).request('/api/admin/insights')).status, 401);
+    const member = await loginAs('member');
+    assert.equal((await member.request('/api/admin/insights')).status, 403);
+});
+
+test('admins get the evaluations of 90 days by default and of every past event with range all', async () => {
+    const admin = await loginAs('admin');
+    const res = await admin.request('/api/admin/insights');
+    assert.equal(res.status, 200);
+    const recent = await res.json();
+    assert.equal(recent.range, '90');
+    assert.deepEqual(Object.keys(recent).sort(), ['categories', 'events', 'members', 'range', 'totals']);
+    assert.equal(recent.totals.events, recent.events.length);
+
+    const allRes = await admin.request('/api/admin/insights?range=all');
+    const text = await allRes.text();
+    const all = JSON.parse(text);
+    assert.equal(all.range, 'all');
+    assert.ok(all.events.some(row => row.title === 'Sommerfest'), 'the archived summer party is evaluated');
+    assert.ok(all.totals.events >= recent.totals.events);
+    assert.ok(all.categories.length >= 1);
+    for (const secret of [CHECKIN_CODE, '481516', 'KiraX', 'formAnswers', 'checkinCode', 'notifications']) {
+        assert.ok(!text.includes(secret), `evaluations leak ${secret}`);
+    }
+});
+
+test('an unknown range is refused', async () => {
+    const admin = await loginAs('admin');
+    const res = await admin.request('/api/admin/insights?range=7');
+    assert.equal(res.status, 400);
+    assert.deepEqual(await res.json(), { error: 'Ungültiger Zeitraum.' });
+});

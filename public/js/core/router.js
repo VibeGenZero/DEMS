@@ -6,6 +6,7 @@ import { state } from './state.js';
 import { placeNavMarker } from './tab-glider.js';
 import { showBotControlSection } from '../admin/bot-control.js';
 import { showAdminSection } from '../admin/dashboard.js';
+import { showInsightsSection } from '../admin/insights.js';
 import { showMemberDetail, showMembersSection } from '../admin/members.js';
 import { beginCardClose, landCardFlight } from '../events/card-flight.js';
 import { showEventDetail } from '../events/detail.js';
@@ -19,7 +20,7 @@ import { showPollDetail, showPollsSection } from '../polls/polls.js';
 export const LEGACY_EVENT_ROUTE = /^events\/(.+)$/;
 
 // Pages without their own navbar link mark the link of their list
-const NAV_ROUTE = { member: 'members' };
+const NAV_ROUTE = { member: 'members', insights: 'admin' };
 
 // Event a logged-out user opened -> shown after the Discord login
 export const PENDING_ROUTE_KEY = 'dems_pending_route';
@@ -132,6 +133,13 @@ export function handleRoute() {
         case 'members':
             if (state.currentUser && state.currentUser.isAdmin) {
                 showMembersSection();
+            } else {
+                navigateTo('events');
+            }
+            break;
+        case 'insights':
+            if (state.currentUser && state.currentUser.isAdmin) {
+                showInsightsSection();
             } else {
                 navigateTo('events');
             }

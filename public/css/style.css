@@ -1280,6 +1280,134 @@ body {
 }
 
 /* ═══════════════════════════════════════════ */
+/* INSIGHTS                                    */
+/* Evaluations for admins (W-14): #insights,   */
+/* markup in admin/insights-view.js. Key       */
+/* figures use STATS CARDS, bars the capacity  */
+/* meter of components.css                     */
+/* ═══════════════════════════════════════════ */
+/* The hint sits in the stats grid and takes its whole width */
+.insights-hint {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.insights-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-24);
+  align-items: start;
+}
+
+.insights-card-title {
+  margin-bottom: var(--space-16);
+  font-size: var(--font-size-lg);
+}
+
+.insights-rank,
+.insights-categories {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-12);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Rank | name | numbers */
+.insights-rank-item {
+  display: grid;
+  grid-template-columns: 2rem minmax(0, 1fr) auto;
+  gap: var(--space-8);
+  align-items: baseline;
+}
+
+.insights-rank-number {
+  color: var(--text-muted);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.insights-rank-name {
+  overflow-wrap: anywhere;
+}
+
+.insights-rank-meta,
+.insights-category-meta {
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.insights-category-head {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-8);
+  margin-bottom: var(--space-4);
+}
+
+.insights-category-label {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.insights-category-count {
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+  white-space: nowrap;
+}
+
+/* The bar spans the card, so its length compares with the other categories */
+.insights-category .capacity-meter {
+  width: 100%;
+  margin-bottom: var(--space-4);
+}
+
+/* The title is a link: no underline until hovered, like the button title of the event table */
+.insights-table .data-table-title {
+  text-decoration: none;
+}
+
+.insights-table .data-table-title:hover {
+  text-decoration: underline;
+}
+
+.insights-date,
+.insights-number {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+@media (max-width: 991.98px) {
+  .insights-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 767.98px) {
+  .insights-rank-item {
+    grid-template-columns: 2rem minmax(0, 1fr);
+  }
+
+  .insights-rank-meta {
+    grid-column: 2;
+  }
+
+  /* As blocks the numbers lose their heads, so each names itself */
+  .insights-table td.insights-number {
+    display: inline-block;
+    margin-right: var(--space-16);
+    font-size: var(--font-size-sm);
+  }
+
+  .insights-table td.insights-number::before {
+    content: attr(data-label) " ";
+    color: var(--text-muted);
+  }
+}
+
+/* ═══════════════════════════════════════════ */
 /* UPDATE EFFECTS                              */
 /* Played once per version with the news       */
 /* dialog (core/update-effects.js): confetti   */
