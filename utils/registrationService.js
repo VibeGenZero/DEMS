@@ -8,6 +8,7 @@ const { findMissingRequiredFields } = require('./formFields');
 const { buildEventUrl } = require('./eventUrl');
 const { withEventLock } = require('./eventLock');
 const { notifyRegistrationsChanged } = require('./announcementRefresh');
+const { wantsDm } = require('./notificationPrefs');
 const { OCCUPYING_STATUSES, countOccupiedPlaces } = require('./capacity');
 const { isEventOver, isRegistrationClosed, isUnregisterClosed, REGISTRATION_CLOSED_MESSAGE, UNREGISTER_CLOSED_MESSAGE } = require('./eventListing');
 const {
@@ -139,6 +140,8 @@ async function notifyRegistration({ user, eventId, event, status, slot = null, i
         const slotLine = slot ? `\n🎯 Dein Slot: **${formatSlotLabel(slot)}**${isAlt ? ' (Ausweichrolle)' : ''}` : '';
 
         if (status === REGISTRATION_STATUS.WAITLISTED) {
+            // Members may switch this DM off (W-16); moving up is always announced
+            if (!(await wantsDm(user.id, 'waitlist'))) return;
             const text = getSlots(event).length > 0
                 ? `📋 Für **${event.title}** sind gerade alle gewünschten Slots belegt. Du wurdest auf die **Warteliste** gesetzt und rückst automatisch nach, sobald ein passender Platz frei wird!`
                 : `📋 Das Event **${event.title}** ist aktuell voll. Du wurdest auf die **Warteliste** gesetzt. Wir benachrichtigen dich, sobald ein Platz frei wird!`;

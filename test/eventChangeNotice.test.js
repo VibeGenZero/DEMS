@@ -107,7 +107,7 @@ test('notifyEventChange sends one DM per recipient and counts only delivered one
     const changes = describeEventChanges(BASE, { ...BASE, startDate: SUNDAY });
     const result = await notifyEventChange({ eventId: 'ev-n', title: 'Spieleabend', changes, send });
 
-    assert.deepEqual(result, { recipients: 3, notified: 2 });
+    assert.deepEqual(result, { recipients: 3, notified: 2, optedOut: 0 });
     assert.deepEqual(sent.map(entry => entry.userId).sort(), ['u1', 'u2', 'u3']);
     assert.ok(sent.every(entry => entry.message.endsWith(buildEventUrl('ev-n'))));
 });
@@ -115,6 +115,19 @@ test('notifyEventChange sends one DM per recipient and counts only delivered one
 test('notifyEventChange sends nothing without changes', async () => {
     const sent = [];
     const result = await notifyEventChange({ eventId: 'ev-n', title: 'Spieleabend', changes: [], send: async (id) => sent.push(id) });
-    assert.deepEqual(result, { recipients: 0, notified: 0 });
+    assert.deepEqual(result, { recipients: 0, notified: 0, optedOut: 0 });
     assert.deepEqual(sent, []);
+});
+
+test('notifyEventChange skips members who switched change DMs off (W-16)', async () => {
+    await setDoc(doc(db, 'users', 'u-off'), { id: 'u-off', notifications: { changes: false } });
+    await setDoc(doc(db, 'registrations', 'w16-1'), { eventId: 'ev-w16', userId: 'u-on', status: 'accepted', guests: ['u-off'] });
+    await setDoc(doc(db, 'registrations', 'w16-2'), { eventId: 'ev-w16', userId: 'u-free', status: 'accepted', guests: [] });
+
+    const sent = [];
+    const changes = describeEventChanges(BASE, { ...BASE, location: null });
+    const result = await notifyEventChange({ eventId: 'ev-w16', title: 'Spieleabend', changes, send: async (userId) => { sent.push(userId); return true; } });
+
+    assert.deepEqual(result, { recipients: 2, notified: 2, optedOut: 1 });
+    assert.deepEqual(sent, ['u-on', 'u-free']);
 });

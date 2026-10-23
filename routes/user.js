@@ -8,6 +8,7 @@ const { promoteFromWaitlist, toPublicEvent, loadEventRegistrations } = require('
 const { notifyRegistrationsChanged } = require('../utils/announcementRefresh');
 const { OCCUPYING_STATUSES, waitlistPositions } = require('../utils/capacity');
 const { buildProfileEvents } = require('../utils/profileEvents');
+const { NOTIFICATION_KINDS, normalizeNotificationPrefs } = require('../utils/notificationPrefs');
 
 /**
  * GET /api/user/registrations — Get all registrations for the logged-in user
@@ -341,17 +342,22 @@ router.get('/search', requireAuth, async (req, res) => {
 });
 
 /**
+ * Settings as the API answers them: invitations and the DM choices (W-16), missing values on.
+ *
+ * @param {Object} [data] -> Stored users document.
+ * @returns {{ acceptInvitations: boolean, notifications: Object }}
+ */
+function settingsOf(data = {}) {
+    return { acceptInvitations: data.acceptInvitations !== false, notifications: normalizeNotificationPrefs(data.notifications) };
+}
+
+/**
  * GET /api/user/settings — Get current user's account settings
  */
 router.get('/settings', requireAuth, async (req, res) => {
     try {
-        const userRef = doc(db, 'users', req.session.user.id);
-        const userSnap = await getDoc(userRef);
-        if (!userSnap.exists()) {
-            return res.json({ acceptInvitations: true });
-        }
-        const data = userSnap.data();
-        res.json({ acceptInvitations: data.acceptInvitations !== false });
+        const userSnap = await getDoc(doc(db, 'users', req.session.user.id));
+        res.json(settingsOf(userSnap.exists() ? userSnap.data() : {}));
     } catch (err) {
         console.error('Error fetching user settings:', err);
         res.status(500).json({ error: 'Fehler beim Laden der Einstellungen' });
@@ -360,21 +366,27 @@ router.get('/settings', requireAuth, async (req, res) => {
 
 /**
  * PUT /api/user/settings — Update account settings
+ *
+ * Changes only what the body sends as a boolean: `acceptInvitations` and the
+ * DM kinds in `notifications` (W-16); everything else stays as stored.
  */
 router.put('/settings', requireAuth, async (req, res) => {
     try {
-        const { acceptInvitations } = req.body;
         const userRef = doc(db, 'users', req.session.user.id);
         const userSnap = await getDoc(userRef);
         if (!userSnap.exists()) {
             return res.status(404).json({ error: 'User nicht gefunden' });
         }
-        await setDoc(userRef, {
-            ...userSnap.data(),
-            acceptInvitations: acceptInvitations !== false,
-            updatedAt: new Date().toISOString()
-        });
-        res.json({ success: true });
+        const stored = userSnap.data();
+        const updated = { ...stored, updatedAt: new Date().toISOString() };
+        if (typeof req.body.acceptInvitations === 'boolean') updated.acceptInvitations = req.body.acceptInvitations;
+        const sent = req.body.notifications && typeof req.body.notifications === 'object' ? req.body.notifications : {};
+        const choices = NOTIFICATION_KINDS.filter(kind => typeof sent[kind] === 'boolean');
+        if (choices.length > 0) {
+            updated.notifications = { ...normalizeNotificationPrefs(stored.notifications), ...Object.fromEntries(choices.map(kind => [kind, sent[kind]])) };
+        }
+        await setDoc(userRef, updated);
+        res.json(settingsOf(updated));
     } catch (err) {
         console.error('Error updating user settings:', err);
         res.status(500).json({ error: 'Fehler beim Speichern der Einstellungen' });

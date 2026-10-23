@@ -305,6 +305,8 @@ function buildEvents(clock) {
     return events;
 }
 
+const SEEDED_DM_CHOICES = { kira: { changes: false }, jonas: { reminders: false } };
+
 function buildUsers(clock) {
     const seeded = [...PERSONAS.filter(persona => !persona.isNewcomer), ...MEMBERS];
     return Object.fromEntries(seeded.map(person => [person.userId, {
@@ -314,6 +316,8 @@ function buildUsers(clock) {
         avatar: defaultAvatar(person.userId),
         // Dennis turned invitations off -> he must not show up in the guest search
         acceptInvitations: person.username !== 'dennis',
+        // DM choices (W-16): Kira wants no change or cancellation DMs, Jonas no reminders
+        ...(SEEDED_DM_CHOICES[person.username] ? { notifications: SEEDED_DM_CHOICES[person.username] } : {}),
         createdAt: clock.offset(-30 * DAY),
         updatedAt: clock.offset(-30 * DAY)
     }]));

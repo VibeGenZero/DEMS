@@ -15,6 +15,7 @@ const { buildEventUrl, buildPollUrl } = require('./utils/eventUrl');
 const { buildBotInviteUrl } = require('./utils/botPermissions');
 const { parseTemplate } = require('./utils/template');
 const { normalizeReminderHours, findDueReminders } = require('./utils/reminders');
+const { filterByPreference } = require('./utils/notificationPrefs');
 const { isEventOver, isRegistrationClosed, isUnregisterClosed, REGISTRATION_CLOSED_MESSAGE, UNREGISTER_CLOSED_MESSAGE } = require('./utils/eventListing');
 const { summarizePlaces, formatPlaces } = require('./utils/capacity');
 const { isRegistrationBlocked } = require('./middleware/maintenance');
@@ -2273,12 +2274,12 @@ async function getPublicGuildChannels(guildId) {
 let reminderInterval = null;
 
 /**
- * DM every accepted participant of an event.
+ * DM every accepted participant of an event who wants reminders (W-16).
  *
  * @param {string} eventId -> Event document id.
  * @param {string} message -> DM text.
  * @param {Function} send -> DM function (userId, message).
- * @returns {Promise<number>} -> Number of recipients.
+ * @returns {Promise<number>} -> Number of recipients messaged.
  */
 async function messageAcceptedParticipants(eventId, message, send) {
     const regs = await getDocs(query(
@@ -2286,10 +2287,11 @@ async function messageAcceptedParticipants(eventId, message, send) {
         where('eventId', '==', eventId),
         where('status', '==', 'accepted')
     ));
-    for (const regDoc of regs.docs) {
-        await send(regDoc.data().userId, message);
+    const { userIds } = await filterByPreference(regs.docs.map(regDoc => regDoc.data().userId), 'reminders');
+    for (const userId of userIds) {
+        await send(userId, message);
     }
-    return regs.docs.length;
+    return userIds.length;
 }
 
 /**

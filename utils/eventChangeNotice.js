@@ -6,6 +6,7 @@
 const { db, collection, query, where, getDocs } = require('../firebaseAdmin');
 const { sendDM } = require('../bot');
 const { buildEventUrl } = require('./eventUrl');
+const { filterByPreference } = require('./notificationPrefs');
 
 const TIMEZONE = process.env.TIMEZONE || 'Europe/Berlin';
 const NO_VALUE = 'nicht festgelegt';
@@ -96,26 +97,26 @@ function changeRecipients(registrations) {
 }
 
 /**
- * Send the change DM to every participant of an event.
+ * Send the change DM to every participant of an event who wants change DMs (W-16).
  *
  * @param {Object} options
  * @param {string} options.eventId -> Event id.
  * @param {string} options.title -> Event title.
  * @param {Array<Object>} options.changes -> Result of describeEventChanges().
  * @param {Function} [options.send] -> DM function (userId, message) → true when delivered; sendDM by default.
- * @returns {Promise<{ recipients: number, notified: number }>} -> How many were meant and how many DMs arrived.
+ * @returns {Promise<{ recipients: number, notified: number, optedOut: number }>} -> How many were meant, how many DMs arrived and how many switched change DMs off.
  */
 async function notifyEventChange({ eventId, title, changes, send = sendDM }) {
-    if (changes.length === 0) return { recipients: 0, notified: 0 };
+    if (changes.length === 0) return { recipients: 0, notified: 0, optedOut: 0 };
     const snap = await getDocs(query(collection(db, 'registrations'), where('eventId', '==', eventId)));
-    const recipients = changeRecipients(snap.docs.map(registration => registration.data()));
+    const { userIds: recipients, optedOut } = await filterByPreference(changeRecipients(snap.docs.map(registration => registration.data())), 'changes');
     const message = buildEventChangeMessage(title, changes, buildEventUrl(eventId));
 
     let notified = 0;
     for (const userId of recipients) {
         if (await send(userId, message)) notified++;
     }
-    return { recipients: recipients.length, notified };
+    return { recipients: recipients.length, notified, optedOut };
 }
 
 module.exports = { describeEventChanges, buildEventChangeMessage, changeRecipients, notifyEventChange };

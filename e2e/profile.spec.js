@@ -118,3 +118,28 @@ test('the member reads the own place on the waitlist on the event page (W-05)', 
     await expect(page.locator('#detail-reg-status')).toHaveText('Platz 3 von 3 auf der Warteliste');
     expect(errors).toEqual([]);
 });
+
+test('the member switches waitlist DMs off and the choice stays after a reload (W-16)', async ({ page }, testInfo) => {
+    // Both projects share the database; one run keeps the member's switch free of races
+    test.skip(testInfo.project.name !== 'desktop', 'same settings on the phone');
+    const errors = watchErrors(page);
+    await loginAs(page, 'member');
+    await navigate(page, 'profile');
+    const settings = page.locator('#account-settings-card');
+    await expect(settings).toContainText('Discord-Nachrichten');
+    for (const kind of ['reminders', 'changes', 'waitlist']) {
+        await expect(page.locator(`#notify-${kind}-toggle`)).toBeChecked();
+    }
+
+    await page.locator('#notify-waitlist-toggle').uncheck();
+    await expect(page.locator('#toast-message')).toHaveText('Warteliste per DM aus.');
+    await page.reload();
+    await navigate(page, 'profile');
+    await expect(page.locator('#notify-waitlist-toggle')).not.toBeChecked();
+    await expect(page.locator('#notify-reminders-toggle')).toBeChecked();
+
+    // Back to the default for the other specs
+    await page.locator('#notify-waitlist-toggle').check();
+    await expect(page.locator('#toast-message')).toHaveText('Warteliste per DM an.');
+    expect(errors).toEqual([]);
+});

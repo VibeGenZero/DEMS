@@ -13,6 +13,7 @@ const { promoteFromWaitlist, addAuditLog, loadEventRoster, loadEventRegistration
 const { mergeReminderHours } = require('../utils/reminders');
 const { keepDeadlineRefreshFlag } = require('../utils/eventListing');
 const { describeEventChanges, notifyEventChange } = require('../utils/eventChangeNotice');
+const { filterByPreference } = require('../utils/notificationPrefs');
 const { describePlaces, formatPlaces, formatWaitlist, waitlistPositions } = require('../utils/capacity');
 const { getSlots, findSlot, formatSlotLabel, normalizeSlots, sumCapacity, resolveAcceptanceSlot, buildRoster } = require('../utils/slotService');
 const { buildPreviewEvent } = require('../utils/eventPreview');
@@ -313,6 +314,9 @@ router.post('/events/preview', async (req, res) => {
     }
 });
 
+// Audit detail suffix for members who switched a DM kind off (W-16)
+const optedOutNote = (optedOut) => (optedOut > 0 ? `; ${optedOut} opted out` : '');
+
 /**
  * PUT /api/admin/events/:id — Update event
  */
@@ -385,11 +389,12 @@ router.put('/events/:id', validateEvent, async (req, res) => {
         let notifiedCount = 0;
         const changes = describeEventChanges(oldEvent, updates);
         if (req.body.notifyParticipants === true && updates.status === 'active' && changes.length > 0) {
-            const { recipients, notified } = await notifyEventChange({ eventId: req.params.id, title: updates.title, changes });
+            const { recipients, notified, optedOut } = await notifyEventChange({ eventId: req.params.id, title: updates.title, changes });
             notifiedCount = notified;
-            if (recipients > 0) {
+            if (recipients + optedOut > 0) {
                 const changed = changes.map(change => change.label).join(', ');
-                await addAuditLog('NOTIFY_EVENT_CHANGE', req.session.user.id, `Notified ${notified} of ${recipients} participants about changed ${changed}`, req.params.id);
+                await addAuditLog('NOTIFY_EVENT_CHANGE', req.session.user.id,
+                    `Notified ${notified} of ${recipients} participants about changed ${changed}${optedOutNote(optedOut)}`, req.params.id);
             }
         }
         res.json({ id: req.params.id, ...updates, notifiedCount });
@@ -460,15 +465,16 @@ router.put('/events/:id/cancel', async (req, res) => {
             where('status', 'in', ['accepted', 'pending'])
         );
         const regs = await getDocs(regQ);
+        // The cancellation counts as a change: members may switch it off (W-16)
+        const { userIds, optedOut } = await filterByPreference(regs.docs.map(regDoc => regDoc.data().userId), 'changes');
 
         let notifiedCount = 0;
-        for (const regDoc of regs.docs) {
-            const reg = regDoc.data();
-            const sent = await sendDM(reg.userId, `⚠️ **WICHTIG:** Das Event **${event.title}** wurde leider **ABGESAGT**.`);
+        for (const userId of userIds) {
+            const sent = await sendDM(userId, `⚠️ **WICHTIG:** Das Event **${event.title}** wurde leider **ABGESAGT**.`);
             if (sent) notifiedCount++;
         }
 
-        await addAuditLog('CANCEL_EVENT', req.session.user.id, `Cancelled event "${event.title}" and notified ${notifiedCount} users`, eventId);
+        await addAuditLog('CANCEL_EVENT', req.session.user.id, `Cancelled event "${event.title}" and notified ${notifiedCount} users${optedOutNote(optedOut)}`, eventId);
         notifyRegistrationsChanged(eventId);
 
         res.json({ success: true, notifiedCount });
