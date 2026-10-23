@@ -267,3 +267,58 @@ test('admins add a server member in the registrations dialog (W-06)', async ({ p
     await expect(hit).toHaveCount(0);
     expect(errors).toEqual([]);
 });
+
+// ── Member overview (W-15) ────────────────────────────────────
+
+const memberRows = (page) => page.locator('#members-table .data-table tbody tr');
+
+test('admins find a member, open the page and see the history', async ({ page }) => {
+    const errors = watchErrors(page);
+    await loginAs(page, 'admin');
+    await navigate(page, 'members');
+    await expect(page.locator('#members-count')).toHaveText(/^\d+ Mitglieder$/);
+    await expect(memberRows(page).first()).toBeVisible();
+
+    await page.locator('#members-search').fill('kir');
+    await expect(memberRows(page)).toHaveCount(1);
+    await expect(memberRows(page).first()).toContainText('@kira');
+
+    await page.locator('#members-search').fill('niemand-heisst-so');
+    await expect(page.locator('#members-table')).toContainText('Keine Mitglieder gefunden');
+    await page.locator('#members-table [data-click="resetMemberSearch"]').click();
+    await expect(memberRows(page).nth(1)).toBeVisible();
+
+    await page.locator('#members-search').fill('kira');
+    await memberRows(page).first().locator('a.data-table-title').click();
+    await expect(page.locator('#member-detail-section')).toBeVisible();
+    await expect(page.locator('#member-detail')).toContainText('Teilnahmeverlauf');
+    await expect(page.locator('#member-detail')).toContainText('Discord');
+    await expect(page.locator('#member-detail .members-history-row').first()).toBeVisible();
+
+    await page.locator('#member-detail-section a[href="#members"]').click();
+    await expect(page.locator('#members-section')).toBeVisible();
+    // The search survives the visit
+    await expect(page.locator('#members-search')).toHaveValue('kira');
+    expect(errors).toEqual([]);
+});
+
+test('the member list sorts by a column and flips on a second click', async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name === 'mobile', 'the column heads are only read by screen readers on phones');
+    await loginAs(page, 'admin');
+    await navigate(page, 'members');
+    const head = page.locator('#members-table th', { hasText: 'Teilnahmen' });
+    await head.locator('button').click();
+    await expect(head).toHaveAttribute('aria-sort', 'descending');
+    const numbers = await page.locator('#members-table td[data-label="Teilnahmen"]').allTextContents();
+    expect(numbers.map(Number)).toEqual([...numbers.map(Number)].sort((a, b) => b - a));
+    await head.locator('button').click();
+    await expect(head).toHaveAttribute('aria-sort', 'ascending');
+});
+
+test('members see no member overview and are sent away from it', async ({ page }) => {
+    await loginAs(page, 'member');
+    await expect(page.locator('#nav-members')).toBeHidden();
+    await page.goto('/#members');
+    await expect(page.locator('#events-section')).toBeVisible();
+    await expect(page.locator('#members-section')).toBeHidden();
+});

@@ -51,3 +51,29 @@ test('a route change marks the navbar link of the page and leaves tab links alon
     assert.deepEqual([...profileLink.classes], []);
     assert.deepEqual([...tabLink.classes], ['active'], 'the tab lost its active class');
 });
+
+// A member's page belongs to the member list (W-15)
+test('a member page marks the navbar link of the member list', async () => {
+    const membersLink = fakeLink('members-section', []);
+    const adminLink = fakeLink('admin-section', ['active']);
+    const noop = () => {};
+    const storage = { getItem: () => null, setItem: noop, removeItem: noop };
+    const document = {
+        getElementById: () => ({ style: {}, classList: { add: noop, remove: noop, toggle: noop, contains: () => false } }),
+        addEventListener: noop,
+        querySelector: () => null,
+        querySelectorAll: (selector) => (selector === '#main-navbar .nav-link' ? [membersLink, adminLink] : [])
+    };
+    const context = vm.createContext({
+        document, console, location: { hash: '#member/200000000000000011', search: '' }, history: { replaceState: noop, pushState: noop },
+        localStorage: storage, sessionStorage: storage,
+        setTimeout: noop, clearTimeout: noop, setInterval: () => 0, clearInterval: noop
+    });
+    context.window = context;
+    const router = (await loadFrontendModules(ROUTER_FILE, context)).get('router.js');
+
+    router.handleRoute();
+
+    assert.deepEqual([...membersLink.classes], ['active']);
+    assert.deepEqual([...adminLink.classes], []);
+});

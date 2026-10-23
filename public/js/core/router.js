@@ -6,6 +6,7 @@ import { state } from './state.js';
 import { placeNavMarker } from './tab-glider.js';
 import { showBotControlSection } from '../admin/bot-control.js';
 import { showAdminSection } from '../admin/dashboard.js';
+import { showMemberDetail, showMembersSection } from '../admin/members.js';
 import { beginCardClose, landCardFlight } from '../events/card-flight.js';
 import { showEventDetail } from '../events/detail.js';
 import { showEventsSection } from '../events/list.js';
@@ -16,6 +17,9 @@ import { showPollDetail, showPollsSection } from '../polls/polls.js';
 
 // Discord messages sent before v2.5.1 link to #events/<id> instead of #event/<id>
 export const LEGACY_EVENT_ROUTE = /^events\/(.+)$/;
+
+// Pages without their own navbar link mark the link of their list
+const NAV_ROUTE = { member: 'members' };
 
 // Event a logged-out user opened -> shown after the Discord login
 export const PENDING_ROUTE_KEY = 'dems_pending_route';
@@ -89,7 +93,7 @@ export function handleRoute() {
     // Only the navbar: the tabs component (.nav.nav-pills) uses .nav-link too
     document.querySelectorAll('#main-navbar .nav-link').forEach(link => {
         link.classList.remove('active');
-        if (link.getAttribute('data-section') === route + '-section') {
+        if (link.getAttribute('data-section') === (NAV_ROUTE[route] || route) + '-section') {
             link.classList.add('active');
         }
     });
@@ -121,6 +125,20 @@ export function handleRoute() {
         case 'admin':
             if (state.currentUser && state.currentUser.isAdmin) {
                 showAdminSection();
+            } else {
+                navigateTo('events');
+            }
+            break;
+        case 'members':
+            if (state.currentUser && state.currentUser.isAdmin) {
+                showMembersSection();
+            } else {
+                navigateTo('events');
+            }
+            break;
+        case 'member':
+            if (state.currentUser && state.currentUser.isAdmin) {
+                showMemberDetail(param);
             } else {
                 navigateTo('events');
             }

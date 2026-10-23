@@ -1786,3 +1786,63 @@ test('status DMs still come with every DM kind switched off (W-16)', async () =>
         await saveSettings(newbie, { notifications: ALL_DMS });
     }
 });
+
+// ── Member overview for admins (W-15) ─────────────────────────
+
+const KIRA_ID = '200000000000000011';
+
+test('the member list is for admins only', async () => {
+    const visitor = createClient(server.baseUrl);
+    assert.equal((await visitor.request('/api/admin/members')).status, 401);
+    assert.equal((await visitor.request(`/api/admin/members/${KIRA_ID}`)).status, 401);
+    const member = await loginAs('member');
+    assert.equal((await member.request('/api/admin/members')).status, 403);
+    assert.equal((await member.request(`/api/admin/members/${KIRA_ID}`)).status, 403);
+});
+
+test('admins get every stored member with numbers and last activity', async () => {
+    const admin = await loginAs('admin');
+    const res = await admin.request('/api/admin/members');
+    assert.equal(res.status, 200);
+    const text = await res.text();
+    const { members } = JSON.parse(text);
+    for (const id of [personaById('admin').userId, personaById('raider').userId, KIRA_ID]) {
+        assert.ok(members.some(m => m.id === id), `missing ${id}`);
+    }
+    const kira = members.find(m => m.id === KIRA_ID);
+    assert.equal(kira.displayName, 'Kira');
+    assert.equal(kira.username, 'kira');
+    assert.ok(kira.stats.registrations >= 2, 'Kira has seeded registrations');
+    assert.deepEqual(Object.keys(kira.stats).sort(), ['attended', 'checkedIn', 'noShows', 'registrations']);
+    assert.ok(kira.lastActiveAt, 'last activity is set');
+    assert.ok(!text.includes(CHECKIN_CODE), 'no check-in code');
+    assert.ok(!text.includes('notifications'), 'no DM choices in the list');
+});
+
+test('a member page shows account info and the full history without secrets', async () => {
+    const admin = await loginAs('admin');
+    const res = await admin.request(`/api/admin/members/${KIRA_ID}`);
+    assert.equal(res.status, 200);
+    const text = await res.text();
+    const detail = JSON.parse(text);
+    assert.equal(detail.member.id, KIRA_ID);
+    assert.equal(detail.member.acceptInvitations, true);
+    assert.deepEqual(detail.member.notifications, { reminders: true, changes: false, waitlist: true });
+    assert.ok(detail.member.createdAt);
+    assert.equal(detail.stats.registrations, detail.history.length);
+    assert.ok(detail.history.some(row => row.source === 'discord'), 'Kira registered through Discord');
+    for (const row of detail.history) {
+        assert.equal(typeof row.noShow, 'boolean');
+        assert.ok(['web', 'discord', 'admin'].includes(row.source));
+    }
+    for (const secret of [CHECKIN_CODE, '481516', 'formAnswers', 'KiraX', 'checkinCode']) {
+        assert.ok(!text.includes(secret), `detail leaks ${secret}`);
+    }
+});
+
+test('an unknown member is answered with 404', async () => {
+    const admin = await loginAs('admin');
+    const res = await admin.request('/api/admin/members/123');
+    assert.equal(res.status, 404);
+    assert.deepEqual(await res.json(), { error: 'Mitglied nicht gefunden.' });
+});

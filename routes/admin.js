@@ -13,7 +13,8 @@ const { promoteFromWaitlist, addAuditLog, loadEventRoster, loadEventRegistration
 const { mergeReminderHours } = require('../utils/reminders');
 const { keepDeadlineRefreshFlag } = require('../utils/eventListing');
 const { describeEventChanges, notifyEventChange } = require('../utils/eventChangeNotice');
-const { filterByPreference } = require('../utils/notificationPrefs');
+const { filterByPreference, normalizeNotificationPrefs } = require('../utils/notificationPrefs');
+const { trackedEventIds, memberStats, memberBase, buildMemberList, buildMemberHistory } = require('../utils/memberOverview');
 const { describePlaces, formatPlaces, formatWaitlist, waitlistPositions } = require('../utils/capacity');
 const { getSlots, findSlot, formatSlotLabel, normalizeSlots, sumCapacity, resolveAcceptanceSlot, buildRoster } = require('../utils/slotService');
 const { buildPreviewEvent } = require('../utils/eventPreview');
@@ -1253,6 +1254,67 @@ router.put('/bot-messages', validateBotMessages, async (req, res) => {
         res.json({ success: true });
     } catch (err) {
         res.status(500).json({ error: 'Fehler beim Speichern' });
+    }
+});
+
+/**
+ * GET /api/admin/members — Every stored member with participation numbers (W-15).
+ * Read-only; numbers and rules in utils/memberOverview.js.
+ */
+router.get('/members', async (req, res) => {
+    try {
+        const [userSnap, regSnap, eventSnap] = await Promise.all([
+            getDocs(collection(db, 'users')),
+            getDocs(collection(db, 'registrations')),
+            getDocs(collection(db, 'events'))
+        ]);
+        const users = userSnap.docs.map(docSnap => ({ ...docSnap.data(), id: docSnap.id }));
+        const registrations = regSnap.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
+        const eventsById = new Map(eventSnap.docs.map(docSnap => [docSnap.id, docSnap.data()]));
+        res.json({ members: buildMemberList(users, registrations, eventsById, new Date()) });
+    } catch (err) {
+        console.error('Member list error:', err);
+        res.status(500).json({ error: 'Fehler beim Laden der Mitglieder' });
+    }
+});
+
+/**
+ * GET /api/admin/members/:id — One member: account info, numbers and complete history (W-15).
+ */
+router.get('/members/:id', async (req, res) => {
+    try {
+        const userSnap = await getDoc(doc(db, 'users', req.params.id));
+        if (!userSnap.exists()) {
+            return res.status(404).json({ error: 'Mitglied nicht gefunden.' });
+        }
+        const user = { ...userSnap.data(), id: userSnap.id };
+        const regSnap = await getDocs(query(collection(db, 'registrations'), where('userId', '==', user.id)));
+        const registrations = regSnap.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
+
+        // Events of the history, and their registrations to know whether attendance was tracked
+        const eventsById = new Map();
+        const eventRegistrations = [];
+        for (const eventId of new Set(registrations.map(registration => registration.eventId).filter(Boolean))) {
+            const eventSnap = await getDoc(doc(db, 'events', eventId));
+            if (!eventSnap.exists()) continue;
+            eventsById.set(eventId, eventSnap.data());
+            eventRegistrations.push(...await loadEventRegistrations(eventId));
+        }
+        const tracked = trackedEventIds(eventsById, eventRegistrations);
+        const now = new Date();
+
+        res.json({
+            member: {
+                ...memberBase(user, registrations),
+                acceptInvitations: user.acceptInvitations !== false,
+                notifications: normalizeNotificationPrefs(user.notifications)
+            },
+            stats: memberStats(registrations, eventsById, tracked, now),
+            history: buildMemberHistory(registrations, eventsById, tracked, now)
+        });
+    } catch (err) {
+        console.error('Member detail error:', err);
+        res.status(500).json({ error: 'Fehler beim Laden des Mitglieds' });
     }
 });
 

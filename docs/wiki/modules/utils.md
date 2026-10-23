@@ -3,14 +3,14 @@ id: utils
 title: utils/ — domain helpers
 type: module
 tags: [utils, registration, form-fields, waitlist, audit-log, profile, debug, change-notice]
-sources: [utils/registrationService.js, utils/formFields.js, utils/eventUtils.js, utils/eventListing.js, utils/profileEvents.js, utils/eventUrl.js, utils/userProfile.js, utils/avatar.js, utils/botPermissions.js, utils/csv.js, utils/template.js, utils/sessionStore.js, utils/reminders.js, utils/debugLog.js, utils/capacity.js, utils/slotService.js, utils/eventLock.js, utils/announcementRefresh.js, utils/pollService.js, utils/pollStore.js, utils/eventPreview.js, utils/eventArchive.js, utils/eventChangeNotice.js, utils/notificationPrefs.js]
+sources: [utils/registrationService.js, utils/formFields.js, utils/eventUtils.js, utils/eventListing.js, utils/profileEvents.js, utils/eventUrl.js, utils/userProfile.js, utils/avatar.js, utils/botPermissions.js, utils/csv.js, utils/template.js, utils/sessionStore.js, utils/reminders.js, utils/debugLog.js, utils/capacity.js, utils/slotService.js, utils/eventLock.js, utils/announcementRefresh.js, utils/pollService.js, utils/pollStore.js, utils/eventPreview.js, utils/eventArchive.js, utils/eventChangeNotice.js, utils/notificationPrefs.js, utils/memberOverview.js]
 part_of: [architecture]
 depends_on: [data-layer, bot]
 see_also: [registration-flow, form-fields, role-slots]
 ---
 # utils/ — domain helpers
 
-> TL;DR: Shared domain logic used by routes and the bot: `registrationService.js` (the single source of truth for creating registrations), `formFields.js` (field types and answer format), `eventUtils.js` (loading registrations/line-ups, waitlist promotion, audit log), `capacity.js` and `slotService.js` (pure place and slot rules), `eventLock.js` (per-event lock), `announcementRefresh.js` (debounced live announcements), `eventUrl.js` (links to event pages), `eventChangeNotice.js` (change DMs after an edit, W-04), `notificationPrefs.js` (which DMs a member wants, W-16), `profileEvents.js` (upcoming and history lists of the profile), `userProfile.js` (users upsert after login) and `debugLog.js` (`DEBUG_MODE` logger).
+> TL;DR: Shared domain logic used by routes and the bot: `registrationService.js` (the single source of truth for creating registrations), `formFields.js` (field types and answer format), `eventUtils.js` (loading registrations/line-ups, waitlist promotion, audit log), `capacity.js` and `slotService.js` (pure place and slot rules), `eventLock.js` (per-event lock), `announcementRefresh.js` (debounced live announcements), `eventUrl.js` (links to event pages), `eventChangeNotice.js` (change DMs after an edit, W-04), `notificationPrefs.js` (which DMs a member wants, W-16), `profileEvents.js` (upcoming and history lists of the profile), `memberOverview.js` (numbers and history of the admin member overview, W-15), `userProfile.js` (users upsert after login) and `debugLog.js` (`DEBUG_MODE` logger).
 
 ## utils/registrationService.js
 
@@ -86,6 +86,20 @@ Exports `FORM_FIELD_TYPE` (`text, textarea, dropdown, checkbox, user, role, chan
 |---|---|
 | `buildProfileEvents(registrations, eventsById, now, waitlistPositionsById)` | `{ upcoming, history }` for `GET /api/user/profile`; rules in [routes-user](routes-user.md) |
 | `toProfileEntry(registration, event, waitlistPosition)` | one entry: registration status, check-in, slot (`getSlots`/`findSlot`), waitlist place (or `null`) and eight event fields; never the check-in code |
+| `byDateDescending(a, b)` | sort rule of the history: latest event start first, the registration time stands in without event or start; reused by `memberOverview.js` |
+
+## utils/memberOverview.js (pure, W-15)
+
+Rules of the admin member overview. **Over** = event exists, not `cancelled`, and `archived` or `isEventOver`. **Teilnahme** (`attended`) = accepted registration of an over event. **Tracked** event = `checkinEnabled` or at least one checked-in registration. **No-Show** = accepted, over, tracked, not checked in — an event nobody checked in for has no no-shows.
+
+| Export | Behaviour |
+|---|---|
+| `trackedEventIds(eventsById, registrations)` | `Set` of tracked event ids |
+| `memberStats(registrations, eventsById, tracked, now)` | `{ registrations, attended, checkedIn, noShows }` of one member; `checkedIn` counts code and admin check-ins |
+| `lastActivity(user, registrations)` | ISO time of the latest of `updatedAt` and the registration times, `null` without a readable date |
+| `memberBase(user, registrations)` | `{ id, username, displayName, avatar, createdAt, lastActiveAt }`; name falls back to username, then id |
+| `buildMemberList(users, registrations, eventsById, now)` | one entry per user with `stats`, ordered by name (`localeCompare` de); registrations of unknown user ids are ignored |
+| `buildMemberHistory(registrations, eventsById, tracked, now)` | `toProfileEntry` + `source` (`web`/`discord`/`admin`, missing = `web`) + `noShow`, sorted by `byDateDescending` |
 
 ## utils/capacity.js, utils/slotService.js (pure)
 

@@ -118,4 +118,4 @@ function buildProfileEvents(registrations, eventsById, now = new Date(), waitlis
     return { upcoming: upcoming.sort(byStartAscending), history: history.sort(byDateDescending) };
 }
 
-module.exports = { buildProfileEvents, toProfileEntry };
+module.exports = { buildProfileEvents, toProfileEntry, byDateDescending };
