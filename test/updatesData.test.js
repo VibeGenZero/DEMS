@@ -6,7 +6,10 @@ const { REPO_ROOT } = require('./helpers');
 
 // Read fresh, so the test sees the file and not a cached require
 const data = JSON.parse(fs.readFileSync(path.join(REPO_ROOT, 'updates.json'), 'utf8'));
-const parts = (version) => version.split('.').map(Number);
+// Numeric major.minor.patch prefix; a pre-release suffix (e.g. "-beta.3") is ignored.
+// While only one pre-release of a version exists that is enough; a second beta entry
+// needs a suffix ordering rule here (see docs/wiki/ops/deployment.md).
+const parts = (version) => version.split('-')[0].split('.').map(Number);
 const newer = (a, b) => {
     const [x, y] = [parts(a), parts(b)];
     for (let i = 0; i < 3; i++) if (x[i] !== y[i]) return x[i] > y[i];
@@ -16,6 +19,7 @@ const newer = (a, b) => {
 test('the release notes are a list of releases, newest first', () => {
     assert.ok(Array.isArray(data.releases) && data.releases.length > 0, 'releases list');
     assert.equal(data.version, data.releases[0].version, 'top-level version is the newest release');
+    assert.equal(data.releases[0].version, '3.0.0-beta.3', 'newest release is the current beta');
     for (let i = 1; i < data.releases.length; i++) {
         assert.ok(newer(data.releases[i - 1].version, data.releases[i].version),
             `${data.releases[i - 1].version} must be newer than ${data.releases[i].version}`);
@@ -24,7 +28,7 @@ test('the release notes are a list of releases, newest first', () => {
 
 test('every release has a version, a date and entries with title and text', () => {
     for (const release of data.releases) {
-        assert.match(release.version, /^\d+\.\d+\.\d+$/, release.version);
+        assert.match(release.version, /^\d+\.\d+\.\d+(-[\w.+-]+)?$/, release.version);
         assert.match(release.date, /^\d{4}-\d{2}-\d{2}$/, `${release.version} date`);
         assert.ok(Array.isArray(release.news) && release.news.length > 0, `${release.version} has entries`);
         for (const entry of release.news) {

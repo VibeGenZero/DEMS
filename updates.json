@@ -1,6 +1,35 @@
 {
-    "version": "2.6.0",
+    "version": "3.0.0-beta.3",
     "releases": [
+        {
+            "version": "3.0.0-beta.3",
+            "date": "2026-10-23",
+            "news": [
+                {
+                    "title": "🧪 Vorabversion auf der Test-Umgebung",
+                    "content": "Das ist eine Vorabversion von DEMS 3.0 und läuft nur auf der Test-Umgebung. Manches ist noch nicht fertig. Wenn dir ein Fehler auffällt, sag bitte einem Admin Bescheid."
+                },
+                {
+                    "title": "📊 Auswertungen für Admins",
+                    "content": "Das Admin-Dashboard zeigt jetzt Zahlen zu vergangenen Events: Teilnahmequote, No-Show-Quote, die aktivsten Mitglieder und beliebte Kategorien.",
+                    "highlight": true
+                },
+                {
+                    "title": "👥 Mitgliederübersicht",
+                    "content": "Admins sehen alle Mitglieder auf einen Blick: mit Suche und komplettem Teilnahmeverlauf – wie oft jemand angemeldet war, gekommen ist oder weggeblieben ist.",
+                    "highlight": true
+                },
+                {
+                    "title": "✉️ Nachricht an alle Teilnehmer",
+                    "content": "Admins können allen Teilnehmern eines Events eine DM schreiben – zum Beispiel „Treffpunkt hat sich geändert“ oder „bitte Headset mitbringen“ – wahlweise an alle oder nur an die angenommenen.",
+                    "highlight": true
+                },
+                {
+                    "title": "📖 Neuigkeiten neu aufgeräumt",
+                    "content": "Das Neuigkeiten-Fenster öffnet sich nach dem Login nur einmal pro Version und zeigt nur die wichtigsten Neuerungen. Die komplette Historie aller Versionen gibt es jetzt auf der Seite „Was ist neu\" im Info-Bereich."
+                }
+            ]
+        },
         {
             "version": "2.6.0",
             "date": "2026-10-03",

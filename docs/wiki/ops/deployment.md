@@ -9,7 +9,7 @@ see_also: [security, known-issues]
 ---
 # Deployment — VPS with Docker (Hostinger + Traefik example)
 
-> TL;DR: Run the private image `moritakahashi/dems` (or build from source) with a compose file that passes `.env` into the container (`env_file`), keeps SQLite on a volume and sits behind a TLS reverse proxy. On a Hostinger VPS the Docker Manager stores projects under `/docker/<project>/` and Traefik routes `*.hstgr.cloud` hosts via container labels.
+> TL;DR: Run the private image `moritakahashi/dems` (or build from source) with a compose file that passes `.env` into the container (`env_file`), keeps SQLite on a volume and sits behind a TLS reverse proxy. On a Hostinger VPS the Docker Manager stores projects under `/docker/<project>/` and Traefik routes `*.hstgr.cloud` hosts via container labels. One SemVer version lives in package, news and git tag; pre-release images carry the moving tag `beta`, live releases `latest`.
 
 ## Requirements
 
@@ -61,6 +61,16 @@ docker compose logs -f
 docker inspect dems --format '{{range .Config.Env}}{{println .}}{{end}}' | cut -d= -f1   # which variables arrived (names only)
 docker run --rm -v dems_dems-data:/data -v $PWD:/backup alpine tar czf /backup/dems-backup.tgz -C /data .   # backup
 ```
+
+## Versions and pre-releases
+
+The version is one SemVer string in three places: `package.json`, `package-lock.json` and `updates.json` (the news dialog shows it). Bump it with `npm version <version> --no-git-tag-version`, then write the matching release entry in `updates.json`. The git tag of a release carries the same text without a leading `v` (e.g. `3.0.0-beta.3`); a build number is not part of the version — an image's commit sha tag identifies the build (a `+build` suffix is no valid image tag).
+
+Pre-releases are the beta series towards 3.0 (`3.0.0-beta.1`, `3.0.0-beta.2`, …) and the release candidate (`3.0.0-rc.1`). They run on the test environment only; the live system receives the final releases (prioplan decision 6).
+
+Published image: the private Docker Hub repository `moritakahashi/dems`. `latest` is the live release; a pre-release image gets its version tag and the moving tag `beta`, never `latest`; every image also carries its commit sha.
+
+Ordering note: `test/updatesData.test.js` compares the numeric major.minor.patch prefix only, which orders one pre-release above the older history. Once a second pre-release of the same version enters the history (e.g. `3.0.0-beta.3` and `3.0.0-beta.4`), that test needs a suffix ordering rule.
 
 ## Troubleshooting
 
