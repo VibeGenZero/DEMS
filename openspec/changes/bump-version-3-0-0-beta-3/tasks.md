@@ -17,8 +17,8 @@
 
 ## 4. Release mechanics
 
-- [ ] 4.1 Create the branch `chore/3.0.0-beta.3` off `main`, merge it into `main` via MR and verify the CI pipeline (test + docker-build health check) is green
-- [ ] 4.2 Tag the merge commit `3.0.0-beta.3` (no `v`) and verify the tag pipeline runs green
+- [x] 4.1 Create the branch `chore/3.0.0-beta.3` off `main`, merge it into `main` via MR and verify the CI pipeline (test + docker-build health check) is green
+- [x] 4.2 Tag the merge commit `3.0.0-beta.3` (no `v`) and verify the tag pipeline runs green
 - [ ] 4.3 Note the sha of the currently deployed beta 2 image, build and push the new image with the tags `3.0.0-beta.3`, `beta` and its commit sha (never `latest`), pull it on the test environment and verify `/api/updates` there answers with `version: "3.0.0-beta.3"` and the popup opens once after login with the three highlighted features
 
 ## 5. Final verification
