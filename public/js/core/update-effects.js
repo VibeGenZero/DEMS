@@ -142,9 +142,12 @@ export function playUpdateEffect(kind) {
  */
 export function celebrateUpdate(version) {
     const kind = updateEffectKind(version);
-    if (!kind || localStorage.getItem(SEEN_KEY) === version) return null;
+    // A blocked storage (private mode, cleared site data) must not break the news popup
+    let seen = null;
+    try { seen = localStorage.getItem(SEEN_KEY); } catch { /* treat as not seen */ }
+    if (!kind || seen === version) return null;
     if (!playUpdateEffect(kind)) return null;
-    localStorage.setItem(SEEN_KEY, version);
+    try { localStorage.setItem(SEEN_KEY, version); } catch { /* plays again on the next page load */ }
     return kind;
 }
 

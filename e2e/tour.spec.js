@@ -116,13 +116,13 @@ test('the raider votes in the open poll', async ({ page }) => {
     expect(errors).toEqual([]);
 });
 
-test('the news dialog closes through its action', async ({ page }) => {
+test('the news dialog closes with "Verstanden" (D-13: no checkbox, no own action)', async ({ page }) => {
     const errors = watchErrors(page);
     // Skip only the boot animation, so the news dialog shows
     await page.addInitScript(() => localStorage.setItem('dems_boot_ts', String(Date.now())));
     await page.goto('/auth/dev-login/member');
     const dialog = await waitForDialog(page, '#updatesModal');
-    await dialog.locator('[data-click="closeUpdatesModal"]').click();
+    await dialog.locator('.modal-footer .btn-accent').click();
     await expect(dialog).toBeHidden();
     expect(errors).toEqual([]);
 });

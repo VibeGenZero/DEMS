@@ -48,7 +48,7 @@ Line counts as of 2026-10-02 (approximate; they drift).
 | `Dockerfile`, `compose.yaml`, `compose.dev.yaml`, `.dockerignore` | container build and run | [docker](../ops/docker.md) |
 | `.env.example` | every supported environment variable | [configuration](../ops/configuration.md) |
 | `.gitlab-ci.yml`, `ci/runner/` | GitLab CI pipeline and the self-hosted runner setup | [ci](../ops/ci.md) |
-| `updates.json` | "what's new" notes served at `/api/updates`, shown by `checkUpdates()` | [server](../modules/server.md) |
+| `updates.json` | release notes of every version since 1.1.0 (newest first, entries may be marked `highlight`), served at `/api/updates`; popup via `core/updates.js`, page `#news` via `pages/news.js` | [server](../modules/server.md) |
 | `landing/` | standalone marketing page (not served by the app) | [landing-page](../modules/landing-page.md) |
 | `docs/superpowers/specs`, `docs/superpowers/plans` | design specs and implementation plans | [decisions](../reference/decisions.md) |
 | `docs/security/` | security audit (2026-04-22) + PoC | [security](../concepts/security.md) |

@@ -29,7 +29,7 @@ see_also: [request-lifecycle, security, configuration]
 | GET | `/api/csrf-token` | none | `{ token }` = `req.session.csrfToken`; the CSRF middleware mints it (and thereby the session) here when missing — the only place besides the login |
 | GET | `/api/maintenance/status` | none | public subset of `maintenanceSettings/config` (`active`, `warningEnabled`, `warningText`, `loginDisabled`, `registrationDisabled`, `plannedMaintenance*`, `panicMode`); `{ active: false }` when unset/error |
 | GET | `/api/server-info` | none | `{ serverName, iconUrl, guildId, debugMode }`; name from `SERVER_NAME`, else `getGuildName()`, else `'DEMS'`; `iconUrl` from `getGuildIconUrl()` (also with `SERVER_NAME`), `null` without an icon or bot |
-| GET | `/api/updates` | none | sends `updates.json` (version, date, `news[]` with German title/content) |
+| GET | `/api/updates` | none | sends `updates.json`: `{ version, releases: [{ version, date, news: [{ title, content, highlight? }] }] }`, newest release first, `version` = newest (D-13; `test/updatesData.test.js` guards order, dates and at most 3 highlights per release) |
 | GET | `/{*splat}` | none | `public/index.html` (SPA fallback, Express 5 wildcard syntax) |
 
 ## Where in code

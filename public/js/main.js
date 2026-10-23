@@ -33,6 +33,8 @@ import './events/slots.js';
 import './pages/debug.js';
 import './pages/debug-components.js';
 import './pages/profile-view.js';
+import './pages/news-view.js';
+import './pages/news.js';
 import './pages/profile.js';
 import './polls/admin.js';
 import './polls/polls.js';
@@ -43,7 +45,7 @@ import { initTabGlider } from './core/tab-glider.js';
 import { initTheme, onThemeChange } from './core/theme.js';
 import { refreshStyleguideTokens } from './pages/debug.js';
 import { initCardFlight } from './events/card-flight.js';
-import { checkUpdates } from './core/updates.js';
+import { loadUpdates } from './core/updates.js';
 import { showUserData } from './pages/info.js';
 
 initActions(document);
@@ -80,7 +82,8 @@ document.addEventListener('click', (e) => {
 // Login state and routing belong to finishLoading() -> checkAuth(); a second
 // /auth/me request here raced with it and swallowed the isNewUser flag
 document.addEventListener('DOMContentLoaded', () => {
-    checkUpdates();
+    // Version badge and unread dot only; the popup waits for the login (core/auth.js)
+    loadUpdates();
 });
 
 // Attach event listener for data button

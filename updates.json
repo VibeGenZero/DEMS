@@ -1,26 +1,250 @@
 {
     "version": "2.6.0",
-    "date": "2026-10-03",
-    "news": [
+    "releases": [
         {
-            "title": "🛡️ Rollen-Slots für Raids & Teams",
-            "content": "Events können jetzt Rollen wie Tank, Heiler oder Schaden mit eigener Platzzahl haben. Du wählst deine Hauptrolle und optional Ausweichrollen – ist deine Rolle voll, wirst du automatisch in einer freien Ausweichrolle eingeplant oder rückst später passend nach."
+            "version": "2.6.0",
+            "date": "2026-10-03",
+            "news": [
+                {
+                    "title": "🛡️ Rollen-Slots für Raids & Teams",
+                    "content": "Events können jetzt Rollen wie Tank, Heiler oder Schaden mit eigener Platzzahl haben. Du wählst deine Hauptrolle und optional Ausweichrollen – ist deine Rolle voll, wirst du automatisch in einer freien Ausweichrolle eingeplant oder rückst später passend nach.",
+                    "highlight": true
+                },
+                {
+                    "title": "🔄 Live-Ankündigungen in Discord",
+                    "content": "Die Event-Ankündigung zeigt die Aufstellung mit Namen und aktualisiert sich bei jeder An- und Abmeldung von selbst. Pro Rolle gibt es einen eigenen Button.",
+                    "highlight": true
+                },
+                {
+                    "title": "↔️ Slot wechseln & Abmelden per Klick",
+                    "content": "Auf der Event-Seite und direkt in Discord kannst du in einen freien Slot wechseln oder dich abmelden – ganz ohne Befehl."
+                },
+                {
+                    "title": "🗳️ Terminabstimmungen",
+                    "content": "Admins schlagen mehrere Termine vor, ihr stimmt pro Termin ab – auf der Website unter „Abstimmungen“ oder direkt in Discord. Die Antworten („passt“, „wenn nötig“, „passt nicht“) können Admins pro Abstimmung selbst benennen, und die Discord-Nachricht zeigt den Zwischenstand live.",
+                    "highlight": true
+                },
+                {
+                    "title": "📅 Vom Termin zum Event",
+                    "content": "Steht der Termin fest, wird daraus mit einem Klick ein Event. Alle, die abgestimmt haben, bekommen eine DM mit dem Link zur Anmeldung."
+                }
+            ]
         },
         {
-            "title": "🔄 Live-Ankündigungen in Discord",
-            "content": "Die Event-Ankündigung zeigt die Aufstellung mit Namen und aktualisiert sich bei jeder An- und Abmeldung von selbst. Pro Rolle gibt es einen eigenen Button."
+            "version": "2.5.1",
+            "date": "2026-10-02",
+            "news": [
+                {
+                    "title": "🔗 Event-Links aus Discord führen wieder zum Event",
+                    "content": "„Hier anmelden“, der Button „Zum Event“, der /events-Befehl, Event-Channels und Bot-Nachrichten öffnen jetzt direkt die Detailseite des Events statt der Event-Übersicht. Auch Links in älteren Discord-Nachrichten funktionieren wieder."
+                },
+                {
+                    "title": "🔐 Nach dem Login direkt zum Event",
+                    "content": "Wer einen Event-Link öffnet und noch nicht eingeloggt ist, landet nach dem Discord-Login automatisch auf genau diesem Event — nicht mehr auf der Übersicht."
+                }
+            ]
         },
         {
-            "title": "↔️ Slot wechseln & Abmelden per Klick",
-            "content": "Auf der Event-Seite und direkt in Discord kannst du in einen freien Slot wechseln oder dich abmelden – ganz ohne Befehl."
+            "version": "2.5.0",
+            "date": "2026-09-08",
+            "news": [
+                {
+                    "title": "🧩 Echte Discord-Komponenten im Anmelde-Dialog",
+                    "content": "Das Anmelde-Popup in Discord besteht nicht mehr nur aus Textfeldern: Dropdowns sind jetzt echte Auswahlmenüs, Checkboxen werden mit Ja/Nein beantwortet und jedes Feld steht in einer Label-Komponente mit Feldname und Hinweistext. Über dem Formular zeigt eine Text-Display-Komponente Titel, Termin und Teilnehmerzahl."
+                },
+                {
+                    "title": "👥 Neue Feldtypen für Mitglieder, Rollen und Channels",
+                    "content": "Formulare können jetzt ein Discord-Mitglied, eine Rolle, einen Channel oder beides kombiniert abfragen. In Discord erscheinen dafür die passenden Auswahlmenüs, im Web eine Suche bzw. eine Auswahlliste. Neu sind außerdem mehrzeilige Textfelder und ein optionaler Hinweistext je Feld."
+                },
+                {
+                    "title": "📋 Einheitliches Antwortformat",
+                    "content": "Ausgewählte Mitglieder, Rollen und Channels werden überall gleich gespeichert — als '@Name (ID)' bzw. '#Name (ID)'. Damit bleiben Anmeldungen aus Discord und aus dem Web in Übersicht und CSV-Export direkt vergleichbar."
+                },
+                {
+                    "title": "🔒 Channel-Auswahl ohne Datenleck",
+                    "content": "Die Channel-Liste im Web-Formular enthält nur Channels, die alle Mitglieder ohnehin sehen können. Private Channels tauchen dort nicht auf."
+                }
+            ]
         },
         {
-            "title": "🗳️ Terminabstimmungen",
-            "content": "Admins schlagen mehrere Termine vor, ihr stimmt pro Termin ab – auf der Website unter „Abstimmungen“ oder direkt in Discord. Die Antworten („passt“, „wenn nötig“, „passt nicht“) können Admins pro Abstimmung selbst benennen, und die Discord-Nachricht zeigt den Zwischenstand live."
+            "version": "2.4.0",
+            "date": "2026-09-08",
+            "news": [
+                {
+                    "title": "✅ Anmelden direkt aus Discord",
+                    "content": "Jede Event-Ankündigung bekommt jetzt zwei Buttons: 'Anmelden' und 'Zum Event'. Der Anmelden-Button prüft alle Bedingungen (Status, Rollen-Requirement, Wartungsmodus, Doppelanmeldung, Plätze) und trägt dich direkt ein — inklusive Warteliste und automatischer Bestätigung."
+                },
+                {
+                    "title": "📝 Event-Formulare als Discord-Dialog",
+                    "content": "Hat ein Event ein Formular, öffnet der Anmelden-Button ein Popup direkt in Discord. Die Antworten werden automatisch übernommen und landen genauso in der Anmeldung wie über die Website. Dropdowns und Checkboxen werden dabei geprüft und normalisiert."
+                },
+                {
+                    "title": "🔗 Link-Button immer dabei",
+                    "content": "Der zweite Button führt immer zur Event-Seite. Passt ein Formular nicht in einen Discord-Dialog (mehr als 5 Felder), bleibt nur dieser Button übrig und der Hinweis führt zur Website."
+                },
+                {
+                    "title": "👀 Herkunft in der Oberfläche sichtbar",
+                    "content": "In der Anmeldungs-Übersicht eines Events steht jetzt bei jeder Anmeldung, ob sie über Discord oder die Website kam. Der CSV-Export enthält die neue Spalte 'Quelle'."
+                },
+                {
+                    "title": "♻️ Eine gemeinsame Anmeldelogik",
+                    "content": "Website und Discord nutzen jetzt denselben Anmelde-Service. Damit gelten überall exakt dieselben Prüfungen, Bot-Nachrichten, Rollenvergaben und Channel-Freischaltungen."
+                }
+            ]
         },
         {
-            "title": "📅 Vom Termin zum Event",
-            "content": "Steht der Termin fest, wird daraus mit einem Klick ein Event. Alle, die abgestimmt haben, bekommen eine DM mit dem Link zur Anmeldung."
+            "version": "2.3.1",
+            "date": "2026-04-23",
+            "news": [
+                {
+                    "title": "🔒 Check-in Codes nicht mehr öffentlich",
+                    "content": "Der 6-stellige Check-in Code wird nicht mehr in der öffentlichen Event-Ansicht mitgeschickt. Er ist weiterhin in der Admin-Oberfläche sichtbar, taucht aber in keiner API-Antwort für reguläre Besucher mehr auf."
+                },
+                {
+                    "title": "📝 Entwürfe & archivierte Events bleiben intern",
+                    "content": "Events mit dem Status 'draft', 'archived' oder 'cancelled' werden jetzt zuverlässig ausschließlich Admins angezeigt. Anfragen nicht-authentifizierter Nutzer mit einem Status-Filter werden abgewiesen."
+                },
+                {
+                    "title": "💬 Kommentare nur für eingeloggte Nutzer",
+                    "content": "Event-Kommentare lassen sich jetzt nur noch mit Discord-Login lesen. Wer nicht eingeloggt ist, sieht wie beim Posten auch beim Lesen einen Hinweis zum Anmelden."
+                },
+                {
+                    "title": "🛡️ Security-Audit umgesetzt",
+                    "content": "Drei Findings aus dem internen Pentest vom 22.04. (zwei kritisch, eins mittel) sind jetzt behoben und mit dem mitgelieferten Proof-of-Concept verifiziert."
+                },
+                {
+                    "title": "📦 Abhängigkeiten gepatcht",
+                    "content": "Firebase wurde auf 11.10 aktualisiert; damit fallen alle vom npm-Audit gemeldeten Schwachstellen (u.a. protobufjs-RCE und mehrere undici-Advisories) weg. `npm audit` meldet jetzt 0 Vulnerabilities."
+                }
+            ]
+        },
+        {
+            "version": "2.3.0",
+            "date": "2026-04-10",
+            "news": [
+                {
+                    "title": "🎨 Neues Event-Detail Layout",
+                    "content": "Die Event-Detailseite wurde komplett überarbeitet: Zweispaltiges Layout mit einem übersichtlichen Sidebar (Datum, Uhrzeit, Dauer, Ort, Ersteller, Kapazität) und einem Anmelde-Button der direkt aus der Seitenleiste funktioniert."
+                },
+                {
+                    "title": "🖼️ Banner & Farbgestaltung",
+                    "content": "Events zeigen jetzt immer einen Banner-Header — entweder ein eigenes Bild, eine benutzerdefinierte Akzentfarbe (via Farbwähler) oder einen automatischen Farbverlauf der pro Event eindeutig und konsistent ist."
+                },
+                {
+                    "title": "👥 Teilnehmer-Avatare",
+                    "content": "Eingeloggte Nutzer sehen auf der Event-Detailseite die Avatare aller bestätigten Teilnehmer direkt unterhalb der Beschreibung."
+                },
+                {
+                    "title": "📍 Ort mit Discord-Deeplink",
+                    "content": "Events können jetzt einen Ort mit Channel-Verlinkung haben. Bei der Eingabe werden Server-Channels vorgeschlagen — ein Klick öffnet den Channel direkt in Discord."
+                },
+                {
+                    "title": "🃏 Übersicht überarbeitet",
+                    "content": "Event-Karten zeigen jetzt Kapazitätsbalken, einen prominenten Datums-Bereich und Farbverläufe als Platzhalter wenn kein Banner gesetzt ist. Layout auf 2 Spalten umgestellt."
+                },
+                {
+                    "title": "⚡ Boot-Animation (24h)",
+                    "content": "Die Lade-Animation beim ersten Besuch wird jetzt nur noch einmal alle 24 Stunden abgespielt."
+                }
+            ]
+        },
+        {
+            "version": "2.2.0",
+            "date": "2026-03-12",
+            "news": [
+                {
+                    "title": "🤖 Bot-Zentrale (Control Center)",
+                    "content": "Neuer Bereich in der Navigation: Die Bot-Zentrale zeigt den Live-Status des Discord Bots (Uptime, Ping, gesendete DMs, verarbeitete Befehle) und alle laufenden Events mit Teilnehmerstatistiken auf einen Blick."
+                },
+                {
+                    "title": "⚙️ Bot Einstellungen",
+                    "content": "Steuere den Bot direkt aus dem Web-Dashboard: Online-Status (Online/Abwesend/DND), Aktivitätstext, und schalte Funktionen wie DM-Benachrichtigungen, Erinnerungen, Event-Start-Meldungen und Auto-Channel-Erstellung ein oder aus."
+                },
+                {
+                    "title": "📡 Laufende Events Live-Monitor",
+                    "content": "Die Bot-Zentrale zeigt alle aktiven Events mit Live-Indikatoren, Kapazitätsbalken und Registrierungsstatistiken (Angenommen/Ausstehend/Warteliste) in Echtzeit an."
+                },
+                {
+                    "title": "🔧 Bugfix: deleteDoc Import",
+                    "content": "Der /unregister Slash-Command funktioniert jetzt zuverlässig — ein fehlender Import wurde behoben."
+                }
+            ]
+        },
+        {
+            "version": "2.1.0",
+            "date": "2026-03-08",
+            "news": [
+                {
+                    "title": "🔁 Event-Serien als gruppierte Kacheln",
+                    "content": "Wiederkehrende Events werden jetzt als eine einzige Kachel mit Terminliste angezeigt — ähnlich wie in Discord. Keine Flut an einzelnen Kacheln mehr! Klicke auf einen Termin, um zur Detailseite zu gelangen."
+                },
+                {
+                    "title": "📋 Serien-Terminübersicht",
+                    "content": "Auf der Event-Detailseite siehst du jetzt alle Termine der Serie auf einen Blick. Der aktuelle Termin wird hervorgehoben, und du kannst direkt zwischen den Terminen wechseln."
+                },
+                {
+                    "title": "🗑️ Serien-Verwaltung für Admins",
+                    "content": "Admins können im Admin-Bereich Serien als Gruppe sehen, einzelne Termine bearbeiten oder die gesamte Serie auf einmal löschen."
+                },
+                {
+                    "title": "📅 Anmeldung pro Einzeltermin",
+                    "content": "Trotz der neuen Gruppierung bleibt die Anmeldung flexibel: Nutzer melden sich weiterhin für einzelne Termine an — nicht für die ganze Serie."
+                }
+            ]
+        },
+        {
+            "version": "2.0.1",
+            "date": "2026-03-08",
+            "news": [
+                {
+                    "title": "🐛 Zeitzonen-Fix",
+                    "content": "Event-Zeiten werden jetzt korrekt als UTC-ISO-Strings gespeichert. Benachrichtigungen und Discord-Event-Sync starten nun pünktlich zur eingegebenen Uhrzeit."
+                }
+            ]
+        },
+        {
+            "version": "2.0.0",
+            "date": "2026-02-20",
+            "news": [
+                {
+                    "title": "🎉 DEMS 2.0 ist da!",
+                    "content": "Willkommen in der Version 2.0! Wir haben riesige neue Discord-Integrationen und Verbesserungen für das Event-Management hinzugefügt."
+                },
+                {
+                    "title": "🎟️ Gästetickets",
+                    "content": "Teilnehmer können nun bei Anmeldung Gäste hinzufügen (per Discord User ID). Gäste belegen automatisch reguläre Plätze."
+                },
+                {
+                    "title": "🎙️ Erweiterte Auto-Channels",
+                    "content": "Admins können nun genau konfigurieren, ob Voice, Text oder beide Kanaltypen für ein Event in Discord erstellt werden sollen, inkl. eigener Namen."
+                },
+                {
+                    "title": "🔄 Native Discord Event Sync",
+                    "content": "Du kannst jetzt deine DEMS Events per Knopfdruck als echtes 'Scheduled Event' in Discord anlegen!"
+                }
+            ]
+        },
+        {
+            "version": "1.1.0",
+            "date": "2026-02-17",
+            "news": [
+                {
+                    "title": "🎉 DEMS Update 1.1.0",
+                    "content": "Willkommen in der neuen Version! Wir haben einige coole Features hinzugefügt."
+                },
+                {
+                    "title": "🤖 Eigene Bot-Nachrichten",
+                    "content": "Admins können jetzt pro Event individuelle Nachrichten für Anmeldung, Zusage und Absage definieren. Nutze Platzhalter wie {user.name}!"
+                },
+                {
+                    "title": "⏯️ Manuelle Event-Steuerung",
+                    "content": "Events können jetzt manuell gestartet und beendet werden, auch ohne festes Datum."
+                },
+                {
+                    "title": "📥 Discord Import",
+                    "content": "Importiere geplante Events direkt aus deinem Discord-Server in das DEMS."
+                }
+            ]
         }
     ]
 }
