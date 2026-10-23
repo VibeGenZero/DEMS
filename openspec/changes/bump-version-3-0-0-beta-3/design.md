@@ -35,3 +35,5 @@
 
 1. Merge the MR, tag `3.0.0-beta.3`, build and push the image with `3.0.0-beta.3`, `beta` and the sha tags, pull it on the test environment.
 2. Rollback: re-deploy the previous `beta`-tagged image (the moving tag points to beta 2 until it is overwritten, so note the sha of beta 2 before pushing) and revert the merge in `main`; nothing else persists a version.
+
+Note added during apply: the `docker-build` CI job had never run — `- when: never` stood first in its `rules` and, GitLab matching rules in order, swallowed everything after it. The fix (a bare `never` must come last) is merged into `main` before the tag, so the tag moves from the version jump merge commit to the `main` HEAD that includes the CI fix; the version content of both commits is identical, and only the fixed head makes the tag pipeline actually run the image health check.
