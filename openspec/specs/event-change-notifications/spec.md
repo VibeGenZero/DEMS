@@ -64,7 +64,7 @@ The server SHALL send change DMs only when the save request asks for it explicit
 - **THEN** reading the event does not return the flag
 
 ### Requirement: Recipients
-A change DM SHALL go to every member with an accepted registration for the event and to every accepted guest of such a registration, each user once. Members whose registration is pending, waitlisted or rejected, and invited guests who have not accepted yet, SHALL NOT receive it.
+A change DM SHALL go to every member with an accepted registration for the event and to every accepted guest of such a registration, each user once, unless that user switched "Änderungen" off in the profile. Members whose registration is pending, waitlisted or rejected, and invited guests who have not accepted yet, SHALL NOT receive it.
 
 #### Scenario: Accepted member with an accepted guest
 - **WHEN** an accepted member has brought an accepted guest and the start changes with notification
@@ -81,6 +81,10 @@ A change DM SHALL go to every member with an accepted registration for the event
 #### Scenario: Same user twice
 - **WHEN** a user is listed as accepted guest of two registrations of the event
 - **THEN** the user receives exactly one DM
+
+#### Scenario: Changes switched off
+- **WHEN** the start changes with notification and one of two accepted members switched "Änderungen" off
+- **THEN** only the other member receives the DM, the answer counts one notified participant and the audit entry names one participant who opted out
 
 ### Requirement: Content of the change DM
 The change DM SHALL be German. It SHALL name the event title and list each changed field ("Beginn", "Ende", "Ort") with its value before and after the change, dates in German format in the configured time zone and an empty value as "nicht festgelegt". Unchanged fields SHALL NOT be listed. The DM SHALL end with a link to the event page.
