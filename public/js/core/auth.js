@@ -63,6 +63,7 @@ export function showLoggedIn() {
 
     if (state.currentUser.isAdmin) {
         document.getElementById('nav-admin').style.display = 'block';
+        document.getElementById('nav-members').style.display = 'block';
         document.getElementById('nav-bot-control').style.display = 'block';
     }
 }
@@ -70,6 +71,7 @@ export function showLoggedIn() {
 export function showLoggedOut() {
     document.getElementById('user-info').style.display = 'none';
     document.getElementById('nav-admin').style.display = 'none';
+    document.getElementById('nav-members').style.display = 'none';
     document.getElementById('nav-bot-control').style.display = 'none';
     document.getElementById('nav-events').style.display = 'none';
     document.getElementById('nav-profile').style.display = 'none';

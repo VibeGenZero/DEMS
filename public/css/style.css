@@ -1144,6 +1144,142 @@ body {
 }
 
 /* ═══════════════════════════════════════════ */
+/* MEMBERS                                     */
+/* Member overview for admins (W-15): list     */
+/* #members and page #member/<id>, markup in   */
+/* admin/member-view.js                        */
+/* ═══════════════════════════════════════════ */
+.members-toolbar {
+  display: flex;
+  margin: var(--space-24) 0 var(--space-12);
+}
+
+.members-toolbar .events-search {
+  width: 100%;
+  max-width: 24rem;
+}
+
+.members-table th:nth-child(1) {
+  width: 32%;
+}
+
+.members-person {
+  display: flex;
+  align-items: center;
+  gap: var(--space-12);
+}
+
+.members-number {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Member page: card | history; one column below 992 px */
+.members-detail {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+  gap: var(--space-24);
+  align-items: start;
+}
+
+/* Two rows of two; the profile grid (three columns) comes later in this file */
+.members-card .members-numbers {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+/* The name is a link: no underline until hovered, like the button title of the event table */
+.members-person .data-table-title {
+  text-decoration: none;
+}
+
+.members-person .data-table-title:hover {
+  text-decoration: underline;
+}
+
+.members-facts {
+  display: grid;
+  gap: var(--space-8);
+  margin: var(--space-16) 0 0;
+  padding-top: var(--space-12);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.members-fact {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-12);
+  font-size: var(--font-size-sm);
+}
+
+.members-fact dt {
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.members-fact dd {
+  margin: 0;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+.members-history-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  margin-bottom: var(--space-16);
+  font-size: var(--font-size-lg);
+}
+
+.members-history {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+}
+
+.members-history-chips {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-4);
+}
+
+@media (max-width: 991.98px) {
+  .members-detail {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 767.98px) {
+  .members-toolbar .events-search {
+    max-width: none;
+  }
+
+  /* As blocks the numbers lose their heads, so each names itself */
+  .members-table td.members-number,
+  .members-table td.members-when {
+    display: inline-block;
+    margin-right: var(--space-16);
+    font-size: var(--font-size-sm);
+  }
+
+  /* Day, title and chips below each other: beside the title the chips would squeeze it to a few letters */
+  .profile-history-row.members-history-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-4);
+  }
+
+  .members-history-chips {
+    justify-content: flex-start;
+  }
+
+  .members-table td.members-number::before,
+  .members-table td.members-when::before {
+    content: attr(data-label) " ";
+    color: var(--text-muted);
+  }
+}
+
+/* ═══════════════════════════════════════════ */
 /* UPDATE EFFECTS                              */
 /* Played once per version with the news       */
 /* dialog (core/update-effects.js): confetti   */

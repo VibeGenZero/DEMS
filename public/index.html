@@ -109,6 +109,11 @@
                 <i class="bi bi-gear me-1"></i>Admin
               </a>
             </li>
+            <li class="nav-item is-hidden" id="nav-members">
+              <a class="nav-link" href="#members" data-section="members-section">
+                <i class="bi bi-people me-1"></i>Mitglieder
+              </a>
+            </li>
             <li class="nav-item is-hidden" id="nav-bot-control">
               <a class="nav-link" href="#bot-control" data-section="bot-control-section">
                 <i class="bi bi-robot me-1"></i>Bot-Zentrale
@@ -754,6 +759,9 @@
             <a class="btn btn-outline-light" href="#polls">
               <i class="bi bi-ui-checks-grid me-1"></i>Abstimmungen
             </a>
+            <a class="btn btn-outline-light" href="#members">
+              <i class="bi bi-people me-1"></i>Mitglieder
+            </a>
             <button class="btn btn-outline-light" data-click="showBotMessagesModal">
               <i class="bi bi-chat-dots me-1"></i>Bot-Nachrichten
             </button>
@@ -810,6 +818,31 @@
             </div>
           </div>
         </div>
+      </div>
+    </section>
+
+    <!-- Member overview for admins (W-15): admin/members.js -->
+    <section id="members-section" class="app-section is-hidden">
+      <div class="container section-container">
+        <div class="section-header">
+          <h2><i class="bi bi-people me-2"></i>Mitglieder</h2>
+          <p class="text-secondary mb-0" id="members-count"></p>
+        </div>
+        <div class="members-toolbar">
+          <div class="events-search">
+            <i class="bi bi-search events-search-icon" aria-hidden="true"></i>
+            <input type="search" class="form-control" id="members-search" placeholder="Name, Benutzername oder Discord-ID …"
+              aria-label="Mitglieder durchsuchen" data-input="searchMembers">
+          </div>
+        </div>
+        <div id="members-table"></div>
+      </div>
+    </section>
+
+    <section id="member-detail-section" class="app-section is-hidden">
+      <div class="container section-container">
+        <a class="btn btn-ghost btn-sm mb-3" href="#members"><i class="bi bi-arrow-left me-1"></i>Alle Mitglieder</a>
+        <div id="member-detail"></div>
       </div>
     </section>
 

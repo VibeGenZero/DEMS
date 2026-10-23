@@ -3,14 +3,14 @@ id: routes-admin
 title: routes/admin.js — admin API
 type: module
 tags: [api, admin, events, registrations, discord, bot-control, maintenance, audit-log, csv]
-sources: [routes/admin.js, middleware/validators.js, utils/eventUtils.js, utils/capacity.js]
+sources: [routes/admin.js, middleware/validators.js, utils/eventUtils.js, utils/capacity.js, utils/memberOverview.js]
 part_of: [architecture]
 depends_on: [middleware, utils, data-layer, bot]
 see_also: [event-lifecycle, maintenance-mode, discord-integration, api-index]
 ---
 # routes/admin.js — admin API
 
-> TL;DR: Mounted at `/api/admin`; every route requires `requireAuth` + `requireAdmin` (`router.use` at the top). Covers event CRUD and lifecycle, registration review, CSV export, Discord announce/sync/import, bot message templates, audit log, full system reset, bot control center and maintenance/panic mode. Most mutations write an audit log entry via `addAuditLog`.
+> TL;DR: Mounted at `/api/admin`; every route requires `requireAuth` + `requireAdmin` (`router.use` at the top). Covers event CRUD and lifecycle, registration review, member overview (W-15), CSV export, Discord announce/sync/import, bot message templates, audit log, full system reset, bot control center and maintenance/panic mode. Most mutations write an audit log entry via `addAuditLog`.
 
 ## Endpoints
 
@@ -44,6 +44,8 @@ see_also: [event-lifecycle, maintenance-mode, discord-integration, api-index]
 | POST | `/events/:id/sync-discord` | creates a Discord scheduled event once, stores `discordScheduledEventId` | `SYNC_DISCORD_EVENT` |
 | GET / PUT | `/bot-messages` | templates `registration`, `accepted`, `rejected` (`validateBotMessages`, ≤2000 chars) | `UPDATE_TEMPLATES` |
 | GET | `/audit-log` | paginated, newest first | — |
+| GET | `/members` | W-15: every `users` document → `{ members: [{ id, username, displayName, avatar, createdAt, lastActiveAt, stats: { registrations, attended, checkedIn, noShows } }] }`, ordered by name; three full reads (`users`, `registrations`, `events`), numbers by `buildMemberList` ([utils](utils.md)) | — |
+| GET | `/members/:id` | W-15: `{ member: { …, acceptInvitations, notifications }, stats, history }`; history = every own registration via `buildMemberHistory` (no form answers, guests or check-in code); "tracked" events need the registrations of each event of the history (`loadEventRegistrations`); unknown id → 404 "Mitglied nicht gefunden." | — |
 | DELETE | `/reset` | body `{ password, targets[] }`; `ADMIN_RESET_PASSWORD` required (`safeEqual`); wipes `events`, `users`, `registrations`, `comments`, `auditLogs`, `polls`, `pollVotes` | (console only) |
 | POST | `/polls` | `normalizePollInput` → new open poll | `CREATE_POLL` |
 | PUT | `/polls/:id` | `updatePoll` (open polls only; dates with votes stay) | `UPDATE_POLL` |

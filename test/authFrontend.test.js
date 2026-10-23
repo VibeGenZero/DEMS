@@ -41,3 +41,22 @@ test('nothing logs out by navigating to /auth/logout any more', () => {
     assert.doesNotMatch(html, /href="\/auth\/logout"/);
     assert.doesNotMatch(appJs, /location\.href\s*=\s*'\/auth\/logout'/);
 });
+
+test('only admins see the member overview link, next to the other admin links (W-15)', async () => {
+    const { app, state, element } = await loadFrontendApp({});
+    state.currentUser = MEMBER;
+    app.showLoggedIn();
+    assert.notEqual(element('nav-members').style.display, 'block');
+
+    state.currentUser = { ...MEMBER, isAdmin: true };
+    app.showLoggedIn();
+    assert.equal(element('nav-members').style.display, 'block');
+
+    app.showLoggedOut();
+    assert.equal(element('nav-members').style.display, 'none');
+
+    const html = fs.readFileSync(path.join(REPO_ROOT, 'public', 'index.html'), 'utf8');
+    const order = ['id="nav-admin"', 'id="nav-members"', 'id="nav-bot-control"'].map(marker => html.indexOf(marker));
+    assert.ok(order.every(index => index > 0) && order[0] < order[1] && order[1] < order[2], 'Mitglieder sits between Admin and Bot-Zentrale');
+    assert.match(html, /<a class="btn btn-outline-light" href="#members">/);
+});

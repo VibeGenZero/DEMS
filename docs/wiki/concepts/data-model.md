@@ -62,6 +62,8 @@ Slot fields exist only on slot events: `slotId` = the slot actually taken (`null
 
 `{ id, username, displayName, avatar (URL), acceptInvitations (bool), notifications?: { reminders, changes, waitlist } (bool each, W-16; missing field or key = on), createdAt, updatedAt }`
 
+Read in full by the admin member overview (W-15, `GET /api/admin/members`, `utils/memberOverview.js`): `createdAt` shows as "Dabei seit", `updatedAt` (login or settings save) and the registration times give "Letzte Aktivität".
+
 ## comments (auto id) — `POST /api/events/:id/comments`
 
 `{ eventId, userId, userName, userAvatar, text (≤1000), isAdmin, replyTo (comment id|null), createdAt }` — `userAvatar` is the session avatar URL at posting time; comments written before F-11 store it wrapped (`cdn.discordapp.com/avatars/<id>/<URL>.png?size=64`), `GET /api/events/:id/comments` unwraps it.
