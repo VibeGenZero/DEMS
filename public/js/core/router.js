@@ -13,6 +13,7 @@ import { showEventDetail } from '../events/detail.js';
 import { showEventsSection } from '../events/list.js';
 import { showDebugSection } from '../pages/debug.js';
 import { showInfoSection } from '../pages/info.js';
+import { showNewsSection } from '../pages/news.js';
 import { showProfileSection } from '../pages/profile.js';
 import { showPollDetail, showPollsSection } from '../polls/polls.js';
 
@@ -20,7 +21,7 @@ import { showPollDetail, showPollsSection } from '../polls/polls.js';
 export const LEGACY_EVENT_ROUTE = /^events\/(.+)$/;
 
 // Pages without their own navbar link mark the link of their list
-const NAV_ROUTE = { member: 'members', insights: 'admin' };
+const NAV_ROUTE = { member: 'members', insights: 'admin', news: 'info' };
 
 // Event a logged-out user opened -> shown after the Discord login
 export const PENDING_ROUTE_KEY = 'dems_pending_route';
@@ -100,7 +101,8 @@ export function handleRoute() {
     });
     placeNavMarker();
 
-    if (!state.currentUser && route !== 'login' && route !== 'info') {
+    // Info and the release notes are public
+    if (!state.currentUser && route !== 'login' && route !== 'info' && route !== 'news') {
         if ((route === 'event' || route === 'poll') && param) rememberPendingRoute(hash);
         document.getElementById('login-section').style.display = 'block';
         return;
@@ -160,6 +162,9 @@ export function handleRoute() {
             break;
         case 'info':
             showInfoSection();
+            break;
+        case 'news':
+            showNewsSection();
             break;
         case 'debug':
             if (window.DEBUG_MODE) {

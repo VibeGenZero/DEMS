@@ -118,42 +118,42 @@ test('an effect fills the layer and shows it; an unknown one leaves it alone', a
 test('the news dialog celebrates a version once per browser', async () => {
     const { app, element } = await loadFrontendApp(news('3.1.0'));
     const layer = element('update-effects');
-    await app.checkUpdates();
+    await app.showNewsAfterLogin();
     assert.equal(element('updates-version-badge').textContent, '3.1.0');
     assert.match(layer.innerHTML, /is-powerup/);
     assert.equal(pieceCount(layer), COUNTS.powerup);
 
-    // The dialog comes back on the next page load, the effect does not
+    // A second call on the same page opens nothing and plays nothing (D-13: once per version)
     layer.innerHTML = '';
-    await app.checkUpdates();
+    await app.showNewsAfterLogin();
     assert.equal(layer.innerHTML, '');
 });
 
 test('the next version celebrates again, with its own effect', async () => {
     const celebrated = { dems_last_effect_version: '3.1.0' };
     const same = await loadFrontendApp(news('3.1.0'), { storage: celebrated });
-    await same.app.checkUpdates();
+    await same.app.showNewsAfterLogin();
     assert.equal(same.element('update-effects').innerHTML, '');
 
     const patch = await loadFrontendApp(news('3.1.1'), { storage: celebrated });
-    await patch.app.checkUpdates();
+    await patch.app.showNewsAfterLogin();
     assert.match(patch.element('update-effects').innerHTML, /is-bug/);
 
     const major = await loadFrontendApp(news('4.0.0'), { storage: celebrated });
-    await major.app.checkUpdates();
+    await major.app.showNewsAfterLogin();
     assert.match(major.element('update-effects').innerHTML, /is-confetti/);
 });
 
 test('no dialog, no effect: a dismissed version stays quiet', async () => {
     const { app, element } = await loadFrontendApp(news('3.0.0'), { storage: { dems_last_seen_version: '3.0.0' } });
-    await app.checkUpdates();
+    await app.showNewsAfterLogin();
     assert.equal(element('update-effects').innerHTML, '');
     assert.equal(isHidden(element('update-effects')), true);
 });
 
 test('a version nobody can read shows the dialog without an effect', async () => {
     const { app, element, toasts } = await loadFrontendApp(news('neu'));
-    await app.checkUpdates();
+    await app.showNewsAfterLogin();
     assert.equal(element('updates-version-badge').textContent, 'neu');
     assert.match(element('updates-content').innerHTML, /Neu/);
     assert.equal(element('update-effects').innerHTML, '');
@@ -164,7 +164,7 @@ test('with reduced motion nothing moves', async () => {
     const { app, element } = await loadFrontendApp(news('3.0.0'), { reducedMotion: true });
     const layer = element('update-effects');
     assert.equal(app.playUpdateEffect('confetti'), false);
-    await app.checkUpdates();
+    await app.showNewsAfterLogin();
     assert.equal(layer.innerHTML, '');
     assert.equal(isHidden(layer), true);
     // The dialog itself still opens

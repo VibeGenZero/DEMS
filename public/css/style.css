@@ -2412,6 +2412,114 @@ a.profile-history-row:hover {
 }
 
 /* ═══════════════════════════════════════════ */
+/* NEWS                                        */
+/* Release notes (D-13): page #news, entries   */
+/* of the news popup, unread dot on the Info   */
+/* link; markup in pages/news-view.js          */
+/* ═══════════════════════════════════════════ */
+/* The version badge of the info page is a link to #news */
+a.info-version-badge {
+  text-decoration: none;
+  transition: var(--transition);
+}
+
+a.info-version-badge:hover,
+a.info-version-badge:focus-visible {
+  border-color: var(--accent);
+  color: var(--text-primary);
+}
+
+.info-news-link {
+  font-weight: 600;
+  color: var(--accent-text);
+}
+
+/* Unread dot behind "Info" in the navbar */
+.nav-dot {
+  display: inline-block;
+  width: var(--space-8);
+  height: var(--space-8);
+  margin-left: var(--space-4);
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+  vertical-align: super;
+}
+
+.news-container {
+  max-width: 52rem;
+}
+
+.news-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-12);
+}
+
+.news-release {
+  background: var(--bg-glass);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius);
+}
+
+.news-release-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-8) var(--space-12);
+  padding: var(--space-16);
+  cursor: pointer;
+  list-style: none;
+}
+
+/* The chevron replaces the browser's own marker */
+.news-release-summary::-webkit-details-marker {
+  display: none;
+}
+
+.news-release-date,
+.news-release-count {
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.news-release-marker {
+  margin-left: auto;
+  color: var(--text-muted);
+  transition: var(--transition);
+}
+
+.news-release[open] .news-release-marker {
+  rotate: 180deg;
+}
+
+.news-release-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-16);
+  padding: 0 var(--space-16) var(--space-16);
+}
+
+/* One entry, in the popup and on the page */
+.news-entry-title {
+  margin-bottom: var(--space-4);
+  color: var(--text-primary);
+  font-size: var(--font-size-md);
+  font-weight: 700;
+}
+
+.news-entry-text {
+  margin-bottom: 0;
+  color: var(--text-secondary);
+}
+
+#updates-content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-16);
+}
+
+/* ═══════════════════════════════════════════ */
 /* EASYMDE CUSTOMIZATION                       */
 /* ═══════════════════════════════════════════ */
 .editor-toolbar {

@@ -103,3 +103,30 @@ test('the evaluations page marks the navbar link of the admin area', async () =>
     assert.deepEqual([...adminLink.classes], ['active']);
     assert.deepEqual([...eventsLink.classes], []);
 });
+
+// The release notes belong to the info area (D-13)
+test('the news page marks the navbar link of the info page', async () => {
+    const infoLink = fakeLink('info-section', []);
+    const eventsLink = fakeLink('events-section', ['active']);
+    const noop = () => {};
+    const storage = { getItem: () => null, setItem: noop, removeItem: noop };
+    const document = {
+        getElementById: () => ({ style: {}, classList: { add: noop, remove: noop, toggle: noop, contains: () => false }, innerHTML: '' }),
+        addEventListener: noop,
+        querySelector: () => null,
+        querySelectorAll: (selector) => (selector === '#main-navbar .nav-link' ? [infoLink, eventsLink] : [])
+    };
+    const context = vm.createContext({
+        document, console, location: { hash: '#news', search: '' }, history: { replaceState: noop, pushState: noop },
+        localStorage: storage, sessionStorage: storage,
+        fetch: () => Promise.resolve({ ok: false, json: async () => ({}) }),
+        setTimeout: noop, clearTimeout: noop, setInterval: () => 0, clearInterval: noop
+    });
+    context.window = context;
+    const router = (await loadFrontendModules(ROUTER_FILE, context)).get('router.js');
+
+    router.handleRoute();
+
+    assert.deepEqual([...infoLink.classes], ['active']);
+    assert.deepEqual([...eventsLink.classes], []);
+});

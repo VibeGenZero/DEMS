@@ -7,6 +7,7 @@ import { showToast } from './ui.js';
 import { avatar } from './components.js';
 import { showFirstLoginModal } from '../pages/profile.js';
 import { refreshPollBadge } from '../polls/polls.js';
+import { showNewsAfterLogin } from './updates.js';
 
 // POST with CSRF token: the server no longer logs out on a plain GET
 export async function logout() {
@@ -30,6 +31,8 @@ export async function checkAuth() {
                 const isNewUser = data.isNewUser;
                 state.currentUser = data;
                 showLoggedIn();
+                // News popup once per version, never for a new member (D-13)
+                showNewsAfterLogin({ isNewUser });
                 // Show first-login modal after a short delay so the UI renders first
                 if (isNewUser) {
                     setTimeout(showFirstLoginModal, 800);

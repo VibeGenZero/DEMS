@@ -66,3 +66,13 @@ test('the admin dashboard opens the evaluations; they have no navbar link (W-14)
     assert.match(html, /<a class="btn btn-outline-light" href="#insights">/);
     assert.doesNotMatch(html, /class="nav-link" href="#insights"/);
 });
+
+test('the news dialog has no "do not show again" box and leads to the page (D-13)', () => {
+    const html = fs.readFileSync(path.join(REPO_ROOT, 'public', 'index.html'), 'utf8');
+    assert.doesNotMatch(html, /dont-show-again|Nicht erneut anzeigen/);
+    assert.match(html, /data-click="openAllNews"/);
+    assert.match(html, /<a class="info-version-badge" id="info-version" href="#news"/);
+    assert.match(html, /<a class="info-news-link" href="#news">/);
+    assert.match(html, /id="nav-info-badge"><span class="visually-hidden">Neuigkeiten ungelesen<\/span>/);
+    assert.match(html, /<section id="news-section" class="app-section is-hidden">/);
+});
