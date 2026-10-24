@@ -943,6 +943,37 @@ body {
   max-width: 120px;
 }
 
+/* Registrations dialog: bar of the bulk actions (W-08), stays on top while the list scrolls */
+.reg-bulk-bar {
+  position: sticky;
+  top: 0;
+  z-index: var(--z-sticky);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-8);
+  margin-bottom: var(--space-12);
+  padding: var(--space-8) var(--space-12);
+  background: var(--bg-card);
+  border: 1px solid var(--border-accent);
+  border-radius: var(--radius);
+}
+
+.reg-bulk-count {
+  font-weight: 600;
+}
+
+.reg-bulk-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-8);
+}
+
+.reg-select-col {
+  width: 2.5rem;
+}
+
 /* ═══════════════════════════════════════════ */
 /* FORM BUILDER                                */
 /* ═══════════════════════════════════════════ */

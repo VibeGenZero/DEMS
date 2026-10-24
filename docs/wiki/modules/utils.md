@@ -3,14 +3,14 @@ id: utils
 title: utils/ — domain helpers
 type: module
 tags: [utils, registration, form-fields, waitlist, audit-log, profile, debug, change-notice, banner]
-sources: [utils/registrationService.js, utils/formFields.js, utils/eventUtils.js, utils/eventListing.js, utils/profileEvents.js, utils/eventUrl.js, utils/userProfile.js, utils/avatar.js, utils/botPermissions.js, utils/csv.js, utils/template.js, utils/sessionStore.js, utils/reminders.js, utils/debugLog.js, utils/capacity.js, utils/slotService.js, utils/eventLock.js, utils/announcementRefresh.js, utils/pollService.js, utils/pollStore.js, utils/eventPreview.js, utils/eventArchive.js, utils/eventChangeNotice.js, utils/notificationPrefs.js, utils/memberOverview.js, utils/insights.js, utils/participantMessage.js, utils/bannerStore.js]
+sources: [utils/registrationService.js, utils/formFields.js, utils/eventUtils.js, utils/eventListing.js, utils/profileEvents.js, utils/eventUrl.js, utils/userProfile.js, utils/avatar.js, utils/botPermissions.js, utils/csv.js, utils/template.js, utils/sessionStore.js, utils/reminders.js, utils/debugLog.js, utils/capacity.js, utils/slotService.js, utils/eventLock.js, utils/announcementRefresh.js, utils/pollService.js, utils/pollStore.js, utils/eventPreview.js, utils/eventArchive.js, utils/eventChangeNotice.js, utils/notificationPrefs.js, utils/memberOverview.js, utils/insights.js, utils/participantMessage.js, utils/bannerStore.js, utils/bulkRegistrations.js]
 part_of: [architecture]
 depends_on: [data-layer, bot]
 see_also: [registration-flow, form-fields, role-slots]
 ---
 # utils/ — domain helpers
 
-> TL;DR: Shared domain logic used by routes and the bot: `registrationService.js` (the single source of truth for creating registrations), `formFields.js` (field types and answer format), `eventUtils.js` (loading registrations/line-ups, waitlist promotion, audit log), `capacity.js` and `slotService.js` (pure place and slot rules), `eventLock.js` (per-event lock), `announcementRefresh.js` (debounced live announcements), `eventUrl.js` (links to event pages), `eventChangeNotice.js` (change DMs after an edit, W-04), `notificationPrefs.js` (which DMs a member wants, W-16), `profileEvents.js` (upcoming and history lists of the profile), `memberOverview.js` (numbers and history of the admin member overview, W-15), `insights.js` (evaluations for admins, W-14), `participantMessage.js` (message of the team to the participants, W-09), `bannerStore.js` (uploaded banners, W-12), `userProfile.js` (users upsert after login) and `debugLog.js` (`DEBUG_MODE` logger).
+> TL;DR: Shared domain logic used by routes and the bot: `registrationService.js` (the single source of truth for creating registrations), `formFields.js` (field types and answer format), `eventUtils.js` (loading registrations/line-ups, waitlist promotion, audit log), `capacity.js` and `slotService.js` (pure place and slot rules), `eventLock.js` (per-event lock), `announcementRefresh.js` (debounced live announcements), `eventUrl.js` (links to event pages), `eventChangeNotice.js` (change DMs after an edit, W-04), `notificationPrefs.js` (which DMs a member wants, W-16), `profileEvents.js` (upcoming and history lists of the profile), `memberOverview.js` (numbers and history of the admin member overview, W-15), `insights.js` (evaluations for admins, W-14), `participantMessage.js` (message of the team to the participants, W-09), `bannerStore.js` (uploaded banners, W-12), `bulkRegistrations.js` (bulk actions on registrations, W-08), `userProfile.js` (users upsert after login) and `debugLog.js` (`DEBUG_MODE` logger).
 
 ## utils/registrationService.js
 
@@ -20,6 +20,7 @@ see_also: [registration-flow, form-fields, role-slots]
 | `switchOwnSlot({ eventId, userId, slotId })` | member moves into a free slot (becomes the main role; waitlisted members get the place) → `{ ok, status, slotId, message }` |
 | `moveRegistrationToSlot({ registrationId, slotId })` | admin move, may overbook → `{ ok, slotId, slotName, userName, warning }` |
 | `unregisterUserFromEvent({ eventId, userId })` | deletes the registration, removes role + channel access (accepted), promotes the waitlist → `{ ok, registration, event }` |
+| `notifyStatusChange({ registration, eventId, event, status, slotId })` | DM after an admin status change (single `PUT /registrations/:id/status` and the bulk route, W-08): accepted (event or global template, else default text with the slot line; then `assignRole` for `assignRoleId`), rejected (template or default text), waitlisted (`waitlistDmText`, only if `wantsDm(userId, 'waitlist')`); never throws |
 | `buildTemplateVars({ user, eventId, event, slot })` | variables for `parseTemplate` incl. `slot.name`, `slot.emoji` |
 | `REGISTRATION_SOURCE` | `WEB: 'web'`, `DISCORD: 'discord'` |
 | `REGISTRATION_STATUS` | `PENDING`, `ACCEPTED`, `WAITLISTED` |
@@ -124,6 +125,10 @@ Evaluations over a time range, built on the rules of `memberOverview.js`. **Eval
 | `RANGES`, `DEFAULT_RANGE`, `isValidRange(range)` | `30`, `90` (default), `365`, `all` |
 | `evaluatedEvents(eventsById, range, now)` | `[id, event]` pairs, newest start first, undated last |
 | `buildInsights({ users, registrations, eventsById, range, now })` | `totals`: `events`, `trackedEvents`, `accepted`, `checkedIn`, `attendanceRate` (checked in ÷ accepted over tracked events), `noShowRate` (100 − attendance), `placesTaken`/`placesOffered`/`occupancyRate` (`placesOf` of accepted registrations ÷ `maxParticipants`, events with a limit only); `members`: top 10 `{ id, name, attended, checkedIn, hasProfile }` (ties by check-ins, then name; name from the profile, else `userName`); `categories`: `{ label, events, registrations, averageAccepted, attendanceRate, share }` grouped by trimmed lower-case category (first spelling, empty = "Ohne Kategorie"), `share` relative to the largest; `events`: one row per evaluated event, `noShows`/`attendanceRate` `null` when untracked, `occupancyRate` `null` without limit |
+
+## utils/bulkRegistrations.js (pure, W-08)
+
+`BULK_ACTIONS` (statuses each action applies to: `accept` pending/waitlisted, `waitlist` pending/accepted, `reject` all three; the frontend copy in `public/js/admin/registration-bulk.js` is pinned by a test), `MAX_BULK_IDS` = 200, `planBulkAction({ action, ids, registrations, event })` → `{ changes: [{ id, from, to, slotId, clearCheckin }], skipped, full }`. Duplicates count once; unknown ids and unfitting statuses are skipped. Accept goes oldest first and never overbooks: without slots it fills `maxParticipants` next to the places of the unselected pending/accepted registrations (`placesOf`, guests and open invitations count); with slots it picks the main or a fallback role with `pickSlot` on the occupancy of the unselected ones. What does not fit goes on the waitlist (a waitlisted one stays and only counts in `full`). Waitlist/reject clear the slot on slot events (`slotId: null`) and the check-in.
 
 ## utils/capacity.js, utils/slotService.js (pure)
 

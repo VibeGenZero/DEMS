@@ -1618,10 +1618,19 @@
             <div class="form-text">Wird sofort angenommen, auch bei vollem Event oder nach dem Anmeldeschluss.</div>
             <div id="reg-add-results" class="list-group mt-2"></div>
           </div>
+          <div id="reg-bulk-bar" class="reg-bulk-bar is-hidden" role="toolbar" aria-label="Sammelaktionen">
+            <span id="reg-bulk-count" class="reg-bulk-count">0 ausgewählt</span>
+            <div class="reg-bulk-actions">
+              <button type="button" class="btn btn-sm btn-outline-success" id="reg-bulk-accept" data-click="runBulkAction" data-action="accept"><i class="bi bi-check2-all me-1"></i>Annehmen</button>
+              <button type="button" class="btn btn-sm btn-outline-secondary" id="reg-bulk-waitlist" data-click="runBulkAction" data-action="waitlist"><i class="bi bi-hourglass-split me-1"></i>Warteliste</button>
+              <button type="button" class="btn btn-sm btn-outline-danger" id="reg-bulk-reject" data-click="runBulkAction" data-action="reject"><i class="bi bi-x-lg me-1"></i>Ablehnen</button>
+            </div>
+          </div>
           <div class="table-responsive">
             <table class="table table-hover">
               <thead>
                 <tr>
+                  <th class="reg-select-col"><input type="checkbox" class="form-check-input" id="reg-select-all" aria-label="Alle auswählen" data-change="toggleAllRegSelection"></th>
                   <th>User</th>
                   <th>Gäste</th>
                   <th>Status</th>

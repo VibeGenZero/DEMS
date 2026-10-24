@@ -8,7 +8,7 @@ const {
 const { requireAuth, requireAdmin, safeEqual } = require('../middleware/auth');
 const { csvCell } = require('../utils/csv');
 const { validateEvent, validateRegStatus, validateBotMessages } = require('../middleware/validators');
-const { sendDM, assignRole, parseTemplate, getGuildRoles, sendChannelMessage, buildEventEmbed, buildEventComponents, getGuildScheduledEvents, createEventChannels, deleteEventChannels, createScheduledEvent, getBotStatus, getBotSettings, saveBotSettings, getRunningEvents, getGuildChannels, buildPollEmbed, buildPollComponents, searchGuildMembers, fetchGuildMember } = require('../bot');
+const { sendDM, getGuildRoles, sendChannelMessage, buildEventEmbed, buildEventComponents, getGuildScheduledEvents, createEventChannels, deleteEventChannels, createScheduledEvent, getBotStatus, getBotSettings, saveBotSettings, getRunningEvents, getGuildChannels, buildPollEmbed, buildPollComponents, searchGuildMembers, fetchGuildMember } = require('../bot');
 const { promoteFromWaitlist, addAuditLog, loadEventRoster, loadEventRegistrations, saveEventWithSlots } = require('../utils/eventUtils');
 const { mergeReminderHours } = require('../utils/reminders');
 const { keepDeadlineRefreshFlag } = require('../utils/eventListing');
@@ -25,11 +25,12 @@ const {
     loadPoll, loadPollVotes, updatePoll, closePoll, decidePollWithEvent, deletePoll
 } = require('../utils/pollStore');
 const { withEventLock } = require('../utils/eventLock');
-const { moveRegistrationToSlot, buildTemplateVars, addRegistrationByAdmin, isOnRegistrationList } = require('../utils/registrationService');
+const { moveRegistrationToSlot, addRegistrationByAdmin, isOnRegistrationList, notifyStatusChange } = require('../utils/registrationService');
 const { notifyRegistrationsChanged } = require('../utils/announcementRefresh');
 const { debugLog } = require('../utils/debugLog');
 const { buildEventUrl } = require('../utils/eventUrl');
 const { MAX_BANNER_BYTES, detectImageType, saveBanner, releaseBanners } = require('../utils/bannerStore');
+const { BULK_ACTIONS, MAX_BULK_IDS, planBulkAction } = require('../utils/bulkRegistrations');
 
 // Announcements per event that are kept up to date live
 const MAX_TRACKED_ANNOUNCEMENTS = 5;
@@ -819,6 +820,78 @@ router.get('/events/:id/member-search', async (req, res) => {
 });
 
 /**
+ * POST /api/admin/events/:id/registrations/bulk — Accept, waitlist or reject
+ * several registrations of one event (W-08). Body `{ ids, action }`.
+ * Accept never overbooks: what does not fit goes on the waitlist (`full`).
+ */
+router.post('/events/:id/registrations/bulk', async (req, res) => {
+    try {
+        const { action, ids } = req.body;
+        if (!Object.hasOwn(BULK_ACTIONS, action)) {
+            return res.status(400).json({ error: 'Ungültige Sammelaktion.' });
+        }
+        const uniqueIds = Array.isArray(ids) ? [...new Set(ids.filter(id => typeof id === 'string' && id))] : [];
+        if (uniqueIds.length === 0 || uniqueIds.length > MAX_BULK_IDS || uniqueIds.length !== new Set(ids).size) {
+            return res.status(400).json({ error: `Bitte 1 bis ${MAX_BULK_IDS} Anmeldungen auswählen.` });
+        }
+        const eventId = req.params.id;
+        const eventSnap = await getDoc(doc(db, 'events', eventId));
+        if (!eventSnap.exists()) {
+            return res.status(404).json({ error: 'Event nicht gefunden' });
+        }
+
+        // Plan on the fresh state and write everything under the event lock
+        const { plan, event, registrationsById } = await withEventLock(eventId, async () => {
+            const lockedEvent = (await getDoc(doc(db, 'events', eventId))).data();
+            const registrations = await loadEventRegistrations(eventId);
+            const result = planBulkAction({ action, ids: uniqueIds, registrations, event: lockedEvent });
+            if (result.changes.length > 0) {
+                const batch = writeBatch(db);
+                for (const change of result.changes) {
+                    const update = { status: change.to };
+                    if (change.slotId !== undefined) update.slotId = change.slotId;
+                    if (change.clearCheckin) Object.assign(update, { checkedIn: false, checkedInAt: null });
+                    batch.update(doc(db, 'registrations', change.id), update);
+                }
+                await batch.commit();
+            }
+            return { plan: result, event: lockedEvent, registrationsById: new Map(registrations.map(reg => [reg.id, reg])) };
+        });
+
+        // Tell every member whose status changed, one after another (never throws)
+        for (const change of plan.changes) {
+            await notifyStatusChange({
+                registration: registrationsById.get(change.id), eventId, event, status: change.to,
+                slotId: change.slotId === undefined ? registrationsById.get(change.id).slotId : change.slotId
+            });
+        }
+        const counts = { accepted: 0, waitlisted: 0, rejected: 0 };
+        plan.changes.forEach(change => { counts[change.to] += 1; });
+        if (counts.rejected > 0) await promoteFromWaitlist(eventId, event);
+        if (plan.changes.length > 0) notifyRegistrationsChanged(eventId);
+
+        const summary = [
+            `${counts.accepted} angenommen`, `${counts.waitlisted} Warteliste`, `${counts.rejected} abgelehnt`,
+            `${plan.full.length} ohne freien Platz`, `${plan.skipped.length} übersprungen`
+        ].join(', ');
+        await addAuditLog('BULK_UPDATE_REGISTRATIONS', req.session.user.id, `${action}: ${summary}`, eventId);
+
+        res.json({
+            ...counts,
+            full: plan.full.length,
+            skipped: plan.skipped.length,
+            results: plan.changes.map(change => ({
+                id: change.id, status: change.to,
+                slotId: change.slotId === undefined ? (registrationsById.get(change.id).slotId || null) : change.slotId
+            }))
+        });
+    } catch (err) {
+        console.error('Bulk registration action error:', err);
+        res.status(500).json({ error: 'Fehler bei der Sammelaktion' });
+    }
+});
+
+/**
  * POST /api/admin/events/:id/registrations — Admin puts a server member on the list (W-06).
  * Body `{ userId, slotId? }`; accepted at once with source "admin", see addRegistrationByAdmin.
  */
@@ -960,35 +1033,11 @@ router.put('/registrations/:id/status', validateRegStatus, async (req, res) => {
         });
         debugLog('admin.updateRegStatus', { regId: req.params.id, newStatus: status });
 
-        const templateSnap = await getDoc(doc(db, 'botMessages', 'templates'));
-        const globalTemplates = templateSnap.exists() ? templateSnap.data() : {};
-        const customMsgs = event.customBotMessages || {};
-        const slot = findSlot(slots, slotId);
-        const vars = await buildTemplateVars({
-            user: { id: reg.userId, displayName: reg.userName },
-            eventId: reg.eventId,
-            event,
-            slot
-        });
-        const slotLine = slot ? `\n🎯 Dein Slot: **${formatSlotLabel(slot)}**` : '';
-
-        if (status === 'accepted') {
-            const template = customMsgs.accepted || globalTemplates.accepted;
-            const msg = template
-                ? parseTemplate(template, vars)
-                : `✅ Du wurdest für **${event.title}** angenommen! Willkommen dabei!${slotLine}`;
-            await sendDM(reg.userId, msg);
-
-            if (event.assignRoleId) {
-                await assignRole(reg.userId, event.assignRoleId, process.env.DISCORD_GUILD_ID);
-            }
-        } else if (status === 'rejected') {
-            const template = customMsgs.rejected || globalTemplates.rejected;
-            const msg = template
-                ? parseTemplate(template, vars)
-                : `❌ Leider wurde deine Anfrage für **${event.title}** abgelehnt.`;
-            await sendDM(reg.userId, msg);
-
+        // The single action tells only accepted and rejected members (no waitlist DM here)
+        if (status === 'accepted' || status === 'rejected') {
+            await notifyStatusChange({ registration: reg, eventId: reg.eventId, event, status, slotId });
+        }
+        if (status === 'rejected') {
             await promoteFromWaitlist(reg.eventId, event);
         }
 
