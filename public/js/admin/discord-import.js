@@ -2,7 +2,8 @@
  * Import of Discord scheduled events into the wizard.
  */
 import { state } from '../core/state.js';
-import { showCreateEventModal, updateBannerPreview } from './wizard.js';
+import { showCreateEventModal } from './wizard.js';
+import { updateBannerPreview } from './wizard-banner.js';
 import { registerActions } from '../core/actions.js';
 import { escapeHtml, markdownPreview, showToast } from '../core/ui.js';
 

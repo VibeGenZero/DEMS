@@ -16,6 +16,8 @@ const MOCK_GUILD = require('./mockGuild');
 const IS_MOCK_MODE = process.env.DEV_MOCK === 'true';
 
 const DEFAULT_DEV_DB = path.join(__dirname, '..', 'data', 'dems.dev.sqlite');
+// Own folder for uploaded banners, so mock uploads never mix with real ones
+const DEFAULT_DEV_UPLOADS = path.join(__dirname, '..', 'data', 'dev-uploads');
 const FIREBASE_KEYS = [
     'FIREBASE_API_KEY',
     'FIREBASE_AUTH_DOMAIN',
@@ -37,6 +39,7 @@ function applyMockEnvironment() {
     }
 
     env.SQLITE_PATH = env.DEV_SQLITE_PATH || DEFAULT_DEV_DB;
+    env.UPLOAD_DIR = env.DEV_UPLOAD_DIR || DEFAULT_DEV_UPLOADS;
     FIREBASE_KEYS.forEach(key => { env[key] = ''; });
     env.DISCORD_BOT_TOKEN = '';
     env.DISCORD_GUILD_ID = MOCK_GUILD.GUILD.id;

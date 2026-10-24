@@ -1,15 +1,20 @@
 const { test, before, after } = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('fs');
 const path = require('path');
 const { createTempDir, startServer, createClient } = require('./helpers');
 const { PERSONAS, ROLE_ID } = require('../dev/mockGuild');
 const { EVENT_ID, SERIES_EVENT_IDS, CHECKIN_CODE } = require('../dev/seedData');
 
 let server;
+let uploadDir;
 
 before(async () => {
+    const tmpDir = createTempDir('dev-server');
+    uploadDir = path.join(tmpDir, 'uploads');
     server = await startServer('dev/start.js', {
-        DEV_SQLITE_PATH: path.join(createTempDir('dev-server'), 'dev.sqlite')
+        DEV_SQLITE_PATH: path.join(tmpDir, 'dev.sqlite'),
+        DEV_UPLOAD_DIR: uploadDir
     });
 });
 
@@ -467,7 +472,7 @@ test('events with an unsafe banner URL or colour are refused', async () => {
     const create = (fields) => admin.send('POST', '/api/admin/events', { title: 'Härtungstest', status: 'draft', ...fields });
 
     for (const [fields, message] of [
-        [{ bannerUrl: 'javascript:alert(1)' }, 'Banner-URL muss mit http:// oder https:// beginnen.'],
+        [{ bannerUrl: 'javascript:alert(1)' }, 'Banner muss eine http(s)-URL oder ein hochgeladenes Bild sein.'],
         [{ accentColor: 'red;background:url(https://evil.example)' }, 'Akzentfarbe muss ein Hex-Farbwert wie #8b5cf6 sein.']
     ]) {
         const res = await create(fields);
@@ -476,6 +481,24 @@ test('events with an unsafe banner URL or colour are refused', async () => {
     }
     assert.equal((await create({ bannerUrl: 'https://example.com/banner.png', accentColor: '#8b5cf6' })).status, 200);
     assert.equal((await create({ bannerUrl: '', accentColor: '' })).status, 200);
+});
+
+test('an event takes an uploaded banner path, but no made-up or foreign path', async () => {
+    const admin = await loginAs('admin');
+    const { bannerUrl } = await (await uploadBanner(admin, PNG_BYTES)).json();
+    const created = await admin.send('POST', '/api/admin/events', { title: 'Upload-Banner', status: 'draft', bannerUrl });
+    assert.equal(created.status, 200);
+    const { id } = await created.json();
+    const stored = await (await admin.request(`/api/admin/all-events`)).json();
+    assert.equal(stored.find(event => event.id === id).bannerUrl, bannerUrl);
+
+    for (const value of ['/uploads/banners/0f8fad5b-d9cb-469f-a165-70867728950e.png', '/api/admin/reset', 'javascript:alert(1)', 'banner.png']) {
+        const res = await admin.send('PUT', `/api/admin/events/${id}`, { title: 'Upload-Banner', status: 'draft', bannerUrl: value });
+        assert.equal(res.status, 400, value);
+        assert.equal((await res.json()).error, 'Banner muss eine http(s)-URL oder ein hochgeladenes Bild sein.');
+    }
+    const after = await (await admin.request(`/api/admin/all-events`)).json();
+    assert.equal(after.find(event => event.id === id).bannerUrl, bannerUrl, 'refused edits change nothing');
 });
 
 test('an active event needs a start date, a draft does not', async () => {
@@ -1952,4 +1975,201 @@ test('a message reaches every accepted participant, also with DM choices off, an
     assert.ok(entry, 'audit entry written');
     assert.equal(entry.targetId, EVENT_ID.OPEN);
     assert.match(entry.details, new RegExp(`${counts.accepted}/${counts.accepted} zugestellt`));
+});
+
+// ── Banner upload (W-12) ────────────────────────────────────────────────
+
+const PNG_BYTES = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13, 0x49, 0x48, 0x44, 0x52]);
+const JPEG_BYTES = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0, 16, 0x4a, 0x46, 0x49, 0x46]);
+const UPLOAD_TYPE_ERROR = 'Nur PNG-, JPEG-, WebP- oder GIF-Bilder sind erlaubt.';
+
+const bannerFiles = () => (fs.existsSync(path.join(uploadDir, 'banners')) ? fs.readdirSync(path.join(uploadDir, 'banners')).sort() : []);
+
+/** POST raw bytes to the banner upload with the CSRF token of the session. */
+async function uploadBanner(client, body, contentType = 'image/png', { csrf = true } = {}) {
+    const { token } = await (await client.request('/api/csrf-token')).json();
+    const headers = { 'Content-Type': contentType };
+    if (csrf) headers['X-CSRF-TOKEN'] = token;
+    return client.request('/api/admin/uploads/banner', { method: 'POST', headers, body });
+}
+
+test('an admin uploads a PNG banner that everyone can fetch', async () => {
+    const admin = await loginAs('admin');
+    const res = await uploadBanner(admin, PNG_BYTES);
+    assert.equal(res.status, 200);
+    const { bannerUrl } = await res.json();
+    assert.match(bannerUrl, /^\/uploads\/banners\/[0-9a-f-]{36}\.png$/);
+
+    const image = await createClient(server.baseUrl).request(bannerUrl);
+    assert.equal(image.status, 200);
+    assert.match(image.headers.get('content-type'), /^image\/png/);
+    assert.equal(image.headers.get('x-content-type-options'), 'nosniff');
+    assert.equal(image.headers.get('set-cookie'), null, 'fetching a banner creates no session');
+    assert.deepEqual(Buffer.from(await image.arrayBuffer()), PNG_BYTES);
+
+    const { data: logs } = await (await admin.request('/api/admin/audit-log?limit=100')).json();
+    assert.ok(logs.some(item => item.action === 'UPLOAD_BANNER' && item.details.includes(path.basename(bannerUrl))), 'audit entry');
+});
+
+test('the stored type follows the content, not the declared type', async () => {
+    const admin = await loginAs('admin');
+    const res = await uploadBanner(admin, JPEG_BYTES, 'image/png');
+    assert.equal(res.status, 200);
+    assert.match((await res.json()).bannerUrl, /\.jpg$/);
+});
+
+test('uploads that are no allowed image, too large or empty are refused and leave no file', async () => {
+    const admin = await loginAs('admin');
+    const before = bannerFiles();
+    const cases = [
+        [Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>'), 'image/png', 400, UPLOAD_TYPE_ERROR],
+        [Buffer.from('<!doctype html><p>hi</p>'), 'text/html', 400, UPLOAD_TYPE_ERROR],
+        [Buffer.concat([PNG_BYTES, Buffer.alloc(5 * 1024 * 1024)]), 'image/png', 413, 'Das Bild darf höchstens 5 MB groß sein.'],
+        [Buffer.alloc(0), 'image/png', 400, 'Keine Bilddatei empfangen.']
+    ];
+    for (const [body, type, status, error] of cases) {
+        const res = await uploadBanner(admin, body, type);
+        assert.equal(res.status, status, error);
+        assert.deepEqual(await res.json(), { error });
+    }
+    assert.deepEqual(bannerFiles(), before);
+});
+
+test('only admins with a CSRF token can upload a banner', async () => {
+    const before = bannerFiles();
+    const member = await loginAs('member');
+    assert.equal((await uploadBanner(member, PNG_BYTES)).status, 403);
+    const admin = await loginAs('admin');
+    const noToken = await uploadBanner(admin, PNG_BYTES, 'image/png', { csrf: false });
+    assert.equal(noToken.status, 403);
+    assert.match((await noToken.json()).error, /CSRF/);
+    assert.deepEqual(bannerFiles(), before);
+});
+
+test('the banner folder serves nothing but uploaded banners', async () => {
+    fs.mkdirSync(path.join(uploadDir, 'banners'), { recursive: true });
+    fs.writeFileSync(path.join(uploadDir, 'banners', 'notes.txt'), 'secret');
+    const client = createClient(server.baseUrl);
+    for (const pathname of ['/uploads/banners/notes.txt', '/uploads/banners/', '/uploads/banners/..%2Fdems.sqlite',
+        '/uploads/banners/x%2F..%2F..%2Fpackage.json', '/uploads/banners/0f8fad5b-d9cb-469f-a165-70867728950e.png']) {
+        assert.equal((await client.request(pathname)).status, 404, pathname);
+    }
+});
+
+// ── Banner clean-up (W-12) ──────────────────────────────────────────────
+
+const bannerExists = (bannerUrl) => fs.existsSync(path.join(uploadDir, 'banners', path.basename(bannerUrl)));
+
+async function eventWithUpload(admin, fields = {}) {
+    const { bannerUrl } = await (await uploadBanner(admin, PNG_BYTES)).json();
+    const res = await admin.send('POST', '/api/admin/events', { title: 'Aufräumtest', status: 'draft', bannerUrl, ...fields });
+    assert.equal(res.status, 200);
+    return { bannerUrl, body: await res.json() };
+}
+
+test('replacing or clearing an uploaded banner deletes the old file', async () => {
+    const admin = await loginAs('admin');
+    const { bannerUrl: first, body } = await eventWithUpload(admin);
+    const { bannerUrl: second } = await (await uploadBanner(admin, PNG_BYTES)).json();
+
+    const replaced = await admin.send('PUT', `/api/admin/events/${body.id}`, { title: 'Aufräumtest', status: 'draft', bannerUrl: second });
+    assert.equal(replaced.status, 200);
+    assert.equal(bannerExists(first), false, 'old banner deleted');
+    assert.equal(bannerExists(second), true);
+
+    const unchanged = await admin.send('PUT', `/api/admin/events/${body.id}`, { title: 'Aufräumtest 2', status: 'draft', bannerUrl: second });
+    assert.equal(unchanged.status, 200);
+    assert.equal(bannerExists(second), true, 'saving the same banner keeps it');
+
+    const cleared = await admin.send('PUT', `/api/admin/events/${body.id}`, { title: 'Aufräumtest', status: 'draft', bannerUrl: '' });
+    assert.equal(cleared.status, 200);
+    assert.equal(bannerExists(second), false);
+});
+
+test('deleting an event deletes its banner unless a duplicate still uses it', async () => {
+    const admin = await loginAs('admin');
+    const { bannerUrl, body } = await eventWithUpload(admin);
+    const copy = await (await admin.send('POST', `/api/admin/events/${body.id}/duplicate`)).json();
+    assert.equal(copy.bannerUrl, bannerUrl);
+
+    assert.equal((await admin.send('DELETE', `/api/admin/events/${body.id}`)).status, 200);
+    assert.equal(bannerExists(bannerUrl), true, 'the copy still uses it');
+    assert.equal((await admin.send('DELETE', `/api/admin/events/${copy.id}`)).status, 200);
+    assert.equal(bannerExists(bannerUrl), false);
+});
+
+test('deleting a series deletes the banner its dates share', async () => {
+    const admin = await loginAs('admin');
+    const start = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+    const until = new Date(start.getTime() + 14 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const { bannerUrl, body } = await eventWithUpload(admin, {
+        status: 'active', startDate: start.toISOString(), recurring: true, recurringInterval: 'weekly', recurringUntil: until
+    });
+    assert.equal(body.count, 3);
+    const seriesId = body.events[0].seriesId;
+    assert.equal((await admin.send('DELETE', `/api/admin/events/series/${seriesId}`)).status, 200);
+    assert.equal(bannerExists(bannerUrl), false);
+});
+
+test('an external banner URL never touches the banner folder', async () => {
+    const admin = await loginAs('admin');
+    const before = bannerFiles();
+    const res = await admin.send('POST', '/api/admin/events', { title: 'Extern', status: 'draft', bannerUrl: 'https://example.com/a.png' });
+    const { id } = await res.json();
+    await admin.send('PUT', `/api/admin/events/${id}`, { title: 'Extern', status: 'draft', bannerUrl: '' });
+    await admin.send('DELETE', `/api/admin/events/${id}`);
+    assert.deepEqual(bannerFiles(), before);
+});
+
+test('the system reset of the events deletes their uploaded banners', async () => {
+    // Own server: the reset wipes every event
+    const tmpDir = createTempDir('reset-banners');
+    const ownUploads = path.join(tmpDir, 'uploads');
+    const own = await startServer('dev/start.js', { DEV_SQLITE_PATH: path.join(tmpDir, 'dev.sqlite'), DEV_UPLOAD_DIR: ownUploads });
+    try {
+        const admin = createClient(own.baseUrl);
+        assert.equal((await admin.request('/auth/dev-login/admin')).status, 302);
+        const { bannerUrl } = await (await uploadBanner(admin, PNG_BYTES)).json();
+        assert.equal((await admin.send('POST', '/api/admin/events', { title: 'Reset', status: 'draft', bannerUrl })).status, 200);
+        const file = path.join(ownUploads, 'banners', path.basename(bannerUrl));
+        assert.equal(fs.existsSync(file), true);
+
+        const res = await admin.send('DELETE', '/api/admin/reset', { password: 'dev', targets: ['events'] });
+        assert.equal(res.status, 200);
+        assert.equal(fs.existsSync(file), false);
+    } finally {
+        await own.stop();
+    }
+});
+
+test('the startup sweep deletes old unused uploads and keeps young ones', async () => {
+    const tmpDir = createTempDir('sweep-banners');
+    const ownUploads = path.join(tmpDir, 'uploads');
+    const dir = path.join(ownUploads, 'banners');
+    fs.mkdirSync(dir, { recursive: true });
+    const oldFile = path.join(dir, '0f8fad5b-d9cb-469f-a165-70867728950e.png');
+    const youngFile = path.join(dir, '1f8fad5b-d9cb-469f-a165-70867728950e.png');
+    fs.writeFileSync(oldFile, PNG_BYTES);
+    fs.writeFileSync(youngFile, PNG_BYTES);
+    const longAgo = new Date(Date.now() - 25 * 60 * 60 * 1000);
+    fs.utimesSync(oldFile, longAgo, longAgo);
+
+    const own = await startServer('dev/start.js', { DEV_SQLITE_PATH: path.join(tmpDir, 'dev.sqlite'), DEV_UPLOAD_DIR: ownUploads });
+    try {
+        await own.waitForOutput('verwaiste Banner', 10000);
+        assert.equal(fs.existsSync(oldFile), false);
+        assert.equal(fs.existsSync(youngFile), true);
+    } finally {
+        await own.stop();
+    }
+});
+
+test('the wizard preview shows an uploaded banner with its absolute address', async () => {
+    const admin = await loginAs('admin');
+    const { bannerUrl } = await (await uploadBanner(admin, PNG_BYTES)).json();
+    const res = await admin.send('POST', '/api/admin/events/preview', { title: 'Vorschau', bannerUrl });
+    assert.equal(res.status, 200);
+    const { embed } = await res.json();
+    assert.ok(embed.image.url.endsWith(bannerUrl), embed.image.url);
+    assert.match(embed.image.url, /^http:\/\/localhost:\d+\/uploads\/banners\//);
 });

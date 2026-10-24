@@ -14,7 +14,7 @@ see_also: [security, known-issues]
 ## Requirements
 
 - HTTPS in front of DEMS (Traefik, Caddy, PaaS) — plain `http://<ip>:3000` breaks the SPA (CSP `upgrade-insecure-requests`, see [security](../concepts/security.md)).
-- Persistent storage: Docker volume for SQLite, or Firebase.
+- Persistent storage: Docker volume for SQLite, or Firebase. Uploaded banners always live on the local disk (`UPLOAD_DIR`, default `/app/data/uploads` in the image), so keep `/app/data` on a volume even with Firebase.
 - Discord developer portal: redirect `https://<host>/auth/discord/callback`, Server Members Intent enabled.
 - Bot invited with the URL it logs on startup ("Bot Invite URL"); a bot invited before 2.7 lacks Connect and CreateEvents — re-invite or add them to the bot role.
 - `.env` with at least `SESSION_SECRET`, `BASE_URL=https://<host>`, Discord values ([configuration](configuration.md)).

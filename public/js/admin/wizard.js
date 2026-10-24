@@ -1,7 +1,7 @@
 /**
  * Event wizard: steps with their checks, create/edit/save, roles.
  * Location field: wizard-location.js; rules: wizard-checks.js; marks: wizard-marks.js;
- * switch "Teilnehmer benachrichtigen": wizard-notify.js.
+ * switch "Teilnehmer benachrichtigen": wizard-notify.js; banner upload: wizard-banner.js.
  */
 import { state } from '../core/state.js';
 import { glideTabs } from '../core/tab-glider.js';
@@ -11,6 +11,7 @@ import { checkWizardStep } from './wizard-checks.js';
 import { clearAllMarks, showStepErrors } from './wizard-marks.js';
 import { notifyRequested, rememberLoadedEvent, updateNotifySwitch } from './wizard-notify.js';
 import { cancelWizardPreview, renderWizardPreview } from './wizard-preview.js';
+import { updateBannerPreview } from './wizard-banner.js';
 import { navigateTo } from '../core/router.js';
 import { registerActions } from '../core/actions.js';
 import { applyStyleData, escapeHtml, hexColor, showElement, showToast, toggleElement } from '../core/ui.js';
@@ -213,10 +214,7 @@ export async function showCreateEventModal() {
         else document.querySelector(selector).value = '';
     });
 
-    // Banner Preview Setup
-    const bannerInput = document.getElementById('event-banner-url');
-    bannerInput.removeEventListener('input', updateBannerPreview);
-    bannerInput.addEventListener('input', updateBannerPreview);
+    // Banner preview (typing runs it through data-input)
     updateBannerPreview();
 
     await loadRoles();
@@ -238,20 +236,6 @@ export async function showCreateEventModal() {
     document.getElementById('event-access').onchange = function () {
         document.getElementById('role-requirement-area').style.display = this.value === 'role-required' ? 'block' : 'none';
     };
-}
-
-export function updateBannerPreview() {
-    const url = document.getElementById('event-banner-url').value;
-    const container = document.getElementById('banner-preview-container');
-    const img = document.getElementById('banner-preview');
-
-    if (url) {
-        container.style.display = 'block';
-        img.src = url;
-    } else {
-        container.style.display = 'none';
-        img.src = '';
-    }
 }
 
 export async function editEvent(eventId) {
@@ -301,10 +285,7 @@ export async function editEvent(eventId) {
         else { state.endDatePicker = flatpickr("#event-end-date", { enableTime: true, dateFormat: "Y-m-d H:i", time_24hr: true, locale: "de" }); state.endDatePicker.setDate(_endDate); }
         DEADLINE_PICKERS.forEach(({ key, field, selector }) => ensureDeadlinePicker(key, selector).setDate(event[field] || null));
 
-        // Banner Preview
-        const bannerInput = document.getElementById('event-banner-url');
-        bannerInput.removeEventListener('input', updateBannerPreview);
-        bannerInput.addEventListener('input', updateBannerPreview);
+        // Banner preview (typing runs it through data-input)
         updateBannerPreview();
         document.getElementById('event-max').value = event.maxParticipants || 0;
         document.getElementById('event-category').value = event.category || '';

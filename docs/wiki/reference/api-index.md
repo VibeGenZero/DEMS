@@ -16,6 +16,7 @@ see_also: [request-lifecycle, add-api-endpoint]
 | Method | Path | Guard |
 |---|---|---|
 | GET | `/healthz` | — |
+| GET | `/uploads/banners/<uuid>.<png\|jpg\|gif\|webp>` (W-12, uploaded banners, read-only, no session; other names 404) | — |
 | GET | `/api/csrf-token` | — |
 | GET | `/api/maintenance/status` | — |
 | GET | `/api/server-info` | — |
@@ -72,6 +73,7 @@ see_also: [request-lifecycle, add-api-endpoint]
 |---|---|
 | GET | `/api/admin/roles`, `/channels`, `/stats`, `/all-events`, `/import/discord-events` |
 | POST | `/api/admin/events`, `/events/preview` |
+| POST | `/api/admin/uploads/banner` (W-12, raw image body ≤ 5 MB) |
 | PUT | `/api/admin/events/:id`, `/events/:id/status`, `/events/:id/cancel` |
 | POST | `/api/admin/events/:id/start`, `/events/:id/end`, `/events/:id/duplicate`, `/events/:id/generate-checkin`, `/events/:id/announce`, `/events/:id/sync-discord` |
 | DELETE | `/api/admin/events/:id`, `/events/series/:seriesId` |

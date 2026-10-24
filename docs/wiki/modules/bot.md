@@ -60,6 +60,7 @@ At the end of the file: `if (IS_MOCK_MODE) Object.assign(module.exports, require
 
 ## Gotchas
 
+- Banners (W-12): `buildEventEmbed` and `createScheduledEvent` go through `bannerForDiscord` (`utils/bannerStore.js`). An external URL is passed on as is; an uploaded banner becomes `BASE_URL` + path in the embed (Discord fetches it, so it needs a public `BASE_URL` — with localhost the embed shows no image) and the file itself for the scheduled event cover (works without a public URL). A missing file means no image. No new Discord call, so `dev/mockBot.js` has no twin for it.
 - `sendChannelMessage` returns `{ channelId, messageId }` (it used to return `true`).
 - `slot_switch`, `slot_leave` and `/unregister` call `deferUpdate`/`deferReply` first and answer with `editReply` — their side effects can exceed Discord's 3 s limit. A guest decline promotes the waitlist after answering.
 - Event links come from `buildEventUrl` in `utils/eventUrl.js` (`#event/<id>`); a hand-built `#events/<id>` would open the event list — see [utils](utils.md).

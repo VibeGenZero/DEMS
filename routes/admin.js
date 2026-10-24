@@ -29,6 +29,7 @@ const { moveRegistrationToSlot, buildTemplateVars, addRegistrationByAdmin, isOnR
 const { notifyRegistrationsChanged } = require('../utils/announcementRefresh');
 const { debugLog } = require('../utils/debugLog');
 const { buildEventUrl } = require('../utils/eventUrl');
+const { MAX_BANNER_BYTES, detectImageType, saveBanner, releaseBanners } = require('../utils/bannerStore');
 
 // Announcements per event that are kept up to date live
 const MAX_TRACKED_ANNOUNCEMENTS = 5;
@@ -150,6 +151,42 @@ router.get('/import/discord-events', async (req, res) => {
     } catch (err) {
         console.error('Import discord events error:', err);
         res.status(500).json({ error: 'Fehler beim Laden der Discord-Events' });
+    }
+});
+
+/**
+ * Raw body parser of the banner upload: takes every content type (the type is
+ * read from the bytes) and turns "too large" into our own 413 answer.
+ */
+const parseBannerBody = (req, res, next) => {
+    express.raw({ type: () => true, limit: MAX_BANNER_BYTES })(req, res, (err) => {
+        if (!err) return next();
+        if (err.type === 'entity.too.large') {
+            return res.status(413).json({ error: 'Das Bild darf höchstens 5 MB groß sein.' });
+        }
+        console.error('Banner upload body error:', err);
+        return res.status(400).json({ error: 'Keine Bilddatei empfangen.' });
+    });
+};
+
+/**
+ * POST /api/admin/uploads/banner — Store an event banner (raw image body)
+ */
+router.post('/uploads/banner', parseBannerBody, async (req, res) => {
+    try {
+        if (!Buffer.isBuffer(req.body) || req.body.length === 0) {
+            return res.status(400).json({ error: 'Keine Bilddatei empfangen.' });
+        }
+        const type = detectImageType(req.body);
+        if (!type) {
+            return res.status(400).json({ error: 'Nur PNG-, JPEG-, WebP- oder GIF-Bilder sind erlaubt.' });
+        }
+        const bannerUrl = await saveBanner(req.body, type);
+        await addAuditLog('UPLOAD_BANNER', req.session.user.id, `Uploaded banner ${bannerUrl.split('/').pop()} (${req.body.length} bytes)`);
+        res.json({ bannerUrl });
+    } catch (err) {
+        console.error('Banner upload error:', err);
+        res.status(500).json({ error: 'Fehler beim Hochladen des Banners.' });
     }
 });
 
@@ -374,6 +411,8 @@ router.put('/events/:id', validateEvent, async (req, res) => {
         }
         const { oldEvent, updates } = saved;
         await addAuditLog('UPDATE_EVENT', req.session.user.id, `Updated event "${title}"`, req.params.id);
+        // A replaced or cleared upload is deleted once no other event uses it (W-12)
+        if (oldEvent.bannerUrl && oldEvent.bannerUrl !== updates.bannerUrl) await releaseBanners([oldEvent.bannerUrl]);
 
         const isNowActive = updates.status === 'active';
         const wasActive = oldEvent.status === 'active';
@@ -575,6 +614,7 @@ router.delete('/events/:id', async (req, res) => {
             deletePromises.push(deleteDoc(doc(db, 'registrations', docSnap.id)));
         });
         await Promise.all(deletePromises);
+        if (event) await releaseBanners([event.bannerUrl]);
 
         await addAuditLog('DELETE_EVENT', req.session.user.id, `Deleted event ${req.params.id}`, req.params.id);
 
@@ -593,9 +633,11 @@ router.delete('/events/series/:seriesId', async (req, res) => {
         const seriesId = req.params.seriesId;
         const snapshot = await getDocs(collection(db, 'events'));
         const eventIds = [];
+        const banners = [];
         snapshot.forEach(docSnap => {
             if (docSnap.data().seriesId === seriesId) {
                 eventIds.push(docSnap.id);
+                banners.push(docSnap.data().bannerUrl);
             }
         });
 
@@ -617,6 +659,7 @@ router.delete('/events/series/:seriesId', async (req, res) => {
             });
             await Promise.all(deletePromises);
         }
+        await releaseBanners(banners);
 
         await addAuditLog('DELETE_SERIES', req.session.user.id, `Deleted series ${seriesId} (${eventIds.length} events)`, eventIds[0]);
         res.json({ success: true, deletedCount: eventIds.length });
@@ -1471,6 +1514,7 @@ router.delete('/reset', async (req, res) => {
 
             const snapshot = await getDocs(collection(db, colName));
             if (snapshot.empty) continue;
+            const wipedBanners = colName === 'events' ? snapshot.docs.map(docSnap => docSnap.data().bannerUrl) : [];
 
             // Delete in batches of 500
             const docs = snapshot.docs;
@@ -1483,6 +1527,7 @@ router.delete('/reset', async (req, res) => {
                 totalDeleted += chunk.length;
             }
             console.log(`🧹 Wiped collection: ${colName}`);
+            await releaseBanners(wipedBanners);
         }
 
         console.log(`⚠️ SYSTEM RESET by ${req.session.user.id}: Deleted ${totalDeleted} documents.`);

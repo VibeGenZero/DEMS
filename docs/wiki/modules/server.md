@@ -18,13 +18,14 @@ see_also: [request-lifecycle, security, configuration]
 2. Refuse to start without `SESSION_SECRET` (or with the placeholder `your_random_session_secret_here`) → exit 1.
 3. Register the middleware chain → see [request-lifecycle](../overview/request-lifecycle.md).
 4. Mount routers: `/auth` (+ `dev/devAuth` first in mock mode), `/api/events`, `/api/polls`, `/api/admin`, `/api/user`.
-5. Start: `app.listen(PORT)`, `startBot(DISCORD_BOT_TOKEN)`, `startReminderScheduler()`, `startPollScheduler()` (date poll deadlines), `startArchiveScheduler({ waitFor: whenBotSettled() })` (archives active events 24 h after their end; the first run waits until the bot is ready or will not start, see [event-lifecycle](../concepts/event-lifecycle.md)); both stopped in `gracefulShutdown`.
+5. Start: `app.listen(PORT)`, `startBot(DISCORD_BOT_TOKEN)`, `startReminderScheduler()`, `startPollScheduler()` (date poll deadlines), `startArchiveScheduler({ waitFor: whenBotSettled() })` (archives active events 24 h after their end; the first run waits until the bot is ready or will not start, see [event-lifecycle](../concepts/event-lifecycle.md)); `sweepOrphanBanners()` once (deletes uploaded banners no event uses that are older than 24 h, W-12); both stopped in `gracefulShutdown`.
 6. Graceful shutdown on `SIGINT`/`SIGTERM` (close server → `stopBot()` → exit; forced exit after 10 s).
 
 ## Endpoints defined in server.js
 
 | Method | Path | Auth | Response |
 |---|---|---|---|
+| GET | `/uploads/banners/<name>` | none | uploaded banners (W-12): `BANNER_FILE` guard + `express.static(bannerDir())`, 7-day immutable cache; other names 404 |
 | GET | `/healthz` | none | `{ status: 'ok' }` — registered before session/CSRF (Docker healthcheck) |
 | GET | `/api/csrf-token` | none | `{ token }` = `req.session.csrfToken`; the CSRF middleware mints it (and thereby the session) here when missing — the only place besides the login |
 | GET | `/api/maintenance/status` | none | public subset of `maintenanceSettings/config` (`active`, `warningEnabled`, `warningText`, `loginDisabled`, `registrationDisabled`, `plannedMaintenance*`, `panicMode`); `{ active: false }` when unset/error |

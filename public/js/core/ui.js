@@ -224,11 +224,15 @@ export function markdownPreview(mdString, maxLength = 120) {
     return `${(lastSpace > maxLength / 2 ? cut.slice(0, lastSpace) : cut).trimEnd()}…`;
 }
 
+/** Path of an uploaded banner; same pattern as BANNER_PATH in utils/bannerStore.js (test/bannerStore.test.js). */
+export const BANNER_PATH = /^\/uploads\/banners\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(png|jpg|gif|webp)$/;
+
 /**
- * Validate a banner URL (must be a valid http/https URL)
+ * Validate a banner URL: an http/https URL or the path of an uploaded banner (W-12)
  */
 export function isValidBannerUrl(url) {
     if (typeof url !== 'string' || !url.trim()) return false;
+    if (BANNER_PATH.test(url)) return true;
     try {
         const parsed = new URL(url);
         return parsed.protocol === 'http:' || parsed.protocol === 'https:';

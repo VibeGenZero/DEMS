@@ -4,6 +4,7 @@
  * defaults of POST /api/admin/events. Pure, no database.
  */
 const { normalizeSlots, sumCapacity } = require('./slotService');
+const { isBannerPath } = require('./bannerStore');
 
 const TITLE_MAX = 200;
 const DESCRIPTION_MAX = 5000;
@@ -13,7 +14,8 @@ const HEX_COLOR = /^#(?:[0-9a-fA-F]{3}){1,2}$/;
 const textOf = (value, max = 2000) => (typeof value === 'string' ? value.slice(0, max) : '');
 
 /**
- * Banner address the embed may show: discord.js refuses everything that is no http(s) URL.
+ * Banner address the embed may show: an http(s) URL or an uploaded banner path
+ * (buildEventEmbed makes it absolute); discord.js refuses everything else.
  *
  * @param {*} value -> Banner URL from the wizard.
  * @returns {string} -> The URL, or '' when it is none.
@@ -21,6 +23,7 @@ const textOf = (value, max = 2000) => (typeof value === 'string' ? value.slice(0
 function bannerOf(value) {
     const url = textOf(value).trim();
     if (!url) return '';
+    if (isBannerPath(url)) return url;
     try {
         return ['http:', 'https:'].includes(new URL(url).protocol) ? url : '';
     } catch {

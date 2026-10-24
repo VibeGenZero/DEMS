@@ -9,7 +9,7 @@ see_also: [auth-session, security]
 ---
 # Request lifecycle (middleware order)
 
-> TL;DR: Every HTTP request passes `server.js` middleware in this exact order: healthz → helmet → cors → rate limits → body parsers → session → CSRF → static files → (debug log) → routers → misc endpoints → SPA fallback. Mutating `/api/*` calls need the `X-CSRF-TOKEN` header; everything unknown returns `index.html`.
+> TL;DR: Every HTTP request passes `server.js` middleware in this exact order: healthz → helmet → cors → rate limits → uploaded banners → body parsers → session → CSRF → static files → (debug log) → routers → misc endpoints → SPA fallback. Mutating `/api/*` calls need the `X-CSRF-TOKEN` header; everything unknown returns `index.html`.
 
 ## Order (as registered in `server.js`)
 
@@ -20,6 +20,7 @@ see_also: [auth-session, security]
 | 3 | `cors({ origin: BASE_URL, credentials: true })` | all | only sets headers, does not block same-origin calls |
 | 4 | `apiLimiter` 200 req / 15 min | `/api/` | skipped in dev mock mode |
 | 5 | `authLimiter` 30 req / 15 min | `/auth/` | counts `/auth/me` too; skipped in mock mode |
+| 5b | `/uploads/banners` static (W-12) | `/uploads/banners/*` | uploaded banners; only `<uuid>.<ext>` names (png, jpg, gif, webp), everything else 404; before the body parsers and the session, so image requests create no session |
 | 6 | `express.json()`, `express.urlencoded({ extended: true })` | all | default 100 KB limit |
 | 7 | `req.body ??= {}` shim | all | Express 5 leaves `req.body` undefined without body |
 | 8 | `express-session` (`PersistentSessionStore`, collection `sessions`) | all | cookie `httpOnly`, `sameSite: lax`, `secure` only with `NODE_ENV=production`, 24 h |

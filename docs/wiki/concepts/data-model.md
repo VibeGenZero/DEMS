@@ -37,7 +37,9 @@ erDiagram
 | `assignRoleId` | role id or `''` | role given on acceptance, removed on unregister |
 | `formFields` | `[{ label, type, required, options[], description }]` | see [form-fields](form-fields.md) |
 | `allowGuests` | bool (default true) | |
-| `category`, `bannerUrl`, `accentColor` | string | UI only, not validated |
+| `category` | string | UI only, not validated |
+| `bannerUrl` | string | empty, an external http(s) URL or the path `/uploads/banners/<uuid>.<ext>` of an uploaded banner (W-12; file in `UPLOAD_DIR`, see [utils](../modules/utils.md)); checked by `validateEvent`. Series and duplicates copy the value, so several events can share one file |
+| `accentColor` | string | hex colour only (`validateEvent`) |
 | `location` | `{ text, channelId, channelType }` or `null` | |
 | `reminderHours` | `[{ hours, sent }]` (legacy: number, normalized by `utils/reminders.js`) | `sent` is the only duplicate protection; kept on save while `startDate` is unchanged — see [reminders-presence](reminders-presence.md) |
 | `customBotMessages` | `{ registration?, accepted?, rejected? }` | per-event DM templates |
