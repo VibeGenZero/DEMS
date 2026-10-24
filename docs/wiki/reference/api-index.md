@@ -74,7 +74,7 @@ see_also: [request-lifecycle, add-api-endpoint]
 | GET | `/api/admin/roles`, `/channels`, `/stats`, `/all-events`, `/import/discord-events` |
 | POST | `/api/admin/events`, `/events/preview` |
 | POST | `/api/admin/uploads/banner` (W-12, raw image body ≤ 5 MB) |
-| PUT | `/api/admin/events/:id`, `/events/:id/status`, `/events/:id/cancel` |
+| PUT | `/api/admin/events/:id` (series dates: optional `applyTo: 'following'`, a later `recurringUntil` extends the series, answer adds `updatedDates` and `createdDates`, W-11), `/events/:id/status`, `/events/:id/cancel` |
 | POST | `/api/admin/events/:id/start`, `/events/:id/end`, `/events/:id/duplicate`, `/events/:id/generate-checkin`, `/events/:id/announce`, `/events/:id/sync-discord` |
 | DELETE | `/api/admin/events/:id`, `/events/series/:seriesId` |
 | GET | `/api/admin/events/:id/checkin-stats`, `/events/:id/registrations`, `/events/:id/registrations/export`, `/events/:id/member-search`, `/events/:id/message-recipients` (W-09) |
