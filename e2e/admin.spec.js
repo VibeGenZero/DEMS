@@ -409,3 +409,48 @@ test('the registrations dialog hands over to the message dialog', async ({ page 
     const dialog = await waitForDialog(page, '#participantMessageModal');
     await expect(dialog.locator('#participant-message-title')).toHaveText('Community-Spieleabend');
 });
+
+test('admins accept and reject several registrations at once (W-08)', async ({ page, browser }, testInfo) => {
+    const errors = watchErrors(page);
+    await loginAs(page, 'admin');
+    const { id, title } = await createEvent(page, testInfo, { status: 'active', approvalMode: 'manual' });
+    // Two members ask to join -> two open requests (newbie stays untouched: e2e/profile.spec.js expects an empty plan)
+    for (const persona of ['raider', 'member']) {
+        const context = await browser.newContext();
+        const memberPage = await context.newPage();
+        await loginAs(memberPage, persona);
+        const answer = await adminRequest(memberPage, 'POST', `/api/events/${id}/register`, { formAnswers: {} });
+        expect(answer.status, persona).toBe('pending');
+        await context.close();
+    }
+
+    await navigate(page, 'admin');
+    await row(page, title).locator('.data-table-buttons > .btn').click();
+    const dialog = await waitForDialog(page, '#registrationsModal');
+    const bar = dialog.locator('#reg-bulk-bar');
+    await expect(bar).toBeHidden();
+
+    const rowOf = (name) => dialog.locator('#registrations-tbody tr', { hasText: name });
+    await rowOf('Lena').locator('[data-change="toggleRegSelection"]').check();
+    await rowOf('Tom').locator('[data-change="toggleRegSelection"]').check();
+    await expect(bar).toBeVisible();
+    await expect(dialog.locator('#reg-bulk-count')).toHaveText('2 ausgewählt');
+    await dialog.locator('#reg-bulk-accept').click();
+    await expect(toast(page)).toContainText('2 angenommen.');
+    await expect(rowOf('Lena')).toContainText('Angenommen');
+    await expect(rowOf('Tom')).toContainText('Angenommen');
+    await expect(bar).toBeHidden();
+
+    await rowOf('Tom').locator('[data-change="toggleRegSelection"]').check();
+    await dialog.locator('#reg-bulk-reject').click();
+    const confirm = await waitForDialog(page, '#confirmModal');
+    await expect(confirm.locator('#confirm-modal-text')).toHaveText('1 Anmeldung ablehnen?');
+    await confirm.locator('#confirm-modal-ok').click();
+    await expect(toast(page)).toContainText('1 abgelehnt.');
+    await expect(rowOf('Tom')).toContainText('Abgelehnt');
+    await expect(rowOf('Tom').locator('[data-change="toggleRegSelection"]')).toHaveCount(0);
+    expect(errors).toEqual([]);
+
+    // Leave no registrations of the personas behind for other specs
+    await adminRequest(page, 'DELETE', `/api/admin/events/${id}`);
+});

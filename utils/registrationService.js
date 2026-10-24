@@ -131,6 +131,66 @@ async function buildTemplateVars({ user, eventId, event, slot = null }) {
  * @param {boolean} [params.isAlt] -> Whether the slot is a fallback role.
  * @returns {Promise<void>} -> Resolves once all notifications were attempted.
  */
+/**
+ * Text of the DM that a registration is on the waitlist.
+ *
+ * @param {Object} event -> Event document data.
+ * @returns {string} -> German DM text (slot events name the slots).
+ */
+function waitlistDmText(event) {
+    return getSlots(event).length > 0
+        ? `📋 Für **${event.title}** sind gerade alle gewünschten Slots belegt. Du wurdest auf die **Warteliste** gesetzt und rückst automatisch nach, sobald ein passender Platz frei wird!`
+        : `📋 Das Event **${event.title}** ist aktuell voll. Du wurdest auf die **Warteliste** gesetzt. Wir benachrichtigen dich, sobald ein Platz frei wird!`;
+}
+
+/**
+ * Tell a member that an admin changed the status of their registration
+ * (single action and bulk actions, W-08): accepted (template or default text,
+ * slot line, event role), rejected (template or default text) or waitlisted
+ * (waitlist DM, unless the member switched it off, W-16). Never throws.
+ *
+ * @param {Object} params -> `{ registration, eventId, event, status, slotId }`.
+ * @returns {Promise<void>} -> Resolves once the DM was attempted.
+ */
+async function notifyStatusChange({ registration, eventId, event, status, slotId = null }) {
+    try {
+        const user = { id: registration.userId, displayName: registration.userName };
+        if (status === REGISTRATION_STATUS.WAITLISTED) {
+            if (!(await wantsDm(user.id, 'waitlist'))) return;
+            await sendDM(user.id, waitlistDmText(event));
+            return;
+        }
+        if (status !== REGISTRATION_STATUS.ACCEPTED && status !== 'rejected') return;
+
+        const customMessages = event.customBotMessages || {};
+        const templateSnap = await getDoc(doc(db, 'botMessages', 'templates'));
+        const globalTemplates = templateSnap.exists() ? templateSnap.data() : {};
+        const slot = findSlot(getSlots(event), slotId);
+        const vars = await buildTemplateVars({ user, eventId, event, slot });
+
+        if (status === REGISTRATION_STATUS.ACCEPTED) {
+            const slotLine = slot ? `\n🎯 Dein Slot: **${formatSlotLabel(slot)}**` : '';
+            const template = customMessages.accepted || globalTemplates.accepted;
+            const message = template
+                ? parseTemplate(template, vars)
+                : `✅ Du wurdest für **${event.title}** angenommen! Willkommen dabei!${slotLine}`;
+            await sendDM(user.id, message);
+            if (event.assignRoleId) {
+                await assignRole(user.id, event.assignRoleId, process.env.DISCORD_GUILD_ID);
+            }
+            return;
+        }
+
+        const template = customMessages.rejected || globalTemplates.rejected;
+        const message = template
+            ? parseTemplate(template, vars)
+            : `❌ Leider wurde deine Anfrage für **${event.title}** abgelehnt.`;
+        await sendDM(user.id, message);
+    } catch (err) {
+        console.error(`[notifyStatusChange] ${status} für ${registration.userId}:`, err.message);
+    }
+}
+
 async function notifyRegistration({ user, eventId, event, status, slot = null, isAlt = false }) {
     try {
         const templateSnap = await getDoc(doc(db, 'botMessages', 'templates'));
@@ -142,10 +202,7 @@ async function notifyRegistration({ user, eventId, event, status, slot = null, i
         if (status === REGISTRATION_STATUS.WAITLISTED) {
             // Members may switch this DM off (W-16); moving up is always announced
             if (!(await wantsDm(user.id, 'waitlist'))) return;
-            const text = getSlots(event).length > 0
-                ? `📋 Für **${event.title}** sind gerade alle gewünschten Slots belegt. Du wurdest auf die **Warteliste** gesetzt und rückst automatisch nach, sobald ein passender Platz frei wird!`
-                : `📋 Das Event **${event.title}** ist aktuell voll. Du wurdest auf die **Warteliste** gesetzt. Wir benachrichtigen dich, sobald ein Platz frei wird!`;
-            await sendDM(user.id, text);
+            await sendDM(user.id, waitlistDmText(event));
             return;
         }
 
@@ -692,6 +749,7 @@ module.exports = {
     moveRegistrationToSlot,
     unregisterUserFromEvent,
     buildTemplateVars,
+    notifyStatusChange,
     REGISTRATION_SOURCE,
     REGISTRATION_STATUS,
     REGISTRATION_ERROR

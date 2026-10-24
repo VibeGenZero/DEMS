@@ -1,5 +1,6 @@
 /**
- * Registrations dialog: list, accept/reject, move slot, check-in, add members (W-06).
+ * Registrations dialog: list, accept/reject, move slot, check-in, add members (W-06),
+ * bulk actions on ticked rows (W-08, registration-bulk.js).
  */
 import { state } from '../core/state.js';
 import { loadAdminEvents, loadAdminStats } from './dashboard.js';
@@ -7,6 +8,7 @@ import { registerActions } from '../core/actions.js';
 import { escapeHtml, showToast, showElement, toggleElement } from '../core/ui.js';
 import { avatar } from '../core/components.js';
 import { formatSlotLabel } from '../events/slots.js';
+import { renderBulkCheckboxCell, resetBulkSelection } from './registration-bulk.js';
 
 /** Event the dialog shows; the member entry posts to it. */
 const regDialog = { eventId: null, eventTitle: '', slots: [] };
@@ -23,8 +25,9 @@ export async function showRegistrations(eventId, eventTitle) {
     Object.assign(document.getElementById('reg-message-btn').dataset, { eventId, eventTitle });
     const tbody = document.getElementById('registrations-tbody');
     const empty = document.getElementById('registrations-empty');
-    tbody.innerHTML = '<tr><td colspan="8" class="text-center py-4"><div class="spinner-border spinner-border-sm text-secondary"></div></td></tr>';
+    tbody.innerHTML = '<tr><td colspan="9" class="text-center py-4"><div class="spinner-border spinner-border-sm text-secondary"></div></td></tr>';
     empty.style.display = 'none';
+    resetBulkSelection(eventId, eventTitle, []);
 
     const modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('registrationsModal'));
     modal.show();
@@ -35,6 +38,7 @@ export async function showRegistrations(eventId, eventTitle) {
         const regs = result.data || result;
         const slots = Array.isArray(result.slots) ? result.slots : [];
         setupMemberEntry(result.eventStatus, slots);
+        resetBulkSelection(eventId, eventTitle, regs);
 
         if (!regs.length) {
             tbody.innerHTML = '';
@@ -58,6 +62,7 @@ export async function showRegistrations(eventId, eventTitle) {
 
             return `
       <tr>
+        ${renderBulkCheckboxCell(reg)}
         <td>
           <strong>${escapeHtml(reg.userName)}</strong>
           <br><small class="text-muted">${escapeHtml(reg.userId)}</small>
@@ -97,7 +102,7 @@ export async function showRegistrations(eventId, eventTitle) {
     `;
         }).join('');
     } catch {
-        tbody.innerHTML = '<tr><td colspan="8" class="text-center text-danger">Fehler</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="9" class="text-center text-danger">Fehler</td></tr>';
     }
 }
 

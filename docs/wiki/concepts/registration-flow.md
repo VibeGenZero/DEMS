@@ -42,15 +42,21 @@ stateDiagram-v2
   pending --> accepted: admin
   pending --> rejected: admin (DM, promotes waitlist)
   pending --> waitlisted: admin
+  accepted --> waitlisted: admin bulk (W-08)
+  accepted --> rejected: admin bulk (W-08)
   waitlisted --> accepted: promoteFromWaitlist (instant)
   waitlisted --> pending: promoteFromWaitlist (manual)
   accepted --> [*]: unregister (role/channel removed, promotes waitlist)
   pending --> [*]: unregister (promotes waitlist)
 ```
 
-Admin changes go through `PUT /api/admin/registrations/:id/status` (allowed targets: `accepted`, `rejected`, `waitlisted`). On slot events, accepting a registration without a slot picks a free wanted slot or overbooks the main role (response `warning`); rejecting and waitlisting clear `slotId`. Slots change via `PUT /api/admin/registrations/:id/slot` (admin, may overbook) and `PUT /api/events/:id/register/slot` (member, free slots only, `event_ended` once the event is over, `registration_closed` once the registration deadline is reached).
+Admin changes go through `PUT /api/admin/registrations/:id/status` (allowed targets: `accepted`, `rejected`, `waitlisted`; DMs for accepted and rejected via `notifyStatusChange` in `utils/registrationService.js`, no DM for waitlisted). On slot events, accepting a registration without a slot picks a free wanted slot or overbooks the main role (response `warning`); rejecting and waitlisting clear `slotId`. Slots change via `PUT /api/admin/registrations/:id/slot` (admin, may overbook) and `PUT /api/events/:id/register/slot` (member, free slots only, `event_ended` once the event is over, `registration_closed` once the registration deadline is reached).
 
 Discord after the end: `canRegisterViaDiscord` is false, so a refreshed announcement keeps only "Zum Event"; an old button (`checkRegistrationConditions`) and a modal sent after the end (`handleEventRegisterModal`, `handleEventSlotModal`) answer ephemerally "Das Event ist schon vorbei.". After the registration deadline the same places answer "Die Anmeldung für dieses Event ist geschlossen." (W-03).
+
+## Bulk actions (W-08)
+
+`POST /api/admin/events/:id/registrations/bulk` changes up to 200 registrations of one event at once (dialog: checkboxes + action bar). Accept applies to pending/waitlisted, waitlist to pending/accepted, reject to all three; the rest is skipped. Accept goes oldest first and **never overbooks**, unlike the single ✓: it fills `maxParticipants` next to the places of the unselected pending/accepted registrations (guests and open invitations count), on slot events the main or a fallback role with a free place; what does not fit goes on the waitlist (`full`). Every changed member gets the DM of the single action, and a newly waitlisted one the waitlist DM (W-16 choice respected). Waitlisting alone moves nobody up; rejections promote the waitlist once. Rules: `planBulkAction` in [utils](../modules/utils.md).
 
 ## Entry points
 

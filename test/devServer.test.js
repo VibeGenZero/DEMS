@@ -8,12 +8,14 @@ const { EVENT_ID, SERIES_EVENT_IDS, CHECKIN_CODE } = require('../dev/seedData');
 
 let server;
 let uploadDir;
+let devDbPath;
 
 before(async () => {
     const tmpDir = createTempDir('dev-server');
     uploadDir = path.join(tmpDir, 'uploads');
+    devDbPath = path.join(tmpDir, 'dev.sqlite');
     server = await startServer('dev/start.js', {
-        DEV_SQLITE_PATH: path.join(tmpDir, 'dev.sqlite'),
+        DEV_SQLITE_PATH: devDbPath,
         DEV_UPLOAD_DIR: uploadDir
     });
 });
@@ -2172,4 +2174,166 @@ test('the wizard preview shows an uploaded banner with its absolute address', as
     const { embed } = await res.json();
     assert.ok(embed.image.url.endsWith(bannerUrl), embed.image.url);
     assert.match(embed.image.url, /^http:\/\/localhost:\d+\/uploads\/banners\//);
+});
+
+// ── Bulk actions on registrations (W-08) ────────────────────────────────
+
+const { MEMBERS } = require('../dev/mockGuild');
+
+/** Firestore-style access to the database of the test server (SQLite, WAL). */
+function serverStore() {
+    process.env.SQLITE_PATH = devDbPath;
+    return require('../firebaseAdmin');
+}
+
+let bulkMinute = 0;
+/**
+ * Event of the admin with registrations written straight into the database.
+ *
+ * @param {Object} admin -> Logged-in admin client.
+ * @param {Object} fields -> Event fields.
+ * @param {Array<Object>} regs -> `{ key, status, member, ...fields }` per registration.
+ * @returns {Promise<{ eventId: string, ids: Object<string, string> }>} -> Registration id per key.
+ */
+async function eventWithRegistrations(admin, fields, regs) {
+    const start = new Date(Date.now() + 5 * 86_400_000).toISOString();
+    const res = await admin.send('POST', '/api/admin/events', { title: 'Sammelaktion', status: 'active', startDate: start, approvalMode: 'manual', ...fields });
+    assert.equal(res.status, 200, await res.clone().text());
+    const { id: eventId } = await res.json();
+    const { db, doc, setDoc } = serverStore();
+    const ids = {};
+    for (const { key, status, member, ...rest } of regs) {
+        const id = `bulk-${eventId}-${key}`;
+        ids[key] = id;
+        await setDoc(doc(db, 'registrations', id), {
+            eventId, userId: member.userId, userName: member.displayName, status, source: 'web', formAnswers: {},
+            createdAt: new Date(Date.UTC(2026, 9, 1, 10, bulkMinute++)).toISOString(), ...rest
+        });
+    }
+    return { eventId, ids };
+}
+
+async function registrationOf(id) {
+    const { db, doc, getDoc } = serverStore();
+    return (await getDoc(doc(db, 'registrations', id))).data();
+}
+
+const bulk = (client, eventId, body) => client.send('POST', `/api/admin/events/${eventId}/registrations/bulk`, body);
+const [KIRA, JONAS, AYLIN, BEN, CHIARA, DENNIS, ELIF, FELIX, GRETA] = MEMBERS;
+
+test('an admin accepts three pending registrations in one request', async () => {
+    const admin = await loginAs('admin');
+    const { eventId, ids } = await eventWithRegistrations(admin, {}, [
+        { key: 'a', status: 'pending', member: KIRA },
+        { key: 'b', status: 'pending', member: JONAS },
+        { key: 'c', status: 'pending', member: AYLIN }
+    ]);
+    const outputBefore = server.output().length;
+    const res = await bulk(admin, eventId, { action: 'accept', ids: Object.values(ids) });
+    assert.equal(res.status, 200);
+    const body = await res.json();
+    assert.deepEqual([body.accepted, body.waitlisted, body.rejected, body.full, body.skipped], [3, 0, 0, 0, 0]);
+    for (const id of Object.values(ids)) assert.equal((await registrationOf(id)).status, 'accepted');
+
+    const log = server.output().slice(outputBefore);
+    for (const member of [KIRA, JONAS, AYLIN]) assert.match(log, new RegExp(`DM an ${member.displayName}`));
+    // The seed has a global accepted template
+    assert.match(log, /du bist bei \*\*Sammelaktion\*\* dabei/);
+
+    const { data: logs } = await (await admin.request('/api/admin/audit-log?limit=100')).json();
+    const entries = logs.filter(item => item.action === 'BULK_UPDATE_REGISTRATIONS' && item.targetId === eventId);
+    assert.equal(entries.length, 1);
+    assert.match(entries[0].details, /3 angenommen/);
+});
+
+test('a bulk accept stops at the participant limit and reports the rest', async () => {
+    const admin = await loginAs('admin');
+    const { eventId, ids } = await eventWithRegistrations(admin, { maxParticipants: 3 }, [
+        { key: 'held', status: 'accepted', member: KIRA },
+        { key: 'old', status: 'pending', member: JONAS },
+        { key: 'mid', status: 'pending', member: AYLIN },
+        { key: 'new', status: 'pending', member: BEN }
+    ]);
+    const outputBefore = server.output().length;
+    const body = await (await bulk(admin, eventId, { action: 'accept', ids: [ids.new, ids.old, ids.mid] })).json();
+    assert.deepEqual([body.accepted, body.waitlisted, body.full], [2, 1, 1]);
+    assert.equal((await registrationOf(ids.old)).status, 'accepted');
+    assert.equal((await registrationOf(ids.mid)).status, 'accepted');
+    assert.equal((await registrationOf(ids.new)).status, 'waitlisted');
+    assert.match(server.output().slice(outputBefore), /DM an Ben[\s\S]*Warteliste/);
+});
+
+test('a bulk reject skips unfitting registrations and lets the waitlist move up', async () => {
+    const admin = await loginAs('admin');
+    const { eventId, ids } = await eventWithRegistrations(admin, { maxParticipants: 2, approvalMode: 'instant' }, [
+        { key: 'a1', status: 'accepted', member: KIRA },
+        { key: 'a2', status: 'accepted', member: JONAS },
+        { key: 'gone', status: 'rejected', member: AYLIN },
+        { key: 'wait', status: 'waitlisted', member: BEN }
+    ]);
+    const body = await (await bulk(admin, eventId, { action: 'reject', ids: [ids.a1, ids.gone] })).json();
+    assert.deepEqual([body.rejected, body.skipped], [1, 1]);
+    assert.equal((await registrationOf(ids.a1)).status, 'rejected');
+    assert.equal((await registrationOf(ids.gone)).status, 'rejected');
+    assert.notEqual((await registrationOf(ids.wait)).status, 'waitlisted', 'Ben moved up');
+});
+
+test('a bulk waitlist clears slot and check-in', async () => {
+    const admin = await loginAs('admin');
+    const slots = [{ name: 'Tank', emoji: '🛡️', capacity: 2 }];
+    const create = await admin.send('POST', '/api/admin/events', { title: 'Slot-Sammelaktion', status: 'active', startDate: new Date(Date.now() + 86_400_000).toISOString(), slots });
+    const event = await create.json();
+    const slotId = event.slots[0].id;
+    const { db, doc, setDoc } = serverStore();
+    const id = `bulk-${event.id}-in`;
+    await setDoc(doc(db, 'registrations', id), {
+        eventId: event.id, userId: CHIARA.userId, userName: CHIARA.displayName, status: 'accepted', slotId, preferredSlotId: slotId,
+        checkedIn: true, checkedInAt: new Date().toISOString(), createdAt: new Date().toISOString()
+    });
+    const body = await (await bulk(admin, event.id, { action: 'waitlist', ids: [id] })).json();
+    assert.equal(body.waitlisted, 1);
+    const stored = await registrationOf(id);
+    assert.deepEqual([stored.status, stored.slotId, stored.checkedIn], ['waitlisted', null, false]);
+});
+
+test('a member who switched the waitlist DM off gets none from a bulk action', async () => {
+    const admin = await loginAs('admin');
+    const { db, doc, setDoc } = serverStore();
+    await setDoc(doc(db, 'users', DENNIS.userId), { id: DENNIS.userId, username: DENNIS.username, notifications: { waitlist: false } }, { merge: true });
+    const { eventId, ids } = await eventWithRegistrations(admin, {}, [
+        { key: 'quiet', status: 'pending', member: DENNIS },
+        { key: 'loud', status: 'pending', member: ELIF }
+    ]);
+    const outputBefore = server.output().length;
+    const body = await (await bulk(admin, eventId, { action: 'waitlist', ids: Object.values(ids) })).json();
+    assert.equal(body.waitlisted, 2);
+    const log = server.output().slice(outputBefore);
+    assert.match(log, /DM an Elif/);
+    assert.doesNotMatch(log, /DM an Dennis/);
+});
+
+test('a bulk action refuses wrong input, unknown events, members and missing CSRF', async () => {
+    const admin = await loginAs('admin');
+    const { eventId, ids } = await eventWithRegistrations(admin, {}, [{ key: 'x', status: 'pending', member: FELIX }]);
+    const tooMany = Array.from({ length: 201 }, (_, i) => `id-${i}`);
+    for (const [body, error] of [
+        [{ action: 'delete', ids: [ids.x] }, 'Ungültige Sammelaktion.'],
+        [{ action: 'accept', ids: [] }, 'Bitte 1 bis 200 Anmeldungen auswählen.'],
+        [{ action: 'accept', ids: tooMany }, 'Bitte 1 bis 200 Anmeldungen auswählen.'],
+        [{ action: 'accept' }, 'Bitte 1 bis 200 Anmeldungen auswählen.']
+    ]) {
+        const res = await bulk(admin, eventId, body);
+        assert.equal(res.status, 400, JSON.stringify(body).slice(0, 60));
+        assert.equal((await res.json()).error, error);
+    }
+    assert.equal((await bulk(admin, 'no-such-event', { action: 'accept', ids: [ids.x] })).status, 404);
+
+    const member = await loginAs('member');
+    assert.equal((await bulk(member, eventId, { action: 'accept', ids: [ids.x] })).status, 403);
+    const noToken = await admin.request(`/api/admin/events/${eventId}/registrations/bulk`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'accept', ids: [ids.x] })
+    });
+    assert.equal(noToken.status, 403);
+    assert.equal((await registrationOf(ids.x)).status, 'pending', 'nothing changed');
+    assert.ok(GRETA, 'mock guild has enough members');
 });
