@@ -1234,6 +1234,7 @@
                       <label class="form-label">Wiederholen bis</label>
                       <input type="date" class="form-control" id="event-recurring-until">
                       <div class="invalid-feedback" id="event-recurring-until-feedback"></div>
+                      <div class="form-text is-hidden" id="event-recurring-until-hint">Ein späteres Datum legt neue Termine an.</div>
                     </div>
                   </div>
                 </div>
@@ -1426,6 +1427,17 @@
             <button type="button" class="btn btn-accent" id="wizard-btn-next" data-click="wizardNext">
               Weiter<i class="bi bi-arrow-right ms-1"></i>
             </button>
+            <!-- Only when editing a series date with later dates (admin/wizard-series.js, W-11) -->
+            <div class="is-hidden" id="wizard-series-scope" role="radiogroup" aria-label="Änderung gilt für">
+              <div class="form-check form-check-inline mb-0">
+                <input class="form-check-input" type="radio" name="event-series-scope" id="event-scope-this" value="this" checked>
+                <label class="form-check-label small" for="event-scope-this">Nur dieser Termin</label>
+              </div>
+              <div class="form-check form-check-inline mb-0">
+                <input class="form-check-input" type="radio" name="event-series-scope" id="event-scope-following" value="following">
+                <label class="form-check-label small" for="event-scope-following" id="event-scope-following-label">Dieser und alle folgenden Termine</label>
+              </div>
+            </div>
             <!-- Only when editing moved start, end or location (admin/wizard-notify.js, W-04) -->
             <div class="form-check form-switch mb-0 is-hidden" id="wizard-notify">
               <input class="form-check-input" type="checkbox" id="event-notify-participants" checked>

@@ -28,6 +28,8 @@ export const WIZARD_MESSAGES = {
     recurringUntil: 'Bis wann soll sich das Event wiederholen?',
     recurringStart: 'Eine Serie braucht ein Startdatum.',
     recurringUntilBeforeStart: '„Wiederholen bis“ liegt vor dem Start.',
+    // Same text as SHORTEN_SERIES_MESSAGE in utils/eventSeries.js (W-11)
+    recurringUntilShortened: '„Wiederholen bis“ kann nur verlängert werden. Einzelne Termine löschst du in der Terminliste.',
     maxParticipants: 'Bitte eine ganze Zahl ab 0 eingeben.',
     reminder: (entry) => `„${entry}“ ist keine Stundenzahl.`,
     requiredRoles: 'Wähle mindestens eine Rolle.',
@@ -81,6 +83,8 @@ function checkDates(draft, add) {
     if (!start && draft.status !== 'active') add('startDate', WIZARD_MESSAGES.recurringStart);
     const until = String(draft.recurringUntil ?? '');
     if (!until) add('recurringUntil', WIZARD_MESSAGES.recurringUntil);
+    // A series can only grow (W-11); storedRecurringUntil is set while editing a series date
+    else if (draft.storedRecurringUntil && until < draft.storedRecurringUntil) add('recurringUntil', WIZARD_MESSAGES.recurringUntilShortened);
     // The server compares the UTC day of each start with this date
     else if (start && until < start.toISOString().slice(0, 10)) add('recurringUntil', WIZARD_MESSAGES.recurringUntilBeforeStart);
 }

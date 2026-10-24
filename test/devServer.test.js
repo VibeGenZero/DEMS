@@ -2337,3 +2337,280 @@ test('a bulk action refuses wrong input, unknown events, members and missing CSR
     assert.equal((await registrationOf(ids.x)).status, 'pending', 'nothing changed');
     assert.ok(GRETA, 'mock guild has enough members');
 });
+
+// ── Series edited together (W-11) ───────────────────────────────────────
+
+const { localDay } = require('../utils/eventSeries');
+const SERIES_TZ = 'Europe/Berlin';
+const localClock = (iso) => new Intl.DateTimeFormat('de-DE', { timeZone: SERIES_TZ, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date(iso));
+const localDayMonth = (iso) => new Intl.DateTimeFormat('de-DE', { timeZone: SERIES_TZ, day: '2-digit', month: '2-digit' }).format(new Date(iso));
+
+/**
+ * Weekly series of four dates, three days from now on.
+ *
+ * @param {Object} admin -> Admin client.
+ * @param {Object} [fields] -> Extra event fields.
+ * @returns {Promise<Array<Object>>} -> Stored dates sorted by start, each with `id`.
+ */
+async function createSeries(admin, fields = {}) {
+    const res = await admin.send('POST', '/api/admin/events', {
+        title: 'Wochenraid', description: 'Alt', status: 'active', accessMode: 'open', approvalMode: 'instant', maxParticipants: 10,
+        startDate: futureDate(3), endDate: futureDate(3, 20),
+        recurring: true, recurringInterval: 'weekly', recurringUntil: localDay(futureDate(24), SERIES_TZ), ...fields
+    });
+    const body = await res.json();
+    assert.equal(res.status, 200, JSON.stringify(body));
+    assert.equal(body.count, 4);
+    return seriesDatesOf(body.events[0].seriesId);
+}
+
+/** Stored dates of a series, sorted by start. */
+async function seriesDatesOf(seriesId) {
+    const { db, collection, getDocs } = serverStore();
+    const snap = await getDocs(collection(db, 'events'));
+    return snap.docs.map(entry => ({ id: entry.id, ...entry.data() }))
+        .filter(event => event.seriesId === seriesId)
+        .sort((a, b) => a.startDate.localeCompare(b.startDate));
+}
+
+/** Change stored fields of an event directly in the server's database. */
+async function patchEvent(id, fields) {
+    const { db, doc, updateDoc } = serverStore();
+    await updateDoc(doc(db, 'events', id), fields);
+}
+
+/** Save a date through the wizard API with the stored values plus `changes`. */
+function saveDate(admin, event, changes = {}) {
+    const { id, ...stored } = event;
+    return admin.send('PUT', `/api/admin/events/${id}`, { ...stored, ...changes });
+}
+
+const seriesAudit = async (admin, action) => {
+    const { data: logs } = await (await admin.request('/api/admin/audit-log?limit=500')).json();
+    return logs.filter(log => log.action === action);
+};
+
+test('a series date is saved alone without a scope or with "this"', async () => {
+    const admin = await loginAs('admin');
+    const dates = await createSeries(admin, { title: 'Nur-ein-Termin' });
+    for (const applyTo of [undefined, 'this', 'irgendwas']) {
+        const res = await saveDate(admin, dates[1], { description: `Nur hier ${applyTo}`, ...(applyTo ? { applyTo } : {}) });
+        const body = await res.json();
+        assert.equal(res.status, 200, JSON.stringify(body));
+        assert.equal(body.updatedDates, 0);
+        const after = await seriesDatesOf(dates[0].seriesId);
+        assert.deepEqual(after.map(event => event.description), ['Alt', `Nur hier ${applyTo}`, 'Alt', 'Alt']);
+    }
+});
+
+test('"this and all following dates" copies the settings and the start time, each date keeps its day', async () => {
+    const admin = await loginAs('admin');
+    const dates = await createSeries(admin, { title: 'Serie-Folgende' });
+    // Date 2 starts 1.5 hours earlier on its own day and lasts three hours, deadline one day before
+    const start = new Date(new Date(dates[1].startDate).getTime() - 90 * 60_000).toISOString();
+    const end = new Date(new Date(start).getTime() + 3 * 3600_000).toISOString();
+    const deadline = new Date(new Date(start).getTime() - 24 * 3600_000).toISOString();
+    const res = await saveDate(admin, dates[1], {
+        description: 'Neu', maxParticipants: 12, startDate: start, endDate: end, registrationDeadline: deadline, applyTo: 'following'
+    });
+    const body = await res.json();
+    assert.equal(res.status, 200, JSON.stringify(body));
+    assert.equal(body.updatedDates, 2);
+    assert.equal(body.createdDates, 0);
+
+    const after = await seriesDatesOf(dates[0].seriesId);
+    assert.deepEqual(after.map(event => event.description), ['Alt', 'Neu', 'Neu', 'Neu']);
+    assert.deepEqual(after.map(event => event.maxParticipants), [10, 12, 12, 12]);
+    assert.equal(after[0].startDate, dates[0].startDate);
+    for (const index of [2, 3]) {
+        assert.equal(localDay(after[index].startDate, SERIES_TZ), localDay(dates[index].startDate, SERIES_TZ), `day of date ${index + 1}`);
+        assert.equal(localClock(after[index].startDate), localClock(start), `time of date ${index + 1}`);
+        assert.equal(new Date(after[index].endDate) - new Date(after[index].startDate), 3 * 3600_000);
+        assert.equal(new Date(after[index].startDate) - new Date(after[index].registrationDeadline), 24 * 3600_000);
+        assert.equal(after[index].unregisterDeadline, '');
+    }
+
+    const entries = (await seriesAudit(admin, 'UPDATE_SERIES')).filter(log => log.targetId === dates[1].id);
+    assert.equal(entries.length, 1);
+    assert.equal(entries[0].adminId, personaById('admin').userId);
+    assert.match(entries[0].details, /"Serie-Folgende" to 2 following dates/);
+});
+
+test('cancelled later dates stay as they are, drafts are changed and stay drafts', async () => {
+    const admin = await loginAs('admin');
+    const dates = await createSeries(admin, { title: 'Serie-Status' });
+    await patchEvent(dates[2].id, { status: 'cancelled' });
+    await patchEvent(dates[3].id, { status: 'draft' });
+    const res = await saveDate(admin, dates[0], { description: 'Neu', applyTo: 'following' });
+    const body = await res.json();
+    assert.equal(res.status, 200, JSON.stringify(body));
+    assert.equal(body.updatedDates, 2);
+    const after = await seriesDatesOf(dates[0].seriesId);
+    assert.deepEqual(after.map(event => [event.description, event.status]), [['Neu', 'active'], ['Neu', 'active'], ['Alt', 'cancelled'], ['Neu', 'draft']]);
+});
+
+test('registrations and the check-in code of a following date stay', async () => {
+    const admin = await loginAs('admin');
+    const dates = await createSeries(admin, { title: 'Serie-Anmeldungen' });
+    const added = await (await addMember(admin, dates[2].id, { userId: MEMBER_ID.DENNIS })).json();
+    await patchEvent(dates[2].id, { checkinCode: '654321', checkinEnabled: true });
+    const res = await saveDate(admin, dates[1], { title: 'Serie-Anmeldungen neu', applyTo: 'following' });
+    assert.equal(res.status, 200);
+    const [, , third] = await seriesDatesOf(dates[0].seriesId);
+    assert.equal(third.title, 'Serie-Anmeldungen neu');
+    assert.deepEqual([third.checkinCode, third.checkinEnabled], ['654321', true]);
+    assert.equal((await registrationOf(added.id)).status, 'accepted');
+});
+
+test('a slot removed while a later date still uses it refuses the whole save and names the date', async () => {
+    const admin = await loginAs('admin');
+    const dates = await createSeries(admin, { title: 'Serie-Slots', slots: [{ name: 'Tank', capacity: 2 }, { name: 'Heiler', capacity: 2 }] });
+    const healer = dates[3].slots.find(slot => slot.name === 'Heiler');
+    const { db, doc, setDoc } = serverStore();
+    await setDoc(doc(db, 'registrations', `series-slot-${dates[3].id}`), {
+        eventId: dates[3].id, userId: ELIF.userId, userName: ELIF.displayName, status: 'accepted', slotId: healer.id, preferredSlotId: healer.id,
+        createdAt: new Date().toISOString()
+    });
+    const res = await saveDate(admin, dates[1], { description: 'Ohne Heiler', slots: dates[1].slots.filter(slot => slot.name === 'Tank'), applyTo: 'following' });
+    assert.equal(res.status, 400);
+    assert.equal((await res.json()).error, `Termin ${localDayMonth(dates[3].startDate)}: Slot „Heiler“ hat noch 1 Anmeldung – bitte zuerst verschieben.`);
+    const after = await seriesDatesOf(dates[0].seriesId);
+    assert.deepEqual(after.map(event => [event.description, event.slots.length]), [['Alt', 2], ['Alt', 2], ['Alt', 2], ['Alt', 2]]);
+});
+
+test('change DMs go out per changed date and are summed and logged per date', async () => {
+    const admin = await loginAs('admin');
+    const dates = await createSeries(admin, { title: 'Serie-DMs' });
+    for (const [event, member] of [[dates[1], MEMBER_ID.DENNIS], [dates[2], MEMBER_ID.DENNIS], [dates[2], MEMBER_ID.ELIF]]) {
+        assert.equal((await addMember(admin, event.id, { userId: member })).status, 201);
+    }
+    const before = { dennis: dmCount('Dennis'), elif: dmCount('Elif') };
+    const start = new Date(new Date(dates[1].startDate).getTime() + 30 * 60_000).toISOString();
+    const res = await saveDate(admin, dates[1], { startDate: start, endDate: '', applyTo: 'following', notifyParticipants: true });
+    const body = await res.json();
+    assert.equal(res.status, 200, JSON.stringify(body));
+    assert.equal(body.notifiedCount, 3);
+    assert.equal(dmCount('Dennis'), before.dennis + 2);
+    assert.equal(dmCount('Elif'), before.elif + 1);
+    for (const event of [dates[1], dates[2]]) {
+        assert.equal((await changeNotices(admin, event.id)).length, 1, event.id);
+    }
+    // Date 4 has nobody to tell -> no entry
+    assert.equal((await changeNotices(admin, dates[3].id)).length, 0);
+});
+
+test('only the title for all following dates sends no change DM', async () => {
+    const admin = await loginAs('admin');
+    const dates = await createSeries(admin, { title: 'Serie-Titel' });
+    assert.equal((await addMember(admin, dates[2].id, { userId: MEMBER_ID.GRETA })).status, 201);
+    const before = dmCount('Greta');
+    const body = await (await saveDate(admin, dates[1], { title: 'Serie-Titel neu', applyTo: 'following', notifyParticipants: true })).json();
+    assert.equal(body.notifiedCount, 0);
+    assert.equal(dmCount('Greta'), before);
+});
+
+test('a series date keeps its interval and stays part of the series', async () => {
+    const admin = await loginAs('admin');
+    const dates = await createSeries(admin, { title: 'Serie-Rhythmus' });
+    const res = await saveDate(admin, dates[1], { recurring: false, recurringInterval: 'monthly', description: 'x' });
+    assert.equal(res.status, 200);
+    const after = await seriesDatesOf(dates[0].seriesId);
+    assert.deepEqual([after[1].recurring, after[1].recurringInterval, after[1].seriesId], [true, 'weekly', dates[0].seriesId]);
+});
+
+test('members and requests without CSRF token cannot save a series', async () => {
+    const admin = await loginAs('admin');
+    const dates = await createSeries(admin, { title: 'Serie-Schutz' });
+    const { id, ...stored } = dates[1];
+    const member = await loginAs('member');
+    assert.equal((await member.send('PUT', `/api/admin/events/${id}`, { ...stored, applyTo: 'following' })).status, 403);
+    const noToken = await admin.request(`/api/admin/events/${id}`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...stored, description: 'Neu', applyTo: 'following' })
+    });
+    assert.equal(noToken.status, 403);
+    assert.deepEqual((await seriesDatesOf(dates[0].seriesId)).map(event => event.description), ['Alt', 'Alt', 'Alt', 'Alt']);
+});
+
+async function registrationsOfEvent(eventId) {
+    const { db, collection, getDocs, query, where } = serverStore();
+    return (await getDocs(query(collection(db, 'registrations'), where('eventId', '==', eventId)))).docs;
+}
+
+test('a later "Wiederholen bis" adds the missing dates as copies of the last date', async () => {
+    const admin = await loginAs('admin');
+    const dates = await createSeries(admin, { title: 'Serie-Verlängern', reminderHours: '24' });
+    await patchEvent(dates[3].id, { description: 'Letzter', checkinCode: '111222', checkinEnabled: true, reminderHours: [{ hours: 24, sent: true }], eventStartNotificationSent: true });
+    assert.equal((await addMember(admin, dates[3].id, { userId: MEMBER_ID.KIRA })).status, 201);
+    const newUntil = localDay(futureDate(38), SERIES_TZ);
+
+    const res = await saveDate(admin, dates[1], { recurringUntil: newUntil });
+    const body = await res.json();
+    assert.equal(res.status, 200, JSON.stringify(body));
+    assert.deepEqual([body.createdDates, body.updatedDates, body.recurringUntil], [2, 0, newUntil]);
+
+    const after = await seriesDatesOf(dates[0].seriesId);
+    assert.equal(after.length, 6);
+    assert.ok(after.every(event => event.recurringUntil === newUntil), 'every date stores the new end');
+    const created = after.slice(4);
+    assert.deepEqual(created.map(event => localDay(event.startDate, SERIES_TZ)),
+        [localDay(futureDate(31), SERIES_TZ), localDay(futureDate(38), SERIES_TZ)]);
+    for (const event of created) {
+        assert.equal(localClock(event.startDate), localClock(dates[3].startDate));
+        assert.equal(new Date(event.endDate) - new Date(event.startDate), new Date(dates[3].endDate) - new Date(dates[3].startDate));
+        assert.deepEqual([event.description, event.status, event.recurring, event.recurringInterval], ['Letzter', 'active', true, 'weekly']);
+        assert.deepEqual([event.checkinCode, event.checkinEnabled, event.eventStartNotificationSent], ['', false, false]);
+        assert.deepEqual(event.reminderHours, [{ hours: 24, sent: false }]);
+        assert.deepEqual(event.announcements, []);
+        assert.equal((await registrationsOfEvent(event.id)).length, 0);
+    }
+
+    const entries = (await seriesAudit(admin, 'EXTEND_SERIES')).filter(log => log.targetId === dates[1].id);
+    assert.equal(entries.length, 1);
+    assert.match(entries[0].details, new RegExp(`to ${newUntil}: 2 new dates`));
+});
+
+test('an extension together with "this and all following dates" copies the new settings', async () => {
+    const admin = await loginAs('admin');
+    const dates = await createSeries(admin, { title: 'Serie-Verlängern-Folgende' });
+    const res = await saveDate(admin, dates[2], { description: 'Neu', recurringUntil: localDay(futureDate(31), SERIES_TZ), applyTo: 'following' });
+    const body = await res.json();
+    assert.equal(res.status, 200, JSON.stringify(body));
+    assert.deepEqual([body.updatedDates, body.createdDates], [1, 1]);
+    const after = await seriesDatesOf(dates[0].seriesId);
+    assert.deepEqual(after.map(event => event.description), ['Alt', 'Alt', 'Neu', 'Neu', 'Neu']);
+});
+
+test('the copy for an extension comes from the last date that is not cancelled', async () => {
+    const admin = await loginAs('admin');
+    const dates = await createSeries(admin, { title: 'Serie-Vorlage' });
+    await patchEvent(dates[2].id, { description: 'Aktiv' });
+    await patchEvent(dates[3].id, { description: 'Abgesagt', status: 'cancelled' });
+    const res = await saveDate(admin, dates[0], { recurringUntil: localDay(futureDate(31), SERIES_TZ) });
+    assert.equal(res.status, 200);
+    const created = (await seriesDatesOf(dates[0].seriesId))[4];
+    assert.deepEqual([created.description, created.status, localDay(created.startDate, SERIES_TZ)], ['Aktiv', 'active', localDay(futureDate(31), SERIES_TZ)]);
+});
+
+test('an earlier "Wiederholen bis" is refused and changes nothing', async () => {
+    const admin = await loginAs('admin');
+    const dates = await createSeries(admin, { title: 'Serie-Kürzen' });
+    for (const applyTo of ['this', 'following']) {
+        const res = await saveDate(admin, dates[1], { description: 'Neu', recurringUntil: localDay(futureDate(10), SERIES_TZ), applyTo });
+        assert.equal(res.status, 400);
+        assert.equal((await res.json()).error, '„Wiederholen bis“ kann nur verlängert werden. Einzelne Termine löschst du in der Terminliste.');
+    }
+    const after = await seriesDatesOf(dates[0].seriesId);
+    assert.deepEqual(after.map(event => event.description), ['Alt', 'Alt', 'Alt', 'Alt']);
+    assert.ok(after.every(event => event.recurringUntil === dates[0].recurringUntil));
+});
+
+test('two parallel extensions create the new dates only once', async () => {
+    const admin = await loginAs('admin');
+    const dates = await createSeries(admin, { title: 'Serie-Parallel' });
+    const newUntil = localDay(futureDate(31), SERIES_TZ);
+    const responses = await Promise.all([0, 1, 2, 3, 0, 1].map(index => saveDate(admin, dates[index], { recurringUntil: newUntil })));
+    assert.deepEqual(responses.map(res => res.status), [200, 200, 200, 200, 200, 200]);
+    const bodies = await Promise.all(responses.map(res => res.json()));
+    assert.deepEqual(bodies.map(body => body.createdDates).sort(), [0, 0, 0, 0, 0, 1]);
+    assert.equal((await seriesDatesOf(dates[0].seriesId)).length, 5);
+});

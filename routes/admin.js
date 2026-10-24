@@ -18,7 +18,7 @@ const { trackedEventIds, memberStats, memberBase, buildMemberList, buildMemberHi
 const { DEFAULT_RANGE, isValidRange, buildInsights } = require('../utils/insights');
 const { MESSAGE_GROUPS, messageRecipients, recipientCounts, validateMessageText, sendParticipantMessage } = require('../utils/participantMessage');
 const { describePlaces, formatPlaces, formatWaitlist, waitlistPositions } = require('../utils/capacity');
-const { getSlots, findSlot, formatSlotLabel, normalizeSlots, sumCapacity, resolveAcceptanceSlot, buildRoster } = require('../utils/slotService');
+const { getSlots, findSlot, formatSlotLabel, normalizeSlots, sumCapacity, resolveAcceptanceSlot, buildRoster, validateSlotChange } = require('../utils/slotService');
 const { buildPreviewEvent } = require('../utils/eventPreview');
 const { normalizePollInput, tallyPoll } = require('../utils/pollService');
 const {
@@ -31,6 +31,10 @@ const { debugLog } = require('../utils/debugLog');
 const { buildEventUrl } = require('../utils/eventUrl');
 const { MAX_BANNER_BYTES, detectImageType, saveBanner, releaseBanners } = require('../utils/bannerStore');
 const { BULK_ACTIONS, MAX_BULK_IDS, planBulkAction } = require('../utils/bulkRegistrations');
+const { followingDates, transferTime, planExtension, seriesUpdateFields, slotsForDate } = require('../utils/eventSeries');
+
+// Days and clock times of series dates (W-11)
+const SERIES_TIMEZONE = process.env.TIMEZONE || 'Europe/Berlin';
 
 // Announcements per event that are kept up to date live
 const MAX_TRACKED_ANNOUNCEMENTS = 5;
@@ -359,88 +363,276 @@ router.post('/events/preview', async (req, res) => {
 const optedOutNote = (optedOut) => (optedOut > 0 ? `; ${optedOut} opted out` : '');
 
 /**
- * PUT /api/admin/events/:id — Update event
+ * Fields PUT /events/:id writes from the wizard input.
+ *
+ * @param {Object} body -> Request body.
+ * @param {Array<Object>} slots -> Normalized slots.
+ * @param {Object} oldEvent -> Stored event before the save.
+ * @returns {Object} -> Updates for the event document.
+ */
+function buildEventUpdates(body, slots, oldEvent) {
+    const {
+        title, description, maxParticipants, accessMode, requiredRoles,
+        approvalMode, assignRoleId, formFields,
+        startDate, endDate, bannerUrl, category, status, reminderHours, checkinMessage,
+        customBotMessages, autoCreateChannels, channelConfig, allowGuests,
+        accentColor, location, registrationDeadline, unregisterDeadline
+    } = body;
+    // A date of a series keeps its rhythm; "Wiederholen bis" changes only by an extension (W-11)
+    const inSeries = !!oldEvent.seriesId;
+    return {
+        title,
+        description,
+        maxParticipants: slots.length > 0 ? sumCapacity(slots) : (parseInt(maxParticipants) || 0),
+        accessMode: accessMode || 'open',
+        requiredRoles: requiredRoles || [],
+        approvalMode: approvalMode || 'manual',
+        assignRoleId: assignRoleId || '',
+        formFields: formFields || [],
+        startDate: startDate || '',
+        endDate: endDate || '',
+        registrationDeadline: registrationDeadline || '',
+        unregisterDeadline: unregisterDeadline || '',
+        // A moved deadline lets the scheduler refresh the announcement again (W-03)
+        registrationClosedRefreshed: keepDeadlineRefreshFlag(oldEvent, registrationDeadline || ''),
+        bannerUrl: bannerUrl || '',
+        category: category || '',
+        status: status || 'active',
+        // Same start -> reminders already sent stay sent, editing must not send them again
+        reminderHours: mergeReminderHours(reminderHours, oldEvent, startDate || ''),
+        checkinMessage: checkinMessage || '',
+        customBotMessages: customBotMessages || {},
+        autoCreateChannels: !!autoCreateChannels,
+        channelConfig: channelConfig || {},
+        allowGuests: slots.length > 0 ? false : allowGuests !== false,
+        slots,
+        sourcePollId: oldEvent.sourcePollId || '',
+        accentColor: accentColor || '',
+        location: location || null,
+        recurring: inSeries ? true : !!body.recurring,
+        recurringInterval: inSeries ? (oldEvent.recurringInterval || '') : (body.recurringInterval || ''),
+        recurringUntil: inSeries ? (oldEvent.recurringUntil || '') : (body.recurringUntil || ''),
+        updatedAt: new Date().toISOString()
+    };
+}
+
+/**
+ * Updates of a following date of a series (W-11): the shared settings of the
+ * edited date, the edited start time and duration on the date's own day.
+ *
+ * @param {Object} edited -> Updates written to the edited date.
+ * @param {Array<Object>} slots -> Normalized slots of this date.
+ * @param {Object} oldEvent -> Stored date before the save.
+ * @returns {Object} -> Updates for the date's document.
+ */
+function buildFollowingUpdates(edited, slots, oldEvent) {
+    const times = transferTime(oldEvent.startDate, edited, SERIES_TIMEZONE) || {
+        startDate: oldEvent.startDate || '',
+        endDate: oldEvent.endDate || '',
+        registrationDeadline: oldEvent.registrationDeadline || '',
+        unregisterDeadline: oldEvent.unregisterDeadline || ''
+    };
+    return {
+        ...seriesUpdateFields(edited),
+        ...times,
+        slots,
+        maxParticipants: slots.length > 0 ? sumCapacity(slots) : edited.maxParticipants,
+        allowGuests: slots.length > 0 ? false : edited.allowGuests,
+        reminderHours: mergeReminderHours(edited.reminderHours, oldEvent, times.startDate),
+        registrationClosedRefreshed: keepDeadlineRefreshFlag(oldEvent, times.registrationDeadline),
+        updatedAt: new Date().toISOString()
+    };
+}
+
+/**
+ * Side effects after one date was saved: channels, waitlist, announcement and
+ * the optional change DM (W-04).
+ *
+ * @param {Object} params -> `{ eventId, oldEvent, updates, notify, adminId }`.
+ * @returns {Promise<number>} -> Participants notified successfully.
+ */
+async function applySavedEvent({ eventId, oldEvent, updates, notify, adminId }) {
+    // Following dates of a series keep their status -> it is not in their updates
+    const status = updates.status || oldEvent.status;
+    const isNowActive = status === 'active';
+    const wasActive = oldEvent.status === 'active';
+
+    if (updates.autoCreateChannels && isNowActive && (!oldEvent.autoCreateChannels || !wasActive)) {
+        createEventChannels({ id: eventId, ...updates }).catch(console.error);
+    } else if ((oldEvent.autoCreateChannels && wasActive) && (!updates.autoCreateChannels || !isNowActive)) {
+        deleteEventChannels(eventId).catch(console.error);
+    }
+
+    // More places or new slots can let waitlisted members move up
+    await promoteFromWaitlist(eventId, { ...oldEvent, ...updates });
+    notifyRegistrationsChanged(eventId);
+
+    // Change DM only on the admin's explicit request (W-04); the flag itself is never stored
+    const changes = describeEventChanges(oldEvent, updates);
+    if (!notify || !isNowActive || changes.length === 0) return 0;
+    const { recipients, notified, optedOut } = await notifyEventChange({ eventId, title: updates.title, changes });
+    if (recipients + optedOut > 0) {
+        const changed = changes.map(change => change.label).join(', ');
+        await addAuditLog('NOTIFY_EVENT_CHANGE', adminId,
+            `Notified ${notified} of ${recipients} participants about changed ${changed}${optedOutNote(optedOut)}`, eventId);
+    }
+    return notified;
+}
+
+// Day of a series date in German messages, e.g. "14.11."
+const seriesDayLabel = (iso) => new Intl.DateTimeFormat('de-DE', { timeZone: SERIES_TIMEZONE, day: '2-digit', month: '2-digit' }).format(new Date(iso));
+
+/**
+ * Check the slots of the request against the registrations of every following date.
+ *
+ * @param {Array<Object>|undefined} rawSlots -> Slots of the request.
+ * @param {Array<Object>} dates -> Following dates with `id`.
+ * @returns {Promise<string|null>} -> German error naming the first date that refuses, or null.
+ */
+async function checkFollowingSlots(rawSlots, dates) {
+    for (const date of dates) {
+        const oldSlots = getSlots(date);
+        const result = normalizeSlots(slotsForDate(rawSlots, oldSlots), oldSlots);
+        const error = result.error || validateSlotChange({ oldSlots, newSlots: result.slots, registrations: await loadEventRegistrations(date.id) });
+        if (error) return `Termin ${seriesDayLabel(date.startDate)}: ${error}`;
+    }
+    return null;
+}
+
+/**
+ * Create the dates an extension adds to a series (W-11) and store the new end on every date.
+ *
+ * @param {Object} params -> `{ seriesId, editedId, starts, newUntil, adminId }`.
+ * @returns {Promise<number>} -> Number of created dates.
+ */
+async function extendSeries({ seriesId, editedId, starts, newUntil, adminId }) {
+    const all = await loadSeriesDates(seriesId);
+    const changeable = all.filter(date => ['draft', 'active'].includes(date.status || 'active'));
+    const template = changeable.at(-1) || all.find(date => date.id === editedId);
+    const { id: _templateId, ...base } = template;
+    const now = new Date().toISOString();
+    for (const start of starts) {
+        const times = transferTime(start, template, SERIES_TIMEZONE);
+        const created = {
+            ...base,
+            ...times,
+            recurringUntil: newUntil,
+            checkinCode: '',
+            checkinEnabled: false,
+            announcements: [],
+            discordChannelId: null,
+            discordTextChannelId: null,
+            reminderHours: mergeReminderHours(base.reminderHours, null, times.startDate),
+            eventStartNotificationSent: false,
+            registrationClosedRefreshed: false,
+            createdAt: now,
+            createdBy: adminId
+        };
+        delete created.updatedAt;
+        await addDoc(collection(db, 'events'), created);
+    }
+    for (const date of all) {
+        if (date.recurringUntil !== newUntil) await updateDoc(doc(db, 'events', date.id), { recurringUntil: newUntil });
+    }
+    await addAuditLog('EXTEND_SERIES', adminId, `Extended series "${template.title}" to ${newUntil}: ${starts.length} new dates`, editedId);
+    return starts.length;
+}
+
+/** Stored dates of a series with `id`, sorted by start. */
+async function loadSeriesDates(seriesId) {
+    const snapshot = await getDocs(collection(db, 'events'));
+    return snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }))
+        .filter(event => event.seriesId === seriesId)
+        .sort((a, b) => (a.startDate || '').localeCompare(b.startDate || ''));
+}
+
+/**
+ * Save a date of a series, optionally with the following dates, and extend
+ * the series (W-11). Runs under the series lock.
+ *
+ * @param {Object} params -> `{ eventId, stored, body, applyTo, adminId }`.
+ * @returns {Promise<Object>} -> `{ status, body }` for the answer.
+ */
+async function saveSeriesDate({ eventId, stored, body, applyTo, adminId }) {
+    const all = await loadSeriesDates(stored.seriesId);
+    const plan = planExtension({
+        seriesEvents: all, interval: stored.recurringInterval, oldUntil: stored.recurringUntil || '',
+        newUntil: typeof body.recurringUntil === 'string' ? body.recurringUntil : '', timeZone: SERIES_TIMEZONE
+    });
+    if (plan.error) return { status: 400, body: { error: plan.error } };
+
+    const following = applyTo === 'following' ? followingDates(all, { id: eventId, ...stored }) : [];
+    const slotError = await checkFollowingSlots(body.slots, following);
+    if (slotError) return { status: 400, body: { error: slotError } };
+
+    const saved = await saveEventWithSlots(eventId, body.slots, (slots, oldEvent) => buildEventUpdates(body, slots, oldEvent));
+    if (!saved.ok) return { status: 400, body: { error: saved.error } };
+    await addAuditLog('UPDATE_EVENT', adminId, `Updated event "${body.title}"`, eventId);
+    const savedDates = [{ eventId, oldEvent: saved.oldEvent, updates: saved.updates }];
+
+    // A registration can land in a removed slot after the check -> the dates saved so far stay
+    let conflict = null;
+    for (const date of following) {
+        const result = await saveEventWithSlots(date.id, slotsForDate(body.slots, getSlots(date)),
+            (slots, oldEvent) => buildFollowingUpdates(saved.updates, slots, oldEvent));
+        if (!result.ok) {
+            const lastSaved = savedDates.at(-1).updates.startDate;
+            conflict = `Die Änderung wurde bis zum ${seriesDayLabel(lastSaved)} übernommen; der Termin ${seriesDayLabel(date.startDate)} hat inzwischen Anmeldungen in einem entfernten Slot.`;
+            break;
+        }
+        savedDates.push({ eventId: date.id, oldEvent: result.oldEvent, updates: result.updates });
+    }
+    const updatedDates = savedDates.length - 1;
+    if (updatedDates > 0) {
+        await addAuditLog('UPDATE_SERIES', adminId, `Applied changes of "${saved.updates.title}" to ${updatedDates} following dates`, eventId);
+    }
+
+    let notifiedCount = 0;
+    for (const date of savedDates) {
+        notifiedCount += await applySavedEvent({ ...date, notify: body.notifyParticipants === true, adminId });
+    }
+    // A replaced or cleared upload is deleted once no other event uses it (W-12)
+    await releaseBanners(savedDates.filter(date => date.oldEvent.bannerUrl !== date.updates.bannerUrl).map(date => date.oldEvent.bannerUrl));
+    if (conflict) return { status: 409, body: { error: conflict } };
+
+    const createdDates = plan.starts.length > 0
+        ? await extendSeries({ seriesId: stored.seriesId, editedId: eventId, starts: plan.starts, newUntil: body.recurringUntil, adminId })
+        : 0;
+    const recurringUntil = createdDates > 0 ? body.recurringUntil : saved.updates.recurringUntil;
+    return { status: 200, body: { id: eventId, ...saved.updates, recurringUntil, notifiedCount, updatedDates, createdDates } };
+}
+
+/**
+ * PUT /api/admin/events/:id — Update event; for a date of a series optionally
+ * with all following dates (`applyTo: 'following'`) and an extension (W-11)
  */
 router.put('/events/:id', validateEvent, async (req, res) => {
     try {
-        const {
-            title, description, maxParticipants, accessMode, requiredRoles,
-            approvalMode, assignRoleId, formFields,
-            startDate, endDate, bannerUrl, category, status, reminderHours, checkinMessage,
-            customBotMessages, autoCreateChannels, channelConfig, allowGuests,
-            accentColor, location, registrationDeadline, unregisterDeadline
-        } = req.body;
+        const adminId = req.session.user.id;
+        const storedSnap = await getDoc(doc(db, 'events', req.params.id));
+        const stored = storedSnap.exists() ? storedSnap.data() : {};
+        if (stored.seriesId) {
+            const applyTo = req.body.applyTo === 'following' ? 'following' : 'this';
+            const result = await withEventLock(`series:${stored.seriesId}`,
+                () => saveSeriesDate({ eventId: req.params.id, stored, body: req.body, applyTo, adminId }));
+            return res.status(result.status).json(result.body);
+        }
 
         // Slots are validated and written under the event lock -> a parallel
         // registration cannot land in a slot that is being removed
-        const saved = await saveEventWithSlots(req.params.id, req.body.slots, (slots, oldEvent) => ({
-            title,
-            description,
-            maxParticipants: slots.length > 0 ? sumCapacity(slots) : (parseInt(maxParticipants) || 0),
-            accessMode: accessMode || 'open',
-            requiredRoles: requiredRoles || [],
-            approvalMode: approvalMode || 'manual',
-            assignRoleId: assignRoleId || '',
-            formFields: formFields || [],
-            startDate: startDate || '',
-            endDate: endDate || '',
-            registrationDeadline: registrationDeadline || '',
-            unregisterDeadline: unregisterDeadline || '',
-            // A moved deadline lets the scheduler refresh the announcement again (W-03)
-            registrationClosedRefreshed: keepDeadlineRefreshFlag(oldEvent, registrationDeadline || ''),
-            bannerUrl: bannerUrl || '',
-            category: category || '',
-            status: status || 'active',
-            // Same start -> reminders already sent stay sent, editing must not send them again
-            reminderHours: mergeReminderHours(reminderHours, oldEvent, startDate || ''),
-            checkinMessage: checkinMessage || '',
-            customBotMessages: customBotMessages || {},
-            autoCreateChannels: !!autoCreateChannels,
-            channelConfig: channelConfig || {},
-            allowGuests: slots.length > 0 ? false : allowGuests !== false,
-            slots,
-            sourcePollId: oldEvent.sourcePollId || '',
-            accentColor: accentColor || '',
-            location: location || null,
-            recurring: !!req.body.recurring,
-            recurringInterval: req.body.recurringInterval || '',
-            recurringUntil: req.body.recurringUntil || '',
-            updatedAt: new Date().toISOString()
-        }));
+        const saved = await saveEventWithSlots(req.params.id, req.body.slots, (slots, oldEvent) => buildEventUpdates(req.body, slots, oldEvent));
         if (!saved.ok) {
             return res.status(400).json({ error: saved.error });
         }
         const { oldEvent, updates } = saved;
-        await addAuditLog('UPDATE_EVENT', req.session.user.id, `Updated event "${title}"`, req.params.id);
+        await addAuditLog('UPDATE_EVENT', adminId, `Updated event "${updates.title}"`, req.params.id);
         // A replaced or cleared upload is deleted once no other event uses it (W-12)
         if (oldEvent.bannerUrl && oldEvent.bannerUrl !== updates.bannerUrl) await releaseBanners([oldEvent.bannerUrl]);
 
-        const isNowActive = updates.status === 'active';
-        const wasActive = oldEvent.status === 'active';
-
-        if (updates.autoCreateChannels && isNowActive && (!oldEvent.autoCreateChannels || !wasActive)) {
-            createEventChannels({ id: req.params.id, ...updates }).catch(console.error);
-        } else if ((oldEvent.autoCreateChannels && wasActive) && (!updates.autoCreateChannels || !isNowActive)) {
-            deleteEventChannels(req.params.id).catch(console.error);
-        }
-
-        // More places or new slots can let waitlisted members move up
-        await promoteFromWaitlist(req.params.id, { ...oldEvent, ...updates });
-        notifyRegistrationsChanged(req.params.id);
-
-        // Change DM only on the admin's explicit request (W-04); the flag itself is never stored
-        let notifiedCount = 0;
-        const changes = describeEventChanges(oldEvent, updates);
-        if (req.body.notifyParticipants === true && updates.status === 'active' && changes.length > 0) {
-            const { recipients, notified, optedOut } = await notifyEventChange({ eventId: req.params.id, title: updates.title, changes });
-            notifiedCount = notified;
-            if (recipients + optedOut > 0) {
-                const changed = changes.map(change => change.label).join(', ');
-                await addAuditLog('NOTIFY_EVENT_CHANGE', req.session.user.id,
-                    `Notified ${notified} of ${recipients} participants about changed ${changed}${optedOutNote(optedOut)}`, req.params.id);
-            }
-        }
-        res.json({ id: req.params.id, ...updates, notifiedCount });
+        const notifiedCount = await applySavedEvent({
+            eventId: req.params.id, oldEvent, updates, notify: req.body.notifyParticipants === true, adminId
+        });
+        res.json({ id: req.params.id, ...updates, notifiedCount, updatedDates: 0, createdDates: 0 });
     } catch (err) {
         console.error('Update event error:', err);
         res.status(500).json({ error: 'Fehler beim Aktualisieren' });

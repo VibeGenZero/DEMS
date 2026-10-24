@@ -1,7 +1,8 @@
 /**
  * Event wizard: steps with their checks, create/edit/save, roles.
  * Location field: wizard-location.js; rules: wizard-checks.js; marks: wizard-marks.js;
- * switch "Teilnehmer benachrichtigen": wizard-notify.js; banner upload: wizard-banner.js.
+ * switch "Teilnehmer benachrichtigen": wizard-notify.js; banner upload: wizard-banner.js;
+ * series dates (scope choice, locked repeat fields, toast): wizard-series.js.
  */
 import { state } from '../core/state.js';
 import { glideTabs } from '../core/tab-glider.js';
@@ -10,6 +11,7 @@ import { addFormField, getFormFieldsFromBuilder, getSlotsFromEditor, renderSlotE
 import { checkWizardStep } from './wizard-checks.js';
 import { clearAllMarks, showStepErrors } from './wizard-marks.js';
 import { notifyRequested, rememberLoadedEvent, updateNotifySwitch } from './wizard-notify.js';
+import { rememberSeries, savedEventToast, seriesScope, storedRecurringUntil, updateSeriesScope } from './wizard-series.js';
 import { cancelWizardPreview, renderWizardPreview } from './wizard-preview.js';
 import { updateBannerPreview } from './wizard-banner.js';
 import { navigateTo } from '../core/router.js';
@@ -72,6 +74,7 @@ export function wizardGoTo(step) {
     toggleElement(document.getElementById('wizard-btn-next'), step < WIZARD_TOTAL_STEPS);
     toggleElement(document.getElementById('wizard-btn-save'), step === WIZARD_TOTAL_STEPS);
     updateNotifySwitch(step === WIZARD_TOTAL_STEPS ? collectEventDraft() : null);
+    updateSeriesScope(step === WIZARD_TOTAL_STEPS);
     document.getElementById('wizard-step-counter').textContent = `Schritt ${step} von ${WIZARD_TOTAL_STEPS}`;
 
     // Refresh EasyMDE when returning to step 1
@@ -164,6 +167,7 @@ export function reminderHoursOf(value) {
 export async function showCreateEventModal() {
     state.pendingPollDecision = null;
     rememberLoadedEvent(null);
+    await rememberSeries(null);
     document.getElementById('eventModalTitle').textContent = 'Neues Event erstellen';
     document.getElementById('event-edit-id').value = '';
     document.getElementById('event-title').value = '';
@@ -312,6 +316,7 @@ export async function editEvent(eventId) {
         toggleElement(document.getElementById('recurring-options'), event.recurring);
         document.getElementById('event-recurring-interval').value = event.recurringInterval || 'weekly';
         document.getElementById('event-recurring-until').value = event.recurringUntil || '';
+        await rememberSeries(event);
 
         await loadRoles();
 
@@ -385,6 +390,8 @@ export function collectEventDraft() {
         recurring: document.getElementById('event-recurring').checked,
         recurringInterval: document.getElementById('event-recurring-interval').value,
         recurringUntil: document.getElementById('event-recurring-until').value,
+        // Only for the check: a series date cannot get an earlier end (W-11)
+        storedRecurringUntil: storedRecurringUntil(),
         checkinMessage: document.getElementById('event-checkin-message').value,
         autoCreateChannels: document.getElementById('event-auto-create-channels').checked,
         channelConfig: {
@@ -411,6 +418,17 @@ export function collectEventDraft() {
             };
         })(),
     };
+}
+
+/**
+ * Body of PUT /api/admin/events/:id.
+ *
+ * @param {Object} draft -> Input of collectEventDraft().
+ * @returns {Object} -> Draft with the notification flag and, for a series date, `applyTo`.
+ */
+function editBody(draft) {
+    const scope = seriesScope();
+    return { ...draft, notifyParticipants: notifyRequested(), ...(scope ? { applyTo: scope } : {}) };
 }
 
 export async function saveEvent() {
@@ -442,15 +460,14 @@ export async function saveEvent() {
                 'Content-Type': 'application/json',
                 'X-CSRF-TOKEN': state.csrfToken
             },
-            // Change DMs only on request and only for edits (W-04)
-            body: JSON.stringify(editId ? { ...draft, notifyParticipants: notifyRequested() } : draft)
+            // Change DMs only on request and only for edits (W-04); series dates send their scope (W-11)
+            body: JSON.stringify(editId ? editBody(draft) : draft)
         });
 
         if (res.ok) {
-            const { notifiedCount } = await res.json();
+            const answer = await res.json();
             bootstrap.Modal.getOrCreateInstance(document.getElementById('eventModal')).hide();
-            const notified = notifiedCount > 0 ? ` – ${notifiedCount} Teilnehmer benachrichtigt.` : '!';
-            showToast(editId ? `Event aktualisiert${notified}` : 'Event erstellt!', 'success');
+            showToast(editId ? savedEventToast(answer) : 'Event erstellt!', 'success');
             loadAdminEvents();
             loadAdminStats();
             if (!editId && state.pendingPollDecision) {

@@ -77,6 +77,7 @@ sources: [scripts/wiki-graph.js, docs/wiki/graph.json, CLAUDE.md]
 | `utils/participantMessage.js` | utils, routes-admin, discord-integration |
 | `utils/bannerStore.js` | utils, routes-admin, data-model, security, bot |
 | `utils/bulkRegistrations.js` | utils, routes-admin, registration-flow |
+| `utils/eventSeries.js` | utils, routes-admin, event-lifecycle |
 | `utils/eventUtils.js`, `utils/eventListing.js`, `utils/profileEvents.js`, `utils/userProfile.js`, `utils/avatar.js`, `utils/botPermissions.js`, `utils/csv.js`, `utils/template.js`, `utils/sessionStore.js`, `utils/debugLog.js` | utils |
 | `utils/reminders.js` | utils, reminders-presence |
 | `public/js/**`, `public/theme-boot.js` | frontend-app |
