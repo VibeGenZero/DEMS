@@ -2,15 +2,15 @@
 id: utils
 title: utils/ — domain helpers
 type: module
-tags: [utils, registration, form-fields, waitlist, audit-log, profile, debug, change-notice]
-sources: [utils/registrationService.js, utils/formFields.js, utils/eventUtils.js, utils/eventListing.js, utils/profileEvents.js, utils/eventUrl.js, utils/userProfile.js, utils/avatar.js, utils/botPermissions.js, utils/csv.js, utils/template.js, utils/sessionStore.js, utils/reminders.js, utils/debugLog.js, utils/capacity.js, utils/slotService.js, utils/eventLock.js, utils/announcementRefresh.js, utils/pollService.js, utils/pollStore.js, utils/eventPreview.js, utils/eventArchive.js, utils/eventChangeNotice.js, utils/notificationPrefs.js, utils/memberOverview.js, utils/insights.js, utils/participantMessage.js]
+tags: [utils, registration, form-fields, waitlist, audit-log, profile, debug, change-notice, banner]
+sources: [utils/registrationService.js, utils/formFields.js, utils/eventUtils.js, utils/eventListing.js, utils/profileEvents.js, utils/eventUrl.js, utils/userProfile.js, utils/avatar.js, utils/botPermissions.js, utils/csv.js, utils/template.js, utils/sessionStore.js, utils/reminders.js, utils/debugLog.js, utils/capacity.js, utils/slotService.js, utils/eventLock.js, utils/announcementRefresh.js, utils/pollService.js, utils/pollStore.js, utils/eventPreview.js, utils/eventArchive.js, utils/eventChangeNotice.js, utils/notificationPrefs.js, utils/memberOverview.js, utils/insights.js, utils/participantMessage.js, utils/bannerStore.js]
 part_of: [architecture]
 depends_on: [data-layer, bot]
 see_also: [registration-flow, form-fields, role-slots]
 ---
 # utils/ — domain helpers
 
-> TL;DR: Shared domain logic used by routes and the bot: `registrationService.js` (the single source of truth for creating registrations), `formFields.js` (field types and answer format), `eventUtils.js` (loading registrations/line-ups, waitlist promotion, audit log), `capacity.js` and `slotService.js` (pure place and slot rules), `eventLock.js` (per-event lock), `announcementRefresh.js` (debounced live announcements), `eventUrl.js` (links to event pages), `eventChangeNotice.js` (change DMs after an edit, W-04), `notificationPrefs.js` (which DMs a member wants, W-16), `profileEvents.js` (upcoming and history lists of the profile), `memberOverview.js` (numbers and history of the admin member overview, W-15), `insights.js` (evaluations for admins, W-14), `participantMessage.js` (message of the team to the participants, W-09), `userProfile.js` (users upsert after login) and `debugLog.js` (`DEBUG_MODE` logger).
+> TL;DR: Shared domain logic used by routes and the bot: `registrationService.js` (the single source of truth for creating registrations), `formFields.js` (field types and answer format), `eventUtils.js` (loading registrations/line-ups, waitlist promotion, audit log), `capacity.js` and `slotService.js` (pure place and slot rules), `eventLock.js` (per-event lock), `announcementRefresh.js` (debounced live announcements), `eventUrl.js` (links to event pages), `eventChangeNotice.js` (change DMs after an edit, W-04), `notificationPrefs.js` (which DMs a member wants, W-16), `profileEvents.js` (upcoming and history lists of the profile), `memberOverview.js` (numbers and history of the admin member overview, W-15), `insights.js` (evaluations for admins, W-14), `participantMessage.js` (message of the team to the participants, W-09), `bannerStore.js` (uploaded banners, W-12), `userProfile.js` (users upsert after login) and `debugLog.js` (`DEBUG_MODE` logger).
 
 ## utils/registrationService.js
 
@@ -172,6 +172,22 @@ Pure rules for `event.reminderHours` (see [reminders-presence](../concepts/remin
 ## utils/eventPreview.js (pure)
 
 `buildPreviewEvent(body)` → the fields the overview card and the Discord announcement need, from the wizard draft: `title` (≤ 200), `description` (≤ 5000), dates, `bannerUrl` only as an http(s) URL (discord.js refuses anything else in `setImage`), `category`, `status`/`accessMode` with the defaults of `POST /events`, `formFields` with a label, `accentColor` only as hex, slots via `normalizeSlots` (none when they are broken), `maxParticipants` = slot sum or the number, guests off with slots. Used by `POST /api/admin/events/preview`.
+
+## utils/bannerStore.js (W-12)
+
+Uploaded event banners as files in `<UPLOAD_DIR>/banners/` (default `data/uploads`); the event stores only the path `/uploads/banners/<uuid>.<ext>`.
+
+| Export | Behaviour |
+|---|---|
+| `BANNER_PATH`, `BANNER_FILE` | regex of an upload path / of a file name; the frontend copy of `BANNER_PATH` in `public/js/core/ui.js` is pinned by `test/bannerStore.test.js` |
+| `MAX_BANNER_BYTES`, `ALLOWED_TYPES` | 5 MB; `png`, `jpg`, `gif`, `webp` (never SVG) |
+| `bannerDir()` | folder of the files, read from `UPLOAD_DIR` on every call |
+| `detectImageType(buffer)` | type from the magic bytes, else `null` — the declared content type is never trusted |
+| `isBannerPath(value)` / `isStoredBanner(value)` | pattern only / pattern and the file exists (used by `validateEvent`) |
+| `saveBanner(buffer, type)` | writes `<uuid>.<ext>` via a temp name + rename → upload path |
+| `bannerForDiscord(bannerUrl)` | `{}`, `{ url }` (external) or `{ url: BASE_URL + path, file }` (upload whose file exists) |
+| `releaseBanners(values)` | deletes each upload path no stored event uses anymore (reads all events once); ignores external URLs; never throws |
+| `sweepOrphanBanners({ maxAgeMs, now })` | startup clean-up: deletes unused files older than `maxAgeMs` (24 h) → count |
 
 ## utils/debugLog.js
 

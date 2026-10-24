@@ -1123,11 +1123,18 @@
                   placeholder="Beschreibe das Event..."></textarea>
               </div>
               <div class="mb-3">
-                <label class="form-label" for="event-banner-url"><i class="bi bi-image me-1"></i>Banner-URL</label>
-                <input type="url" class="form-control" id="event-banner-url"
-                  placeholder="https://example.com/banner.jpg">
+                <label class="form-label" for="event-banner-url"><i class="bi bi-image me-1"></i>Banner</label>
+                <div class="input-group">
+                  <input type="text" inputmode="url" class="form-control" id="event-banner-url"
+                    placeholder="https://example.com/banner.jpg" data-input="updateBannerPreview">
+                  <button type="button" class="btn btn-outline-danger is-hidden" id="event-banner-clear" data-click="clearBanner"
+                    aria-label="Banner entfernen" title="Banner entfernen"><i class="bi bi-x-lg"></i></button>
+                  <button type="button" class="btn btn-outline-secondary" id="event-banner-upload" data-click="pickBannerFile"><i class="bi bi-upload me-1"></i>Bild hochladen</button>
+                </div>
+                <input type="file" class="is-hidden" id="event-banner-file" accept="image/png,image/jpeg,image/webp,image/gif"
+                  data-change="uploadBanner" aria-label="Banner-Bild auswählen">
                 <div class="invalid-feedback" id="event-banner-url-feedback"></div>
-                <small class="text-muted">Direkte URL zu einem Banner-Bild (z.B. Imgur, Discord CDN)</small>
+                <small class="text-muted">Bild hochladen (PNG, JPEG, WebP, GIF, max. 5 MB) oder direkte URL eintragen</small>
                 <div class="mt-2 is-hidden" id="banner-preview-container">
                   <img id="banner-preview" class="banner-preview" src="" alt="Banner Vorschau">
                 </div>

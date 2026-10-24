@@ -9,7 +9,7 @@ see_also: [deployment, dev-mock-mode]
 ---
 # Docker — image, stages, compose files
 
-> TL;DR: Multi-stage `Dockerfile` on `node:24-bookworm-slim`: `runtime` (default, production: non-root `node` user, `NODE_ENV=production`, SQLite on volume `/app/data`, healthcheck `GET /healthz`) and `dev` (all deps, nodemon polling, used by `compose.dev.yaml`). `compose.yaml` runs production from `.env`; `compose.dev.yaml` runs the dev mock mode with the source bind-mounted.
+> TL;DR: Multi-stage `Dockerfile` on `node:24-bookworm-slim`: `runtime` (default, production: non-root `node` user, `NODE_ENV=production`, SQLite and uploaded banners (`/app/data/uploads`, W-12) on volume `/app/data`, healthcheck `GET /healthz`) and `dev` (all deps, nodemon polling, used by `compose.dev.yaml`). `compose.yaml` runs production from `.env`; `compose.dev.yaml` runs the dev mock mode with the source bind-mounted.
 
 ## Dockerfile stages
 

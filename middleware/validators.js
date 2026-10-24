@@ -4,6 +4,7 @@
  */
 
 const { parseDate, eventEndTime } = require('../utils/eventListing');
+const { isStoredBanner } = require('../utils/bannerStore');
 
 /**
  * Whether a value is an absolute http(s) URL of at most 2000 characters.
@@ -23,7 +24,7 @@ function isHttpUrl(value) {
 /**
  * Validate event creation/update body
  */
-function validateEvent(req, res, next) {
+async function validateEvent(req, res, next) {
     const { title, maxParticipants, accessMode, status, approvalMode } = req.body;
 
     const errors = [];
@@ -86,10 +87,11 @@ function validateEvent(req, res, next) {
         errors.push('Beschreibung darf maximal 5000 Zeichen lang sein.');
     }
 
-    // Banner and colour end up in <img src> and inline CSS -> only http(s) URLs and hex colours
+    // Banner and colour end up in <img src> and inline CSS -> only http(s) URLs,
+    // uploaded banners whose file exists (W-12) and hex colours
     const { bannerUrl, accentColor } = req.body;
-    if (bannerUrl && !isHttpUrl(bannerUrl)) {
-        errors.push('Banner-URL muss mit http:// oder https:// beginnen.');
+    if (bannerUrl && !isHttpUrl(bannerUrl) && !(await isStoredBanner(bannerUrl))) {
+        errors.push('Banner muss eine http(s)-URL oder ein hochgeladenes Bild sein.');
     }
     if (accentColor && !(typeof accentColor === 'string' && /^#(?:[0-9a-fA-F]{3}){1,2}$/.test(accentColor))) {
         errors.push('Akzentfarbe muss ein Hex-Farbwert wie #8b5cf6 sein.');

@@ -31,8 +31,10 @@ test('a valid draft passes every step', async () => {
 test('step 1 wants a title and an http(s) banner', async () => {
     const check = await checker();
     assert.deepEqual(check(1, { title: '   ' }), [{ field: 'title', message: 'Bitte einen Titel eingeben.' }]);
-    assert.deepEqual(check(1, { bannerUrl: 'ftp://example.com/a.png' }), [{ field: 'bannerUrl', message: 'Die Banner-URL muss mit http:// oder https:// beginnen.' }]);
+    assert.deepEqual(check(1, { bannerUrl: 'ftp://example.com/a.png' }), [{ field: 'bannerUrl', message: 'Die Banner-URL muss mit http:// oder https:// beginnen oder ein hochgeladenes Bild sein.' }]);
+    assert.deepEqual(check(1, { bannerUrl: '/relative.png' }).map(item => item.field), ['bannerUrl']);
     assert.deepEqual(check(1, { bannerUrl: 'HTTPS://example.com/a.png' }), []);
+    assert.deepEqual(check(1, { bannerUrl: '/uploads/banners/0f8fad5b-d9cb-469f-a165-70867728950e.png' }), [], 'uploaded banner (W-12)');
 });
 
 test('step 2: an active event needs a start, a draft does not; the end cannot come first', async () => {

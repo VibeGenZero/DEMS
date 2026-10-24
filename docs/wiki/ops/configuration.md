@@ -23,6 +23,7 @@ see_also: [docker, deployment, dev-mock-mode]
 | `SERVER_NAME` | no | Discord guild name / `DEMS` | name shown in the UI (`/api/server-info`) |
 | `FIREBASE_API_KEY`, `_AUTH_DOMAIN`, `_PROJECT_ID`, `_STORAGE_BUCKET`, `_MESSAGING_SENDER_ID`, `_APP_ID` | all or none | — | all six → Firestore; none → SQLite; partial → exit 1 |
 | `SQLITE_PATH` | no | `./data/dems.sqlite` | SQLite file (Docker: `/app/data/dems.sqlite`) |
+| `UPLOAD_DIR` | no | `./data/uploads` | folder of uploaded banners (`banners/` below it, W-12); in Docker `/app/data/uploads` on the data volume. Also used with Firestore — the files always live on the local disk, so a host without a persistent disk loses them on redeploy |
 | `PORT` | no | `3000` | HTTP port (fixed to 3000 inside containers) |
 | `TIMEZONE` | no | `Europe/Berlin` | date formatting in bot messages |
 | `DEBUG_MODE` | no | `false` | verbose request/Firestore/bot logging + `#debug` UI section; never in production |
@@ -31,6 +32,7 @@ see_also: [docker, deployment, dev-mock-mode]
 | `DEMS_PORT` | no | `3000` | host port in `compose.yaml` |
 | `DEV_MOCK` | no | — | dev mock mode (set automatically by `npm run dev:mock`) |
 | `DEV_SQLITE_PATH` | no | `data/dems.dev.sqlite` | database of the dev mock mode |
+| `DEV_UPLOAD_DIR` | no | `data/dev-uploads` | banner folder of the dev mock mode (becomes `UPLOAD_DIR`) |
 | `DEMS_DEV_PORT` | no | `3000` | host port in `compose.dev.yaml` |
 
 ## Rules

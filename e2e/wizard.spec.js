@@ -111,3 +111,35 @@ test('a new location offers "Teilnehmer benachrichtigen" and the save tells how 
     await expect(page.locator('#toast-message')).toHaveText(/^Event aktualisiert – \d+ Teilnehmer benachrichtigt\.$/);
     expect(errors).toEqual([]);
 });
+
+// 1x1 PNG, so the browser can draw the preview
+const TINY_PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==', 'base64');
+
+test('an admin uploads a banner in the wizard and the event page shows it (W-12)', async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== 'desktop', 'the wizard is the same on the phone');
+    const errors = watchErrors(page);
+    await loginAs(page, 'admin');
+    await openWizard(page);
+
+    await page.locator('#event-title').fill('E2E-Bannerabend');
+    await page.locator('#event-banner-file').setInputFiles({ name: 'banner.png', mimeType: 'image/png', buffer: TINY_PNG });
+    await expect(page.locator('#toast-message')).toHaveText('Banner hochgeladen.');
+    await expect(page.locator('#event-banner-url')).toHaveValue(/^\/uploads\/banners\/[0-9a-f-]{36}\.png$/);
+    await expect(page.locator('#banner-preview')).toBeVisible();
+    await expect(page.locator('#event-banner-clear')).toBeVisible();
+    const bannerUrl = await page.locator('#event-banner-url').inputValue();
+
+    // A draft needs no start date
+    await page.locator('#eventModal [data-click="wizardGoTo"][data-step="2"]').click();
+    await page.locator('#event-status').selectOption('draft');
+    const saved = page.waitForResponse(res => res.url().endsWith('/api/admin/events') && res.request().method() === 'POST');
+    await page.locator('#eventModal [data-click="wizardGoTo"][data-step="5"]').click();
+    await page.locator('#wizard-btn-save').click();
+    const { id } = await (await saved).json();
+    await expect(page.locator('#eventModal')).toBeHidden();
+
+    await page.goto(`/#event/${id}`);
+    await expect(page.locator('.event-detail-banner-img')).toHaveAttribute('src', bannerUrl);
+    await expect(page.locator('.event-detail-banner-img')).toBeVisible();
+    expect(errors).toEqual([]);
+});

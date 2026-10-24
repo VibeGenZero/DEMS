@@ -12,6 +12,7 @@ const { IS_MOCK_MODE } = require('./dev/mockMode');
 const { db, collection, doc, getDoc, getDocs, addDoc, setDoc, updateDoc, deleteDoc, query, where, orderBy } = require('./firebaseAdmin');
 const { debugLog } = require('./utils/debugLog');
 const { buildEventUrl, buildPollUrl } = require('./utils/eventUrl');
+const { bannerForDiscord } = require('./utils/bannerStore');
 const { buildBotInviteUrl } = require('./utils/botPermissions');
 const { parseTemplate } = require('./utils/template');
 const { normalizeReminderHours, findDueReminders } = require('./utils/reminders');
@@ -643,8 +644,10 @@ function buildEventEmbed(event, registrationLink, roster) {
         embed.addFields({ name: '⏳ Warteliste', value: String(roster.waitlistCount), inline: true });
     }
 
-    if (event.bannerUrl) {
-        embed.setImage(event.bannerUrl);
+    // External URL as is; an uploaded banner (W-12) as BASE_URL + path
+    const banner = bannerForDiscord(event.bannerUrl);
+    if (banner.url) {
+        embed.setImage(banner.url);
     }
 
     if (event.category) {
@@ -2494,10 +2497,12 @@ async function createScheduledEvent(event) {
             reason: 'DEMS Sync'
         });
 
-        // Set Image (if URL valid and image supported format)
-        if (event.bannerUrl) {
+        // Set Image: an uploaded banner (W-12) as the file itself, so it works
+        // without a public BASE_URL; an external one as its URL
+        const banner = bannerForDiscord(event.bannerUrl);
+        if (banner.file || banner.url) {
             try {
-                await scheduledEvent.setImage(event.bannerUrl);
+                await scheduledEvent.setImage(banner.file || banner.url);
             } catch (e) {
                 console.warn('Could not set banner image for scheduled event:', e.message);
             }

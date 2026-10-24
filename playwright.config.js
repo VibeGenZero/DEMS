@@ -30,7 +30,13 @@ module.exports = defineConfig({
         command: 'node dev/start.js',
         url: `http://localhost:${PORT}/healthz`,
         // DEBUG_MODE shows the styleguide (#debug), which e2e/styleguide.spec.js walks through
-        env: { PORT: String(PORT), DEV_SQLITE_PATH: path.join(os.tmpdir(), `dems-e2e-${Date.now()}.sqlite`), DEBUG_MODE: 'true' },
+        // Own upload folder as well -> banner uploads never land in data/dev-uploads (W-12)
+        env: {
+            PORT: String(PORT),
+            DEV_SQLITE_PATH: path.join(os.tmpdir(), `dems-e2e-${Date.now()}.sqlite`),
+            DEV_UPLOAD_DIR: path.join(os.tmpdir(), `dems-e2e-uploads-${Date.now()}`),
+            DEBUG_MODE: 'true'
+        },
         reuseExistingServer: false,
         timeout: 60_000
     }

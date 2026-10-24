@@ -10,7 +10,7 @@ const PRINT_ENV = `
     const { IS_MOCK_MODE } = require(${repoPath('dev/mockMode')});
     const keys = ['SQLITE_PATH', 'FIREBASE_API_KEY', 'FIREBASE_APP_ID', 'DISCORD_BOT_TOKEN',
         'DISCORD_GUILD_ID', 'DISCORD_ADMIN_ROLE_ID', 'DISCORD_ANNOUNCE_CHANNEL_ID',
-        'DISCORD_EVENT_CATEGORY_ID', 'BASE_URL', 'SESSION_SECRET', 'ADMIN_RESET_PASSWORD'];
+        'DISCORD_EVENT_CATEGORY_ID', 'BASE_URL', 'SESSION_SECRET', 'ADMIN_RESET_PASSWORD', 'UPLOAD_DIR'];
     console.log(JSON.stringify({ IS_MOCK_MODE, env: Object.fromEntries(keys.map(k => [k, process.env[k]])) }));
 `;
 
@@ -36,6 +36,8 @@ test('forces the mock environment and ignores real credentials', () => {
     assert.equal(IS_MOCK_MODE, true);
     assert.ok(path.isAbsolute(env.SQLITE_PATH));
     assert.ok(env.SQLITE_PATH.endsWith(path.join('data', 'dems.dev.sqlite')));
+    assert.ok(path.isAbsolute(env.UPLOAD_DIR));
+    assert.ok(env.UPLOAD_DIR.endsWith(path.join('data', 'dev-uploads')), env.UPLOAD_DIR);
     assert.equal(env.FIREBASE_API_KEY, '');
     assert.equal(env.FIREBASE_APP_ID, '');
     assert.equal(env.DISCORD_BOT_TOKEN, '');
@@ -48,11 +50,13 @@ test('forces the mock environment and ignores real credentials', () => {
     assert.equal(env.ADMIN_RESET_PASSWORD, 'dev');
 });
 
-test('keeps an own session secret, reset password and dev database path', () => {
+test('keeps an own session secret, reset password, dev database path and upload folder', () => {
     const customDb = path.join(os.tmpdir(), 'dems-custom-dev.sqlite');
+    const customUploads = path.join(os.tmpdir(), 'dems-custom-uploads');
     const result = runNode(PRINT_ENV, {
         DEV_MOCK: 'true',
         DEV_SQLITE_PATH: customDb,
+        DEV_UPLOAD_DIR: customUploads,
         SESSION_SECRET: 'my-secret',
         ADMIN_RESET_PASSWORD: 'my-password'
     });
@@ -60,6 +64,7 @@ test('keeps an own session secret, reset password and dev database path', () => 
 
     const { env } = parseLastLine(result.stdout);
     assert.equal(env.SQLITE_PATH, customDb);
+    assert.equal(env.UPLOAD_DIR, customUploads);
     assert.equal(env.SESSION_SECRET, 'my-secret');
     assert.equal(env.ADMIN_RESET_PASSWORD, 'my-password');
 });
@@ -73,6 +78,7 @@ test('changes nothing without DEV_MOCK', () => {
     assert.equal(env.FIREBASE_API_KEY, 'real-key');
     assert.equal(env.DISCORD_GUILD_ID, '999');
     assert.equal(env.SQLITE_PATH, undefined);
+    assert.equal(env.UPLOAD_DIR, undefined);
 });
 
 test('dev/start.js refuses to start in production', () => {

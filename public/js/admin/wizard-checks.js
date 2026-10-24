@@ -20,7 +20,7 @@ export const STEP_FIELDS = {
 
 export const WIZARD_MESSAGES = {
     title: 'Bitte einen Titel eingeben.',
-    bannerUrl: 'Die Banner-URL muss mit http:// oder https:// beginnen.',
+    bannerUrl: 'Die Banner-URL muss mit http:// oder https:// beginnen oder ein hochgeladenes Bild sein.',
     startRequired: 'Aktive Events brauchen ein Startdatum.',
     endBeforeStart: 'Das Ende liegt vor dem Start.',
     registrationDeadlineAfterEnd: 'Der Anmeldeschluss liegt nach dem Ende des Events.',
@@ -42,6 +42,8 @@ export const WIZARD_MESSAGES = {
 // Without an end date an event lasts two hours (eventEndTime in utils/eventListing.js)
 const DEFAULT_DURATION_MS = 2 * 60 * 60 * 1000;
 const HTTP_URL = /^https?:\/\//i;
+// Uploaded banner (W-12); same pattern as BANNER_PATH in utils/bannerStore.js (test/bannerStore.test.js)
+const UPLOADED_BANNER = /^\/uploads\/banners\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(png|jpg|gif|webp)$/;
 const WHOLE_NUMBER = /^\d+$/;
 
 /**
@@ -59,7 +61,7 @@ function dateOf(value) {
 function checkBasics(draft, add) {
     if (!String(draft.title ?? '').trim()) add('title', WIZARD_MESSAGES.title);
     const banner = String(draft.bannerUrl ?? '').trim();
-    if (banner && !HTTP_URL.test(banner)) add('bannerUrl', WIZARD_MESSAGES.bannerUrl);
+    if (banner && !HTTP_URL.test(banner) && !UPLOADED_BANNER.test(banner)) add('bannerUrl', WIZARD_MESSAGES.bannerUrl);
 }
 
 function checkDates(draft, add) {

@@ -16,7 +16,7 @@ see_also: [run-and-debug, testing, docker]
 
 | File | Role |
 |---|---|
-| `dev/mockMode.js` | switch `IS_MOCK_MODE`; production guard (exit 1); forces env: `SQLITE_PATH` = `DEV_SQLITE_PATH` or `data/dems.dev.sqlite`, blank `FIREBASE_*` + bot token, mock guild/admin role/announce channel ids, `BASE_URL=http://localhost:<PORT>`; defaults `SESSION_SECRET=dems-dev-mock-secret`, `ADMIN_RESET_PASSWORD=dev` |
+| `dev/mockMode.js` | switch `IS_MOCK_MODE`; production guard (exit 1); forces env: `SQLITE_PATH` = `DEV_SQLITE_PATH` or `data/dems.dev.sqlite`, `UPLOAD_DIR` = `DEV_UPLOAD_DIR` or `data/dev-uploads` (uploaded banners, W-12), blank `FIREBASE_*` + bot token, mock guild/admin role/announce channel ids, `BASE_URL=http://localhost:<PORT>`; defaults `SESSION_SECRET=dems-dev-mock-secret`, `ADMIN_RESET_PASSWORD=dev` |
 | `dev/mockGuild.js` | static mock server "DEMS Dev Server": roles (Admin, Moderator, Raid-Team, VIP, Mitglied, managed "DEMS Bot"), channels (incl. non-public `#mod-intern`), 2 scheduled events, 4 personas, 9 members, `findMember`, `defaultAvatar` |
 | `dev/mockBot.js` | replaces the Discord-facing exports of `bot.js` (merged at the end of `bot.js`); `sendChannelMessage` returns fake `{ channelId, messageId }`, `refreshEventAnnouncements` logs `Ankündigung von "…" aktualisiert`, `refreshPollMessages` logs `Abstimmung "…" aktualisiert`, `markPollMessagesDeleted` logs the delete notice |
 | `dev/devAuth.js` | `/auth/discord` and `/auth/discord/callback` → `/auth/dev-login` (persona page; its look is `dev/dev-login.css`, served as `/auth/dev-login.css`, because the CSP allows no style element) → `/auth/dev-login/:personaId` starts the session like the real login (`startUserSession`: new session id + CSRF token) |

@@ -225,9 +225,12 @@ test('event cards escape admin texts and drop unsafe banner addresses', async ()
     assert.match(html, /href="#event\/ev&quot;1"/);
     assert.match(html, /src="https:\/\/example\.com\/a\.png&quot; onerror=&quot;alert\(1\)"/);
     assert.doesNotMatch(html, /red;background/);
-    for (const bannerUrl of ['javascript:alert(1)', 'data:image/png;base64,AAAA', '/relative.png', '']) {
+    for (const bannerUrl of ['javascript:alert(1)', 'data:image/png;base64,AAAA', '/relative.png', '/uploads/banners/x.png', '']) {
         assert.doesNotMatch(app.renderEventCard({ id: 'b', title: 'B', bannerUrl, startDate: at(11, 19) }, NOW), /<img/, bannerUrl);
     }
+    // An uploaded banner (W-12) is a same-origin path
+    const uploaded = app.renderEventCard({ id: 'u', title: 'U', bannerUrl: '/uploads/banners/0f8fad5b-d9cb-469f-a165-70867728950e.png', startDate: at(11, 19) }, NOW);
+    assert.match(uploaded, /<img class="event-card-banner" src="\/uploads\/banners\/0f8fad5b-d9cb-469f-a165-70867728950e\.png"/);
 });
 
 test('cards and skeletons contain no emoji', async () => {

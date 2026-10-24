@@ -19,6 +19,7 @@ import './admin/participant-message.js';
 import './admin/registrations.js';
 import './admin/wizard-builders.js';
 import './admin/wizard-location.js';
+import './admin/wizard-banner.js';
 import './admin/wizard.js';
 import './core/auth.js';
 import './core/router.js';

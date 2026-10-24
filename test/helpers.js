@@ -12,7 +12,7 @@ const REPO_ROOT = path.join(__dirname, '..');
 
 // Variables that would leak the developer's own setup into a test process
 const LEAKING_PREFIXES = ['DISCORD_', 'FIREBASE_', 'DEV_'];
-const LEAKING_KEYS = ['NODE_ENV', 'SQLITE_PATH', 'SESSION_SECRET', 'ADMIN_RESET_PASSWORD', 'PORT', 'BASE_URL', 'DEBUG_MODE'];
+const LEAKING_KEYS = ['NODE_ENV', 'SQLITE_PATH', 'UPLOAD_DIR', 'SESSION_SECRET', 'ADMIN_RESET_PASSWORD', 'PORT', 'BASE_URL', 'DEBUG_MODE'];
 
 const SERVER_START_TIMEOUT_MS = 20000;
 const POLL_INTERVAL_MS = 100;

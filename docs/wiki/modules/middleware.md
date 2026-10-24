@@ -39,7 +39,7 @@ The Discord registration path calls `isRegistrationBlocked()` directly (`checkRe
 
 | Export | Rules |
 |---|---|
-| `validateEvent` | `title` required, ≤200 chars; `maxParticipants` integer ≥0; `accessMode` ∈ `open`, `role-required`; `approvalMode` ∈ `manual`, `instant`; `status` ∈ `draft`, `active`, `archived`, `cancelled`; `description` ≤5000 chars; `bannerUrl` empty or an http(s) URL ≤2000 chars; `accentColor` empty or `#rgb`/`#rrggbb` |
+| `validateEvent` | `title` required, ≤200 chars; `maxParticipants` integer ≥0; `accessMode` ∈ `open`, `role-required`; `approvalMode` ∈ `manual`, `instant`; `status` ∈ `draft`, `active`, `archived`, `cancelled`; `description` ≤5000 chars; `bannerUrl` empty, an http(s) URL ≤2000 chars or an uploaded banner path whose file exists (`isStoredBanner`, W-12; else 400 "Banner muss eine http(s)-URL oder ein hochgeladenes Bild sein."); `validateEvent` is async for that check; `accentColor` empty or `#rgb`/`#rrggbb` |
 | `validateRegStatus` | `status` ∈ `accepted`, `rejected`, `waitlisted` |
 | `validateBotMessages` | `registration`, `accepted`, `rejected` ≤2000 chars each |
 

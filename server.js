@@ -17,6 +17,7 @@ const { startPollScheduler, stopPollScheduler } = require('./utils/pollStore');
 const { startArchiveScheduler, stopArchiveScheduler } = require('./utils/eventArchive');
 const { createCsrfToken, createRoleRefresh } = require('./middleware/auth');
 const { PersistentSessionStore } = require('./utils/sessionStore');
+const { BANNER_FILE, bannerDir, sweepOrphanBanners } = require('./utils/bannerStore');
 
 // Production runs behind a TLS proxy (trust proxy below) -> cookies only over HTTPS
 const IS_PRODUCTION = process.env.NODE_ENV === 'production';
@@ -89,6 +90,14 @@ const authLimiter = rateLimit({
     skip: () => IS_MOCK_MODE
 });
 app.use('/auth/', authLimiter);
+
+// ── Uploaded banners (W-12) ─────────────────────────────────────────────
+// Public and read-only (Discord fetches them for embeds); before the session
+// middleware so an image request creates no session. Only `<uuid>.<ext>` names.
+app.use('/uploads/banners',
+    (req, res, next) => (BANNER_FILE.test(req.path.slice(1)) ? next() : res.status(404).end()),
+    (req, res, next) => express.static(bannerDir(), { index: false, dotfiles: 'deny', maxAge: '7d', immutable: true })(req, res, next),
+    (req, res) => res.status(404).end());
 
 // ── Middleware ───────────────────────────────────────────────────────────
 app.use(express.json());
@@ -291,6 +300,10 @@ startPollScheduler();
 // Archives events a day after their end; the first run catches up after a pause and
 // waits for the bot, so the Discord announcements of archived events get refreshed (W-01)
 startArchiveScheduler({ waitFor: whenBotSettled() });
+// Uploaded banners no event uses and older than a day (wizard closed without saving, W-12)
+sweepOrphanBanners().then((count) => {
+    if (count > 0) console.log(`🧹 ${count} verwaiste Banner gelöscht.`);
+});
 
 // ── Graceful Shutdown ───────────────────────────────────────────────────
 function gracefulShutdown(signal) {
