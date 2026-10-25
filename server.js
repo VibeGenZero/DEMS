@@ -16,7 +16,7 @@ const { startBot, whenBotSettled, startReminderScheduler, stopBot, getGuildName,
 const { startPollScheduler, stopPollScheduler } = require('./utils/pollStore');
 const { startArchiveScheduler, stopArchiveScheduler } = require('./utils/eventArchive');
 const { createCsrfToken, createRoleRefresh } = require('./middleware/auth');
-const { PersistentSessionStore } = require('./utils/sessionStore');
+const { sharedSessionStore } = require('./utils/sessionStore');
 const { BANNER_FILE, bannerDir, sweepOrphanBanners } = require('./utils/bannerStore');
 
 // Production runs behind a TLS proxy (trust proxy below) -> cookies only over HTTPS
@@ -110,7 +110,7 @@ app.use((req, res, next) => {
 });
 app.use(session({
     // Sessions in the database (SQLite/Firestore) -> logins survive restarts and deploys
-    store: new PersistentSessionStore(),
+    store: sharedSessionStore(),
     secret: process.env.SESSION_SECRET,
     resave: false,
     saveUninitialized: false,

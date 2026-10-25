@@ -21,6 +21,10 @@ const DEFAULT_PRUNE_INTERVAL_MS = 6 * 60 * 60 * 1000;
 
 const documentId = (sid) => crypto.createHash('sha256').update(sid).digest('hex');
 
+// One store instance for the whole process: every session write is visible to
+// every caller, so panic mode can end sessions it did not create itself.
+let defaultStore;
+
 /**
  * Expiry of a session: its cookie expiry, else DEFAULT_TTL_MS from now.
  *
@@ -103,6 +107,49 @@ class PersistentSessionStore extends Store {
         }
         return expired.length;
     }
+
+    /**
+     * Destroy every session whose user is not an admin.
+     *
+     * The `keepAdmins` option leaves admin sessions in place (panic mode uses
+     * it so the lockdown can be deactivated).
+     * @returns {Promise<number>} -> Number of destroyed sessions.
+     */
+    async destroyAll({ keepAdmins = false } = {}) {
+        // An unreadable record belongs to no admin we must keep -> it goes too,
+        // instead of aborting the lockdown halfway
+        const isAdminSession = (json) => {
+            try {
+                return JSON.parse(json)?.user?.isAdmin === true;
+            } catch {
+                return false;
+            }
+        };
+        let destroyed = 0;
+        for (const [sid, entry] of [...this.cache]) {
+            if (keepAdmins && isAdminSession(entry.json)) continue;
+            await new Promise(resolve => this.destroy(sid, resolve));
+            destroyed++;
+        }
+        const snapshot = await getDocs(collection(db, SESSION_COLLECTION));
+        for (const snap of snapshot.docs) {
+            if (keepAdmins && isAdminSession(snap.data().data)) continue;
+            await deleteDoc(doc(db, SESSION_COLLECTION, snap.id));
+            destroyed++;
+        }
+        return destroyed;
+    }
 }
 
-module.exports = { PersistentSessionStore, SESSION_COLLECTION };
+/**
+ * The shared store instance, so every caller (server bootstrap, panic mode)
+ * works against the same cache and database.
+ *
+ * @returns {PersistentSessionStore} -> Process-wide store.
+ */
+function sharedSessionStore() {
+    if (!defaultStore) defaultStore = new PersistentSessionStore();
+    return defaultStore;
+}
+
+module.exports = { PersistentSessionStore, sharedSessionStore, SESSION_COLLECTION };

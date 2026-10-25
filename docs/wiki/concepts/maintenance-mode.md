@@ -3,7 +3,7 @@ id: maintenance-mode
 title: Maintenance mode and panic mode
 type: concept
 tags: [maintenance, panic-mode, lockdown, banner, login, registration]
-sources: [routes/admin.js, middleware/maintenance.js, server.js, public/js/admin/maintenance.js]
+sources: [routes/admin.js, middleware/maintenance.js, server.js, utils/sessionStore.js, public/js/admin/maintenance.js]
 depends_on: [data-model]
 see_also: [auth-session, registration-flow, middleware]
 ---
@@ -19,7 +19,7 @@ see_also: [auth-session, registration-flow, middleware]
 | `plannedMaintenance` + `plannedMaintenanceText` (+ start/end) | — | second banner with date range |
 | `loginDisabled` | non-admin OAuth/persona login → `/?error=maintenance_login_disabled` | error message after redirect |
 | `registrationDisabled` | web register → 503; Discord button → German error | — |
-| `panicMode` | sets warning + loginDisabled + registrationDisabled; login → `/?error=panic_mode` | full-screen `#panic-lockdown-overlay` for non-admins |
+| `panicMode` | sets warning + loginDisabled + registrationDisabled; login → `/?error=panic_mode`; ends every non-admin session at activation (admins keep theirs so they can deactivate the mode; logins during the lockdown are blocked anyway) | full-screen `#panic-lockdown-overlay` for non-admins |
 
 ## Endpoints
 
@@ -32,10 +32,10 @@ see_also: [auth-session, registration-flow, middleware]
 
 ## Where in code
 
-`getLoginBlockReason`, `isRegistrationBlocked`, `checkRegistrationAllowed` (middleware/maintenance.js); `MAINTENANCE MODE` block at the end of routes/admin.js; `checkMaintenanceStatus`, `showMaintenanceModal`, `activatePanicMode`, `deactivatePanicMode` (`public/js/admin/maintenance.js`).
+`getLoginBlockReason`, `isRegistrationBlocked`, `checkRegistrationAllowed` (middleware/maintenance.js); `MAINTENANCE MODE` block at the end of routes/admin.js; `destroyAll`/`sharedSessionStore` (`utils/sessionStore.js`); `checkMaintenanceStatus`, `showMaintenanceModal`, `activatePanicMode`, `deactivatePanicMode` (`public/js/admin/maintenance.js`).
 
 ## Gotchas
 
-- Panic mode does not end existing sessions; non-admin users already logged in are only blocked by the frontend overlay, the API still answers them (except registrations). Sessions are stored in the database, so restarting the server does not log anyone out either.
+- Sessions are stored in the database, so restarting the server does not log anyone out. Panic mode ends every existing non-admin session at activation (regression test `test/panicSessionInvalidation.test.js`); admin sessions stay, so an admin can deactivate the mode; an unreadable session record is deleted as well instead of failing the activation.
 - Without `ADMIN_RESET_PASSWORD` set, panic mode cannot be deactivated via UI (and the system reset is impossible). Dev mock mode defaults it to `dev`.
 - Read errors of the settings document fail open (login and registration allowed).
