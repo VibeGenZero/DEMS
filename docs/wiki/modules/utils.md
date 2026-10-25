@@ -176,7 +176,7 @@ Pure, no database. `csvCell(value)` → one quoted CSV cell; values starting wit
 
 ## utils/sessionStore.js
 
-`PersistentSessionStore` (extends express-session `Store`, used by `server.js`): `get` / `set` / `destroy` on the collection `sessions` (`SESSION_COLLECTION`) through `firebaseAdmin.js`, document id = SHA-256 of the session id. Write-through cache in memory, database read only on a miss; expiry = cookie expiry (default 24 h), expired sessions are deleted on read; `pruneExpired()` runs every 6 h (`pruneIntervalMs`, 0 = off) and returns the number of deleted documents. No `touch` on purpose.
+`PersistentSessionStore` (extends express-session `Store`, used by `server.js`): `get` / `set` / `destroy` on the collection `sessions` (`SESSION_COLLECTION`) through `firebaseAdmin.js`, document id = SHA-256 of the session id. Write-through cache in memory, database read only on a miss; expiry = cookie expiry (default 24 h), expired sessions are deleted on read; `pruneExpired()` runs every 6 h (`pruneIntervalMs`, 0 = off) and returns the number of deleted documents. No `touch` on purpose. `sharedSessionStore()` returns the one instance of the process (server and panic mode share its cache). `destroyAll({ keepAdmins })` deletes every session in cache and database, with `keepAdmins` all but those whose `user.isAdmin` is true; an unreadable record counts as non-admin and is deleted too, so one broken document cannot stop the panic lockdown.
 
 ## utils/reminders.js
 

@@ -31,6 +31,7 @@ const { notifyRegistrationsChanged } = require('../utils/announcementRefresh');
 const { debugLog } = require('../utils/debugLog');
 const { buildEventUrl } = require('../utils/eventUrl');
 const { MAX_BANNER_BYTES, detectImageType, saveBanner, releaseBanners } = require('../utils/bannerStore');
+const { sharedSessionStore } = require('../utils/sessionStore');
 const { BULK_ACTIONS, MAX_BULK_IDS, planBulkAction } = require('../utils/bulkRegistrations');
 const { followingDates, transferTime, planExtension, seriesUpdateFields, slotsForDate } = require('../utils/eventSeries');
 
@@ -2085,6 +2086,12 @@ router.post('/maintenance/panic', async (req, res) => {
             updatedAt: new Date().toISOString(),
             updatedBy: req.session.user.id
         });
+
+        // A lockdown that only covers new logins is no lockdown: end every
+        // non-admin session (the admin's own session survives, so the mode can
+        // be deactivated). Logins during the lockdown are blocked anyway.
+        const ended = await sharedSessionStore().destroyAll({ keepAdmins: true });
+        console.log(`🚪 ${ended} Nicht-Admin-Sitzungen durch den Panic Mode beendet.`);
 
         await addAuditLog('PANIC_MODE_ACTIVATED', req.session.user.id, 'Panic Mode aktiviert — Kompletter Lockdown');
         console.log(`🚨 PANIC MODE activated by ${req.session.user.id}`);
