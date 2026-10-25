@@ -26,7 +26,7 @@ An event edit SHALL count as a change participants must know about only when the
 - **THEN** nothing counts as changed and no DM is sent, even when the admin asked for a notification
 
 ### Requirement: Switch in the event wizard
-When editing an event, the wizard SHALL show the switch "Teilnehmer benachrichtigen" next to "Speichern" only while the status "Aktiv" is selected and the start, the end or the location differs from the values the event was loaded with. When the switch appears it SHALL be switched on. The wizard SHALL NOT show the switch when creating an event.
+When editing an event, the wizard SHALL show the switch "Teilnehmer benachrichtigen" next to "Speichern" only while the status "Aktiv" is selected and the start, the end or the location differs from the values the event was loaded with. When the switch appears it SHALL be switched on. The wizard SHALL NOT show the switch when creating an event, nor while "DM-Benachrichtigungen" is off in the bot center.
 
 #### Scenario: Start changed while editing
 - **WHEN** an admin edits an active event, changes its start and goes to the last step
@@ -44,8 +44,12 @@ When editing an event, the wizard SHALL show the switch "Teilnehmer benachrichti
 - **WHEN** an admin edits an event with the status "Entwurf" selected and changes its location
 - **THEN** the switch stays hidden
 
+#### Scenario: DM notifications off
+- **WHEN** "DM-Benachrichtigungen" is off in the bot center and an admin changes the start of an active event
+- **THEN** the switch stays hidden
+
 ### Requirement: Notification only on request
-The server SHALL send change DMs only when the save request asks for it explicitly, the event is active after the save and at least one relevant change was saved. The request flag SHALL NOT be stored on the event. A save without the flag, or with the switch turned off, SHALL behave as before and send no change DM.
+The server SHALL send change DMs only when the save request asks for it explicitly, "DM-Benachrichtigungen" is on in the bot center, the event is active after the save and at least one relevant change was saved. The request flag SHALL NOT be stored on the event. A save without the flag, or with the switch turned off, SHALL behave as before and send no change DM.
 
 #### Scenario: Switch turned off
 - **WHEN** an admin changes the location of an active event and saves with the switch turned off
@@ -62,6 +66,10 @@ The server SHALL send change DMs only when the save request asks for it explicit
 #### Scenario: Flag not stored
 - **WHEN** an event was saved with the notification flag
 - **THEN** reading the event does not return the flag
+
+#### Scenario: DM notifications off in the bot center
+- **WHEN** "DM-Benachrichtigungen" is off and a save request with the notification flag changes the start of an active event
+- **THEN** the event is saved, no participant gets a DM and the answer reports 0 notified participants
 
 ### Requirement: Recipients
 A change DM SHALL go to every member with an accepted registration for the event and to every accepted guest of such a registration, each user once, unless that user switched "Änderungen" off in the profile. Members whose registration is pending, waitlisted or rejected, and invited guests who have not accepted yet, SHALL NOT receive it.
