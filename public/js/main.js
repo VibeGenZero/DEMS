@@ -21,6 +21,7 @@ import './admin/registrations.js';
 import './admin/wizard-builders.js';
 import './admin/wizard-location.js';
 import './admin/wizard-banner.js';
+import './admin/wizard-templates.js';
 import './admin/wizard.js';
 import './core/auth.js';
 import './core/router.js';

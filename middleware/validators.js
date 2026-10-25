@@ -22,17 +22,24 @@ function isHttpUrl(value) {
 }
 
 /**
- * Validate event creation/update body
+ * Check the fields of an event body. Templates (W-10) store no dates or status
+ * and may have no title, so those rules are skipped for them.
+ *
+ * @param {Object} body -> Event fields as POST/PUT /api/admin/events or a template send them.
+ * @param {Object} [options] -> `{ template }` for the settings of an event template.
+ * @returns {Promise<string[]>} -> German error sentences, empty when everything is fine.
  */
-async function validateEvent(req, res, next) {
-    const { title, maxParticipants, accessMode, status, approvalMode } = req.body;
+async function checkEventFields(body, { template = false } = {}) {
+    const { title, maxParticipants, accessMode, status, approvalMode } = body;
 
     const errors = [];
 
     // Title is required and must be non-empty string
-    if (!title || typeof title !== 'string' || title.trim().length === 0) {
+    if (title !== undefined && title !== null && typeof title !== 'string') {
         errors.push('Titel ist erforderlich.');
-    } else if (title.trim().length > 200) {
+    } else if (!template && (!title || title.trim().length === 0)) {
+        errors.push('Titel ist erforderlich.');
+    } else if (title && title.trim().length > 200) {
         errors.push('Titel darf maximal 200 Zeichen lang sein.');
     }
 
@@ -56,6 +63,9 @@ async function validateEvent(req, res, next) {
         errors.push(`Genehmigungsmodus muss einer der folgenden sein: ${validApprovalModes.join(', ')}`);
     }
 
+    // Templates store no status, dates or deadlines (W-10)
+    if (template) return checkContentFields(body, errors);
+
     // status must be valid enum
     const validStatuses = ['draft', 'active', 'archived', 'cancelled'];
     if (status && !validStatuses.includes(status)) {
@@ -63,7 +73,7 @@ async function validateEvent(req, res, next) {
     }
 
     // Members plan by the start date; reminders and the overview need it too (D-10)
-    const { startDate, endDate } = req.body;
+    const { startDate, endDate } = body;
     if ((status || 'active') === 'active' && !startDate) {
         errors.push('Aktive Events brauchen ein Startdatum.');
     }
@@ -75,21 +85,32 @@ async function validateEvent(req, res, next) {
     const end = startDate ? eventEndTime({ startDate, endDate }) : null;
     const deadlines = [['registrationDeadline', 'Der Anmeldeschluss'], ['unregisterDeadline', 'Der Abmeldeschluss']];
     for (const [field, name] of deadlines) {
-        const value = req.body[field];
+        const value = body[field];
         if (!value) continue;
         const deadline = parseDate(value);
         if (!deadline) errors.push(`${name} ist kein gültiges Datum.`);
         else if (end && deadline > end) errors.push(`${name} liegt nach dem Ende des Events.`);
     }
 
+    return checkContentFields(body, errors);
+}
+
+/**
+ * Rules events and templates share: description, banner, accent colour.
+ *
+ * @param {Object} body -> Event fields.
+ * @param {string[]} errors -> Errors found so far; extended in place.
+ * @returns {Promise<string[]>} -> The same list.
+ */
+async function checkContentFields(body, errors) {
     // Description length check
-    if (req.body.description && typeof req.body.description === 'string' && req.body.description.length > 5000) {
+    if (body.description && typeof body.description === 'string' && body.description.length > 5000) {
         errors.push('Beschreibung darf maximal 5000 Zeichen lang sein.');
     }
 
     // Banner and colour end up in <img src> and inline CSS -> only http(s) URLs,
     // uploaded banners whose file exists (W-12) and hex colours
-    const { bannerUrl, accentColor } = req.body;
+    const { bannerUrl, accentColor } = body;
     if (bannerUrl && !isHttpUrl(bannerUrl) && !(await isStoredBanner(bannerUrl))) {
         errors.push('Banner muss eine http(s)-URL oder ein hochgeladenes Bild sein.');
     }
@@ -97,6 +118,14 @@ async function validateEvent(req, res, next) {
         errors.push('Akzentfarbe muss ein Hex-Farbwert wie #8b5cf6 sein.');
     }
 
+    return errors;
+}
+
+/**
+ * Validate event creation/update body
+ */
+async function validateEvent(req, res, next) {
+    const errors = await checkEventFields(req.body);
     if (errors.length > 0) {
         console.log('[validateEvent] 400 error — body:', JSON.stringify(req.body), '— errors:', errors);
         return res.status(400).json({ error: errors.join(' ') });
@@ -137,4 +166,4 @@ function validateBotMessages(req, res, next) {
     next();
 }
 
-module.exports = { validateEvent, validateRegStatus, validateBotMessages };
+module.exports = { checkEventFields, validateEvent, validateRegStatus, validateBotMessages };

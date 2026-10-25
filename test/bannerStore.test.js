@@ -159,3 +159,20 @@ test('sweepOrphanBanners copes with a missing folder', async () => {
         process.env.UPLOAD_DIR = before;
     }
 });
+
+test('a banner an event template uses is neither released nor swept (W-10)', async () => {
+    const now = Date.now();
+    const kept = await store.saveBanner(PNG, 'png');
+    const file = path.join(store.bannerDir(), path.basename(kept));
+    fs.utimesSync(file, new Date(now - 25 * HOUR), new Date(now - 25 * HOUR));
+    await setDoc(doc(db, 'eventTemplates', 'tpl-a'), { name: 'Raid', settings: { bannerUrl: kept } });
+
+    await store.releaseBanners([kept]);
+    assert.equal(await store.isStoredBanner(kept), true, 'release keeps it');
+    await store.sweepOrphanBanners({ maxAgeMs: 24 * HOUR, now });
+    assert.equal(await store.isStoredBanner(kept), true, 'sweep keeps it');
+
+    await deleteDoc(doc(db, 'eventTemplates', 'tpl-a'));
+    await store.releaseBanners([kept]);
+    assert.equal(await store.isStoredBanner(kept), false);
+});

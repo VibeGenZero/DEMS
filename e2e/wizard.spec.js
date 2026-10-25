@@ -225,3 +225,77 @@ test('an admin changes a series for all following dates and extends it (W-11)', 
         await adminRequest(page, 'DELETE', `/api/admin/events/series/${seriesId}`);
     }
 });
+
+test('an admin saves the wizard as a template and starts the next event from it (W-10)', async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== 'desktop', 'the wizard is the same on the phone');
+    const errors = watchErrors(page);
+    await loginAs(page, 'admin');
+    await openWizard(page);
+    // The seed has the template "Raid-Abend", so the chooser is there
+    await expect(page.locator('#wizard-template-area')).toBeVisible();
+
+    let eventId = null;
+    try {
+        // Build the setup once: title, raid slots, one form field
+        await page.locator('#event-title').fill('E2E-Vorlagenabend');
+        await page.locator('#eventModal [data-click="wizardGoTo"][data-step="3"]').click();
+        await page.locator('#event-use-slots').check();
+        await page.locator('[data-click="applySlotPreset"]').click();
+        await page.locator('#eventModal [data-click="wizardGoTo"][data-step="4"]').click();
+        await page.locator('#wizard-page-4 [data-click="addFormField"]').click();
+        await page.locator('#form-fields-builder .ff-label').fill('Lieblingsklasse');
+
+        // Save it as a template; the event itself is not saved
+        await page.locator('#wizard-btn-template').click();
+        await expect(page.locator('#wizard-template-save')).toBeVisible();
+        await page.locator('#event-template-name').fill('E2E-Vorlage');
+        await page.locator('#wizard-template-save [data-click="saveTemplate"]').click();
+        await expect(page.locator('#toast-message')).toHaveText('Vorlage „E2E-Vorlage“ gespeichert.');
+        await expect(page.locator('#wizard-template-save')).toBeHidden();
+        await page.locator('#eventModal .btn-close').click();
+        await expect(page.locator('#eventModal')).toBeHidden();
+
+        // A fresh wizard starts from the template
+        await openWizard(page);
+        await expect(page.locator('#event-title')).toHaveValue('');
+        const chosen = await page.locator('#event-template-select option', { hasText: 'E2E-Vorlage' }).getAttribute('value');
+        await page.locator('#event-template-select').selectOption(chosen);
+        await expect(page.locator('#toast-message')).toHaveText('Vorlage „E2E-Vorlage“ übernommen.');
+        await expect(page.locator('#event-title')).toHaveValue('E2E-Vorlagenabend');
+        await page.locator('#eventModal [data-click="wizardGoTo"][data-step="4"]').click();
+        await expect(page.locator('#form-fields-builder .ff-label')).toHaveValue('Lieblingsklasse');
+
+        // Date and status are up to the admin; a draft keeps the overview clean
+        await page.locator('#eventModal [data-click="wizardGoTo"][data-step="2"]').click();
+        await expect(page.locator('#event-start-date')).toHaveValue('');
+        await page.locator('#event-start-date').evaluate(input => input._flatpickr.setDate(new Date(Date.now() + 9 * 86_400_000), true));
+        await page.locator('#event-status').selectOption('draft');
+        const saved = page.waitForResponse(res => res.url().endsWith('/api/admin/events') && res.request().method() === 'POST');
+        await page.locator('#eventModal [data-click="wizardGoTo"][data-step="5"]').click();
+        await page.locator('#wizard-btn-save').click();
+        const created = await (await saved).json();
+        eventId = created.id;
+        await expect(page.locator('#eventModal')).toBeHidden();
+        expect(created.title).toBe('E2E-Vorlagenabend');
+        expect(created.slots.map(slot => slot.name)).toEqual(['Tank', 'Heiler', 'Schaden']);
+        expect(created.formFields.map(field => field.label)).toEqual(['Lieblingsklasse']);
+
+        // Delete the template from the wizard after the inline question
+        await openWizard(page);
+        await page.locator('#event-template-select').selectOption(chosen);
+        await page.locator('#event-template-delete').click();
+        await expect(page.locator('#wizard-template-delete-text')).toHaveText('Vorlage „E2E-Vorlage“ löschen?');
+        await page.locator('#wizard-template-delete-confirm [data-click="deleteTemplate"]').click();
+        await expect(page.locator('#toast-message')).toHaveText('Vorlage „E2E-Vorlage“ gelöscht.');
+        await expect(page.locator('#event-template-select option', { hasText: 'E2E-Vorlage' })).toHaveCount(0);
+        await page.locator('#eventModal .btn-close').click();
+        expect(errors).toEqual([]);
+    } finally {
+        // Leave nothing behind for the other specs
+        const templates = await adminRequest(page, 'GET', '/api/admin/event-templates');
+        for (const template of (Array.isArray(templates) ? templates : []).filter(item => item.name === 'E2E-Vorlage')) {
+            await adminRequest(page, 'DELETE', `/api/admin/event-templates/${template.id}`);
+        }
+        if (eventId) await adminRequest(page, 'DELETE', `/api/admin/events/${eventId}`);
+    }
+});

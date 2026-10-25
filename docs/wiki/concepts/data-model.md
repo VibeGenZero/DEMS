@@ -3,13 +3,13 @@ id: data-model
 title: Data model — collections and document shapes
 type: concept
 tags: [data-model, schema, collections, events, registrations, users, firestore]
-sources: [routes/admin.js, utils/registrationService.js, utils/userProfile.js, utils/sessionStore.js, routes/events.js, utils/eventUtils.js, bot.js, dev/seedData.js]
+sources: [routes/admin.js, utils/registrationService.js, utils/userProfile.js, utils/sessionStore.js, routes/events.js, utils/eventUtils.js, bot.js, dev/seedData.js, utils/eventTemplates.js]
 depends_on: [data-layer]
 see_also: [registration-flow, event-lifecycle, maintenance-mode, glossary]
 ---
 # Data model — collections and document shapes
 
-> TL;DR: Eleven schemaless collections. `events`, `registrations`, `comments`, `auditLogs`, `polls` use auto ids; `pollVotes` uses `<pollId>_<userId>`; `users` uses the Discord user id; `botMessages/templates`, `botSettings/config`, `maintenanceSettings/config` are singleton documents; `devMeta/seed` exists only in dev mock mode. All dates are ISO-8601 strings. Shapes are defined by the code that writes them (no schema file) — the producers are listed per collection.
+> TL;DR: Twelve schemaless collections. `events`, `registrations`, `comments`, `auditLogs`, `polls`, `eventTemplates` use auto ids; `pollVotes` uses `<pollId>_<userId>`; `users` uses the Discord user id; `botMessages/templates`, `botSettings/config`, `maintenanceSettings/config` are singleton documents; `devMeta/seed` exists only in dev mock mode. All dates are ISO-8601 strings. Shapes are defined by the code that writes them (no schema file) — the producers are listed per collection.
 
 ```mermaid
 erDiagram
@@ -72,7 +72,7 @@ Read in full by the admin member overview (W-15, `GET /api/admin/members`, `util
 
 ## auditLogs (auto id) — `utils/eventUtils.js#addAuditLog`
 
-`{ action, adminId, details, targetId, timestamp }`. Actions: `CREATE_EVENT`, `UPDATE_EVENT`, `NOTIFY_EVENT_CHANGE`, `UPDATE_EVENT_STATUS`, `CANCEL_EVENT`, `START_EVENT`, `END_EVENT`, `DELETE_EVENT`, `DELETE_SERIES`, `DUPLICATE_EVENT`, `GENERATE_CHECKIN`, `EXPORT_REGISTRATIONS`, `MESSAGE_PARTICIPANTS` (W-09), `UPDATE_REGISTRATION_STATUS`, `MOVE_REGISTRATION_SLOT`, `CREATE_POLL`, `UPDATE_POLL`, `CLOSE_POLL`, `ANNOUNCE_POLL`, `DELETE_POLL`, `DECIDE_POLL`, `ANNOUNCE_EVENT`, `SYNC_DISCORD_EVENT`, `UPDATE_TEMPLATES`, `UPDATE_BOT_SETTINGS`, `UPDATE_MAINTENANCE`, `PANIC_MODE_ACTIVATED`, `PANIC_MODE_DEACTIVATED`.
+`{ action, adminId, details, targetId, timestamp }`. Actions: `CREATE_EVENT`, `UPDATE_EVENT`, `NOTIFY_EVENT_CHANGE`, `UPDATE_EVENT_STATUS`, `CANCEL_EVENT`, `START_EVENT`, `END_EVENT`, `DELETE_EVENT`, `DELETE_SERIES`, `DUPLICATE_EVENT`, `GENERATE_CHECKIN`, `EXPORT_REGISTRATIONS`, `MESSAGE_PARTICIPANTS` (W-09), `UPDATE_REGISTRATION_STATUS`, `MOVE_REGISTRATION_SLOT`, `CREATE_POLL`, `UPDATE_POLL`, `CLOSE_POLL`, `ANNOUNCE_POLL`, `DELETE_POLL`, `DECIDE_POLL`, `ANNOUNCE_EVENT`, `SYNC_DISCORD_EVENT`, `UPDATE_TEMPLATES` (bot messages), `CREATE_EVENT_TEMPLATE`, `UPDATE_EVENT_TEMPLATE`, `DELETE_EVENT_TEMPLATE` (W-10), `UPDATE_BOT_SETTINGS`, `UPDATE_MAINTENANCE`, `PANIC_MODE_ACTIVATED`, `PANIC_MODE_DEACTIVATED`.
 
 ## polls (auto id) — written by `routes/admin.js` and `utils/pollStore.js`
 
@@ -85,6 +85,10 @@ Read in full by the admin member overview (W-15, `GET /api/admin/members`, `util
 ## sessions (id = SHA-256 of the session id) — written by `utils/sessionStore.js`
 
 `{ data (JSON text of the express-session data: cookie, user, csrfToken, oauthState), expiresAt (ISO), updatedAt }`. Expired documents are deleted when read and every 6 h (`pruneExpired`). Not seeded, and neither `npm run dev:reset` nor the admin system reset wipes them — logins survive both.
+
+## eventTemplates (auto id) — written by `routes/admin.js` (`/api/admin/event-templates`, W-10)
+
+`{ name (unique ignoring case, ≤ 80), settings, createdAt, createdBy, updatedAt, updatedBy }` — shared by all admins, at most 50. `settings` holds only `TEMPLATE_FIELDS` of `utils/eventTemplates.js` with event shapes (see the events table): `title`, `description`, `bannerUrl`, `accentColor`, `category`, `location`, `maxParticipants`, `accessMode`, `requiredRoles`, `approvalMode`, `allowGuests`, `slots`, `assignRoleId`, `formFields`, `reminderHours` (`[{ hours }]`, no `sent`), `checkinMessage`, `autoCreateChannels`, `channelConfig`, `customBotMessages`. Never dates, deadlines, status, series fields, Discord ids, announcements or the check-in code. Applying a template in the wizard copies the settings once; events keep no link to it. An uploaded banner in `settings.bannerUrl` counts as used for the banner clean-up. Not wiped by the admin system reset.
 
 ## Singletons
 

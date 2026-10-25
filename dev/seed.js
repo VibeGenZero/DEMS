@@ -27,6 +27,7 @@ const SEED_COLLECTIONS = [
     'auditLogs',
     'polls',
     'pollVotes',
+    'eventTemplates',
     'botMessages',
     'botSettings',
     'maintenanceSettings',

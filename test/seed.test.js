@@ -26,7 +26,8 @@ const EXPECTED_COUNTS = {
     pollVotes: 5,
     botMessages: 1,
     botSettings: 1,
-    maintenanceSettings: 1
+    maintenanceSettings: 1,
+    eventTemplates: 1
 };
 
 async function countDocs(name) {

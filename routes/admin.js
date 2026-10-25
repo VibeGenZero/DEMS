@@ -7,7 +7,8 @@ const {
 } = require('../firebaseAdmin');
 const { requireAuth, requireAdmin, safeEqual } = require('../middleware/auth');
 const { csvCell } = require('../utils/csv');
-const { validateEvent, validateRegStatus, validateBotMessages } = require('../middleware/validators');
+const { checkEventFields, validateEvent, validateRegStatus, validateBotMessages } = require('../middleware/validators');
+const { MAX_TEMPLATES, pickTemplateSettings, normalizeTemplateName, nameTaken } = require('../utils/eventTemplates');
 const { sendDM, getGuildRoles, sendChannelMessage, buildEventEmbed, buildEventComponents, getGuildScheduledEvents, createEventChannels, deleteEventChannels, createScheduledEvent, getBotStatus, getBotSettings, saveBotSettings, getRunningEvents, getGuildChannels, buildPollEmbed, buildPollComponents, searchGuildMembers, fetchGuildMember } = require('../bot');
 const { promoteFromWaitlist, addAuditLog, loadEventRoster, loadEventRegistrations, saveEventWithSlots } = require('../utils/eventUtils');
 const { mergeReminderHours } = require('../utils/reminders');
@@ -859,6 +860,126 @@ router.delete('/events/series/:seriesId', async (req, res) => {
     } catch (err) {
         console.error('Delete series error:', err);
         res.status(500).json({ error: 'Fehler beim Löschen der Serie' });
+    }
+});
+
+// ── Event templates (W-10) ──────────────────────────────────────────────
+
+/** Every stored template as `{ id, ...data }`. */
+async function loadTemplates() {
+    const snapshot = await getDocs(collection(db, 'eventTemplates'));
+    return snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
+}
+
+/**
+ * Check name and settings of a template body.
+ *
+ * @param {Object} body -> `{ name, settings }`.
+ * @param {Array<Object>} templates -> Stored templates.
+ * @param {string} [exceptId] -> Template being overwritten.
+ * @returns {Promise<Object>} -> `{ name, settings }` or `{ status, error }`.
+ */
+async function checkTemplateBody(body, templates, exceptId) {
+    const named = normalizeTemplateName(body.name);
+    if (named.error) return { status: 400, error: named.error };
+    if (nameTaken(templates, named.name, exceptId)) return { status: 409, error: 'Eine Vorlage mit diesem Namen gibt es schon.' };
+    const input = body.settings && typeof body.settings === 'object' ? body.settings : {};
+    const errors = await checkEventFields(input, { template: true });
+    if (errors.length > 0) return { status: 400, error: errors.join(' ') };
+    const picked = pickTemplateSettings(input);
+    if (picked.error) return { status: 400, error: picked.error };
+    return { name: named.name, settings: picked.settings };
+}
+
+/**
+ * GET /api/admin/event-templates — All templates, sorted by name
+ */
+router.get('/event-templates', async (req, res) => {
+    try {
+        const templates = await loadTemplates();
+        templates.sort((a, b) => String(a.name).localeCompare(String(b.name), 'de'));
+        res.json(templates);
+    } catch (err) {
+        console.error('List templates error:', err);
+        res.status(500).json({ error: 'Fehler beim Laden der Vorlagen' });
+    }
+});
+
+/**
+ * POST /api/admin/event-templates — Store the wizard settings as a template
+ */
+router.post('/event-templates', async (req, res) => {
+    try {
+        const templates = await loadTemplates();
+        if (templates.length >= MAX_TEMPLATES) {
+            return res.status(400).json({ error: `Es sind höchstens ${MAX_TEMPLATES} Vorlagen möglich.` });
+        }
+        const checked = await checkTemplateBody(req.body, templates);
+        if (checked.error) return res.status(checked.status).json({ error: checked.error });
+
+        const template = {
+            name: checked.name,
+            settings: checked.settings,
+            createdAt: new Date().toISOString(),
+            createdBy: req.session.user.id,
+            updatedAt: null,
+            updatedBy: null
+        };
+        const ref = await addDoc(collection(db, 'eventTemplates'), template);
+        await addAuditLog('CREATE_EVENT_TEMPLATE', req.session.user.id, `Created event template "${template.name}"`, ref.id);
+        res.json({ id: ref.id, ...template });
+    } catch (err) {
+        console.error('Create template error:', err);
+        res.status(500).json({ error: 'Fehler beim Speichern der Vorlage' });
+    }
+});
+
+/**
+ * PUT /api/admin/event-templates/:id — Overwrite name and settings of a template
+ */
+router.put('/event-templates/:id', async (req, res) => {
+    try {
+        const templates = await loadTemplates();
+        const old = templates.find(template => template.id === req.params.id);
+        if (!old) return res.status(404).json({ error: 'Vorlage nicht gefunden' });
+        const checked = await checkTemplateBody(req.body, templates, old.id);
+        if (checked.error) return res.status(checked.status).json({ error: checked.error });
+
+        const template = {
+            name: checked.name,
+            settings: checked.settings,
+            createdAt: old.createdAt || null,
+            createdBy: old.createdBy || null,
+            updatedAt: new Date().toISOString(),
+            updatedBy: req.session.user.id
+        };
+        await setDoc(doc(db, 'eventTemplates', old.id), template);
+        const oldBanner = old.settings?.bannerUrl;
+        if (oldBanner && oldBanner !== template.settings.bannerUrl) await releaseBanners([oldBanner]);
+        await addAuditLog('UPDATE_EVENT_TEMPLATE', req.session.user.id, `Updated event template "${template.name}"`, old.id);
+        res.json({ id: old.id, ...template });
+    } catch (err) {
+        console.error('Update template error:', err);
+        res.status(500).json({ error: 'Fehler beim Speichern der Vorlage' });
+    }
+});
+
+/**
+ * DELETE /api/admin/event-templates/:id — Delete a template; events made from it stay
+ */
+router.delete('/event-templates/:id', async (req, res) => {
+    try {
+        const ref = doc(db, 'eventTemplates', req.params.id);
+        const snap = await getDoc(ref);
+        if (!snap.exists()) return res.status(404).json({ error: 'Vorlage nicht gefunden' });
+        const old = snap.data();
+        await deleteDoc(ref);
+        await releaseBanners([old.settings?.bannerUrl]);
+        await addAuditLog('DELETE_EVENT_TEMPLATE', req.session.user.id, `Deleted event template "${old.name}"`, req.params.id);
+        res.json({ success: true });
+    } catch (err) {
+        console.error('Delete template error:', err);
+        res.status(500).json({ error: 'Fehler beim Löschen der Vorlage' });
     }
 });
 

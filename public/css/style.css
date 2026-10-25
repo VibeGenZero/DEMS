@@ -3377,6 +3377,63 @@ a.info-version-badge:focus-visible {
   max-width: 22rem;
 }
 
+/* ═══════════════════════════════════════════ */
+/* EVENT TEMPLATES IN THE WIZARD (W-10)        */
+/* admin/wizard-templates.js                   */
+/* ═══════════════════════════════════════════ */
+.wizard-template-area {
+  margin-bottom: var(--space-24);
+  padding-bottom: var(--space-16);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.wizard-template-confirm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-8);
+  margin-top: var(--space-8);
+}
+
+.wizard-template-confirm span {
+  margin-right: auto;
+  font-weight: 600;
+}
+
+/* Left group of the footer; own class, the right group keeps its Bootstrap layout */
+.wizard-footer-start {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-8);
+}
+
+/* Full row below the footer buttons (the footer wraps) */
+.wizard-template-save {
+  width: 100%;
+  margin-top: var(--space-8);
+}
+
+.wizard-template-save-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-8);
+}
+
+.wizard-template-save-row .form-control {
+  flex: 1 1 12rem;
+}
+
+.wizard-template-warning {
+  margin-top: var(--space-8);
+  padding: var(--space-8) var(--space-12);
+  border: 1px solid var(--warning-border);
+  border-radius: var(--radius-sm);
+  background: var(--warning-bg);
+  color: var(--text-primary);
+  font-size: var(--font-size-sm);
+}
+
 /* ═══════════════════════════════════════════════ */
 /*  MAINTENANCE MODE                              */
 /* ═══════════════════════════════════════════════ */
