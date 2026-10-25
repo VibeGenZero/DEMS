@@ -6,7 +6,8 @@
  * DMs and message refreshes run after the lock is released.
  */
 const { db, collection, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, query, where, writeBatch } = require('../firebaseAdmin');
-const { sendDM, markPollMessagesDeleted } = require('../bot');
+const { markPollMessagesDeleted } = require('../bot');
+const { sendAutomaticDM } = require('./botSettings');
 const { withEventLock } = require('./eventLock');
 const { notifyPollChanged } = require('./announcementRefresh');
 const { buildEventUrl, buildPollUrl } = require('./eventUrl');
@@ -195,12 +196,12 @@ async function notifyCreatorAboutEnd(poll) {
         const favoriteId = getFavoriteOptionId(tally);
         const link = buildPollUrl(poll.id);
         if (!favoriteId) {
-            await sendDM(poll.createdBy, `🗳️ Die Abstimmung **${poll.title}** ist beendet – leider hat niemand abgestimmt. ${link}`);
+            await sendAutomaticDM(poll.createdBy, `🗳️ Die Abstimmung **${poll.title}** ist beendet – leider hat niemand abgestimmt. ${link}`);
             return;
         }
         const favorite = tally.options.find(entry => entry.optionId === favoriteId);
         const option = poll.options.find(entry => entry.id === favoriteId);
-        await sendDM(poll.createdBy,
+        await sendAutomaticDM(poll.createdBy,
             `🗳️ Die Abstimmung **${poll.title}** ist beendet. Favorit: **${formatPollOption(option)}** (✅ ${favorite.yes} · 🤔 ${favorite.maybe}). Jetzt Event erstellen: ${link}`
         );
     } catch (err) {
@@ -293,7 +294,7 @@ async function notifyVotersAboutDecision(poll, option) {
         if ((vote.yes || []).includes(option.id)) detail = `Du hattest ✅ *${escapeMarkdown(labels.yes)}* angegeben – jetzt anmelden: ${link}`;
         else if ((vote.maybe || []).includes(option.id)) detail = `Du hattest 🤔 *${escapeMarkdown(labels.maybe)}* angegeben – jetzt anmelden: ${link}`;
         try {
-            await sendDM(vote.userId, `📅 Der Termin für **${poll.title}** steht: **${date}**. ${detail}`);
+            await sendAutomaticDM(vote.userId, `📅 Der Termin für **${poll.title}** steht: **${date}**. ${detail}`);
         } catch (err) {
             console.error('Poll decision DM failed:', err.message);
         }

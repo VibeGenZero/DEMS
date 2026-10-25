@@ -1,5 +1,6 @@
 const { db, collection, doc, getDoc, getDocs, addDoc, updateDoc, query, where } = require('../firebaseAdmin');
-const { sendDM, assignRole, addParticipantToEventChannels } = require('../bot');
+const { assignRole, addParticipantToEventChannels } = require('../bot');
+const { sendAutomaticDM, sendWelcomeOnce } = require('./botSettings');
 const { pickCapacityPromotions } = require('./capacity');
 const {
     getSlots, hasSlots, findSlot, formatSlotLabel, pickWaitlistPromotions, buildRoster, normalizeSlots, validateSlotChange
@@ -76,9 +77,10 @@ async function announcePromotions(eventId, event, promotions) {
         const slotLine = slot ? `\n🎯 Dein Slot: **${formatSlotLabel(slot)}**` : '';
         try {
             if (promotion.status === 'accepted') {
-                await sendDM(promotion.userId,
+                await sendAutomaticDM(promotion.userId,
                     `🎉 Ein Platz wurde frei! Du wurdest von der Warteliste für **${event.title}** in die Teilnehmerliste aufgenommen!${slotLine}`
                 );
+                await sendWelcomeOnce({ id: promotion.userId, displayName: promotion.userName }, promotion.registrationId || null);
                 if (event.assignRoleId) {
                     await assignRole(promotion.userId, event.assignRoleId, process.env.DISCORD_GUILD_ID);
                 }
@@ -86,7 +88,7 @@ async function announcePromotions(eventId, event, promotions) {
                     await addParticipantToEventChannels(event, promotion.userId);
                 }
             } else {
-                await sendDM(promotion.userId,
+                await sendAutomaticDM(promotion.userId,
                     `📋 Ein Platz wurde frei bei **${event.title}**! Deine Anfrage wird jetzt geprüft.${slotLine}`
                 );
             }

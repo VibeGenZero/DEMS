@@ -10,6 +10,7 @@ const {
 // when bot.js is required without server.js (e.g. in tests)
 const { IS_MOCK_MODE } = require('./dev/mockMode');
 const { db, collection, doc, getDoc, getDocs, addDoc, setDoc, updateDoc, deleteDoc, query, where, orderBy } = require('./firebaseAdmin');
+const { loadBotSettings, rememberBotSettings, sendAutomaticDM } = require('./utils/botSettings');
 const { debugLog } = require('./utils/debugLog');
 const { buildEventUrl, buildPollUrl } = require('./utils/eventUrl');
 const { bannerForDiscord } = require('./utils/bannerStore');
@@ -328,7 +329,7 @@ client.on('interactionCreate', async (interaction) => {
 
                     // Notify registrant
                     const inviteeName = pendingGuests[guestIndex].displayName || guestId;
-                    await sendDM(reg.userId, `✅ **${inviteeName}** hat deine Gäste-Einladung für das Event angenommen!`);
+                    await sendAutomaticDM(reg.userId, `✅ **${inviteeName}** hat deine Gäste-Einladung für das Event angenommen!`);
 
                     // Send configured acceptance message to the guest
                     try {
@@ -351,7 +352,7 @@ client.on('interactionCreate', async (interaction) => {
                         const msg = template
                             ? parseTemplate(template, vars)
                             : `✅ Du wurdest als Gast für **${event.title || 'das Event'}** eingetragen!`;
-                        await sendDM(guestId, msg);
+                        await sendAutomaticDM(guestId, msg);
                     } catch (msgErr) {
                         console.error('Failed to send guest acceptance message:', msgErr);
                     }
@@ -372,7 +373,7 @@ client.on('interactionCreate', async (interaction) => {
                     require('./utils/announcementRefresh').notifyRegistrationsChanged(reg.eventId);
 
                     // Notify registrant
-                    await sendDM(reg.userId, `❌ Deine Gäste-Einladung wurde abgelehnt.`);
+                    await sendAutomaticDM(reg.userId, `❌ Deine Gäste-Einladung wurde abgelehnt.`);
 
                     await interaction.update({
                         embeds: [new EmbedBuilder()
@@ -2304,10 +2305,14 @@ async function messageAcceptedParticipants(eventId, message, send) {
  * @param {Date} [options.now] -> Current time.
  * @param {Function} [options.send] -> DM function (userId, message), default sendDM.
  * @param {Function} [options.refresh] -> Announcement refresh (eventId), default notifyRegistrationsChanged.
+ * @param {Object} [options.settings] -> Bot center settings, default loadBotSettings() (B-02).
  * @returns {Promise<void>}
  */
-async function checkReminders({ now = new Date(), send = sendDM, refresh = (eventId) => require('./utils/announcementRefresh').notifyRegistrationsChanged(eventId) } = {}) {
+async function checkReminders({ now = new Date(), send = sendDM, refresh = (eventId) => require('./utils/announcementRefresh').notifyRegistrationsChanged(eventId), settings = null } = {}) {
     try {
+        // Switches of the bot center (B-02): a due reminder or start DM is marked
+        // either way, so nothing is sent late after a switch is turned on again
+        const { reminderEnabled, eventStartNotifications } = settings || await loadBotSettings();
         const snapshot = await getDocs(query(collection(db, 'events')));
 
         for (const docSnap of snapshot.docs) {
@@ -2328,7 +2333,13 @@ async function checkReminders({ now = new Date(), send = sendDM, refresh = (even
             // After a downtime several reminders can be due at once -> one DM, all marked.
             // Legacy numeric reminderHours are stored as a list on the way.
             const due = findDueReminders(event, now);
-            if (due.length > 0) {
+            if (due.length > 0 && !reminderEnabled) {
+                // Dropped, not postponed: marked as sent without a DM
+                const reminderHours = normalizeReminderHours(event.reminderHours)
+                    .map((reminder, index) => (due.includes(index) ? { ...reminder, sent: true } : reminder));
+                await updateDoc(doc(db, 'events', eventId), { reminderHours });
+                debugLog('bot.reminderSkipped', { eventId });
+            } else if (due.length > 0) {
                 const reminderHours = normalizeReminderHours(event.reminderHours)
                     .map((reminder, index) => (due.includes(index) ? { ...reminder, sent: true } : reminder));
                 await updateDoc(doc(db, 'events', eventId), { reminderHours });
@@ -2346,7 +2357,7 @@ async function checkReminders({ now = new Date(), send = sendDM, refresh = (even
                 await updateDoc(doc(db, 'events', eventId), { eventStartNotificationSent: true });
 
                 console.log(`🎯 Event started: ${event.title}`);
-                await messageAcceptedParticipants(eventId,
+                if (eventStartNotifications) await messageAcceptedParticipants(eventId,
                     `🎯 **${event.title}** hat gerade begonnen! Viel Spaß!\n\n🔗 Event ansehen: ${buildEventUrl(eventId)}`, send);
             }
         }
@@ -2731,29 +2742,12 @@ function getBotStatus() {
 }
 
 /**
- * Get bot settings from Firestore
+ * Bot settings with defaults for every key (cached, utils/botSettings.js).
+ *
+ * @returns {Promise<Object>}
  */
 async function getBotSettings() {
-    try {
-        const snap = await getDoc(doc(db, 'botSettings', 'config'));
-        if (snap.exists()) return snap.data();
-    } catch (err) {
-        console.error('Failed to load bot settings:', err.message);
-    }
-    // Defaults
-    return {
-        statusType: 'online',
-        activityType: 'WATCHING',
-        activityText: '',
-        dmNotifications: true,
-        reminderEnabled: true,
-        eventStartNotifications: true,
-        autoChannelCreation: true,
-        autoUpdatePresence: false,
-        autoStatusCalendarEvents: false,
-        announceChannel: process.env.DISCORD_ANNOUNCE_CHANNEL_ID || '',
-        welcomeMessage: '',
-    };
+    return loadBotSettings();
 }
 
 /**
@@ -2761,10 +2755,9 @@ async function getBotSettings() {
  */
 async function saveBotSettings(settings) {
     try {
-        await setDoc(doc(db, 'botSettings', 'config'), {
-            ...settings,
-            updatedAt: new Date().toISOString()
-        });
+        const stored = { ...settings, updatedAt: new Date().toISOString() };
+        await setDoc(doc(db, 'botSettings', 'config'), stored);
+        rememberBotSettings(stored);
         await applyBotSettings();
         return true;
     } catch (err) {
@@ -2930,14 +2923,8 @@ async function applyBotSettings() {
 
         client.user.setPresence({ status, activities });
 
-        // Toggle reminder scheduler
-        if (settings.reminderEnabled && !reminderInterval) {
-            startReminderScheduler();
-        } else if (!settings.reminderEnabled && reminderInterval) {
-            clearInterval(reminderInterval);
-            reminderInterval = null;
-            console.log('⏰ Reminder scheduler deaktiviert via Bot-Zentrale');
-        }
+        // The reminder scheduler always runs (deadline refresh, start handling);
+        // reminderEnabled is checked per pass in checkReminders (B-02)
 
         // Toggle presence auto-update (refreshes activity text with live event data)
         if (settings.autoUpdatePresence && !presenceUpdateInterval) {

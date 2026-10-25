@@ -182,10 +182,40 @@ export async function loadBotRunningEvents() {
     }
 }
 
+/**
+ * Options of the announcement channel dropdown: the .env default, the text
+ * channels of the server, and a stored channel the bot cannot list (offline).
+ *
+ * @param {Array<Object>} channels -> `GET /api/admin/channels` (`{ id, name, type }`).
+ * @param {string} selected -> Stored channel id or ''.
+ * @returns {string} -> Option elements.
+ */
+export function announceChannelOptions(channels, selected) {
+    const text = (Array.isArray(channels) ? channels : []).filter(channel => channel.type === 'text');
+    const options = ['<option value="">Standard aus .env</option>']
+        .concat(text.map(channel => `<option value="${escapeHtml(channel.id)}">#${escapeHtml(channel.name)}</option>`));
+    if (selected && !text.some(channel => channel.id === selected)) {
+        options.push(`<option value="${escapeHtml(selected)}">Gespeicherter Kanal (${escapeHtml(selected)})</option>`);
+    }
+    return options.join('');
+}
+
+async function loadChannelList() {
+    try {
+        const res = await fetch('/api/admin/channels');
+        return res.ok ? await res.json() : [];
+    } catch {
+        return [];
+    }
+}
+
 export async function loadBotSettings() {
     try {
-        const res = await fetch('/api/admin/bot/settings');
+        const [res, channels] = await Promise.all([fetch('/api/admin/bot/settings'), loadChannelList()]);
         const settings = await res.json();
+        const select = document.getElementById('bot-announce-channel');
+        select.innerHTML = announceChannelOptions(channels, settings.announceChannel || '');
+        select.value = settings.announceChannel || '';
 
         document.getElementById('bot-status-type').value = settings.statusType || 'online';
         document.getElementById('bot-activity-type').value = settings.activityType || 'WATCHING';
@@ -214,6 +244,7 @@ export async function saveBotSettingsForm() {
         eventStartNotifications: document.getElementById('bot-event-start-notifications').checked,
         autoChannelCreation: document.getElementById('bot-auto-channel-creation').checked,
         welcomeMessage: document.getElementById('bot-welcome-message').value,
+        announceChannel: document.getElementById('bot-announce-channel').value,
     };
 
     try {

@@ -32,6 +32,7 @@ const { debugLog } = require('../utils/debugLog');
 const { buildEventUrl } = require('../utils/eventUrl');
 const { MAX_BANNER_BYTES, detectImageType, saveBanner, releaseBanners } = require('../utils/bannerStore');
 const { sharedSessionStore } = require('../utils/sessionStore');
+const { loadBotSettings, announceTarget } = require('../utils/botSettings');
 const { BULK_ACTIONS, MAX_BULK_IDS, planBulkAction } = require('../utils/bulkRegistrations');
 const { followingDates, transferTime, planExtension, seriesUpdateFields, slotsForDate } = require('../utils/eventSeries');
 
@@ -43,6 +44,22 @@ const MAX_TRACKED_ANNOUNCEMENTS = 5;
 
 // All admin routes require auth + admin
 router.use(requireAuth, requireAdmin);
+
+/**
+ * Create the private channels of an event unless "Auto Channel-Erstellung" is
+ * off in the bot center (B-02). The event keeps its own option either way.
+ *
+ * @param {Object} event -> Event with `id`.
+ * @returns {Promise<Object|null>} -> Channel ids, or null when locked or failed.
+ */
+async function createEventChannelsAllowed(event) {
+    const { autoChannelCreation } = await loadBotSettings();
+    if (!autoChannelCreation) {
+        debugLog('admin.channelsLocked', { eventId: event.id });
+        return null;
+    }
+    return createEventChannels(event);
+}
 
 /**
  * GET /api/admin/roles — Get all guild roles
@@ -309,7 +326,7 @@ router.post('/events', validateEvent, async (req, res) => {
             debugLog('admin.createEvent', { title: req.body.title, adminId: req.session?.user?.id });
             await addAuditLog('CREATE_EVENT', req.session.user.id, `Created event "${title}"`, ref.id);
             if (baseEvent.autoCreateChannels && baseEvent.status === 'active') {
-                createEventChannels({ id: ref.id, ...baseEvent }).catch(console.error);
+                createEventChannelsAllowed({ id: ref.id, ...baseEvent }).catch(console.error);
             }
             return { eventId: ref.id, body: { id: ref.id, ...baseEvent } };
         };
@@ -459,8 +476,9 @@ async function applySavedEvent({ eventId, oldEvent, updates, notify, adminId }) 
     const isNowActive = status === 'active';
     const wasActive = oldEvent.status === 'active';
 
-    if (updates.autoCreateChannels && isNowActive && (!oldEvent.autoCreateChannels || !wasActive)) {
-        createEventChannels({ id: eventId, ...updates }).catch(console.error);
+    const hasChannels = !!(oldEvent.discordChannelId || oldEvent.discordTextChannelId);
+    if (updates.autoCreateChannels && isNowActive && !hasChannels) {
+        createEventChannelsAllowed({ id: eventId, ...updates }).catch(console.error);
     } else if ((oldEvent.autoCreateChannels && wasActive) && (!updates.autoCreateChannels || !isNowActive)) {
         deleteEventChannels(eventId).catch(console.error);
     }
@@ -469,9 +487,11 @@ async function applySavedEvent({ eventId, oldEvent, updates, notify, adminId }) 
     await promoteFromWaitlist(eventId, { ...oldEvent, ...updates });
     notifyRegistrationsChanged(eventId);
 
-    // Change DM only on the admin's explicit request (W-04); the flag itself is never stored
+    // Change DM only on the admin's explicit request (W-04) and while DM notifications
+    // are on in the bot center (B-02); the flag itself is never stored
     const changes = describeEventChanges(oldEvent, updates);
     if (!notify || !isNowActive || changes.length === 0) return 0;
+    if (!(await loadBotSettings()).dmNotifications) return 0;
     const { recipients, notified, optedOut } = await notifyEventChange({ eventId, title: updates.title, changes });
     if (recipients + optedOut > 0) {
         const changed = changes.map(change => change.label).join(', ');
@@ -664,7 +684,7 @@ router.put('/events/:id/status', async (req, res) => {
 
         if (oldEvent.autoCreateChannels) {
             if (status === 'active' && oldEvent.status !== 'active') {
-                createEventChannels({ id: req.params.id, ...oldEvent, status }).catch(console.error);
+                createEventChannelsAllowed({ id: req.params.id, ...oldEvent, status }).catch(console.error);
             } else if (status !== 'active' && oldEvent.status === 'active') {
                 deleteEventChannels(req.params.id).catch(console.error);
             }
@@ -747,7 +767,7 @@ router.post('/events/:id/start', async (req, res) => {
         notifyRegistrationsChanged(eventId);
 
         if (data.autoCreateChannels && data.status !== 'active') {
-            createEventChannels({ id: eventId, ...data, ...updates }).catch(console.error);
+            createEventChannelsAllowed({ id: eventId, ...data, ...updates }).catch(console.error);
         }
 
         res.json({ success: true, updates });
@@ -1487,10 +1507,10 @@ router.post('/events/:id/message', async (req, res) => {
  */
 router.post('/events/:id/announce', async (req, res) => {
     try {
-        const channelId = process.env.DISCORD_ANNOUNCE_CHANNEL_ID;
-        if (!channelId) {
-            return res.status(400).json({ error: 'DISCORD_ANNOUNCE_CHANNEL_ID nicht konfiguriert in .env' });
-        }
+        // Bot center choice, else DISCORD_ANNOUNCE_CHANNEL_ID (B-02)
+        const target = announceTarget(await loadBotSettings());
+        if (target.error) return res.status(400).json({ error: target.error });
+        const { channelId } = target;
 
         const eventSnap = await getDoc(doc(db, 'events', req.params.id));
         if (!eventSnap.exists()) {
@@ -1635,10 +1655,10 @@ router.post('/polls/:id/close', async (req, res) => {
  */
 router.post('/polls/:id/announce', async (req, res) => {
     try {
-        const channelId = process.env.DISCORD_ANNOUNCE_CHANNEL_ID;
-        if (!channelId) {
-            return res.status(400).json({ error: 'DISCORD_ANNOUNCE_CHANNEL_ID nicht konfiguriert in .env' });
-        }
+        // Bot center choice, else DISCORD_ANNOUNCE_CHANNEL_ID (B-02)
+        const target = announceTarget(await loadBotSettings());
+        if (target.error) return res.status(400).json({ error: target.error });
+        const { channelId } = target;
         const poll = await loadPoll(req.params.id);
         if (!poll) {
             return res.status(404).json({ error: 'Abstimmung nicht gefunden' });
@@ -1961,6 +1981,16 @@ router.put('/bot/settings', async (req, res) => {
             announceChannel: announceChannel || '',
             welcomeMessage: welcomeMessage || '',
         };
+
+        // Only text channels of the server; while the list cannot be read, only the stored value or none (B-02)
+        const stored = await getBotSettings();
+        if (settings.announceChannel && settings.announceChannel !== stored.announceChannel) {
+            const guildId = process.env.DISCORD_GUILD_ID;
+            const channels = guildId ? await getGuildChannels(guildId) : [];
+            if (!channels.some(channel => channel.id === settings.announceChannel && channel.type === 'text')) {
+                return res.status(400).json({ error: 'Ankündigungskanal nicht gefunden.' });
+            }
+        }
 
         const success = await saveBotSettings(settings);
         if (success) {

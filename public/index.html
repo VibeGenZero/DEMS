@@ -984,28 +984,28 @@
                     <label class="form-check-label" for="bot-dm-notifications">
                       <i class="bi bi-envelope me-1"></i>DM-Benachrichtigungen
                     </label>
-                    <small class="d-block text-muted">Sende Direktnachrichten bei Registrierung, Annahme, etc.</small>
+                    <small class="d-block text-muted">Automatische Nachrichten: Anmeldung, Annahme, Warteliste, Gäste, Änderungen, Abstimmungen, Willkommen. Absagen, Nachrichten des Teams und Gäste-Einladungen gehen immer raus.</small>
                   </div>
                   <div class="form-check form-switch mb-3">
                     <input class="form-check-input" type="checkbox" id="bot-reminder-enabled" checked>
                     <label class="form-check-label" for="bot-reminder-enabled">
                       <i class="bi bi-bell me-1"></i>Erinnerungen
                     </label>
-                    <small class="d-block text-muted">Automatische Erinnerungen vor Event-Start</small>
+                    <small class="d-block text-muted">Automatische Erinnerungen vor Event-Start. Was fällig wird, während der Schalter aus ist, entfällt.</small>
                   </div>
                   <div class="form-check form-switch mb-3">
                     <input class="form-check-input" type="checkbox" id="bot-event-start-notifications" checked>
                     <label class="form-check-label" for="bot-event-start-notifications">
                       <i class="bi bi-play-circle me-1"></i>Event-Start Benachrichtigungen
                     </label>
-                    <small class="d-block text-muted">Benachrichtige Teilnehmer wenn ein Event startet</small>
+                    <small class="d-block text-muted">Benachrichtige Teilnehmer, wenn ein Event startet</small>
                   </div>
                   <div class="form-check form-switch mb-3">
                     <input class="form-check-input" type="checkbox" id="bot-auto-channel-creation" checked>
                     <label class="form-check-label" for="bot-auto-channel-creation">
                       <i class="bi bi-hash me-1"></i>Auto Channel-Erstellung
                     </label>
-                    <small class="d-block text-muted">Erstelle automatisch Voice/Text Channels für Events</small>
+                    <small class="d-block text-muted">Erstelle Voice/Text Channels für Events, die es wünschen. Aus = für kein Event; vorhandene Channels bleiben.</small>
                   </div>
                 </div>
               </div>
@@ -1015,7 +1015,16 @@
             <div class="mb-3 mt-3">
               <label class="form-label"><i class="bi bi-chat-heart me-2"></i>Willkommensnachricht (optional)</label>
               <textarea class="form-control" id="bot-welcome-message" rows="2" placeholder="Nachricht die neuen Teilnehmern per DM gesendet wird..." maxlength="500"></textarea>
-              <small class="text-muted">Wird gesendet, wenn ein Nutzer zum ersten Mal akzeptiert wird. Leer lassen zum Deaktivieren.</small>
+              <small class="text-muted">Wird einmal gesendet, wenn ein Mitglied zum ersten Mal angenommen wird. Platzhalter: {user.name}, {user.mention}. Leer lassen zum Deaktivieren.</small>
+            </div>
+
+            <!-- Announcement channel (admin/bot-control.js, B-02) -->
+            <div class="mb-3">
+              <label class="form-label" for="bot-announce-channel"><i class="bi bi-megaphone me-2"></i>Ankündigungskanal</label>
+              <select class="form-select" id="bot-announce-channel">
+                <option value="">Standard aus .env</option>
+              </select>
+              <small class="text-muted">Textkanal für Event- und Abstimmungs-Ankündigungen. „Standard aus .env“ nutzt DISCORD_ANNOUNCE_CHANNEL_ID.</small>
             </div>
 
             <div class="d-flex justify-content-end gap-2 mt-4">
@@ -1355,6 +1364,8 @@
                     data-change="toggleVisible" data-target="channel-config-options">
                   <label class="form-check-label" for="event-auto-create-channels"><i class="bi bi-headset me-1"></i>Auto-Voice/Text Channels generieren</label>
                 </div>
+                <!-- Bot center lock "Auto Channel-Erstellung" (admin/wizard-bot.js, B-02) -->
+                <div class="small text-muted ms-4 mb-2 is-hidden" id="event-channels-locked"><i class="bi bi-lock me-1"></i>In der Bot-Zentrale ausgeschaltet.</div>
                 <small class="text-muted d-block ms-4 mb-2">Erstellt einen privaten Kanal für dieses Event in Discord,
                   auf den nur angenommene Teilnehmer zugreifen können.</small>
                 <div id="channel-config-options" class="ms-4 mt-3 is-hidden">
