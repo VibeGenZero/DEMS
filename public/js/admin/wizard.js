@@ -14,6 +14,7 @@ import { notifyRequested, rememberLoadedEvent, updateNotifySwitch } from './wiza
 import { rememberSeries, savedEventToast, seriesScope, storedRecurringUntil, updateSeriesScope } from './wizard-series.js';
 import { cancelWizardPreview, renderWizardPreview } from './wizard-preview.js';
 import { updateBannerPreview } from './wizard-banner.js';
+import { renderTemplateChooser, startTemplateChoice } from './wizard-templates.js';
 import { navigateTo } from '../core/router.js';
 import { registerActions } from '../core/actions.js';
 import { applyStyleData, escapeHtml, hexColor, showElement, showToast, toggleElement } from '../core/ui.js';
@@ -199,16 +200,7 @@ export async function showCreateEventModal() {
     document.getElementById('event-msg-accepted').value = '';
     document.getElementById('event-msg-rejected').value = '';
 
-    // Initialize EasyMDE if not exists
-    if (!state.descriptionEditor) {
-        state.descriptionEditor = new EasyMDE({
-            element: document.getElementById('event-description'),
-            spellChecker: false,
-            status: false,
-            maxHeight: "200px",
-            autoDownloadFontAwesome: false,
-        });
-    }
+    ensureDescriptionEditor();
     state.descriptionEditor.value('');
 
     if (state.startDatePicker) state.startDatePicker.clear();
@@ -222,6 +214,7 @@ export async function showCreateEventModal() {
     updateBannerPreview();
 
     await loadRoles();
+    await startTemplateChoice();
 
     clearAllMarks();
     updateStartRequired();
@@ -242,6 +235,82 @@ export async function showCreateEventModal() {
     };
 }
 
+/** EasyMDE of the description, created on first use. */
+function ensureDescriptionEditor() {
+    if (state.descriptionEditor) return;
+    state.descriptionEditor = new EasyMDE({
+        element: document.getElementById('event-description'),
+        spellChecker: false,
+        status: false,
+        maxHeight: "200px",
+        autoDownloadFontAwesome: false,
+    });
+}
+
+/**
+ * Put event settings into the wizard: editing an event and applying a template (W-10).
+ * Dates, deadlines, status and series inputs stay as they are.
+ *
+ * @param {Object} fields -> Stored event or template settings.
+ * @returns {Promise<void>}
+ */
+export async function fillWizard(fields) {
+    const event = fields || {};
+    document.getElementById('event-title').value = event.title || '';
+    ensureDescriptionEditor();
+    state.descriptionEditor.value(event.description || '');
+
+    document.getElementById('event-banner-url').value = event.bannerUrl || '';
+    const accentEl = document.getElementById('event-accent-color');
+    if (accentEl) accentEl.value = event.accentColor || '#8b5cf6';
+
+    const locationTextEl = document.getElementById('event-location-text');
+    const locationChanId = document.getElementById('event-location-channel-id');
+    const locationChanType = document.getElementById('event-location-channel-type');
+    if (locationTextEl) locationTextEl.value = event.location?.text || '';
+    if (locationChanId) locationChanId.value = event.location?.channelId || '';
+    if (locationChanType) locationChanType.value = event.location?.channelType || '';
+
+    // Banner preview (typing runs it through data-input)
+    updateBannerPreview();
+    document.getElementById('event-max').value = event.maxParticipants || 0;
+    document.getElementById('event-category').value = event.category || '';
+    document.getElementById('event-access').value = event.accessMode || 'open';
+    document.getElementById('event-approval').value = event.approvalMode || 'manual';
+    document.getElementById('event-reminder').value = reminderHoursOf(event.reminderHours).join(', ');
+    document.getElementById('event-checkin-message').value = event.checkinMessage || '';
+    document.getElementById('event-auto-create-channels').checked = !!event.autoCreateChannels;
+
+    toggleElement(document.getElementById('channel-config-options'), event.autoCreateChannels);
+    const cConfig = event.channelConfig || {};
+    document.getElementById('event-channel-type').value = cConfig.type || 'voice';
+    document.getElementById('event-voice-name').value = cConfig.voiceName || '';
+    document.getElementById('event-text-name').value = cConfig.textName || '';
+
+    document.getElementById('event-allow-guests').checked = event.allowGuests !== false;
+    renderSlotEditor(event.slots || []);
+
+    await loadRoles();
+    document.getElementById('event-assign-role').value = event.assignRoleId || '';
+
+    // Custom Messages
+    const customMsgs = event.customBotMessages || {};
+    const hasCustom = customMsgs.registration || customMsgs.accepted || customMsgs.rejected;
+    document.getElementById('event-custom-msg-toggle').checked = !!hasCustom;
+    document.getElementById('custom-msg-options').style.display = hasCustom ? 'block' : 'none';
+    document.getElementById('event-msg-registration').value = customMsgs.registration || '';
+    document.getElementById('event-msg-accepted').value = customMsgs.accepted || '';
+    document.getElementById('event-msg-rejected').value = customMsgs.rejected || '';
+
+    document.getElementById('role-requirement-area').style.display = event.accessMode === 'role-required' ? 'block' : 'none';
+    const requiredRoles = new Set(event.requiredRoles || []);
+    document.querySelectorAll('#role-checkboxes input').forEach(cb => { cb.checked = requiredRoles.has(cb.value); });
+
+    const builder = document.getElementById('form-fields-builder');
+    builder.innerHTML = '';
+    (event.formFields || []).forEach(field => addFormField(field));
+}
+
 export async function editEvent(eventId) {
     state.pendingPollDecision = null;
     try {
@@ -251,33 +320,6 @@ export async function editEvent(eventId) {
         document.getElementById('eventModalTitle').textContent = 'Event bearbeiten';
         rememberLoadedEvent(event);
         document.getElementById('event-edit-id').value = eventId;
-        document.getElementById('event-title').value = event.title || '';
-
-        // Update EasyMDE
-        if (!state.descriptionEditor) {
-            state.descriptionEditor = new EasyMDE({
-                element: document.getElementById('event-description'),
-                spellChecker: false,
-                status: false,
-                maxHeight: "200px",
-                autoDownloadFontAwesome: false,
-            });
-        }
-        state.descriptionEditor.value(event.description || '');
-
-        document.getElementById('event-banner-url').value = event.bannerUrl || '';
-
-        // Accent color
-        const accentEl = document.getElementById('event-accent-color');
-        if (accentEl) accentEl.value = event.accentColor || '#8b5cf6';
-
-        // Location
-        const locationTextEl = document.getElementById('event-location-text');
-        const locationChanId = document.getElementById('event-location-channel-id');
-        const locationChanType = document.getElementById('event-location-channel-type');
-        if (locationTextEl) locationTextEl.value = event.location?.text || '';
-        if (locationChanId) locationChanId.value = event.location?.channelId || '';
-        if (locationChanType) locationChanType.value = event.location?.channelType || '';
 
         // Store dates to apply once Flatpickr is initialized (lazy init on step 2)
         const _startDate = event.startDate || null;
@@ -289,26 +331,7 @@ export async function editEvent(eventId) {
         else { state.endDatePicker = flatpickr("#event-end-date", { enableTime: true, dateFormat: "Y-m-d H:i", time_24hr: true, locale: "de" }); state.endDatePicker.setDate(_endDate); }
         DEADLINE_PICKERS.forEach(({ key, field, selector }) => ensureDeadlinePicker(key, selector).setDate(event[field] || null));
 
-        // Banner preview (typing runs it through data-input)
-        updateBannerPreview();
-        document.getElementById('event-max').value = event.maxParticipants || 0;
-        document.getElementById('event-category').value = event.category || '';
-        document.getElementById('event-access').value = event.accessMode || 'open';
-        document.getElementById('event-approval').value = event.approvalMode || 'manual';
         document.getElementById('event-status').value = event.status || 'active';
-        document.getElementById('event-reminder').value = reminderHoursOf(event.reminderHours).join(', ');
-        document.getElementById('event-checkin-message').value = event.checkinMessage || '';
-        document.getElementById('event-auto-create-channels').checked = !!event.autoCreateChannels;
-
-        toggleElement(document.getElementById('channel-config-options'), event.autoCreateChannels);
-        const cConfig = event.channelConfig || {};
-        document.getElementById('event-channel-type').value = cConfig.type || 'voice';
-        document.getElementById('event-voice-name').value = cConfig.voiceName || '';
-        document.getElementById('event-text-name').value = cConfig.textName || '';
-
-        // Allow Guests Toggle
-        document.getElementById('event-allow-guests').checked = event.allowGuests !== false;
-        renderSlotEditor(event.slots || []);
 
         // Recurring fields
         const recurringCb = document.getElementById('event-recurring');
@@ -318,30 +341,8 @@ export async function editEvent(eventId) {
         document.getElementById('event-recurring-until').value = event.recurringUntil || '';
         await rememberSeries(event);
 
-        await loadRoles();
-
-        document.getElementById('event-assign-role').value = event.assignRoleId || '';
-
-        // Custom Messages
-        const customMsgs = event.customBotMessages || {};
-        const hasCustom = customMsgs.registration || customMsgs.accepted || customMsgs.rejected;
-        document.getElementById('event-custom-msg-toggle').checked = !!hasCustom;
-        document.getElementById('custom-msg-options').style.display = hasCustom ? 'block' : 'none';
-        document.getElementById('event-msg-registration').value = customMsgs.registration || '';
-        document.getElementById('event-msg-accepted').value = customMsgs.accepted || '';
-        document.getElementById('event-msg-rejected').value = customMsgs.rejected || '';
-
-        document.getElementById('role-requirement-area').style.display = event.accessMode === 'role-required' ? 'block' : 'none';
-        if (event.requiredRoles) {
-            event.requiredRoles.forEach(roleId => {
-                const cb = document.querySelector(`#role-checkboxes input[value="${roleId}"]`);
-                if (cb) cb.checked = true;
-            });
-        }
-
-        const builder = document.getElementById('form-fields-builder');
-        builder.innerHTML = '';
-        (event.formFields || []).forEach(field => addFormField(field));
+        await fillWizard(event);
+        renderTemplateChooser({ editing: true });
 
         document.getElementById('event-access').onchange = function () {
             document.getElementById('role-requirement-area').style.display = this.value === 'role-required' ? 'block' : 'none';

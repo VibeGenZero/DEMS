@@ -1112,6 +1112,23 @@
 
             <!-- ── Step 1: Grundlagen ── -->
             <div class="wizard-page" id="wizard-page-1">
+              <!-- Only for a new event with at least one template (admin/wizard-templates.js, W-10) -->
+              <div class="wizard-template-area is-hidden" id="wizard-template-area">
+                <label class="form-label" for="event-template-select"><i class="bi bi-bookmark me-1"></i>Aus Vorlage starten</label>
+                <div class="input-group">
+                  <select class="form-select" id="event-template-select" data-change="applyTemplate">
+                    <option value="">Vorlage wählen …</option>
+                  </select>
+                  <button type="button" class="btn btn-outline-danger" id="event-template-delete" data-click="askDeleteTemplate"
+                    aria-label="Vorlage löschen" title="Vorlage löschen" disabled><i class="bi bi-trash"></i></button>
+                </div>
+                <div class="wizard-template-confirm is-hidden" id="wizard-template-delete-confirm" role="alert">
+                  <span id="wizard-template-delete-text"></span>
+                  <button type="button" class="btn btn-sm btn-secondary" data-click="cancelDeleteTemplate">Abbrechen</button>
+                  <button type="button" class="btn btn-sm btn-danger" data-click="deleteTemplate"><i class="bi bi-trash me-1"></i>Löschen</button>
+                </div>
+                <div class="form-text">Übernimmt alle Einstellungen der Vorlage. Datum und Status trägst du selbst ein.</div>
+              </div>
               <div class="mb-3">
                 <label class="form-label" for="event-title">Titel <span class="text-danger">*</span></label>
                 <input type="text" class="form-control" id="event-title" maxlength="200" placeholder="Event-Name">
@@ -1418,7 +1435,12 @@
 
         <!-- Wizard Footer -->
         <div class="modal-footer border-0 justify-content-between">
-          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Abbrechen</button>
+          <div class="wizard-footer-start">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Abbrechen</button>
+            <button type="button" class="btn btn-outline-secondary" id="wizard-btn-template" data-click="openTemplateSave">
+              <i class="bi bi-bookmark-plus me-1"></i>Als Vorlage speichern
+            </button>
+          </div>
           <div class="d-flex flex-wrap justify-content-end gap-2 align-items-center">
             <span class="text-muted small me-2" id="wizard-step-counter">Schritt 1 von 5</span>
             <button type="button" class="btn btn-outline-secondary is-hidden" id="wizard-btn-back" data-click="wizardBack">
@@ -1446,6 +1468,17 @@
             <button type="button" class="btn btn-accent is-hidden" id="wizard-btn-save" data-click="saveEvent">
               <i class="bi bi-save me-1"></i>Speichern
             </button>
+          </div>
+          <!-- Name of the new template; saving does not save the event (admin/wizard-templates.js, W-10) -->
+          <div class="wizard-template-save is-hidden" id="wizard-template-save">
+            <label class="form-label small mb-1" for="event-template-name">Name der Vorlage</label>
+            <div class="wizard-template-save-row">
+              <input type="text" class="form-control" id="event-template-name" maxlength="80" placeholder="z. B. Raid-Abend"
+                data-input="resetTemplateWarning">
+              <button type="button" class="btn btn-secondary" data-click="closeTemplateSave">Abbrechen</button>
+              <button type="button" class="btn btn-accent" data-click="saveTemplate"><i class="bi bi-bookmark-check me-1"></i>Vorlage speichern</button>
+            </div>
+            <div class="wizard-template-warning is-hidden" id="wizard-template-warning" role="alert"></div>
           </div>
         </div>
 

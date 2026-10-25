@@ -39,7 +39,8 @@ The Discord registration path calls `isRegistrationBlocked()` directly (`checkRe
 
 | Export | Rules |
 |---|---|
-| `validateEvent` | `title` required, ≤200 chars; `maxParticipants` integer ≥0; `accessMode` ∈ `open`, `role-required`; `approvalMode` ∈ `manual`, `instant`; `status` ∈ `draft`, `active`, `archived`, `cancelled`; `description` ≤5000 chars; `bannerUrl` empty, an http(s) URL ≤2000 chars or an uploaded banner path whose file exists (`isStoredBanner`, W-12; else 400 "Banner muss eine http(s)-URL oder ein hochgeladenes Bild sein."); `validateEvent` is async for that check; `accentColor` empty or `#rgb`/`#rrggbb` |
+| `validateEvent` | `title` required, ≤200 chars; `maxParticipants` integer ≥0; `accessMode` ∈ `open`, `role-required`; `approvalMode` ∈ `manual`, `instant`; `status` ∈ `draft`, `active`, `archived`, `cancelled`; `description` ≤5000 chars; `bannerUrl` empty, an http(s) URL ≤2000 chars or an uploaded banner path whose file exists (`isStoredBanner`, W-12; else 400 "Banner muss eine http(s)-URL oder ein hochgeladenes Bild sein."); `validateEvent` is async for that check; `accentColor` empty or `#rgb`/`#rrggbb`. The rules live in `checkEventFields(body, { template })` → list of German sentences; `validateEvent` only answers 400 with them |
+| `checkEventFields` | the rules above for any body; with `{ template: true }` (event templates, W-10) the title may be empty and status, start date, end and deadline rules are skipped — templates store none of them |
 | `validateRegStatus` | `status` ∈ `accepted`, `rejected`, `waitlisted` |
 | `validateBotMessages` | `registration`, `accepted`, `rejected` ≤2000 chars each |
 

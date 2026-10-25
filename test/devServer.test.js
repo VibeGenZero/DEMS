@@ -2614,3 +2614,220 @@ test('two parallel extensions create the new dates only once', async () => {
     assert.deepEqual(bodies.map(body => body.createdDates).sort(), [0, 0, 0, 0, 0, 1]);
     assert.equal((await seriesDatesOf(dates[0].seriesId)).length, 5);
 });
+
+// ── Event templates (W-10) ──────────────────────────────────────────────
+
+const TEMPLATE_SETTINGS = {
+    title: 'Spieleabend',
+    description: 'Brettspiele und Snacks',
+    category: 'Community',
+    approvalMode: 'instant',
+    formFields: [{ label: 'Lieblingsspiel', type: 'text', required: false, options: [], description: '' }],
+    reminderHours: '24, 1',
+    slots: [{ name: 'Spielleitung', emoji: '', capacity: 1 }, { name: 'Mitspieler', emoji: '', capacity: 5 }],
+    // Never part of a template
+    startDate: '2099-03-06T19:00:00.000Z',
+    status: 'active',
+    checkinCode: '123456',
+    recurring: true
+};
+
+/** Create a template and return the answer; `body` defaults to a valid one. */
+async function createTemplate(admin, name, settings = TEMPLATE_SETTINGS) {
+    return admin.send('POST', '/api/admin/event-templates', { name, settings });
+}
+
+/** Delete every template whose name starts with the prefix of a test. */
+async function deleteTemplates(admin, prefix) {
+    const templates = await (await admin.request('/api/admin/event-templates')).json();
+    for (const template of templates.filter(item => item.name.startsWith(prefix))) {
+        await admin.send('DELETE', `/api/admin/event-templates/${template.id}`);
+    }
+}
+
+async function auditActions(admin) {
+    const { data: logs } = await (await admin.request('/api/admin/audit-log?limit=100')).json();
+    return logs;
+}
+
+test('an admin creates a template that keeps only the recurring settings', async () => {
+    const admin = await loginAs('admin');
+    const res = await createTemplate(admin, '  T1 Spieleabend  ');
+    assert.equal(res.status, 200, await res.clone().text());
+    const created = await res.json();
+    assert.equal(created.name, 'T1 Spieleabend');
+    assert.equal(created.createdBy, personaById('admin').userId);
+    assert.equal(created.settings.title, 'Spieleabend');
+    assert.equal(created.settings.maxParticipants, 6);
+    assert.equal(created.settings.allowGuests, false);
+    assert.deepEqual(created.settings.reminderHours, [{ hours: 24 }, { hours: 1 }]);
+    for (const field of ['startDate', 'status', 'checkinCode', 'recurring']) {
+        assert.equal(field in created.settings, false, field);
+    }
+
+    const logs = await auditActions(admin);
+    assert.ok(logs.some(item => item.action === 'CREATE_EVENT_TEMPLATE' && item.targetId === created.id), 'audit entry');
+    await deleteTemplates(admin, 'T1 ');
+});
+
+test('all admins see the same templates, sorted by name', async () => {
+    const admin = await loginAs('admin');
+    assert.equal((await createTemplate(admin, 'T2 Zocken')).status, 200);
+    assert.equal((await createTemplate(admin, 'T2 Abend')).status, 200);
+    const templates = await (await admin.request('/api/admin/event-templates')).json();
+    const names = templates.map(template => template.name).filter(name => name.startsWith('T2 '));
+    assert.deepEqual(names, ['T2 Abend', 'T2 Zocken']);
+    const sorted = [...templates.map(template => template.name)].sort((a, b) => a.localeCompare(b, 'de'));
+    assert.deepEqual(templates.map(template => template.name), sorted);
+    assert.ok(templates.every(template => template.id && template.settings && template.createdBy));
+    await deleteTemplates(admin, 'T2 ');
+});
+
+test('members cannot read or write templates and writes need the CSRF token', async () => {
+    const member = await loginAs('member');
+    assert.equal((await member.request('/api/admin/event-templates')).status, 403);
+    assert.equal((await createTemplate(member, 'T3 Mitglied')).status, 403);
+
+    const admin = await loginAs('admin');
+    const noToken = await admin.request('/api/admin/event-templates', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: 'T3 Ohne Token', settings: {} })
+    });
+    assert.equal(noToken.status, 403);
+    const templates = await (await admin.request('/api/admin/event-templates')).json();
+    assert.equal(templates.some(template => template.name.startsWith('T3 ')), false);
+});
+
+test('template names must be unique, ignoring case, and 1 to 80 characters long', async () => {
+    const admin = await loginAs('admin');
+    assert.equal((await createTemplate(admin, 'T4 Raid')).status, 200);
+    const taken = await createTemplate(admin, 't4 raid');
+    assert.equal(taken.status, 409);
+    assert.deepEqual(await taken.json(), { error: 'Eine Vorlage mit diesem Namen gibt es schon.' });
+    for (const name of ['', '   ', 'x'.repeat(81), undefined]) {
+        const res = await createTemplate(admin, name);
+        assert.equal(res.status, 400, String(name));
+        assert.deepEqual(await res.json(), { error: 'Der Name der Vorlage muss 1 bis 80 Zeichen lang sein.' });
+    }
+    await deleteTemplates(admin, 'T4 ');
+});
+
+test('template settings are checked like event settings, but the title may be empty', async () => {
+    const admin = await loginAs('admin');
+    const badBanner = await createTemplate(admin, 'T5 Banner', { bannerUrl: 'javascript:alert(1)' });
+    assert.equal(badBanner.status, 400);
+    assert.deepEqual(await badBanner.json(), { error: 'Banner muss eine http(s)-URL oder ein hochgeladenes Bild sein.' });
+    const badSlots = await createTemplate(admin, 'T5 Slots', { slots: [{ name: '', capacity: 1 }] });
+    assert.equal(badSlots.status, 400);
+    assert.match((await badSlots.json()).error, /Slot braucht einen Namen/);
+
+    const empty = await createTemplate(admin, 'T5 Leer', { title: '' });
+    assert.equal(empty.status, 200, await empty.clone().text());
+    const templates = await (await admin.request('/api/admin/event-templates')).json();
+    assert.deepEqual(templates.filter(template => template.name.startsWith('T5 ')).map(template => template.name), ['T5 Leer']);
+    await deleteTemplates(admin, 'T5 ');
+});
+
+test('an admin overwrites a template; renaming onto another name is refused', async () => {
+    const admin = await loginAs('admin');
+    const { id } = await (await createTemplate(admin, 'T6 Raid')).json();
+    assert.equal((await createTemplate(admin, 'T6 Turnier')).status, 200);
+    const raider = await loginAs('raider');
+    assert.equal((await raider.send('PUT', `/api/admin/event-templates/${id}`, { name: 'T6 Raid', settings: {} })).status, 403);
+
+    const other = await loginAs('admin');
+    const formFields = [{ label: 'Klasse', type: 'text', required: true, options: [], description: '' }];
+    const res = await other.send('PUT', `/api/admin/event-templates/${id}`, { name: 'T6 Raid', settings: { title: 'Raid', formFields } });
+    assert.equal(res.status, 200, await res.clone().text());
+    const updated = await res.json();
+    assert.deepEqual(updated.settings.formFields, formFields);
+    assert.equal(updated.updatedBy, personaById('admin').userId);
+    assert.ok(updated.updatedAt);
+    assert.equal(updated.createdBy, personaById('admin').userId);
+
+    const listed = (await (await other.request('/api/admin/event-templates')).json()).find(template => template.id === id);
+    assert.deepEqual(listed.settings.formFields, formFields);
+    assert.ok((await auditActions(other)).some(item => item.action === 'UPDATE_EVENT_TEMPLATE' && item.targetId === id));
+
+    const rename = await other.send('PUT', `/api/admin/event-templates/${id}`, { name: 't6 turnier', settings: {} });
+    assert.equal(rename.status, 409);
+    assert.deepEqual(await rename.json(), { error: 'Eine Vorlage mit diesem Namen gibt es schon.' });
+    // Same name in other case is the template itself
+    assert.equal((await other.send('PUT', `/api/admin/event-templates/${id}`, { name: 't6 raid', settings: {} })).status, 200);
+    await deleteTemplates(other, 'T6 ');
+    await deleteTemplates(other, 't6 ');
+});
+
+test('unknown templates answer 404 on overwrite and delete', async () => {
+    const admin = await loginAs('admin');
+    for (const method of ['PUT', 'DELETE']) {
+        const res = await admin.send(method, '/api/admin/event-templates/gibt-es-nicht', { name: 'T7', settings: {} });
+        assert.equal(res.status, 404, method);
+        assert.deepEqual(await res.json(), { error: 'Vorlage nicht gefunden' });
+    }
+});
+
+test('deleting a template leaves events with the same settings alone', async () => {
+    const admin = await loginAs('admin');
+    const { id, settings } = await (await createTemplate(admin, 'T8 Spieleabend')).json();
+    const start = new Date(Date.now() + 6 * 86_400_000).toISOString();
+    const eventRes = await admin.send('POST', '/api/admin/events', { ...settings, status: 'draft', startDate: start });
+    assert.equal(eventRes.status, 200, await eventRes.clone().text());
+    const { id: eventId } = await eventRes.json();
+
+    const res = await admin.send('DELETE', `/api/admin/event-templates/${id}`);
+    assert.equal(res.status, 200);
+    const templates = await (await admin.request('/api/admin/event-templates')).json();
+    assert.equal(templates.some(template => template.id === id), false);
+    assert.ok((await auditActions(admin)).some(item => item.action === 'DELETE_EVENT_TEMPLATE' && item.targetId === id));
+
+    const event = await (await admin.request(`/api/events/${eventId}?status=all`)).json();
+    assert.equal(event.title, 'Spieleabend');
+    assert.equal(event.slots.length, 2);
+    await admin.send('DELETE', `/api/admin/events/${eventId}`);
+});
+
+test('at most 50 templates can exist', async () => {
+    const admin = await loginAs('admin');
+    const existing = (await (await admin.request('/api/admin/event-templates')).json()).length;
+    const { db, doc, setDoc, deleteDoc } = serverStore();
+    const filler = [];
+    for (let i = existing; i < 50; i++) {
+        const id = `t9-filler-${i}`;
+        filler.push(id);
+        await setDoc(doc(db, 'eventTemplates', id), {
+            name: `T9 Füller ${i}`, settings: {}, createdAt: new Date().toISOString(), createdBy: 'test', updatedAt: null, updatedBy: null
+        });
+    }
+    const res = await createTemplate(admin, 'T9 Zu viel');
+    assert.equal(res.status, 400);
+    assert.deepEqual(await res.json(), { error: 'Es sind höchstens 50 Vorlagen möglich.' });
+    for (const id of filler) await deleteDoc(doc(db, 'eventTemplates', id));
+});
+
+test('a template keeps its uploaded banner when the event using it is deleted', async () => {
+    const admin = await loginAs('admin');
+    const { bannerUrl } = await (await uploadBanner(admin, PNG_BYTES)).json();
+    const start = new Date(Date.now() + 7 * 86_400_000).toISOString();
+    const { id: eventId } = await (await admin.send('POST', '/api/admin/events', { title: 'Mit Banner', status: 'draft', startDate: start, bannerUrl })).json();
+    const created = await createTemplate(admin, 'T10 Banner', { bannerUrl });
+    assert.equal(created.status, 200, await created.clone().text());
+
+    await admin.send('DELETE', `/api/admin/events/${eventId}`);
+    assert.ok(bannerFiles().includes(path.basename(bannerUrl)), 'the template still uses it');
+    await deleteTemplates(admin, 'T10 ');
+    assert.equal(bannerFiles().includes(path.basename(bannerUrl)), false, 'deleted with the last template');
+});
+
+test('overwriting a template with another banner deletes the old unused file', async () => {
+    const admin = await loginAs('admin');
+    const { bannerUrl: first } = await (await uploadBanner(admin, PNG_BYTES)).json();
+    const { bannerUrl: second } = await (await uploadBanner(admin, PNG_BYTES)).json();
+    const { id } = await (await createTemplate(admin, 'T11 Banner', { bannerUrl: first })).json();
+
+    const res = await admin.send('PUT', `/api/admin/event-templates/${id}`, { name: 'T11 Banner', settings: { bannerUrl: second } });
+    assert.equal(res.status, 200, await res.clone().text());
+    assert.equal(bannerFiles().includes(path.basename(first)), false, 'old file gone');
+    assert.ok(bannerFiles().includes(path.basename(second)), 'new file kept');
+    await deleteTemplates(admin, 'T11 ');
+});

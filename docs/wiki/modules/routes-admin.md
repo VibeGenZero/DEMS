@@ -3,7 +3,7 @@ id: routes-admin
 title: routes/admin.js — admin API
 type: module
 tags: [api, admin, events, registrations, discord, bot-control, maintenance, audit-log, csv]
-sources: [routes/admin.js, middleware/validators.js, utils/eventUtils.js, utils/capacity.js, utils/memberOverview.js, utils/insights.js, utils/participantMessage.js]
+sources: [routes/admin.js, middleware/validators.js, utils/eventUtils.js, utils/capacity.js, utils/memberOverview.js, utils/insights.js, utils/participantMessage.js, utils/eventTemplates.js]
 part_of: [architecture]
 depends_on: [middleware, utils, data-layer, bot]
 see_also: [event-lifecycle, maintenance-mode, discord-integration, api-index]
@@ -32,6 +32,10 @@ see_also: [event-lifecycle, maintenance-mode, discord-integration, api-index]
 | DELETE | `/events/:id` | `await deleteEventChannels(id)` first (it reads the channel ids from the event), then deletes event + its registrations, then `releaseBanners` for its banner (W-12) | `DELETE_EVENT` |
 | DELETE | `/events/series/:seriesId` | per event: `await deleteEventChannels(id)`, then event + registrations; afterwards `releaseBanners` for the shared banner (W-12) | `DELETE_SERIES` |
 | POST | `/events/:id/duplicate` | copy as `draft`, title `"<title> (Kopie)"`, `checkinCode`, `announcements`, reminder `sent` flags and `eventStartNotificationSent` reset | `DUPLICATE_EVENT` |
+| GET | `/event-templates` | W-10: all `eventTemplates` documents as `{ id, name, settings, createdAt, createdBy, updatedAt, updatedBy }`, sorted by name (`localeCompare` de) | — |
+| POST | `/event-templates` | W-10: body `{ name, settings }`; 400 at `MAX_TEMPLATES` (50) „Es sind höchstens 50 Vorlagen möglich.“; name via `normalizeTemplateName` (400), taken name ignoring case → 409 „Eine Vorlage mit diesem Namen gibt es schon.“; settings via `checkEventFields(settings, { template: true })` and `pickTemplateSettings` (`utils/eventTemplates.js`; only `TEMPLATE_FIELDS`, no dates/status/Discord ids) | `CREATE_EVENT_TEMPLATE` |
+| PUT | `/event-templates/:id` | W-10: same checks (the own name may change case), keeps `createdAt`/`createdBy`, sets `updatedAt`/`updatedBy`; a replaced uploaded banner goes through `releaseBanners`; unknown id → 404 „Vorlage nicht gefunden“ | `UPDATE_EVENT_TEMPLATE` |
+| DELETE | `/event-templates/:id` | W-10: deletes the template (events made from it stay), then `releaseBanners` for its banner; unknown id → 404 | `DELETE_EVENT_TEMPLATE` |
 | POST | `/events/:id/generate-checkin` | 6-digit code (`crypto.randomInt`), `checkinEnabled: true` | `GENERATE_CHECKIN` |
 | GET | `/events/:id/checkin-stats` | `{ total, checkedIn, code }` over accepted registrations | — |
 | GET | `/events/:id/registrations` | paginated (`page`, `limit` 50), newest first; plus `slots` and `eventStatus` of the event; waitlisted entries carry `waitlistPosition` (counted before paging, W-05) | — |
@@ -73,5 +77,5 @@ grep `router.(get|post|put|delete)('/<path>` in `routes/admin.js`; the file is g
 - `POST /events/:id/start|end` use `doc(collectionRef, id)`; the SQLite adapter supports that form since 2026-09 (it used to 404).
 - `deleteEventChannels(id)` reads the channel ids from the event document → call it (and await it) before the event is deleted; it checks for channel ids itself, so no status condition is needed.
 - The event payload is whitelisted field by field in POST and PUT (`baseEvent`, `updates`) — adding an event field means editing both. See [add-event-field](../howto/add-event-field.md).
-- Uploaded banners (W-12) are shared by reference: series and `POST /events/:id/duplicate` copy the path, so a route that drops a banner never deletes the file itself but calls `releaseBanners` (`utils/bannerStore.js`), which deletes it only when no stored event uses it. Unsaved uploads are removed by the startup sweep after 24 h.
+- Uploaded banners (W-12) are shared by reference: series and `POST /events/:id/duplicate` copy the path, so a route that drops a banner never deletes the file itself but calls `releaseBanners` (`utils/bannerStore.js`), which deletes it only when no stored event and no event template (W-10) uses it. Unsaved uploads are removed by the startup sweep after 24 h.
 - Status, cancel, start, end and event updates call `notifyRegistrationsChanged`, so announcement buttons disappear on inactive events.

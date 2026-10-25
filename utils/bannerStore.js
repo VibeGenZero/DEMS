@@ -114,7 +114,7 @@ function bannerForDiscord(bannerUrl) {
 }
 
 /**
- * Banner paths every stored event still uses.
+ * Banner paths every stored event or event template still uses.
  *
  * @returns {Promise<Set<string>>}
  */
@@ -127,11 +127,17 @@ async function usedBanners() {
         const bannerUrl = docSnap.data().bannerUrl;
         if (isBannerPath(bannerUrl)) used.add(bannerUrl);
     });
+    // Event templates (W-10) keep their banner for the events still to come
+    const templates = await getDocs(collection(db, 'eventTemplates'));
+    templates.forEach(docSnap => {
+        const bannerUrl = docSnap.data().settings?.bannerUrl;
+        if (isBannerPath(bannerUrl)) used.add(bannerUrl);
+    });
     return used;
 }
 
 /**
- * Delete files that just stopped being used, unless another event still uses them.
+ * Delete files that just stopped being used, unless another event or a template still uses them.
  * Never throws; failures are logged.
  *
  * @param {Array<*>} values -> Former banner values (external URLs and empties are ignored).

@@ -85,6 +85,8 @@ see_also: [request-lifecycle, add-api-endpoint]
 | POST | `/api/admin/polls`, `/polls/:id/close`, `/polls/:id/announce` |
 | PUT | `/api/admin/polls/:id` |
 | DELETE | `/api/admin/polls/:id` |
+| GET / POST | `/api/admin/event-templates` (W-10, shared event templates; POST `{ name, settings }`) |
+| PUT / DELETE | `/api/admin/event-templates/:id` (W-10) |
 | GET / PUT | `/api/admin/bot-messages` |
 | GET | `/api/admin/audit-log` |
 | DELETE | `/api/admin/reset` |

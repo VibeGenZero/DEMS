@@ -612,6 +612,44 @@ function buildPollVotes(clock) {
     ]);
 }
 
+/** One shared event template for the wizard's "Aus Vorlage starten" (W-10). */
+function buildEventTemplates(clock) {
+    return {
+        'dev-template-raid': {
+            name: 'Raid-Abend',
+            settings: {
+                title: 'Raid-Abend',
+                description: 'Wöchentlicher Raid. Bitte 15 Minuten vorher im Voice sein.',
+                bannerUrl: '',
+                accentColor: '#22c55e',
+                category: 'Raid',
+                location: { text: 'Event-Voice', channelId: CHANNEL_ID.EVENT_VOICE, channelType: 'voice' },
+                maxParticipants: 6,
+                accessMode: 'role-required',
+                requiredRoles: [ROLE_ID.RAID_TEAM],
+                approvalMode: 'manual',
+                allowGuests: false,
+                slots: [
+                    { id: 'tpl-tank', name: 'Tank', emoji: '', capacity: 1 },
+                    { id: 'tpl-heal', name: 'Heiler', emoji: '', capacity: 2 },
+                    { id: 'tpl-dps', name: 'Schaden', emoji: '', capacity: 3 }
+                ],
+                assignRoleId: '',
+                formFields: [{ label: 'Charaktername', type: 'text', required: true, options: [], description: 'Name deines Charakters im Spiel' }],
+                reminderHours: [{ hours: 24 }, { hours: 1 }],
+                checkinMessage: '',
+                autoCreateChannels: false,
+                channelConfig: {},
+                customBotMessages: {}
+            },
+            createdAt: clock.offset(-10 * DAY),
+            createdBy: people.mori.userId,
+            updatedAt: null,
+            updatedBy: null
+        }
+    };
+}
+
 function buildSeedData(now = new Date()) {
     const clock = createClock(now);
     return {
@@ -622,6 +660,7 @@ function buildSeedData(now = new Date()) {
         auditLogs: buildAuditLogs(clock),
         polls: buildPolls(clock),
         pollVotes: buildPollVotes(clock),
+        eventTemplates: buildEventTemplates(clock),
         ...buildSettings(clock)
     };
 }
