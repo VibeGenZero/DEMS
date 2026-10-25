@@ -182,3 +182,81 @@ test('a reminder counts as sent even when every participant switched reminders o
         await deleteDoc(doc(db, 'users', PARTICIPANT));
     }
 });
+
+// ── Bot center switches (B-02) ──────────────────────────────────────────
+
+const { normalizeBotSettings } = require('../utils/botSettings');
+
+/** One pass with the given bot center settings; returns the DMs. */
+async function runPassWith(changes, refresh = () => {}) {
+    const sent = [];
+    await bot.checkReminders({
+        now: NOW,
+        settings: normalizeBotSettings(changes),
+        send: async (userId, message) => { sent.push({ userId, message }); },
+        refresh
+    });
+    return sent;
+}
+
+test('reminders off: a due reminder is dropped and not sent after switching on again', async () => {
+    await storeEvent('rem-off', { startDate: inHours(2), reminderHours: [{ hours: 24, sent: false }] });
+    try {
+        assert.deepEqual(await runPassWith({ reminderEnabled: false }), []);
+        assert.deepEqual((await storedEvent('rem-off')).reminderHours, [{ hours: 24, sent: true }]);
+        assert.deepEqual(await runPassWith({ reminderEnabled: true }), [], 'no late reminder');
+    } finally {
+        await removeEvent('rem-off');
+    }
+});
+
+test('start notifications off: no start DM, and none later', async () => {
+    await storeEvent('start-off', { startDate: inHours(-0.02), reminderHours: [] });
+    try {
+        assert.deepEqual(await runPassWith({ eventStartNotifications: false }), []);
+        assert.equal((await storedEvent('start-off')).eventStartNotificationSent, true);
+        assert.deepEqual(await runPassWith({ eventStartNotifications: true }), []);
+    } finally {
+        await removeEvent('start-off');
+    }
+});
+
+test('reminders off leave the start DM alone, start notifications off leave reminders alone', async () => {
+    await storeEvent('mixed', { startDate: inHours(-0.02), reminderHours: [] });
+    try {
+        const sent = await runPassWith({ reminderEnabled: false });
+        assert.equal(sent.length, 1);
+        assert.match(sent[0].message, /hat gerade begonnen/);
+    } finally {
+        await removeEvent('mixed');
+    }
+    await storeEvent('mixed-2', { startDate: inHours(2), reminderHours: [{ hours: 24, sent: false }] });
+    try {
+        const sent = await runPassWith({ eventStartNotifications: false });
+        assert.equal(sent.length, 1);
+        assert.match(sent[0].message, /Erinnerung/);
+    } finally {
+        await removeEvent('mixed-2');
+    }
+});
+
+test('the deadline refresh runs with reminders off', async () => {
+    const refreshed = [];
+    await storeEvent('deadline-rem-off', { startDate: inHours(48), registrationDeadline: inHours(-1), registrationClosedRefreshed: false });
+    try {
+        await runPassWith({ reminderEnabled: false, eventStartNotifications: false }, (eventId) => refreshed.push(eventId));
+        assert.deepEqual(refreshed, ['deadline-rem-off']);
+    } finally {
+        await removeEvent('deadline-rem-off');
+    }
+});
+
+test('the reminder switch no longer stops the scheduler (it also closes announcements at the deadline)', () => {
+    const fs = require('fs');
+    const source = fs.readFileSync(path.join(__dirname, '..', 'bot.js'), 'utf8').replace(/\r\n/g, '\n');
+    const start = source.indexOf('async function applyBotSettings');
+    const body = source.slice(start, source.indexOf('\n}\n', start));
+    assert.ok(body.length > 100, 'applyBotSettings found');
+    assert.equal(/clearInterval\(reminderInterval\)|startReminderScheduler\(/.test(body), false,
+        'applyBotSettings must not start or stop the reminder scheduler; reminderEnabled is checked inside checkReminders (B-02)');
+});

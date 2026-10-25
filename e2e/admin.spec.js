@@ -454,3 +454,39 @@ test('admins accept and reject several registrations at once (W-08)', async ({ p
     // Leave no registrations of the personas behind for other specs
     await adminRequest(page, 'DELETE', `/api/admin/events/${id}`);
 });
+
+test('admins choose the announcement channel and lock channel creation in the bot center (B-02)', async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== 'desktop', 'same form on the phone; shared settings must not race');
+    const errors = watchErrors(page);
+    await loginAs(page, 'admin');
+    const before = await adminRequest(page, 'GET', '/api/admin/bot/settings');
+    try {
+        await navigate(page, 'bot-control');
+        const select = page.locator('#bot-announce-channel');
+        await expect(select.locator('option', { hasText: '#events' })).toHaveCount(1);
+        await expect(select.locator('option').first()).toHaveText('Standard aus .env');
+        await expect(select.locator('option', { hasText: 'Lobby' })).toHaveCount(0);
+        await select.selectOption({ label: '#events' });
+        await page.locator('#bot-auto-channel-creation').uncheck();
+        await page.locator('#bot-settings-form button[type="submit"]').click();
+        await expect(page.locator('#toast-message')).toHaveText('Bot-Einstellungen gespeichert!');
+
+        // The choice survives a reload
+        await page.reload();
+        await navigate(page, 'bot-control');
+        await expect(page.locator('#bot-announce-channel option:checked')).toHaveText('#events');
+        await expect(page.locator('#bot-auto-channel-creation')).not.toBeChecked();
+
+        // The wizard shows the locked channel option
+        await navigate(page, 'admin');
+        await page.locator('[data-click="showCreateEventModal"]').first().click();
+        await waitForDialog(page, '#eventModal');
+        await page.locator('#eventModal [data-click="wizardGoTo"][data-step="5"]').click();
+        await expect(page.locator('#event-auto-create-channels')).toBeDisabled();
+        await expect(page.locator('#event-channels-locked')).toHaveText('In der Bot-Zentrale ausgeschaltet.');
+        await page.locator('#eventModal .btn-close').click();
+        expect(errors).toEqual([]);
+    } finally {
+        await adminRequest(page, 'PUT', '/api/admin/bot/settings', before);
+    }
+});

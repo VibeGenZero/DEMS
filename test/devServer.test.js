@@ -2831,3 +2831,209 @@ test('overwriting a template with another banner deletes the old unused file', a
     assert.ok(bannerFiles().includes(path.basename(second)), 'new file kept');
     await deleteTemplates(admin, 'T11 ');
 });
+
+// ── Bot center switches (B-02) ──────────────────────────────────────────
+
+/**
+ * Change some bot center settings and keep the rest as stored.
+ *
+ * @param {Object} admin -> Admin client.
+ * @param {Object} changes -> Settings to change.
+ * @returns {Promise<Object>} -> The settings before the change (for restoring).
+ */
+async function changeBotSettings(admin, changes) {
+    const current = await (await admin.request('/api/admin/bot/settings')).json();
+    const res = await admin.send('PUT', '/api/admin/bot/settings', { ...current, ...changes });
+    assert.equal(res.status, 200, await res.clone().text());
+    return current;
+}
+
+/** Run `fn` with bot center settings changed, then restore them. */
+async function withBotSettings(admin, changes, fn) {
+    const before = await changeBotSettings(admin, changes);
+    try {
+        await fn();
+    } finally {
+        await admin.send('PUT', '/api/admin/bot/settings', before);
+    }
+}
+
+test('DM notifications off: registering is accepted without a DM, on again it comes', async () => {
+    const admin = await loginAs('admin');
+    const member = await loginAs('member');
+    await withBotSettings(admin, { dmNotifications: false }, async () => {
+        const event = await createEventAs(admin, { title: 'Stilles Treffen' });
+        const before = dmCount('Tom');
+        const reg = await (await member.send('POST', `/api/events/${event.id}/register`, {})).json();
+        assert.equal(reg.status, 'accepted', JSON.stringify(reg));
+        assert.equal(dmCount('Tom'), before);
+    });
+    const event = await createEventAs(admin, { title: 'Lautes Treffen' });
+    const before = dmCount('Tom');
+    const reg = await (await member.send('POST', `/api/events/${event.id}/register`, {})).json();
+    assert.equal(reg.status, 'accepted', JSON.stringify(reg));
+    assert.equal(dmCount('Tom'), before + 1);
+});
+
+test('DM notifications off: an admin accepts without a DM, the event role is still given', async () => {
+    const admin = await loginAs('admin');
+    const member = await loginAs('member');
+    await withBotSettings(admin, { dmNotifications: false }, async () => {
+        const event = await createEventAs(admin, { title: 'Mit Rolle', approvalMode: 'manual', assignRoleId: ROLE_ID.RAID_TEAM });
+        const pending = await (await member.send('POST', `/api/events/${event.id}/register`, {})).json();
+        assert.equal(pending.status, 'pending', JSON.stringify(pending));
+        const dms = dmCount('Tom');
+        const roles = server.output().split('vergeben').length;
+        assert.equal((await admin.send('PUT', `/api/admin/registrations/${pending.id}/status`, { status: 'accepted' })).status, 200);
+        assert.equal(dmCount('Tom'), dms);
+        assert.ok(server.output().split('vergeben').length > roles, 'the event role is given');
+    });
+});
+
+test('DM notifications off: moving up from the waitlist sends no DM', async () => {
+    const admin = await loginAs('admin');
+    const member = await loginAs('member');
+    await withBotSettings(admin, { dmNotifications: false }, async () => {
+        const event = await createEventAs(admin, { title: 'Stiller Platz', maxParticipants: 1 });
+        const taken = await (await addMember(admin, event.id, { userId: MEMBER_ID.DENNIS })).json();
+        const before = dmCount('Tom');
+        const waiting = await (await member.send('POST', `/api/events/${event.id}/register`, {})).json();
+        assert.equal(waiting.status, 'waitlisted', JSON.stringify(waiting));
+        assert.equal((await admin.send('PUT', `/api/admin/registrations/${taken.id}/status`, { status: 'rejected' })).status, 200);
+        const mine = await (await member.request(`/api/events/${event.id}/my-registration`)).json();
+        assert.equal(mine.status, 'accepted');
+        assert.equal(dmCount('Tom'), before);
+    });
+});
+
+test('DM notifications off: cancelling an event and the team message still reach participants', async () => {
+    const admin = await loginAs('admin');
+    await withBotSettings(admin, { dmNotifications: false }, async () => {
+        const event = await createEventAs(admin, { title: 'Trotzdem Post' });
+        assert.equal((await addMember(admin, event.id, { userId: MEMBER_ID.DENNIS })).status, 201);
+        const before = dmCount('Dennis');
+        const message = await admin.send('POST', `/api/admin/events/${event.id}/message`, { group: 'accepted', text: 'Bitte pünktlich sein.' });
+        assert.equal(message.status, 200, await message.clone().text());
+        assert.equal(dmCount('Dennis'), before + 1);
+        assert.equal((await admin.send('PUT', `/api/admin/events/${event.id}/cancel`, {})).status, 200);
+        assert.equal(dmCount('Dennis'), before + 2);
+    });
+});
+
+/** Read an event as admin. */
+const adminEvent = async (admin, id) => (await admin.request(`/api/events/${id}?status=all`)).json();
+
+/** Channel creation runs in the background -> give it time, then read the event. */
+async function settledEvent(admin, id) {
+    await new Promise(resolve => setTimeout(resolve, 400));
+    return adminEvent(admin, id);
+}
+
+const CHANNEL_EVENT = { autoCreateChannels: true, channelConfig: { type: 'both', voiceName: '', textName: '' } };
+
+test('channel creation off: no channels for new, activated or edited events; the option is kept', async () => {
+    const admin = await loginAs('admin');
+    await withBotSettings(admin, { autoChannelCreation: false }, async () => {
+        const created = await createEventAs(admin, { title: 'Ohne Kanal', ...CHANNEL_EVENT });
+        let event = await settledEvent(admin, created.id);
+        assert.equal(event.autoCreateChannels, true);
+        assert.ok(!event.discordChannelId && !event.discordTextChannelId, 'no channel on create');
+
+        const draft = await createEventAs(admin, { title: 'Entwurf ohne Kanal', status: 'draft', ...CHANNEL_EVENT });
+        assert.equal((await admin.send('PUT', `/api/admin/events/${draft.id}/status`, { status: 'active' })).status, 200);
+        event = await settledEvent(admin, draft.id);
+        assert.ok(!event.discordChannelId && !event.discordTextChannelId, 'no channel on activation');
+
+        const res = await admin.send('PUT', `/api/admin/events/${created.id}`, { ...event, title: 'Ohne Kanal 2', ...CHANNEL_EVENT });
+        assert.equal(res.status, 200, await res.clone().text());
+        event = await settledEvent(admin, created.id);
+        assert.ok(!event.discordChannelId && !event.discordTextChannelId, 'no channel on update');
+        assert.equal(event.autoCreateChannels, true);
+    });
+});
+
+test('channel creation on again: saving the event creates its channels', async () => {
+    const admin = await loginAs('admin');
+    let id;
+    await withBotSettings(admin, { autoChannelCreation: false }, async () => {
+        id = (await createEventAs(admin, { title: 'Später mit Kanal', ...CHANNEL_EVENT })).id;
+    });
+    const stored = await settledEvent(admin, id);
+    assert.ok(!stored.discordChannelId, 'still none after switching on');
+    const res = await admin.send('PUT', `/api/admin/events/${id}`, { ...stored, ...CHANNEL_EVENT });
+    assert.equal(res.status, 200, await res.clone().text());
+    const event = await settledEvent(admin, id);
+    assert.ok(event.discordChannelId && event.discordTextChannelId, 'channels exist');
+});
+
+test('channel creation off: existing channels are still deleted with their event', async () => {
+    const admin = await loginAs('admin');
+    const { id } = await createEventAs(admin, { title: 'Hat Kanal', ...CHANNEL_EVENT });
+    assert.ok((await settledEvent(admin, id)).discordChannelId, 'created while on');
+    await withBotSettings(admin, { autoChannelCreation: false }, async () => {
+        const before = server.output().split('gelöscht').length;
+        assert.equal((await admin.send('DELETE', `/api/admin/events/${id}`)).status, 200);
+        await new Promise(resolve => setTimeout(resolve, 200));
+        assert.ok(server.output().split('gelöscht').length > before, 'channels deleted');
+    });
+});
+
+test('DM notifications off: a flagged new start sends no change DM and logs no notice', async () => {
+    const admin = await loginAs('admin');
+    await withBotSettings(admin, { dmNotifications: false }, async () => {
+        const { id, fields } = await createChangeEvent(admin);
+        const before = dmCount('Dennis');
+        const res = await admin.send('PUT', `/api/admin/events/${id}`, { ...fields, startDate: futureDate(6), notifyParticipants: true });
+        const body = await res.json();
+        assert.equal(res.status, 200, JSON.stringify(body));
+        assert.equal(body.notifiedCount, 0);
+        assert.equal(dmCount('Dennis'), before);
+        assert.equal((await changeNotices(admin, id)).length, 0);
+    });
+});
+
+// ── Announcement channel (B-02) ─────────────────────────────────────────
+
+const { CHANNEL_ID } = require('../dev/mockGuild');
+const { POLL_ID } = require('../dev/seedData');
+
+/** Text after the last mock log line that names a channel message. */
+const lastChannelPost = () => server.output().split('Nachricht in ').at(-1).split('\n')[0];
+
+test('announcements go to the channel chosen in the bot center, else to the .env channel', async () => {
+    const admin = await loginAs('admin');
+    const event = await createEventAs(admin, { title: 'Kanalwahl' });
+    await withBotSettings(admin, { announceChannel: CHANNEL_ID.EVENTS }, async () => {
+        const saved = await (await admin.request('/api/admin/bot/settings')).json();
+        assert.equal(saved.announceChannel, CHANNEL_ID.EVENTS);
+        const res = await admin.send('POST', `/api/admin/events/${event.id}/announce`, { text: '' });
+        assert.equal(res.status, 200, await res.clone().text());
+        assert.match(lastChannelPost(), /^#events/);
+    });
+    await withBotSettings(admin, { announceChannel: '' }, async () => {
+        const res = await admin.send('POST', `/api/admin/events/${event.id}/announce`, { text: '' });
+        assert.equal(res.status, 200, await res.clone().text());
+        assert.match(lastChannelPost(), /^#ankündigungen/);
+    });
+});
+
+test('a poll announcement uses the bot center channel too', async () => {
+    const admin = await loginAs('admin');
+    await withBotSettings(admin, { announceChannel: CHANNEL_ID.GENERAL }, async () => {
+        const res = await admin.send('POST', `/api/admin/polls/${POLL_ID.OPEN}/announce`, { text: '' });
+        assert.equal(res.status, 200, await res.clone().text());
+        assert.match(lastChannelPost(), /^#allgemein/);
+    });
+});
+
+test('an announcement channel that is not a text channel of the server is refused', async () => {
+    const admin = await loginAs('admin');
+    const before = await (await admin.request('/api/admin/bot/settings')).json();
+    for (const announceChannel of ['999999999999999999', CHANNEL_ID.LOBBY]) {
+        const res = await admin.send('PUT', '/api/admin/bot/settings', { ...before, announceChannel, welcomeMessage: 'geändert' });
+        assert.equal(res.status, 400, announceChannel);
+        assert.deepEqual(await res.json(), { error: 'Ankündigungskanal nicht gefunden.' });
+    }
+    const after = await (await admin.request('/api/admin/bot/settings')).json();
+    assert.equal(after.welcomeMessage, before.welcomeMessage, 'nothing saved');
+});

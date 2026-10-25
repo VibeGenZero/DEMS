@@ -13,14 +13,14 @@ see_also: [event-lifecycle, discord-integration]
 
 ## Reminder scheduler (`checkReminders`)
 
-- Interval: 5 min (`setInterval`, first run 5 min after start). Started by `server.js`; `applyBotSettings` stops/starts it according to `reminderEnabled`.
+- Interval: 5 min (`setInterval`, first run 5 min after start). Started once by `server.js` and always running (B-02): the bot center switches are checked per pass, so the deadline refresh keeps working with reminders off. Before B-02, `applyBotSettings` stopped the interval with `reminderEnabled`, which also stopped the deadline refresh and sent every overdue reminder at once after switching on again.
 - For every event with `status === 'active'` and `startDate`:
-  - `findDueReminders(event, now)` (`utils/reminders.js`): reminders with `sent !== true`, `now >= start - hours` and `now < start`. If any are due, they are stored as `sent: true` first (a legacy number becomes `[{ hours, sent }]` on the way), then **one** DM goes to all `accepted` registrations: "⏰ Erinnerung! ..." — several reminders due at once (after a downtime) do not send several DMs. Members who switched "Erinnerungen" off in the profile are left out (`messageAcceptedParticipants` → `filterByPreference(…, 'reminders')`, W-16); the reminder still counts as sent.
-  - Start notification: within 5 minutes after `startDate`, if `eventStartNotificationSent` is false → set the flag, then DM accepted participants (also without those who switched "Erinnerungen" off).
+  - `findDueReminders(event, now)` (`utils/reminders.js`): reminders with `sent !== true`, `now >= start - hours` and `now < start`. If any are due, they are stored as `sent: true` first (a legacy number becomes `[{ hours, sent }]` on the way), then **one** DM goes to all `accepted` registrations: "⏰ Erinnerung! ..." — only while `reminderEnabled` is on; with the switch off the due reminders are marked `sent` without a DM (dropped, never sent late) — several reminders due at once (after a downtime) do not send several DMs. Members who switched "Erinnerungen" off in the profile are left out (`messageAcceptedParticipants` → `filterByPreference(…, 'reminders')`, W-16); the reminder still counts as sent.
+  - Start notification: within 5 minutes after `startDate`, if `eventStartNotificationSent` is false → set the flag, then DM accepted participants (also without those who switched "Erinnerungen" off) — the DM only while `eventStartNotifications` is on; the flag is set either way.
   - Registration deadline (W-03): once `registrationDeadline` has passed (event not over yet) and `registrationClosedRefreshed` is false → set the flag, then refresh the stored announcements (`notifyRegistrationsChanged`) so the register buttons go away. Editing the deadline resets the flag.
 - Duplicate protection lives only in the database: a restart, or a crash while sending, never repeats a DM (at most once; a crash mid-send can leave some participants without the DM).
 - Event form: the text field `#event-reminder` takes several hours ("24, 1"; comma, semicolon or space; empty = none). `editEvent` fills it with `reminderHoursOf(event.reminderHours).join(', ')`, `saveEvent` sends the text, the server normalizes it.
-- `checkReminders({ now, send })` takes the time and the DM function for tests (`test/reminderScheduler.test.js`); the scheduler calls it without arguments.
+- `checkReminders({ now, send, refresh, settings })` takes the time, the DM function, the announcement refresh and the bot center settings (default `loadBotSettings()`) for tests (`test/reminderScheduler.test.js`); the scheduler calls it without arguments.
 - Saving an event (`POST`/`PUT /api/admin/events`) stores `mergeReminderHours(...)`: a reminder that was already sent stays sent while `startDate` is unchanged, a new start time makes every reminder due again. Duplicating an event resets `sent` and `eventStartNotificationSent`.
 - Times are formatted with `TIMEZONE` (default `Europe/Berlin`).
 
@@ -37,9 +37,11 @@ see_also: [event-lifecycle, discord-integration]
 | `statusType` | `online`, `idle`, `dnd`, `invisible` |
 | `activityType` | `PLAYING`, `WATCHING`, `LISTENING`, `COMPETING` |
 | `activityText` | template with `{events.count}`, `{events.next}`, `{events.next.date}`, `{events.next.time}`, `{events.next.participants}`, `{events.list}`, `{events.list.details}`, `{server.members}`, `{server.name}`, `{link.events}` (`buildActivityVariables`) |
+| `dmNotifications` | off → no automatic DM (`sendAutomaticDM` in `utils/botSettings.js`); see [discord-integration](discord-integration.md) for what it covers |
 | `autoUpdatePresence` | refresh every 5 min |
 | `autoStatusCalendarEvents` (needs `autoUpdatePresence`) | `dnd` while an event runs (started and not `isEventOver`: end, else start + 2 h), `online` if one is upcoming, else `idle` |
-| `reminderEnabled` | starts/stops the reminder scheduler |
+| `reminderEnabled` | off → due reminder DMs are dropped (marked sent); the scheduler keeps running (B-02) |
+| `eventStartNotifications` | off → no start DM; the event is marked as notified anyway (B-02) |
 
 ## Bot control center (admin `#bot-control`)
 
@@ -47,5 +49,6 @@ see_also: [event-lifecycle, discord-integration]
 
 ## Gotchas
 
-- `dmNotifications`, `eventStartNotifications`, `autoChannelCreation`, `welcomeMessage`, `announceChannel` are saved but not evaluated anywhere.
+- `announceChannel` and `welcomeMessage` are evaluated in `routes/admin.js` (announcements) and `utils/botSettings.js` (welcome DM), see [discord-integration](discord-integration.md).
+- Settings are read through `utils/botSettings.js` (defaults for missing keys, cached until the next save).
 - In dev mock mode reminder DMs are not simulated (internal call to the real `sendDM`).

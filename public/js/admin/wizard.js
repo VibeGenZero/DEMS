@@ -15,6 +15,7 @@ import { rememberSeries, savedEventToast, seriesScope, storedRecurringUntil, upd
 import { cancelWizardPreview, renderWizardPreview } from './wizard-preview.js';
 import { updateBannerPreview } from './wizard-banner.js';
 import { renderTemplateChooser, startTemplateChoice } from './wizard-templates.js';
+import { loadWizardBotSettings } from './wizard-bot.js';
 import { navigateTo } from '../core/router.js';
 import { registerActions } from '../core/actions.js';
 import { applyStyleData, escapeHtml, hexColor, showElement, showToast, toggleElement } from '../core/ui.js';
@@ -215,6 +216,7 @@ export async function showCreateEventModal() {
 
     await loadRoles();
     await startTemplateChoice();
+    await loadWizardBotSettings();
 
     clearAllMarks();
     updateStartRequired();
@@ -343,6 +345,7 @@ export async function editEvent(eventId) {
 
         await fillWizard(event);
         renderTemplateChooser({ editing: true });
+        await loadWizardBotSettings();
 
         document.getElementById('event-access').onchange = function () {
             document.getElementById('role-requirement-area').style.display = this.value === 'role-required' ? 'block' : 'none';

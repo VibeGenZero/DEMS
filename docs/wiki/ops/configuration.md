@@ -18,7 +18,7 @@ see_also: [docker, deployment, dev-mock-mode]
 | `DISCORD_BOT_TOKEN` | no | — | bot login; empty → bot off, Discord helpers no-op |
 | `DISCORD_GUILD_ID` | yes (login) | — | membership check at login, all guild helpers, slash command registration |
 | `DISCORD_ADMIN_ROLE_ID` | practically yes | — | members with this role are admins; empty → nobody is admin |
-| `DISCORD_ANNOUNCE_CHANNEL_ID` | for announcements | — | target of `POST /api/admin/events/:id/announce` (400 if empty) |
+| `DISCORD_ANNOUNCE_CHANNEL_ID` | fallback | — | announcement channel of events and date polls while the bot center has no "Ankündigungskanal" chosen (B-02); with neither, announcing answers 400 |
 | `DISCORD_EVENT_CATEGORY_ID` | no | — | parent category for auto-created event channels |
 | `SERVER_NAME` | no | Discord guild name / `DEMS` | name shown in the UI (`/api/server-info`) |
 | `FIREBASE_API_KEY`, `_AUTH_DOMAIN`, `_PROJECT_ID`, `_STORAGE_BUCKET`, `_MESSAGING_SENDER_ID`, `_APP_ID` | all or none | — | all six → Firestore; none → SQLite; partial → exit 1 |

@@ -4,7 +4,7 @@
  * learns the old and the new value by DM.
  */
 const { db, collection, query, where, getDocs } = require('../firebaseAdmin');
-const { sendDM } = require('../bot');
+const { sendAutomaticDM } = require('./botSettings');
 const { buildEventUrl } = require('./eventUrl');
 const { filterByPreference } = require('./notificationPrefs');
 
@@ -103,10 +103,10 @@ function changeRecipients(registrations) {
  * @param {string} options.eventId -> Event id.
  * @param {string} options.title -> Event title.
  * @param {Array<Object>} options.changes -> Result of describeEventChanges().
- * @param {Function} [options.send] -> DM function (userId, message) → true when delivered; sendDM by default.
+ * @param {Function} [options.send] -> DM function (userId, message) → true when delivered; sendAutomaticDM by default (B-02: nothing while DM notifications are off).
  * @returns {Promise<{ recipients: number, notified: number, optedOut: number }>} -> How many were meant, how many DMs arrived and how many switched change DMs off.
  */
-async function notifyEventChange({ eventId, title, changes, send = sendDM }) {
+async function notifyEventChange({ eventId, title, changes, send = sendAutomaticDM }) {
     if (changes.length === 0) return { recipients: 0, notified: 0, optedOut: 0 };
     const snap = await getDocs(query(collection(db, 'registrations'), where('eventId', '==', eventId)));
     const { userIds: recipients, optedOut } = await filterByPreference(changeRecipients(snap.docs.map(registration => registration.data())), 'changes');

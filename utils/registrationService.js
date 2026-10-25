@@ -1,8 +1,9 @@
 const { db, collection, doc, getDoc, addDoc, updateDoc, deleteDoc } = require('../firebaseAdmin');
 const {
-    sendDM, assignRole, removeRole, parseTemplate, getGuildRoles,
+    assignRole, removeRole, parseTemplate, getGuildRoles,
     addParticipantToEventChannels, removeParticipantFromEventChannels, sendGuestInvitation
 } = require('../bot');
+const { sendAutomaticDM, sendWelcomeOnce } = require('./botSettings');
 const { debugLog } = require('./debugLog');
 const { findMissingRequiredFields } = require('./formFields');
 const { buildEventUrl } = require('./eventUrl');
@@ -157,7 +158,7 @@ async function notifyStatusChange({ registration, eventId, event, status, slotId
         const user = { id: registration.userId, displayName: registration.userName };
         if (status === REGISTRATION_STATUS.WAITLISTED) {
             if (!(await wantsDm(user.id, 'waitlist'))) return;
-            await sendDM(user.id, waitlistDmText(event));
+            await sendAutomaticDM(user.id, waitlistDmText(event));
             return;
         }
         if (status !== REGISTRATION_STATUS.ACCEPTED && status !== 'rejected') return;
@@ -174,7 +175,8 @@ async function notifyStatusChange({ registration, eventId, event, status, slotId
             const message = template
                 ? parseTemplate(template, vars)
                 : `✅ Du wurdest für **${event.title}** angenommen! Willkommen dabei!${slotLine}`;
-            await sendDM(user.id, message);
+            await sendAutomaticDM(user.id, message);
+            await sendWelcomeOnce(user, registration.id || null);
             if (event.assignRoleId) {
                 await assignRole(user.id, event.assignRoleId, process.env.DISCORD_GUILD_ID);
             }
@@ -185,13 +187,13 @@ async function notifyStatusChange({ registration, eventId, event, status, slotId
         const message = template
             ? parseTemplate(template, vars)
             : `❌ Leider wurde deine Anfrage für **${event.title}** abgelehnt.`;
-        await sendDM(user.id, message);
+        await sendAutomaticDM(user.id, message);
     } catch (err) {
         console.error(`[notifyStatusChange] ${status} für ${registration.userId}:`, err.message);
     }
 }
 
-async function notifyRegistration({ user, eventId, event, status, slot = null, isAlt = false }) {
+async function notifyRegistration({ user, eventId, event, status, slot = null, isAlt = false, registrationId = null }) {
     try {
         const templateSnap = await getDoc(doc(db, 'botMessages', 'templates'));
         const globalTemplates = templateSnap.exists() ? templateSnap.data() : {};
@@ -202,7 +204,7 @@ async function notifyRegistration({ user, eventId, event, status, slot = null, i
         if (status === REGISTRATION_STATUS.WAITLISTED) {
             // Members may switch this DM off (W-16); moving up is always announced
             if (!(await wantsDm(user.id, 'waitlist'))) return;
-            await sendDM(user.id, waitlistDmText(event));
+            await sendAutomaticDM(user.id, waitlistDmText(event));
             return;
         }
 
@@ -211,7 +213,8 @@ async function notifyRegistration({ user, eventId, event, status, slot = null, i
             const message = template
                 ? parseTemplate(template, vars)
                 : `✅ Du wurdest automatisch für **${event.title}** angenommen!${slotLine}`;
-            await sendDM(user.id, message);
+            await sendAutomaticDM(user.id, message);
+            await sendWelcomeOnce(user, registrationId);
 
             if (event.assignRoleId) {
                 await assignRole(user.id, event.assignRoleId, process.env.DISCORD_GUILD_ID);
@@ -226,7 +229,7 @@ async function notifyRegistration({ user, eventId, event, status, slot = null, i
         const message = template
             ? parseTemplate(template, vars)
             : `📋 Deine Anfrage für **${event.title}** ist eingegangen. Bitte warte auf die Bestätigung.${slotLine}`;
-        await sendDM(user.id, message);
+        await sendAutomaticDM(user.id, message);
     } catch (err) {
         console.error('[registrationService] notifyRegistration failed:', err.message);
     }
@@ -397,7 +400,7 @@ async function registerUserForEvent({ eventId, user, formAnswers = {}, guests = 
     const slots = getSlots(event);
     const slot = findSlot(slots, registration.slotId);
     const isAlt = !!slot && registration.slotId !== registration.preferredSlotId;
-    await notifyRegistration({ user, eventId, event, status: registration.status, slot, isAlt });
+    await notifyRegistration({ user, eventId, event, status: registration.status, slot, isAlt, registrationId });
     notifyRegistrationsChanged(eventId);
 
     return {
@@ -482,7 +485,7 @@ async function switchOwnSlot({ eventId, userId, slotId }) {
         if (outcome.wasWaitlisted) {
             await notifyRegistration({
                 user: { id: userId, displayName: registration.userName },
-                eventId, event, status: registration.status, slot
+                eventId, event, status: registration.status, slot, registrationId: registration.id
             });
         }
         await announcePromotions(eventId, event, outcome.promotions);
@@ -711,7 +714,7 @@ async function addRegistrationByAdmin({ eventId, member, slotId = null }) {
         const slot = findSlot(getSlots(event), registration.slotId);
         await notifyRegistration({
             user: { id: member.id, displayName: member.displayName },
-            eventId, event, status: registration.status, slot
+            eventId, event, status: registration.status, slot, registrationId
         });
     }
     notifyRegistrationsChanged(eventId);

@@ -4,6 +4,7 @@
  * event. The server checks the same again (utils/eventChangeNotice.js) and
  * decides who gets the DM. Split from wizard.js to keep it small.
  */
+import { state } from '../core/state.js';
 import { toggleElement } from '../core/ui.js';
 
 // Start, end and location of the event being edited; null while creating one
@@ -71,7 +72,9 @@ export function rememberLoadedEvent(event) {
  * @param {Object|null} draft -> Wizard input on the last step (with "Speichern"), null on every other step.
  */
 export function updateNotifySwitch(draft) {
-    showSwitch(draft !== null && loadedEvent !== null && draft.status === 'active' && scheduleChanged(loadedEvent, draft));
+    // No offer while "DM-Benachrichtigungen" is off in the bot center (B-02, admin/wizard-bot.js)
+    const dmsOn = state.botSettings?.dmNotifications !== false;
+    showSwitch(dmsOn && draft !== null && loadedEvent !== null && draft.status === 'active' && scheduleChanged(loadedEvent, draft));
 }
 
 /**
