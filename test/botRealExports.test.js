@@ -36,7 +36,7 @@ test('every Discord helper answers with its neutral value while the bot is not r
     const event = { id: 'ev', title: 'Abend', discordChannelId: 'c1', discordTextChannelId: 't1' };
     const neutral = {
         sendDM: [['u1', 'Hallo'], false],
-        sendChannelMessage: [['c1', {}], false],
+        sendChannelMessage: [['c1', { components: [] }, { roleIds: ['r1'] }], false],
         refreshEventAnnouncements: [['ev'], false],
         refreshPollMessages: [['poll'], false],
         markPollMessagesDeleted: [[{ id: 'poll', messages: [] }], false],
@@ -58,7 +58,8 @@ test('every Discord helper answers with its neutral value while the bot is not r
         addParticipantToEventChannels: [[event, 'u1'], false],
         removeParticipantFromEventChannels: [[event, 'u1'], false],
         deleteEventChannels: [['ev'], false],
-        sendGuestInvitation: [['g2', { id: 'u1', displayName: 'Host' }, event, 'reg1'], false]
+        sendGuestInvitation: [['g2', { id: 'u1', displayName: 'Host' }, event, 'reg1'], false],
+        ensureAnnouncementThread: [[{ channelId: 'c1', messageId: 'm1' }, 'Abend', null], null]
     };
     for (const [name, [args, expected]] of Object.entries(neutral)) {
         assert.deepEqual(await bot[name](...args), expected, name);

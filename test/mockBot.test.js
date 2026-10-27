@@ -67,13 +67,13 @@ test('messages are logged and reported as sent', async () => {
 
     assert.equal(await bot.startBot(''), true);
     assert.equal(await bot.sendDM(raider.userId, 'Hallo Lena'), true);
-    const sent = await bot.sendChannelMessage(CHANNEL_ID.ANNOUNCEMENTS, bot.buildEventEmbed(event), {
-        text: 'Neues Event!',
-        roleIds: [ROLE_ID.RAID_TEAM],
-        components: bot.buildEventComponents(event, 'evt-mock')
+    const intro = bot.buildAnnouncementIntro({ text: 'Neues Event!', roleIds: [ROLE_ID.RAID_TEAM] });
+    const sent = await bot.sendChannelMessage(CHANNEL_ID.ANNOUNCEMENTS, bot.buildEventAnnouncement(event, 'evt-mock', undefined, intro), {
+        roleIds: [ROLE_ID.RAID_TEAM]
     });
     assert.equal(sent.channelId, CHANNEL_ID.ANNOUNCEMENTS);
     assert.match(sent.messageId, /^\d+$/);
+    assert.equal(sent.guildId, GUILD.id);
     assert.equal(await bot.sendGuestInvitation(raider.userId, { id: '1', displayName: 'Tom' }, { id: 'evt-mock', title: 'Mock-Test' }, 'reg-1'), true);
     assert.equal(await bot.assignRole(raider.userId, ROLE_ID.VIP, GUILD.id), true);
     assert.equal(await bot.removeRole(raider.userId, ROLE_ID.VIP, GUILD.id), true);
@@ -104,10 +104,20 @@ test('event channels are simulated and stored on the event', async () => {
 });
 
 test('the "Zum Event" button of an announcement opens the event page', () => {
-    const [row] = bot.buildEventComponents({ title: 'Link-Test', status: 'active' }, 'evt-link');
-    const linkButton = row.toJSON().components.find(component => component.url);
+    const payload = bot.buildEventAnnouncement({ title: 'Link-Test', status: 'active' }, 'evt-link');
+    const container = payload.components.map(component => component.toJSON()).find(component => component.type === 17);
+    const row = container.components.find(component => component.type === 1);
+    const linkButton = row.components.find(component => component.url);
     assert.equal(linkButton.label, 'Zum Event');
     assert.match(linkButton.url, /\/#event\/evt-link$/);
+});
+
+test('the mock opens a discussion thread once and keeps it (B-14)', async () => {
+    const sent = { channelId: CHANNEL_ID.ANNOUNCEMENTS, messageId: '1', guildId: GUILD.id };
+    const thread = await bot.ensureAnnouncementThread(sent, 'Thread-Test', null);
+    assert.equal(thread.guildId, GUILD.id);
+    assert.match(thread.threadId, /^\d{18}$/);
+    assert.equal(await bot.ensureAnnouncementThread(sent, 'Thread-Test', thread), thread);
 });
 
 /** Collect everything printed with console.log while `fn` runs. */

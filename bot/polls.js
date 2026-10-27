@@ -1,49 +1,50 @@
 /**
- * Date polls in Discord: the poll embed and buttons, refreshing posted polls
+ * Date polls in Discord: the poll message (Components V2) and its buttons, refreshing posted polls
  * and the vote buttons and selects.
  */
-const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, MessageFlags, escapeMarkdown } = require('discord.js');
+const { ContainerBuilder, TextDisplayBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, MessageFlags, escapeMarkdown } = require('discord.js');
 const { db, doc, updateDoc } = require('../firebaseAdmin');
 const { buildEventUrl, buildPollUrl } = require('../utils/eventUrl');
 const { isRegistrationBlocked } = require('../middleware/maintenance');
 const { tallyPoll, getFavoriteOptionId, formatPollOption, isPollOpen, canVote, getPollLabels } = require('../utils/pollService');
 const { SELECT_OPTION_LABEL_MAX_LENGTH, POLL_VOTE_PREFIX, POLL_YES_PREFIX, POLL_MAYBE_PREFIX, POLL_NAMES_MAX, POLL_DESCRIPTION_MAX_LENGTH } = require('./constants');
 const { state } = require('./client');
-const { editStoredMessages } = require('./messages');
+const { editStoredMessages, recordsChanged } = require('./messages');
+const { DEMS_ACCENT, MESSAGE_TEXT_MAX, fitText } = require('./layout');
 const { resolveInteractionRoles, ensureUserProfile } = require('./registration');
 
+// Container colours of a poll: open (DEMS accent), decided, closed or deleted
+const POLL_DECIDED_COLOR = 0x22c55e;
+const POLL_ENDED_COLOR = 0x6b7280;
+
 /**
- * Build the embed of a date poll.
+ * Build a date poll as a Components V2 message (B-05).
+ *
+ * Ping line above a container: title with description (or the chosen date),
+ * one block per option with counts and the first "passt" names, the deadline
+ * or end state with the vote count, and the buttons.
  *
  * @param {Object} poll -> The poll with its `id`.
  * @param {Object} tally -> Result of tallyPoll().
- * @returns {EmbedBuilder} -> The embed.
+ * @param {string} [intro] -> Ping line from buildAnnouncementIntro(), '' for none.
+ * @returns {{ flags: number, components: Array }} -> Payload for channel.send() / message.edit().
  */
-function buildPollEmbed(poll, tally) {
+function buildPollMessage(poll, tally, intro = '') {
     const decided = poll.status === 'decided';
     const closed = !decided && !isPollOpen(poll);
-    let title = `📅 ${poll.title}`;
-    if (decided) title = `✅ Termin steht: ${poll.title}`;
-    else if (closed) title = `🔒 Abstimmung beendet: ${poll.title}`;
-
-    const embed = new EmbedBuilder()
-        .setColor(decided ? 0x22c55e : 0x8b5cf6)
-        .setTitle(title.substring(0, 256));
-
-    const winner = decided ? poll.options.find(option => option.id === poll.winnerOptionId) : null;
-    const description = winner
-        ? `**${formatPollOption(winner)}**`
-        : (poll.description || '').substring(0, POLL_DESCRIPTION_MAX_LENGTH);
-    if (description) embed.setDescription(description);
+    const title = escapeMarkdown(String(poll.title || ''));
+    let heading = `## 📅 ${title}`;
+    if (decided) heading = `## ✅ Termin steht: ${title}`;
+    else if (closed) heading = `## 🔒 Abstimmung beendet: ${title}`;
 
     const highlightId = decided ? poll.winnerOptionId : getFavoriteOptionId(tally);
     const labels = getPollLabels(poll);
-    tally.options.forEach(entry => {
+    const options = tally.options.map(entry => {
         const option = poll.options.find(candidate => candidate.id === entry.optionId);
         let marker = '';
         if (entry.optionId === highlightId) marker = decided ? '✅ ' : '🏆 ';
-        embed.addFields({ name: `${marker}${formatPollOption(option)}`, value: `✅ ${entry.yes} · 🤔 ${entry.maybe}\n${formatPollVoters(entry, labels)}`, inline: false });
-    });
+        return `**${marker}${formatPollOption(option)}**\n✅ ${entry.yes} · 🤔 ${entry.maybe}\n${formatPollVoters(entry, labels)}`;
+    }).join('\n\n');
 
     const votes = `${tally.voterCount} ${tally.voterCount === 1 ? 'Stimme' : 'Stimmen'}`;
     let footer = `Abstimmung beendet · ${votes}`;
@@ -52,8 +53,44 @@ function buildPollEmbed(poll, tally) {
             ? `⏰ Abstimmung bis ${formatPollOption({ startDate: poll.deadline })} · ${votes}`
             : `Abstimmung offen · ${votes}`;
     }
-    embed.setFooter({ text: footer });
-    return embed;
+
+    const winner = decided ? poll.options.find(option => option.id === poll.winnerOptionId) : null;
+    // The description gets what the other texts leave of Discord's budget
+    const used = (intro || '').length + heading.length + 1 + options.length + footer.length;
+    const description = winner
+        ? `**${formatPollOption(winner)}**`
+        : fitText(fitText(poll.description, POLL_DESCRIPTION_MAX_LENGTH), MESSAGE_TEXT_MAX - used);
+
+    let accent = DEMS_ACCENT;
+    if (decided) accent = POLL_DECIDED_COLOR;
+    else if (closed) accent = POLL_ENDED_COLOR;
+
+    const container = new ContainerBuilder()
+        .setAccentColor(accent)
+        .addTextDisplayComponents(
+            text => text.setContent(description ? `${heading}\n${description}` : heading),
+            text => text.setContent(options || '— keine Termine —'),
+            text => text.setContent(footer)
+        )
+        .addActionRowComponents(row => row.addComponents(...buildPollButtons(poll)));
+
+    const components = intro ? [new TextDisplayBuilder().setContent(intro), container] : [container];
+    return { flags: MessageFlags.IsComponentsV2, components };
+}
+
+/**
+ * Notice that replaces the posted messages of a deleted poll.
+ *
+ * @param {Object} poll -> The poll that is being deleted.
+ * @returns {{ flags: number, components: Array }} -> Grey container without buttons.
+ */
+function buildPollDeletedMessage(poll) {
+    const container = new ContainerBuilder()
+        .setAccentColor(POLL_ENDED_COLOR)
+        .addTextDisplayComponents(text => text.setContent(
+            `## 🗑️ Abstimmung gelöscht: ${escapeMarkdown(String(poll.title || ''))}\nDiese Abstimmung wurde von einem Admin gelöscht.`
+        ));
+    return { flags: MessageFlags.IsComponentsV2, components: [container] };
 }
 
 /**
@@ -72,28 +109,21 @@ function formatPollVoters(entry, labels = getPollLabels(null)) {
 }
 
 /**
- * Buttons below a poll message.
+ * Buttons at the end of a poll message.
  *
  * @param {Object} poll -> The poll with its `id`.
- * @returns {ActionRowBuilder[]} -> One row.
+ * @returns {ButtonBuilder[]} -> "Zum Event" when decided; else "Abstimmen" while open and "Im Web ansehen".
  */
-function buildPollComponents(poll) {
-    const row = new ActionRowBuilder();
+function buildPollButtons(poll) {
     if (poll.status === 'decided' && poll.eventId) {
-        row.addComponents(
-            new ButtonBuilder().setLabel('Zum Event').setStyle(ButtonStyle.Link).setURL(buildEventUrl(poll.eventId)).setEmoji('🔗')
-        );
-        return [row];
+        return [new ButtonBuilder().setLabel('Zum Event').setStyle(ButtonStyle.Link).setURL(buildEventUrl(poll.eventId)).setEmoji('🔗')];
     }
+    const buttons = [];
     if (isPollOpen(poll)) {
-        row.addComponents(
-            new ButtonBuilder().setCustomId(`${POLL_VOTE_PREFIX}:${poll.id}`).setLabel('Abstimmen').setStyle(ButtonStyle.Primary).setEmoji('🗳️')
-        );
+        buttons.push(new ButtonBuilder().setCustomId(`${POLL_VOTE_PREFIX}:${poll.id}`).setLabel('Abstimmen').setStyle(ButtonStyle.Primary).setEmoji('🗳️'));
     }
-    row.addComponents(
-        new ButtonBuilder().setLabel('Im Web ansehen').setStyle(ButtonStyle.Link).setURL(buildPollUrl(poll.id)).setEmoji('🔗')
-    );
-    return [row];
+    buttons.push(new ButtonBuilder().setLabel('Im Web ansehen').setStyle(ButtonStyle.Link).setURL(buildPollUrl(poll.id)).setEmoji('🔗'));
+    return buttons;
 }
 
 /**
@@ -146,11 +176,8 @@ async function refreshPollMessages(pollId) {
         if (announcements.length === 0) return false;
 
         const tally = tallyPoll(poll, await loadPollVotes(pollId));
-        const kept = await editStoredMessages(announcements, {
-            embeds: [buildPollEmbed(poll, tally)],
-            components: buildPollComponents(poll)
-        });
-        if (kept.length !== announcements.length) {
+        const kept = await editStoredMessages(announcements, (record) => buildPollMessage(poll, tally, record.intro));
+        if (recordsChanged(announcements, kept)) {
             await updateDoc(doc(db, 'polls', pollId), { announcements: kept });
         }
         return true;
@@ -171,11 +198,8 @@ async function markPollMessagesDeleted(poll) {
     try {
         const announcements = Array.isArray(poll.announcements) ? poll.announcements : [];
         if (announcements.length === 0) return false;
-        const embed = new EmbedBuilder()
-            .setColor(0x6b7280)
-            .setTitle(`🗑️ Abstimmung gelöscht: ${poll.title}`.substring(0, 256))
-            .setDescription('Diese Abstimmung wurde von einem Admin gelöscht.');
-        await editStoredMessages(announcements, { embeds: [embed], components: [] });
+        // The ping line goes away with the poll
+        await editStoredMessages(announcements, () => buildPollDeletedMessage(poll));
         return true;
     } catch (err) {
         console.error('markPollMessagesDeleted failed:', err.message);
@@ -255,8 +279,8 @@ async function handlePollVoteSelect(interaction, pollId, kind) {
 }
 
 module.exports = {
-    buildPollEmbed,
-    buildPollComponents,
+    buildPollMessage,
+    buildPollDeletedMessage,
     buildPollVoteReply,
     refreshPollMessages,
     markPollMessagesDeleted,

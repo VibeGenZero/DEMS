@@ -117,3 +117,26 @@ test('no element that starts hidden carries a Bootstrap display utility (its !im
         .map(classes => classes.join(' '));
     assert.deepEqual(clashes, []);
 });
+
+// ── Bot center: discussion threads (B-14) ───────────────────────────────
+
+test('the thread switch shows the stored value, on when the key is missing', async () => {
+    assert.equal((await openBotCenter({ announcementThreads: false })).element('bot-announcement-threads').checked, false);
+    assert.equal((await openBotCenter({})).element('bot-announcement-threads').checked, true);
+});
+
+test('saving the bot center sends the thread switch', async () => {
+    const frontend = await openBotCenter({ announcementThreads: true });
+    frontend.element('bot-announcement-threads').checked = false;
+    await frontend.app.saveBotSettingsForm();
+    const sent = frontend.requests.find(request => request.url === '/api/admin/bot/settings' && request.method === 'PUT');
+    assert.equal(JSON.parse(sent.body).announcementThreads, false);
+});
+
+test('the thread switch says what it does', () => {
+    // The fake DOM knows ids, not texts -> the label is checked in the markup
+    const html = require('fs').readFileSync(require('path').join(__dirname, '..', 'public', 'index.html'), 'utf8');
+    assert.match(html, /id="bot-announcement-threads" checked>/);
+    assert.match(html, /<i class="bi bi-chat-dots me-1"><\/i>Diskussions-Thread zu Ankündigungen/);
+    assert.ok(html.includes('Öffnet beim Ankündigen eines Events einen Thread für Fragen und Absprachen.'));
+});

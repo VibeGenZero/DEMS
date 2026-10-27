@@ -18,7 +18,7 @@ Line counts as of 2026-10-02 (approximate; they drift).
 |---|---|---|---|---|
 | `server.js` | ~280 | Express setup, middleware chain, misc endpoints, startup/shutdown | read whole | [server](../modules/server.md) |
 | `bot.js` | ~80 | entry point of the discord.js bot: wires the client, exports every Discord helper used by routes, mock overlay | read whole | [bot](../modules/bot.md) |
-| `bot/*.js` | ~30–480 each | the bot's 14 area modules (commands, interactions, messages, polls, registration, guild, channels, scheduler, settings, …) | read the one module from the table in [bot](../modules/bot.md) whole | [bot](../modules/bot.md) |
+| `bot/*.js` | ~30–480 each | the bot's 16 area modules (commands, interactions, layout, messages, polls, threads, registration, guild, channels, scheduler, settings, …) | read the one module from the table in [bot](../modules/bot.md) whole | [bot](../modules/bot.md) |
 | `firebaseAdmin.js` | ~60 | picks Firestore or SQLite, re-exports the data API | read whole | [data-layer](../modules/data-layer.md) |
 | `db/sqliteAdapter.js` | ~250 | Firestore-compatible SQLite document store | read whole when touching queries | [data-layer](../modules/data-layer.md) |
 | `routes/auth.js` | ~170 | Discord OAuth2 login, `/auth/me`, logout | read whole | [routes-auth](../modules/routes-auth.md) |

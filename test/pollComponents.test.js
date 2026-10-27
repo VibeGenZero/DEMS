@@ -11,6 +11,8 @@ process.env.DEV_MOCK = 'true';
 process.env.DEV_SQLITE_PATH = path.join(tmpDir, 'poll-components.sqlite');
 
 const bot = require('../bot');
+// Real poll builders (pure); the deleted notice is not exported through bot.js
+const polls = require('../bot/polls');
 const { db, doc, setDoc } = require('../firebaseAdmin');
 const { tallyPoll } = require('../utils/pollService');
 const { buildPollUrl } = require('../utils/eventUrl');
@@ -29,7 +31,6 @@ const poll = (fields = {}) => ({
 const votes = ['Ana', 'Ben', 'Cem', 'Dan', 'Eva', '*Fee*'].map((name, i) => ({
     userId: `u${i}`, userName: name, yes: [A.id], maybe: i === 0 ? [B.id] : [], updatedAt: String(i)
 }));
-const fieldsOf = (embed) => embed.toJSON().fields;
 
 async function captureLogs(fn) {
     const lines = [];
@@ -45,55 +46,6 @@ async function captureLogs(fn) {
 
 test('poll links open the poll page', () => {
     assert.ok(buildPollUrl('p1').endsWith('/#poll/p1'));
-});
-
-test('the open poll embed shows counts, names and the favorite', () => {
-    // Deadline far in the future: a past one closes the poll. 2099-10-09 is a Friday, 18:00 in Berlin.
-    const embed = bot.buildPollEmbed(poll({ deadline: '2099-10-09T16:00:00.000Z' }), tallyPoll(poll(), votes)).toJSON();
-    assert.equal(embed.title, '📅 Raid-Termin');
-    assert.equal(embed.description, 'Wann passt es?');
-    assert.deepEqual(fieldsOf(bot.buildPollEmbed(poll(), tallyPoll(poll(), votes))).map(f => f.name), [
-        '🏆 So, 11.10. · 20:00',
-        'Mo, 12.10. · 18:00'
-    ]);
-    const [first, second] = embed.fields;
-    assert.equal(first.value, '✅ 6 · 🤔 0\nAna, Ben, Cem, Dan, Eva, +1');
-    assert.equal(second.value, '✅ 0 · 🤔 1\n🤔 nur „wenn nötig“');
-    assert.equal(embed.footer.text, '⏰ Abstimmung bis Fr, 09.10. · 18:00 · 6 Stimmen');
-});
-
-test('names are escaped and empty dates say so', () => {
-    const escaped = bot.buildPollEmbed(poll(), tallyPoll(poll(), [votes[5]])).toJSON();
-    assert.equal(escaped.fields[0].value, '✅ 1 · 🤔 0\n\\*Fee\\*');
-    const empty = bot.buildPollEmbed(poll(), tallyPoll(poll(), [])).toJSON();
-    assert.equal(empty.fields[1].value, '✅ 0 · 🤔 0\n— noch keine Stimmen —');
-    assert.equal(empty.footer.text, 'Abstimmung offen · 0 Stimmen');
-});
-
-test('closed and decided polls change title and buttons', () => {
-    const closed = bot.buildPollEmbed(poll({ status: 'closed' }), tallyPoll(poll(), votes)).toJSON();
-    assert.equal(closed.title, '🔒 Abstimmung beendet: Raid-Termin');
-    assert.equal(closed.footer.text, 'Abstimmung beendet · 6 Stimmen');
-
-    const decided = bot.buildPollEmbed(poll({ status: 'decided', winnerOptionId: B.id, eventId: 'e1' }), tallyPoll(poll(), votes)).toJSON();
-    assert.equal(decided.title, '✅ Termin steht: Raid-Termin');
-    assert.equal(decided.description, '**Mo, 12.10. · 18:00**');
-    assert.equal(decided.fields[1].name, '✅ Mo, 12.10. · 18:00');
-});
-
-test('the buttons follow the poll status', () => {
-    const buttons = (fields) => bot.buildPollComponents(poll(fields)).flatMap(row => row.toJSON().components);
-    const open = buttons({});
-    assert.deepEqual(open.map(b => b.label), ['Abstimmen', 'Im Web ansehen']);
-    assert.equal(open[0].custom_id, 'poll_vote:p1');
-    assert.ok(open[1].url.endsWith('/#poll/p1'));
-
-    assert.deepEqual(buttons({ status: 'closed' }).map(b => b.label), ['Im Web ansehen']);
-    assert.deepEqual(buttons({ deadline: '2020-01-01T00:00:00.000Z' }).map(b => b.label), ['Im Web ansehen']);
-
-    const decided = buttons({ status: 'decided', eventId: 'e1' });
-    assert.deepEqual(decided.map(b => b.label), ['Zum Event']);
-    assert.ok(decided[0].url.endsWith('/#event/e1'));
 });
 
 test('the vote answer holds two prefilled selects', () => {
@@ -136,6 +88,90 @@ test('own answers show up in Discord', () => {
     const labels = { yes: 'Bin dabei', maybe: 'Vielleicht', no: 'Kann nicht' };
     const reply = bot.buildPollVoteReply(poll({ labels }), { yes: [], maybe: [] });
     assert.deepEqual(reply.components.map(row => row.toJSON().components[0].placeholder), ['✅ Bin dabei …', '🤔 Vielleicht …']);
-    const [, second] = bot.buildPollEmbed(poll({ labels }), tallyPoll(poll(), votes)).toJSON().fields;
-    assert.equal(second.value, '✅ 0 · 🤔 1\n🤔 nur „Vielleicht“');
+    const [, second] = optionBlocks(message({ labels }));
+    assert.equal(second, '**Mo, 12.10. · 18:00**\n✅ 0 · 🤔 1\n🤔 nur „Vielleicht“');
+});
+
+const IS_COMPONENTS_V2 = 1 << 15;
+const GREY = 0x6b7280;
+const GREEN = 0x22c55e;
+const ACCENT = 0x8b5cf6;
+const message = (fields, tallyVotes = votes, intro) => bot.buildPollMessage(poll(fields), tallyPoll(poll(), tallyVotes), intro);
+const partsOf = (payload) => payload.components.map(component => component.toJSON());
+const containerOf = (payload) => partsOf(payload).find(component => component.type === 17);
+const textsOf = (payload) => containerOf(payload).components.filter(component => component.type === 10).map(component => component.content);
+const optionBlocks = (payload) => textsOf(payload)[1].split('\n\n');
+const buttonsOf = (payload) => {
+    const row = containerOf(payload).components.find(component => component.type === 1);
+    return row ? row.components : [];
+};
+
+test('the open poll message shows counts, names and the favorite in an accent container', () => {
+    // Deadline far in the future: a past one closes the poll. 2099-10-09 is a Friday, 18:00 in Berlin.
+    const payload = message({ deadline: '2099-10-09T16:00:00.000Z' });
+    assert.equal(payload.flags, IS_COMPONENTS_V2);
+    assert.equal(containerOf(payload).accent_color, ACCENT);
+    const [head, , footer] = textsOf(payload);
+    assert.equal(head, '## 📅 Raid-Termin\nWann passt es?');
+    assert.deepEqual(optionBlocks(payload), [
+        '**🏆 So, 11.10. · 20:00**\n✅ 6 · 🤔 0\nAna, Ben, Cem, Dan, Eva, +1',
+        '**Mo, 12.10. · 18:00**\n✅ 0 · 🤔 1\n🤔 nur „wenn nötig“'
+    ]);
+    assert.equal(footer, '⏰ Abstimmung bis Fr, 09.10. · 18:00 · 6 Stimmen');
+});
+
+test('the ping line stands above the poll container', () => {
+    const payload = message({}, votes, '<@&r1>\nAbstimmen!');
+    assert.deepEqual(partsOf(payload).map(component => component.type), [10, 17]);
+    assert.equal(partsOf(payload)[0].content, '<@&r1>\nAbstimmen!');
+    assert.deepEqual(partsOf(message({})).map(component => component.type), [17]);
+});
+
+test('names are escaped and empty dates say so', () => {
+    assert.equal(optionBlocks(message({}, [votes[5]]))[0], '**🏆 So, 11.10. · 20:00**\n✅ 1 · 🤔 0\n\\*Fee\\*');
+    const empty = message({}, []);
+    assert.equal(optionBlocks(empty)[1], '**Mo, 12.10. · 18:00**\n✅ 0 · 🤔 0\n— noch keine Stimmen —');
+    assert.equal(textsOf(empty)[2], 'Abstimmung offen · 0 Stimmen');
+    assert.equal(textsOf(message({ title: '*Raid*', description: '' }))[0], '## 📅 \\*Raid\\*');
+});
+
+test('closed and decided polls change colour, title and footer', () => {
+    const closed = message({ status: 'closed' });
+    assert.equal(containerOf(closed).accent_color, GREY);
+    assert.equal(textsOf(closed)[0], '## 🔒 Abstimmung beendet: Raid-Termin\nWann passt es?');
+    assert.equal(textsOf(closed)[2], 'Abstimmung beendet · 6 Stimmen');
+
+    const decided = message({ status: 'decided', winnerOptionId: B.id, eventId: 'e1' });
+    assert.equal(containerOf(decided).accent_color, GREEN);
+    assert.equal(textsOf(decided)[0], '## ✅ Termin steht: Raid-Termin\n**Mo, 12.10. · 18:00**');
+    assert.ok(optionBlocks(decided)[1].startsWith('**✅ Mo, 12.10. · 18:00**'));
+});
+
+test('a long description is cut to the text budget', () => {
+    const payload = message({ description: 'x'.repeat(5000) });
+    const [head] = textsOf(payload);
+    assert.ok(head.endsWith('…'));
+    assert.ok(head.length <= '## 📅 Raid-Termin\n'.length + 1000, String(head.length));
+});
+
+test('the buttons follow the poll status', () => {
+    const open = buttonsOf(message({}));
+    assert.deepEqual(open.map(b => b.label), ['Abstimmen', 'Im Web ansehen']);
+    assert.equal(open[0].custom_id, 'poll_vote:p1');
+    assert.ok(open[1].url.endsWith('/#poll/p1'));
+
+    assert.deepEqual(buttonsOf(message({ status: 'closed' })).map(b => b.label), ['Im Web ansehen']);
+    assert.deepEqual(buttonsOf(message({ deadline: '2020-01-01T00:00:00.000Z' })).map(b => b.label), ['Im Web ansehen']);
+
+    const decided = buttonsOf(message({ status: 'decided', eventId: 'e1' }));
+    assert.deepEqual(decided.map(b => b.label), ['Zum Event']);
+    assert.ok(decided[0].url.endsWith('/#event/e1'));
+});
+
+test('a deleted poll becomes a grey notice without buttons', () => {
+    const payload = polls.buildPollDeletedMessage(poll({ title: 'Raid_Termin' }));
+    assert.equal(payload.flags, IS_COMPONENTS_V2);
+    assert.equal(containerOf(payload).accent_color, GREY);
+    assert.deepEqual(textsOf(payload), ['## 🗑️ Abstimmung gelöscht: Raid\\_Termin\nDiese Abstimmung wurde von einem Admin gelöscht.']);
+    assert.deepEqual(buttonsOf(payload), []);
 });

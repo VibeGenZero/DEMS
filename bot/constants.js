@@ -36,14 +36,12 @@ const SLOT_SWITCH_PREFIX = 'slot_switch';
 const SLOT_LEAVE_PREFIX = 'slot_leave';
 const ALT_SLOTS_FIELD_ID = 'alt_slots';
 
-// Discord allows five buttons per action row
-const BUTTONS_PER_ROW = 5;
-// Names listed per slot in the announcement embed
+// Names listed per slot in the announcement
 const ROSTER_NAMES_MAX = 5;
 const POLL_VOTE_PREFIX = 'poll_vote';
 const POLL_YES_PREFIX = 'poll_yes';
 const POLL_MAYBE_PREFIX = 'poll_maybe';
-// Names listed per date in the poll embed
+// Names listed per date in the poll message
 const POLL_NAMES_MAX = 5;
 const POLL_DESCRIPTION_MAX_LENGTH = 1000;
 
@@ -65,7 +63,6 @@ module.exports = {
     SLOT_SWITCH_PREFIX,
     SLOT_LEAVE_PREFIX,
     ALT_SLOTS_FIELD_ID,
-    BUTTONS_PER_ROW,
     ROSTER_NAMES_MAX,
     POLL_VOTE_PREFIX,
     POLL_YES_PREFIX,

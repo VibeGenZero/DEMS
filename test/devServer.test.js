@@ -528,6 +528,11 @@ test('an active event needs a start date, a draft does not', async () => {
     assert.equal((await admin.send('PUT', `/api/admin/events/${id}/status`, { status: 'active' })).status, 200);
 });
 
+/** Container of the V2 message in a wizard preview answer. */
+const previewContainer = (preview) => preview.message.components.find(component => component.type === 17);
+/** Contents of the container's text displays: heading + description, facts, line-up. */
+const previewTexts = (preview) => previewContainer(preview).components.filter(component => component.type === 10).map(component => component.content);
+
 test('the wizard preview builds the Discord announcement of an unsaved event and stores nothing', async () => {
     const admin = await loginAs('admin');
     const countEvents = async () => (await (await admin.request('/api/admin/all-events')).json()).length;
@@ -538,12 +543,17 @@ test('the wizard preview builds the Discord announcement of an unsaved event and
     });
     assert.equal(res.status, 200);
     const preview = await res.json();
-    assert.equal(preview.embed.title, '🎉 Vorschau-Raid');
-    assert.equal(preview.embed.description, 'Bringt Tränke mit.');
-    assert.match(preview.embed.fields[0].name, /Datum$/);
-    assert.match(preview.embed.fields[1].name, /Plätze$/);
-    assert.equal(preview.embed.fields[1].value, '0 von 5 Plätzen belegt');
-    assert.deepEqual(preview.components.flatMap(row => row.components).map(button => button.label), ['Tank', 'Heiler', 'Zum Event']);
+    const container = previewContainer(preview);
+    const [head, facts] = previewTexts(preview);
+    assert.equal(head, '## 🎉 Vorschau-Raid\nBringt Tränke mit.');
+    assert.match(facts, /^🗓️ \*\*Datum:\*\* /);
+    assert.ok(facts.includes('👥 **Plätze:** 0 von 5 Plätzen belegt'), facts);
+    // Slot buttons beside their line-up blocks, the link in the last row (B-05)
+    const buttons = container.components.flatMap(part => {
+        if (part.type === 9) return [part.accessory];
+        return part.type === 1 ? part.components : [];
+    });
+    assert.deepEqual(buttons.map(button => button.label), ['Tank', 'Heiler', 'Zum Event']);
     assert.equal(preview.places.text, '0 von 5 Plätzen belegt');
     assert.deepEqual(preview.bot, { name: 'DEMS Bot (Mock)', avatarUrl: 'https://cdn.discordapp.com/embed/avatars/0.png' });
     assert.equal(await countEvents(), before);
@@ -554,7 +564,7 @@ test('a half-done draft can be previewed; members and requests without a token c
     const draft = await admin.send('POST', '/api/admin/events/preview', { bannerUrl: 'https://' });
     assert.equal(draft.status, 200);
     const body = await draft.json();
-    assert.equal(body.embed.image, undefined);
+    assert.ok(!previewContainer(body).components.some(component => component.type === 12), 'no banner image');
     assert.equal(body.places.text, '0 Plätze belegt');
 
     const member = await loginAs('member');
@@ -569,11 +579,13 @@ test('a description longer than Discord allows is cut in the announcement instea
     const admin = await loginAs('admin');
     const res = await admin.send('POST', '/api/admin/events/preview', { title: 'Lange Beschreibung', status: 'draft', description: `${'x'.repeat(4094)}🎉${'y'.repeat(400)}` });
     assert.equal(res.status, 200);
-    const { embed } = await res.json();
-    // 4096 characters at most; a cut emoji leaves no half character behind
-    assert.ok(embed.description.length <= 4096, String(embed.description.length));
-    assert.ok(embed.description.endsWith('…'));
-    assert.doesNotMatch(embed.description, /[\uD800-\uDBFF]…$/);
+    const preview = await res.json();
+    const texts = previewTexts(preview);
+    // 4000 characters of text per message at most; a cut emoji leaves no half character behind
+    const total = texts.reduce((sum, text) => sum + text.length, 0);
+    assert.ok(total <= 4000, String(total));
+    assert.ok(texts[0].endsWith('…'));
+    assert.doesNotMatch(texts[0], /[\uD800-\uDBFF]…$/);
 });
 
 test('the preview of a saved event counts its registrations, also after a slot was removed', async () => {
@@ -2171,9 +2183,10 @@ test('the wizard preview shows an uploaded banner with its absolute address', as
     const { bannerUrl } = await (await uploadBanner(admin, PNG_BYTES)).json();
     const res = await admin.send('POST', '/api/admin/events/preview', { title: 'Vorschau', bannerUrl });
     assert.equal(res.status, 200);
-    const { embed } = await res.json();
-    assert.ok(embed.image.url.endsWith(bannerUrl), embed.image.url);
-    assert.match(embed.image.url, /^http:\/\/localhost:\d+\/uploads\/banners\//);
+    const gallery = previewContainer(await res.json()).components.find(component => component.type === 12);
+    const imageUrl = gallery.items[0].media.url;
+    assert.ok(imageUrl.endsWith(bannerUrl), imageUrl);
+    assert.match(imageUrl, /^http:\/\/localhost:\d+\/uploads\/banners\//);
 });
 
 // ── Bulk actions on registrations (W-08) ────────────────────────────────
@@ -3036,4 +3049,89 @@ test('an announcement channel that is not a text channel of the server is refuse
     }
     const after = await (await admin.request('/api/admin/bot/settings')).json();
     assert.equal(after.welcomeMessage, before.welcomeMessage, 'nothing saved');
+});
+
+// ── V2 announcements and discussion threads (B-05, B-14) ───────────────
+
+const { GUILD } = require('../dev/mockGuild');
+
+test('the bot center saves the thread switch, on by default', async () => {
+    const admin = await loginAs('admin');
+    const current = await (await admin.request('/api/admin/bot/settings')).json();
+    assert.equal(current.announcementThreads, true);
+    await withBotSettings(admin, { announcementThreads: false }, async () => {
+        const saved = await (await admin.request('/api/admin/bot/settings')).json();
+        assert.equal(saved.announcementThreads, false);
+    });
+    assert.equal((await (await admin.request('/api/admin/bot/settings')).json()).announcementThreads, true);
+});
+
+/** Event as members get it from the API. */
+async function publicEvent(eventId) {
+    const member = await loginAs('member');
+    const res = await member.request(`/api/events/${eventId}`);
+    assert.equal(res.status, 200);
+    return res.json();
+}
+
+test('announcing stores the ping line and opens one discussion thread per event', async () => {
+    const admin = await loginAs('admin');
+    const event = await createEventAs(admin, { title: 'Thread-Abend' });
+    const first = await admin.send('POST', `/api/admin/events/${event.id}/announce`, { text: 'Heute!', roleIds: [ROLE_ID.RAID_TEAM], pingEveryone: true });
+    assert.equal(first.status, 200, await first.clone().text());
+    assert.equal((await first.json()).message, 'Event im Discord-Channel angekündigt!');
+
+    const afterFirst = await publicEvent(event.id);
+    assert.equal(afterFirst.announcements.length, 1);
+    assert.equal(afterFirst.announcements[0].intro, `<@&${ROLE_ID.RAID_TEAM}>\n@everyone\nHeute!`);
+    assert.equal(afterFirst.discordThread.guildId, GUILD.id);
+    assert.match(afterFirst.discordThread.threadId, /^\d{18}$/);
+
+    // Announcing again keeps the thread
+    await admin.send('POST', `/api/admin/events/${event.id}/announce`, { text: '' });
+    const afterSecond = await publicEvent(event.id);
+    assert.equal(afterSecond.announcements.length, 2);
+    assert.equal(afterSecond.announcements[1].intro, '');
+    assert.deepEqual(afterSecond.discordThread, afterFirst.discordThread);
+});
+
+test('with the thread switch off an announcement opens no thread', async () => {
+    const admin = await loginAs('admin');
+    const event = await createEventAs(admin, { title: 'Ohne Thread' });
+    await withBotSettings(admin, { announcementThreads: false }, async () => {
+        const res = await admin.send('POST', `/api/admin/events/${event.id}/announce`, { text: '' });
+        assert.equal(res.status, 200, await res.clone().text());
+    });
+    const stored = await publicEvent(event.id);
+    assert.equal(stored.announcements.length, 1);
+    assert.ok(!stored.discordThread);
+});
+
+test('a thread is bot-owned: event saves cannot set it and a copy starts without one', async () => {
+    const admin = await loginAs('admin');
+    const fakeThread = { guildId: GUILD.id, threadId: '123456789012345678' };
+    const event = await createEventAs(admin, { title: 'Kopier-Thread', discordThread: fakeThread });
+    assert.ok(!(await publicEvent(event.id)).discordThread);
+
+    await admin.send('POST', `/api/admin/events/${event.id}/announce`, { text: '' });
+    const announced = await publicEvent(event.id);
+    assert.ok(announced.discordThread);
+    const put = await admin.send('PUT', `/api/admin/events/${event.id}`, { ...announced, discordThread: fakeThread });
+    assert.equal(put.status, 200, await put.clone().text());
+    assert.deepEqual((await publicEvent(event.id)).discordThread, announced.discordThread);
+
+    const copy = await (await admin.send('POST', `/api/admin/events/${event.id}/duplicate`)).json();
+    assert.equal(copy.discordThread, null);
+    assert.deepEqual(copy.announcements, []);
+});
+
+test('posting a poll stores its ping line and opens no thread', async () => {
+    const admin = await loginAs('admin');
+    const res = await admin.send('POST', `/api/admin/polls/${POLL_ID.OPEN}/announce`, { text: 'Abstimmen!', roleIds: [] });
+    assert.equal(res.status, 200, await res.clone().text());
+    const { db, doc, getDoc } = serverStore();
+    const poll = (await getDoc(doc(db, 'polls', POLL_ID.OPEN))).data();
+    assert.equal(poll.announcements.at(-1).intro, 'Abstimmen!');
+    assert.ok(!poll.discordThread);
+    assert.doesNotMatch(server.output(), /Diskussions-Thread "[^"]*Termin/);
 });

@@ -36,3 +36,10 @@ test('the invite adds the bot with slash commands for the given application', ()
         assert.equal(permissionsOf(url.href).has(flag), true, String(flag));
     }
 });
+
+test('the invite asks for the right to open discussion threads', () => {
+    // Each announced event gets a public thread on its announcement (B-14)
+    const permissions = permissionsOf(buildBotInviteUrl('123'));
+    assert.equal(permissions.has(Flags.CreatePublicThreads), true);
+    assert.equal(permissions.has(Flags.SendMessagesInThreads), true);
+});

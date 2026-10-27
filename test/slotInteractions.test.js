@@ -126,7 +126,14 @@ const answersOf = (interaction) => interaction.calls
 
 test('after the registration deadline the announcement keeps only the link', async () => {
     const closed = { title: 'Zu', status: 'active', approvalMode: 'instant', startDate: inTwoDays(), registrationDeadline: passed() };
-    const labels = (event) => bot.buildEventComponents(event, 'int-x').flatMap(row => row.toJSON().components.map(button => button.label));
+    // Every button of the V2 announcement: slot buttons beside their blocks, then the last row (B-05)
+    const labels = (event) => {
+        const container = bot.buildEventAnnouncement(event, 'int-x').components.map(part => part.toJSON()).find(part => part.type === 17);
+        return container.components.flatMap(part => {
+            if (part.type === 9) return [part.accessory.label];
+            return part.type === 1 ? part.components.map(button => button.label) : [];
+        });
+    };
     assert.deepEqual(labels(closed), ['Zum Event']);
     assert.deepEqual(labels({ ...closed, slots: SLOTS, maxParticipants: 2 }), ['Zum Event']);
     assert.deepEqual(labels({ ...closed, registrationDeadline: inTwoDays() }), ['Anmelden', 'Zum Event']);
@@ -178,12 +185,14 @@ test('an old leave button after the unregister deadline keeps the registration',
 
 test('the announcement tells both deadlines', async () => {
     const event = { title: 'Raid', status: 'active', startDate: '2026-10-24T18:00:00.000Z', registrationDeadline: '2026-10-23T18:00:00.000Z', unregisterDeadline: '2026-10-24T12:00:00.000Z' };
-    const fields = bot.buildEventEmbed(event, 'https://example.com').toJSON().fields;
-    const field = (name) => fields.find(entry => entry.name === name);
-    assert.equal(field('⏰ Anmeldung bis').value, new Date(event.registrationDeadline).toLocaleString('de-DE', { timeZone: 'Europe/Berlin' }));
-    assert.equal(field('⏰ Abmeldung bis').value, new Date(event.unregisterDeadline).toLocaleString('de-DE', { timeZone: 'Europe/Berlin' }));
-    const plain = bot.buildEventEmbed({ title: 'Ohne', startDate: event.startDate }, null).toJSON().fields;
-    assert.equal(plain.some(entry => entry.name.includes('bis')), false);
+    // Facts are the second text of the container (B-05)
+    const factsOf = (data) => bot.buildEventAnnouncement(data, 'int-x').components.map(part => part.toJSON())
+        .find(part => part.type === 17).components.filter(part => part.type === 10)[1].content.split('\n');
+    const facts = factsOf(event);
+    const berlin = (value) => new Date(value).toLocaleString('de-DE', { timeZone: 'Europe/Berlin' });
+    assert.ok(facts.includes(`⏰ **Anmeldung bis:** ${berlin(event.registrationDeadline)}`), facts.join('\n'));
+    assert.ok(facts.includes(`⏰ **Abmeldung bis:** ${berlin(event.unregisterDeadline)}`), facts.join('\n'));
+    assert.equal(factsOf({ title: 'Ohne', startDate: event.startDate }).some(line => line.includes('bis:')), false);
 });
 
 // ── Paths pinned before splitting bot.js (B-01) ─────────────────────────

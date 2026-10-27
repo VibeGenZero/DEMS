@@ -35,7 +35,7 @@ test('only values the Discord builders accept reach them', () => {
         assert.equal(buildPreviewEvent({ bannerUrl }).bannerUrl, '', bannerUrl);
     }
     assert.equal(buildPreviewEvent({ bannerUrl: 'https://example.com/raid.png' }).bannerUrl, 'https://example.com/raid.png');
-    // An uploaded banner (W-12) stays; the embed turns it into an absolute URL
+    // An uploaded banner (W-12) stays; the announcement turns it into an absolute URL
     assert.equal(buildPreviewEvent({ bannerUrl: '/uploads/banners/0f8fad5b-d9cb-469f-a165-70867728950e.webp' }).bannerUrl, '/uploads/banners/0f8fad5b-d9cb-469f-a165-70867728950e.webp');
     assert.equal(buildPreviewEvent({ bannerUrl: '/uploads/banners/../a.png' }).bannerUrl, '');
 });

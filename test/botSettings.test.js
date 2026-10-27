@@ -32,6 +32,7 @@ test('normalizeBotSettings gives every setting its default', () => {
         reminderEnabled: true,
         eventStartNotifications: true,
         autoChannelCreation: true,
+        announcementThreads: true,
         autoUpdatePresence: false,
         autoStatusCalendarEvents: false,
         announceChannel: '',
@@ -50,6 +51,7 @@ test('stored values win, booleans are coerced like the settings route does', () 
     assert.equal(normalized.announceChannel, '123');
     assert.equal(normalized.welcomeMessage, 'Hallo');
     assert.equal(normalized.updatedAt, 'x');
+    assert.equal(settings.normalizeBotSettings({ announcementThreads: false }).announcementThreads, false);
 });
 
 test('settings saved before a key existed read that key as its default', async () => {
@@ -59,6 +61,7 @@ test('settings saved before a key existed read that key as its default', async (
     assert.equal(loaded.dmNotifications, false);
     assert.equal(loaded.eventStartNotifications, true);
     assert.equal(loaded.autoChannelCreation, true);
+    assert.equal(loaded.announcementThreads, true);
 });
 
 test('loadBotSettings reads once and keeps the value until a save remembers a new one', async () => {

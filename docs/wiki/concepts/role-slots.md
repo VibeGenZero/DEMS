@@ -2,7 +2,7 @@
 id: role-slots
 title: Role slots — line-ups with main and fallback roles
 type: concept
-tags: [slots, roles, raid, lineup, waitlist, fallback, announcements, live-embed, lock]
+tags: [slots, roles, raid, lineup, waitlist, fallback, announcements, live-announcement, lock]
 sources: [utils/slotService.js, utils/capacity.js, utils/eventLock.js, utils/announcementRefresh.js, utils/registrationService.js, utils/eventUtils.js, bot.js, bot/messages.js, routes/events.js, routes/admin.js, public/js/events/slots.js, public/js/admin/wizard-builders.js, public/js/admin/registrations.js]
 depends_on: [data-model, registration-flow]
 see_also: [discord-integration, event-lifecycle, bot, frontend-app]
@@ -25,7 +25,7 @@ see_also: [discord-integration, event-lifecycle, bot, frontend-app]
 | `pickWaitlistPromotions` | waitlist oldest first; everyone whose main role or fallback has a free place moves up; overbooked slots stay closed |
 | `resolveAcceptanceSlot` | admin accepts a slot-less registration: free wanted slot, else the main role overbooked (+ warning); an unknown main role falls back to a free slot |
 | `validateSlotChange` | refuses removing a slot that has pending/accepted registrations or is the main role of a waitlisted registration, and switching slots on while open registrations exist |
-| `buildRoster` | line-up for the event page and the embed |
+| `buildRoster` | line-up for the event page and the Discord announcement |
 
 Normal events use `utils/capacity.js`: places = 1 + guests + open invitations; promotion moves up every waitlisted registration that still fits (fixes the old guest overbooking).
 
@@ -41,7 +41,7 @@ Normal events use `utils/capacity.js`: places = 1 + guests + open invitations; p
 
 ## Discord
 
-`buildEventComponents` renders one button per slot (`event_slot:<eventId>:<slotId>`, "(voll)" when full, 5 per row, link button last). The modal (`event_slot_modal:…`) starts with the fallback select `alt_slots` when there is more than one slot → slot events allow 4 form fields in Discord (`getModalFieldLimit`). Already registered members get an ephemeral answer with `slot_switch:<eventId>:<slotId>` and `slot_leave:<eventId>`. `refreshEventAnnouncements` edits the stored messages; deleted ones (Discord errors 10003/10008) are dropped.
+`buildEventAnnouncement` renders one block per slot with its button beside it (`event_slot:<eventId>:<slotId>`, "(voll)" when full; plain text without button once registration is closed), the link button in the last row (B-05). The modal (`event_slot_modal:…`) starts with the fallback select `alt_slots` when there is more than one slot → slot events allow 4 form fields in Discord (`getModalFieldLimit`). Already registered members get an ephemeral answer with `slot_switch:<eventId>:<slotId>` and `slot_leave:<eventId>`. `refreshEventAnnouncements` edits the stored messages; deleted ones (Discord errors 10003/10008) are dropped.
 
 ## Concurrency
 
