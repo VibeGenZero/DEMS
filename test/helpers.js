@@ -199,10 +199,10 @@ function createClient(baseUrl) {
  * Discord interaction double that records every answer in call order.
  * `answered` resolves with the first answer that is not a defer.
  *
- * @param {Object} options -> `{ kind: 'button'|'select'|'command'|'modal', customId, userId, commandName, eventOption, values, roles }`; a modal answers every field empty.
+ * @param {Object} options -> `{ kind: 'button'|'select'|'command'|'modal'|'autocomplete', customId, userId, commandName, eventOption, focused, values, roles }`; a modal answers every field empty, an autocomplete reads `focused` as the typed text.
  * @returns {Object} -> The fake interaction.
  */
-function createFakeInteraction({ kind, customId, userId, commandName, eventOption, values = [], roles = null }) {
+function createFakeInteraction({ kind, customId, userId, commandName, eventOption, focused = '', values = [], roles = null }) {
     const calls = [];
     let resolveAnswered;
     const answered = new Promise(resolve => { resolveAnswered = resolve; });
@@ -212,8 +212,8 @@ function createFakeInteraction({ kind, customId, userId, commandName, eventOptio
         member: roles ? { roles, displayName: userId } : null,
         deferred: false,
         replied: false,
-        options: { getString: () => eventOption },
-        isAutocomplete: () => false,
+        options: { getString: () => eventOption, getFocused: () => focused },
+        isAutocomplete: () => kind === 'autocomplete',
         isModalSubmit: () => kind === 'modal',
         fields: { getTextInputValue: () => '', getStringSelectValues: () => [], getField: () => null },
         isStringSelectMenu: () => kind === 'select',
@@ -223,7 +223,8 @@ function createFakeInteraction({ kind, customId, userId, commandName, eventOptio
         async deferReply(payload) { calls.push(['deferReply', payload]); interaction.deferred = true; },
         async update(payload) { calls.push(['update', payload]); interaction.replied = true; resolveAnswered(); },
         async reply(payload) { calls.push(['reply', payload]); interaction.replied = true; resolveAnswered(); },
-        async editReply(payload) { calls.push(['editReply', payload]); resolveAnswered(); }
+        async editReply(payload) { calls.push(['editReply', payload]); resolveAnswered(); },
+        async respond(choices) { calls.push(['respond', choices]); resolveAnswered(); }
     };
     return interaction;
 }

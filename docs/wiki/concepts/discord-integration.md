@@ -3,13 +3,13 @@ id: discord-integration
 title: Discord integration — what DEMS does in Discord
 type: concept
 tags: [discord, announcements, roles, channels, scheduled-events, dm, slash-commands, permissions, intents]
-sources: [bot.js, routes/admin.js, utils/registrationService.js, utils/eventUtils.js, utils/eventUrl.js, utils/botPermissions.js, utils/eventChangeNotice.js, utils/notificationPrefs.js, utils/participantMessage.js, utils/botSettings.js]
+sources: [bot.js, bot/messages.js, bot/guild.js, bot/channels.js, routes/admin.js, utils/registrationService.js, utils/eventUtils.js, utils/eventUrl.js, utils/botPermissions.js, utils/eventChangeNotice.js, utils/notificationPrefs.js, utils/participantMessage.js, utils/botSettings.js]
 depends_on: [bot]
 see_also: [form-fields, registration-flow, reminders-presence, configuration]
 ---
 # Discord integration — what DEMS does in Discord
 
-> TL;DR: The bot announces events (embed + "Anmelden"/"Zum Event" buttons), lets members register through a modal, offers `/events`, `/register`, `/unregister`, sends DMs for every registration change, assigns/removes an event role, optionally creates private voice/text channels per event, and can create native Discord scheduled events. Everything targets ONE guild (`DISCORD_GUILD_ID`).
+> TL;DR: The bot announces events (embed + "Anmelden"/"Zum Event" buttons), lets members register through a modal, offers `/events`, `/register`, `/unregister`, sends DMs for every registration change, assigns/removes an event role, optionally creates private voice/text channels per event, and can create native Discord scheduled events. Everything targets ONE guild (`DISCORD_GUILD_ID`). The helpers named below live in the area modules of `bot/` (table in [bot](../modules/bot.md)) and are exported through `bot.js`.
 
 ## Features
 

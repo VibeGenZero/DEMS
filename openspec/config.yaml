@@ -12,7 +12,7 @@ rules:
   proposal:
     - Name the affected wiki nodes (docs/wiki/...) and the ticket (F-xx/D-xx) if there is one
   design:
-    - Mention required Discord helpers in bot.js plus their twin in dev/mockBot.js when the bot is touched
+    - Mention required Discord helpers (area module in bot/, exported through bot.js) plus their twin in dev/mockBot.js when the bot is touched
     - New env variables must be listed for .env.example and docs/wiki/ops/configuration.md
   tasks:
     - Test first (node:test + node:assert/strict); server behaviour via test/devServer.test.js personas

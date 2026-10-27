@@ -164,7 +164,7 @@ Pure, no database: `avatarUrlOf(user)` → `session.user.avatar` (already a comp
 
 ## utils/botPermissions.js
 
-`BOT_PERMISSIONS` (`{ flag, reason }` per Discord permission the bot needs, incl. everything it grants in channel overwrites) and `buildBotInviteUrl(clientId)` → OAuth2 URL with scopes `bot applications.commands`; used by `logBotInviteUrl` in `bot.js`. Pure, no database.
+`BOT_PERMISSIONS` (`{ flag, reason }` per Discord permission the bot needs, incl. everything it grants in channel overwrites) and `buildBotInviteUrl(clientId)` → OAuth2 URL with scopes `bot applications.commands`; used by `logBotInviteUrl` in `bot/lifecycle.js`. Pure, no database.
 
 ## utils/csv.js and utils/template.js
 
@@ -213,4 +213,4 @@ Uploaded event banners as files in `<UPLOAD_DIR>/banners/` (default `data/upload
 ## Gotchas
 
 - `withEventLock` is not reentrant: inside the lock call `promoteFromWaitlistLocked`, then `announcePromotions` after releasing it — calling `promoteFromWaitlist` there would wait for itself.
-- `bot.js` requires `registrationService` and `eventUtils` lazily inside functions (circular dependency).
+- The `bot/` modules require `registrationService`, `eventUtils`, `pollStore` and `announcementRefresh` lazily inside functions (circular dependency: those utils require `bot.js` at load time).

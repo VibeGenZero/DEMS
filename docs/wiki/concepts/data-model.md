@@ -3,7 +3,7 @@ id: data-model
 title: Data model — collections and document shapes
 type: concept
 tags: [data-model, schema, collections, events, registrations, users, firestore]
-sources: [routes/admin.js, utils/registrationService.js, utils/userProfile.js, utils/sessionStore.js, routes/events.js, utils/eventUtils.js, bot.js, dev/seedData.js, utils/eventTemplates.js, utils/botSettings.js]
+sources: [routes/admin.js, utils/registrationService.js, utils/userProfile.js, utils/sessionStore.js, routes/events.js, utils/eventUtils.js, bot/registration.js, dev/seedData.js, utils/eventTemplates.js, utils/botSettings.js]
 depends_on: [data-layer]
 see_also: [registration-flow, event-lifecycle, maintenance-mode, glossary]
 ---
@@ -60,7 +60,7 @@ erDiagram
 
 Slot fields exist only on slot events: `slotId` = the slot actually taken (`null` on the waitlist), `preferredSlotId` = main role, `altSlotIds` = fallback roles in slot order.
 
-## users (id = Discord user id) — written by `utils/userProfile.js`, `bot.js#ensureUserProfile`
+## users (id = Discord user id) — written by `utils/userProfile.js`, `bot/registration.js#ensureUserProfile`
 
 `{ id, username, displayName, avatar (URL), acceptInvitations (bool), notifications?: { reminders, changes, waitlist } (bool each, W-16; missing field or key = on), welcomeSentAt? (ISO, B-02: the bot center welcome message was sent; written by `utils/botSettings.js#sendWelcomeOnce`), createdAt, updatedAt }`
 

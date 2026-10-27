@@ -3,7 +3,7 @@ id: conventions
 title: Coding conventions
 type: reference
 tags: [conventions, style, language, git, commits, testing, jsdoc]
-sources: [bot.js, utils/formFields.js, routes/events.js, public/js/core/ui.js, test/helpers.js]
+sources: [bot, utils/formFields.js, routes/events.js, public/js/core/ui.js, test/helpers.js]
 see_also: [testing, data-layer, glossary]
 ---
 # Coding conventions
@@ -23,7 +23,7 @@ see_also: [testing, data-layer, glossary]
 - CommonJS (`require`, `module.exports = { ... }` at the end of the file).
 - Indentation: match the file — 4 spaces almost everywhere; `firebaseAdmin.js` and `db/sqliteAdapter.js` use 2.
 - Names: `camelCase` functions/variables, `UPPER_SNAKE_CASE` constants (`MODAL_MAX_FIELDS`, `REGISTER_BUTTON_PREFIX`), `kebab-case` file ids in the wiki.
-- JSDoc in newer code (`bot.js` registration part, `utils/`, `dev/`): summary line, blank line, `@param {type} name -> meaning`, `@returns {type} -> meaning`, optional `@example`. Use the `->` style for new functions.
+- JSDoc in newer code (`bot/registration.js`, `bot/registrationModal.js`, `utils/`, `dev/`): summary line, blank line, `@param {type} name -> meaning`, `@returns {type} -> meaning`, optional `@example`. Use the `->` style for new functions.
 - Comments explain *why*; keep them short.
 - Magic values become named constants next to related ones.
 
@@ -33,7 +33,7 @@ see_also: [testing, data-layer, glossary]
 - Data: Firestore modular API from `firebaseAdmin.js`; dates as ISO strings; filter/sort in memory instead of composite indexes.
 - Admin mutations: `addAuditLog(ACTION, adminId, details, targetId)`.
 - Verbose traces: `debugLog(label, data)` (only active with `DEBUG_MODE=true`).
-- Discord calls: through exported `bot.js` helpers that no-op without a ready bot; ephemeral replies via `flags: MessageFlags.Ephemeral`.
+- Discord calls: through `bot.js` helpers (code in the area modules of `bot/`) that no-op without a ready bot; ephemeral replies via `flags: MessageFlags.Ephemeral`.
 - Express 5: named wildcards, no writes to `req.query`.
 
 ## Frontend patterns

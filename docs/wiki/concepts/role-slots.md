@@ -3,7 +3,7 @@ id: role-slots
 title: Role slots — line-ups with main and fallback roles
 type: concept
 tags: [slots, roles, raid, lineup, waitlist, fallback, announcements, live-embed, lock]
-sources: [utils/slotService.js, utils/capacity.js, utils/eventLock.js, utils/announcementRefresh.js, utils/registrationService.js, utils/eventUtils.js, bot.js, routes/events.js, routes/admin.js, public/js/events/slots.js, public/js/admin/wizard-builders.js, public/js/admin/registrations.js]
+sources: [utils/slotService.js, utils/capacity.js, utils/eventLock.js, utils/announcementRefresh.js, utils/registrationService.js, utils/eventUtils.js, bot.js, bot/messages.js, routes/events.js, routes/admin.js, public/js/events/slots.js, public/js/admin/wizard-builders.js, public/js/admin/registrations.js]
 depends_on: [data-model, registration-flow]
 see_also: [discord-integration, event-lifecycle, bot, frontend-app]
 ---

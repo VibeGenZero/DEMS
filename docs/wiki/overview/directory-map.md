@@ -8,7 +8,7 @@ see_also: [architecture]
 ---
 # Directory map and reading strategy
 
-> TL;DR: Where every file lives, how big it is and how to read it cheaply. Three files hold most of the tokens (`public/css/style.css`, `bot.js`, `public/index.html`) — never read them whole; jump via the function/section maps in their wiki nodes and `grep -n`.
+> TL;DR: Where every file lives, how big it is and how to read it cheaply. Two files hold most of the tokens (`public/css/style.css`, `public/index.html`) — never read them whole; jump via the function/section maps in their wiki nodes and `grep -n`.
 
 Line counts as of 2026-10-02 (approximate; they drift).
 
@@ -17,7 +17,8 @@ Line counts as of 2026-10-02 (approximate; they drift).
 | Path | Lines | Purpose | Read strategy | Node |
 |---|---|---|---|---|
 | `server.js` | ~280 | Express setup, middleware chain, misc endpoints, startup/shutdown | read whole | [server](../modules/server.md) |
-| `bot.js` | ~2200 | discord.js bot + all Discord helpers used by routes | **grep** function names from [bot](../modules/bot.md) | [bot](../modules/bot.md) |
+| `bot.js` | ~80 | entry point of the discord.js bot: wires the client, exports every Discord helper used by routes, mock overlay | read whole | [bot](../modules/bot.md) |
+| `bot/*.js` | ~30–480 each | the bot's 14 area modules (commands, interactions, messages, polls, registration, guild, channels, scheduler, settings, …) | read the one module from the table in [bot](../modules/bot.md) whole | [bot](../modules/bot.md) |
 | `firebaseAdmin.js` | ~60 | picks Firestore or SQLite, re-exports the data API | read whole | [data-layer](../modules/data-layer.md) |
 | `db/sqliteAdapter.js` | ~250 | Firestore-compatible SQLite document store | read whole when touching queries | [data-layer](../modules/data-layer.md) |
 | `routes/auth.js` | ~170 | Discord OAuth2 login, `/auth/me`, logout | read whole | [routes-auth](../modules/routes-auth.md) |
