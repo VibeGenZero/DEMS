@@ -14,7 +14,7 @@ see_also: [data-model, conventions]
 |---|---|---|
 | Event, Veranstaltung | `events` document | [data-model](../concepts/data-model.md) |
 | Anmeldung / Registrierung | registration (`registrations`) | [registration-flow](../concepts/registration-flow.md) |
-| Abmeldung | unregister (`DELETE /api/events/:id/register`, `/unregister`) | routes/events.js, bot.js |
+| Abmeldung | unregister (`DELETE /api/events/:id/register`, `/unregister`) | routes/events.js, bot/commands.js |
 | Anmeldeschluss, „Anmeldung bis“, „Anmeldung geschlossen“ | `registrationDeadline`, `isRegistrationClosed`, code `registration_closed` | [registration-flow](../concepts/registration-flow.md) |
 | Abmeldeschluss, „Abmeldung bis“ | `unregisterDeadline`, `isUnregisterClosed`, code `unregister_closed` | [registration-flow](../concepts/registration-flow.md) |
 | Anfrage (wartet auf Bestätigung) | status `pending` | registration |
@@ -28,13 +28,13 @@ see_also: [data-model, conventions]
 | Antworten | `formAnswers` (keyed by label) | registration |
 | Zugang: offen / Rollen-Requirement | `accessMode`: `open` / `role-required`, `requiredRoles` | event |
 | Genehmigung: manuell / sofort | `approvalMode`: `manual` / `instant` | event |
-| Rolle vergeben | `assignRoleId`, `assignRole` | event, bot.js |
+| Rolle vergeben | `assignRoleId`, `assignRole` | event, bot/guild.js |
 | Entwurf / Aktiv / Archiviert / Abgesagt | status `draft` / `active` / `archived` / `cancelled` | [event-lifecycle](../concepts/event-lifecycle.md) |
 | Serie, wiederkehrend | `seriesId`, `recurring`, `recurringInterval` | event |
 | Check-in, Code | `checkinEnabled`, `checkinCode`, `checkedIn` | event / registration |
 | Erinnerung | `reminderHours`, `checkReminders` | [reminders-presence](../concepts/reminders-presence.md) |
 | Ankündigen / Ankündigung | announce (`POST .../announce`) | [discord-integration](../concepts/discord-integration.md) |
-| Event-Channels | `autoCreateChannels`, `channelConfig`, `createEventChannels` | bot.js |
+| Event-Channels | `autoCreateChannels`, `channelConfig`, `createEventChannels` | bot/channels.js |
 | Ort | `location` `{ text, channelId, channelType }` | event |
 | Kategorie | `category` | event |
 | Bot-Nachrichten / Vorlagen | `botMessages/templates`, `customBotMessages` | data-model |

@@ -12,8 +12,9 @@ afterEach(() => {
     else process.env.BASE_URL = originalBaseUrl;
 });
 
-/** All JavaScript files of a directory, relative to the repository root. */
+/** All JavaScript files of a directory, relative to the repository root (none when it does not exist). */
 function jsFilesIn(dir) {
+    if (!fs.existsSync(path.join(REPO_ROOT, dir))) return [];
     return fs.readdirSync(path.join(REPO_ROOT, dir))
         .filter(name => name.endsWith('.js'))
         .map(name => `${dir}/${name}`);
@@ -30,7 +31,7 @@ test('event links fall back to localhost without BASE_URL', () => {
 });
 
 test('no server code links an event to the list route #events/<id>', () => {
-    const files = ['bot.js', 'server.js', ...jsFilesIn('routes'), ...jsFilesIn('utils'), ...jsFilesIn('dev')];
+    const files = ['bot.js', ...jsFilesIn('bot'), 'server.js', ...jsFilesIn('routes'), ...jsFilesIn('utils'), ...jsFilesIn('dev')];
     const offenders = files.filter(file => fs.readFileSync(path.join(REPO_ROOT, file), 'utf8').includes('#events/${'));
     assert.deepEqual(offenders, []);
 });

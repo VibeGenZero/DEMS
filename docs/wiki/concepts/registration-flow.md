@@ -3,7 +3,7 @@ id: registration-flow
 title: Registration flow — rules, statuses, waitlist, guests
 type: concept
 tags: [registration, waitlist, guests, approval, capacity, discord, web]
-sources: [utils/registrationService.js, utils/eventUtils.js, routes/events.js, routes/admin.js, bot.js]
+sources: [utils/registrationService.js, utils/eventUtils.js, routes/events.js, routes/admin.js, bot.js, bot/registration.js]
 depends_on: [data-model, form-fields, maintenance-mode]
 see_also: [discord-integration, routes-events, event-lifecycle, role-slots]
 ---

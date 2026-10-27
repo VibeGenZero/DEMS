@@ -33,7 +33,7 @@ see_also: [maintenance-mode, auth-session]
 | `getLoginBlockReason(isAdmin)` | `'panic_mode'` / `'maintenance_login_disabled'` / `null`; admins never blocked; shared by OAuth callback and dev persona login |
 | `checkRegistrationAllowed` | middleware → 503 `{ error }` when registrations are blocked (used on `POST /api/events/:id/register`) |
 
-The Discord registration path calls `isRegistrationBlocked()` directly (`checkRegistrationConditions` in `bot.js`).
+The Discord registration path calls `isRegistrationBlocked()` directly (`checkRegistrationConditions` in `bot/registration.js`).
 
 ## middleware/validators.js
 

@@ -3,7 +3,7 @@ id: form-fields
 title: Registration form fields — types, web widgets, Discord components
 type: concept
 tags: [forms, form-fields, discord-modal, entity-picker, validation]
-sources: [utils/formFields.js, bot.js, public/js/events/registration-form.js, public/js/admin/wizard-builders.js]
+sources: [utils/formFields.js, bot/registrationModal.js, public/js/events/registration-form.js, public/js/admin/wizard-builders.js]
 see_also: [registration-flow, discord-integration, add-form-field-type]
 ---
 # Registration form fields — types, web widgets, Discord components
@@ -12,7 +12,7 @@ see_also: [registration-flow, discord-integration, add-form-field-type]
 
 ## Type matrix
 
-| Type | Web widget (`renderFormFields` in `events/registration-form.js`) | Discord modal component (`applyFieldComponent` in bot.js) | Stored answer |
+| Type | Web widget (`renderFormFields` in `events/registration-form.js`) | Discord modal component (`applyFieldComponent` in `bot/registrationModal.js`) | Stored answer |
 |---|---|---|---|
 | `text` (default/unknown) | input | TextInput short | string |
 | `textarea` | textarea | TextInput paragraph | string |
@@ -42,7 +42,7 @@ Entity answers are produced by `formatEntityAnswer(type, name, id)` (same functi
 | What | grep |
 |---|---|
 | type constants | `FORM_FIELD_TYPE` (utils/formFields.js) |
-| Discord mapping | `function applyFieldComponent`, `function readModalField` (bot.js) |
+| Discord mapping | `function applyFieldComponent`, `function readModalField` (`bot/registrationModal.js`) |
 | web rendering / answers | `function renderFormFields`, `function collectFormAnswers`, `function initEntityPicker` (`public/js/events/registration-form.js`) |
 | admin form builder | `function addFormField`, `function getFormFieldsFromBuilder` (`public/js/admin/wizard-builders.js`) |
 

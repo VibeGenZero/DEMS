@@ -1,66 +1,73 @@
 ---
 id: bot
-title: bot.js — Discord bot and Discord helpers
+title: bot.js and bot/ — Discord bot and Discord helpers
 type: module
 tags: [discord, bot, discordjs, slash-commands, modals, buttons, dm, roles, channels]
-sources: [bot.js, dev/mockBot.js]
+sources: [bot.js, bot, dev/mockBot.js, test/botModules.test.js, test/botRealExports.test.js]
 part_of: [architecture]
 depends_on: [data-layer, utils, middleware]
 see_also: [discord-integration, reminders-presence, form-fields]
 ---
-# bot.js — Discord bot and Discord helpers
+# bot.js and bot/ — Discord bot and Discord helpers
 
-> TL;DR: `bot.js` (~2200 lines) owns the discord.js `Client` and exports ~28 helpers the routes call (DMs, channel messages, roles, guild data, event channels, scheduled events, bot status/settings). It also handles all Discord interactions: `/events`, `/register`, `/unregister`, the "Anmelden" button + registration modal, and guest-invitation buttons. Every helper returns `false`/`[]`/`null` while the bot is not ready. Do not read it whole — jump by function name.
+> TL;DR: `bot.js` (~80 lines) is the only entry point of the Discord bot: it wires the client and exports 44 helpers the routes call (DMs, channel messages, roles, guild data, event channels, scheduled events, bot status/settings). The code lives in 14 area modules in `bot/` (each ≤ 500 lines, readable whole): pick the module from the table below. Every helper returns `false`/`[]`/`null` while the bot is not ready. Split from one 3076-line file by B-01.
 
-## Function map (grep `function <name>`)
+## Modules
 
-| Area | Functions |
+`bot.js` is the only door: server, routes, utils and dev code `require('./bot')`, never a file in `bot/`. The modules in `bot/` require each other directly (never `../bot`), so calls between them use the real functions even in mock mode. `test/botModules.test.js` checks both rules, the size limits, that only `bot/client.js` creates a `Client`, and the export list.
+
+| Module | Holds |
 |---|---|
-| Setup | constants (`MODAL_*_MAX_LENGTH`, `REGISTER_BUTTON_PREFIX`, `REGISTER_MODAL_PREFIX`, `SELECTABLE_CHANNEL_TYPES`), `client` (intents: Guilds, GuildMembers, GuildMessages, DirectMessages, GuildScheduledEvents), `client.once(Events.ClientReady)` → `registerSlashCommands`, `logBotInviteUrl`, `applyBotSettings` |
-| Interaction dispatcher | `client.on('interactionCreate', ...)`: autocomplete → modal submit → buttons → slash commands |
-| Messaging | `sendDM`, `sendChannelMessage`, `buildEventEmbed` (description cut to Discord's 4096 characters with "…" by `cutForEmbed`, the event page keeps the full text; field "👥 Plätze" with the places sentence of `utils/capacity.js` via `formatParticipantCount`, "⏳ Warteliste" whenever somebody waits; + `formatRosterSlotTitle`, `formatRosterMembers`), `buildEventComponents` (+ `buildSlotButton`), `parseTemplate` (from `utils/template.js`, re-exported), `sendGuestInvitation`, `refreshEventAnnouncements`, `isGoneDiscordError`, `editStoredMessages` |
-| Date polls | `buildPollEmbed` (+ `formatPollVoters`), `buildPollComponents`, `buildPollVoteReply`, `refreshPollMessages`, `markPollMessagesDeleted`, `handlePollVoteButton`, `handlePollVoteSelect` |
-| Registration via Discord | `canRegisterViaDiscord`, `buildRegistrationModal` (+ `buildModalIntro`, `buildFieldDescription`, `applySelectConstraints`, `applyFieldComponent`, `buildFieldCustomId`), `readModalField`, `parseModalAnswers`, `resolveSelectedUserName`, `resolveInteractionRoles`, `ensureUserProfile`, `checkRegistrationConditions`, `completeDiscordRegistration`, `handleEventRegisterButton`, `handleEventRegisterModal`; slots: `addFormFieldLabels`, `buildSlotModal`, `readAltSlotIds`, `buildRegisteredSlotReply`, `handleEventSlotButton`, `handleEventSlotModal`, `handleSlotSwitchButton`, `handleSlotLeaveButton`, `replyWithFailure` |
-| Guild data | `getGuildName`, `getGuildIconUrl` (server icon for the login card, 256 px; `null` without icon or bot; mock: `null`), `getGuildRoles`, `getGuildChannels`, `getPublicGuildChannels`, `getUserRoles`, `fetchMemberRoleIds` (`{ isMember, roleIds }` or `null` when Discord cannot answer; for `createRoleRefresh`), `isGuildMember`, `searchGuildMembers(query, limit = 10)` (Discord's member search: start of username or nickname, no bots, `[]` without bot; mock: substring over personas and members) and `fetchGuildMember(userId)` (`{ id, username, displayName, avatar }`, `false` for no member, `null` when Discord cannot answer) for the admin entry of W-06, `assignRole`, `removeRole` |
-| Event channels & scheduled events | `createEventChannels`, `addParticipantToEventChannels`, `removeParticipantFromEventChannels`, `deleteEventChannels`, `getGuildScheduledEvents`, `createScheduledEvent` |
-| Reminders | `checkReminders({ now, send })` (exported for tests), `messageAcceptedParticipants`, `startReminderScheduler`; rules in `utils/reminders.js` |
-| Bot control center | `getBotStatus`, `getBotSettings`, `saveBotSettings`, `buildActivityVariables`, `applyBotSettings`, `getRunningEvents` |
-| Lifecycle | `startBot(token)`, `whenBotSettled(timeoutMs)` (true once ready; false without a token, after a failed login or after 2 min without the ready event; the mock answers true), `stopBot()`, `logBotInviteUrl` (URL from `buildBotInviteUrl`, `utils/botPermissions.js`) |
+| `bot/constants.js` | `TIMEZONE`, Discord length limits (`MODAL_*_MAX_LENGTH`, `SELECT_OPTION_LABEL_MAX_LENGTH`), checkbox values, `SELECTABLE_CHANNEL_TYPES`, every custom ID prefix, `BUTTONS_PER_ROW`, roster and poll limits |
+| `bot/client.js` | `client` (intents: Guilds, GuildMembers, GuildMessages, DirectMessages, GuildScheduledEvents) and `state` (`isReady`, `startedAt`, `dmsSent`, `commandsProcessed`) — an object, so every module sees updates; read `state.isReady` in guards |
+| `bot/lifecycle.js` | `wireClient()` (attaches `Events.ClientReady` → `registerSlashCommands`, `logBotInviteUrl`, `applyBotSettings`; `error`; `interactionCreate` → `handleInteraction`; once, called by `bot.js`), `startBot(token)`, `whenBotSettled(timeoutMs)` (true once ready; false without a token, after a failed login or after 2 min without the ready event; the mock answers true), `stopBot()` (stops scheduler and presence updates, destroys the client), `logBotInviteUrl` (URL from `buildBotInviteUrl`, `utils/botPermissions.js`) |
+| `bot/commands.js` | `registerSlashCommands` (on ready), `handleAutocomplete` (event choices for `/register` and `/unregister`), `handleChatCommand` (`/events`, `/register`, `/unregister`) |
+| `bot/interactions.js` | `handleInteraction`: the router attached to `interactionCreate`; order autocomplete → modal submit → string select → button (by custom ID prefix) → slash command, counts `state.commandsProcessed` for slash commands |
+| `bot/messages.js` | `sendDM`, `sendChannelMessage`, `buildEventEmbed` (description cut to Discord's 4096 characters with "…" by `cutForEmbed`, the event page keeps the full text; field "👥 Plätze" with the places sentence of `utils/capacity.js` via `formatParticipantCount`, "⏳ Warteliste" whenever somebody waits; + `formatRosterSlotTitle`, `formatRosterMembers`), `canRegisterViaDiscord`, `buildEventComponents` (+ `buildSlotButton`), `isGoneDiscordError`, `editStoredMessages`, `refreshEventAnnouncements` |
+| `bot/polls.js` | date polls: `buildPollEmbed` (+ `formatPollVoters`), `buildPollComponents`, `buildPollVoteReply`, `refreshPollMessages`, `markPollMessagesDeleted`, `handlePollVoteButton`, `handlePollVoteSelect` |
+| `bot/registrationModal.js` | building the registration and slot modals (`buildRegistrationModal`, `buildSlotModal`, `buildModalIntro`, `buildFieldDescription`, `buildFieldCustomId`, `applyFieldComponent`, `applySelectConstraints`, `addFormFieldLabels`), reading them (`readModalField`, `parseModalAnswers`, `readAltSlotIds`, `resolveSelectedUserName`), `buildRegisteredSlotReply` |
+| `bot/registration.js` | registration through Discord: `resolveInteractionRoles`, `ensureUserProfile`, `checkRegistrationConditions`, `completeDiscordRegistration`, `handleEventRegisterButton`, `handleEventRegisterModal`, `handleEventSlotButton`, `handleEventSlotModal`, `handleSlotSwitchButton`, `handleSlotLeaveButton`, `replyWithFailure`, the double-click guard `pendingDiscordRegistrations` |
+| `bot/guests.js` | `sendGuestInvitation` (DM with Accept/Decline) and `handleGuestButton` (only the invited user may answer; decline promotes the waitlist after answering) |
+| `bot/guild.js` | `getGuildName`, `getGuildIconUrl` (server icon for the login card, 256 px; `null` without icon or bot; mock: `null`), `getGuildRoles`, `getGuildChannels`, `getPublicGuildChannels`, `getUserRoles`, `fetchMemberRoleIds` (`{ isMember, roleIds }` or `null` when Discord cannot answer; for `createRoleRefresh`), `isGuildMember`, `searchGuildMembers(query, limit = 10)` (Discord's member search: start of username or nickname, no bots, `[]` without bot; mock: substring over personas and members) and `fetchGuildMember(userId)` (`{ id, username, displayName, avatar }`, `false` for no member, `null` when Discord cannot answer) for the admin entry of W-06, `assignRole`, `removeRole` |
+| `bot/channels.js` | `createEventChannels`, `addParticipantToEventChannels`, `removeParticipantFromEventChannels`, `deleteEventChannels`, `getGuildScheduledEvents`, `createScheduledEvent` |
+| `bot/scheduler.js` | `checkReminders({ now, send, refresh, settings })` (exported for tests), `messageAcceptedParticipants`, `startReminderScheduler`, `stopReminderScheduler`, `isReminderSchedulerRunning` (the interval is private here); rules in `utils/reminders.js` |
+| `bot/settings.js` | bot control center: `getBotStatus`, `getBotSettings`, `saveBotSettings`, `buildActivityVariables`, `applyBotSettings`, `stopPresenceUpdates`, `isPresenceAutoUpdating` (the presence interval is private here), `getRunningEvents` |
 
 ## Interaction custom IDs
 
-| Custom ID | Component | Handler |
+| Custom ID | Component | Handler (module) |
 |---|---|---|
-| `event_register:<eventId>` | "Anmelden" button on announcements | `handleEventRegisterButton` |
-| `event_register_modal:<eventId>` | registration modal | `handleEventRegisterModal` |
-| `field:<index>` | input inside the modal | `readModalField` |
-| `guest_accept:<registrationId>:<guestUserId>` / `guest_decline:...` | buttons in guest-invitation DM | inline in dispatcher |
-| `event_slot:<eventId>:<slotId>` | slot button on announcements | `handleEventSlotButton` |
-| `event_slot_modal:<eventId>:<slotId>` | slot modal | `handleEventSlotModal` |
-| `alt_slots` | fallback-role select inside the slot modal | `readAltSlotIds` |
-| `slot_switch:<eventId>:<slotId>` / `slot_leave:<eventId>` | buttons in the ephemeral status answer | `handleSlotSwitchButton` / `handleSlotLeaveButton` |
-| `poll_vote:<pollId>` | "Abstimmen" below a poll message | `handlePollVoteButton` |
-| `poll_yes:<pollId>` / `poll_maybe:<pollId>` | vote selects in the ephemeral answer (handled before the button branch via `isStringSelectMenu`) | `handlePollVoteSelect` |
+| `event_register:<eventId>` | "Anmelden" button on announcements | `handleEventRegisterButton` (registration) |
+| `event_register_modal:<eventId>` | registration modal | `handleEventRegisterModal` (registration) |
+| `field:<index>` | input inside the modal | `readModalField` (registrationModal) |
+| `guest_accept:<registrationId>:<guestUserId>` / `guest_decline:...` | buttons in guest-invitation DM | `handleGuestButton` (guests) |
+| `event_slot:<eventId>:<slotId>` | slot button on announcements | `handleEventSlotButton` (registration) |
+| `event_slot_modal:<eventId>:<slotId>` | slot modal | `handleEventSlotModal` (registration) |
+| `alt_slots` | fallback-role select inside the slot modal | `readAltSlotIds` (registrationModal) |
+| `slot_switch:<eventId>:<slotId>` / `slot_leave:<eventId>` | buttons in the ephemeral status answer | `handleSlotSwitchButton` / `handleSlotLeaveButton` (registration) |
+| `poll_vote:<pollId>` | "Abstimmen" below a poll message | `handlePollVoteButton` (polls) |
+| `poll_yes:<pollId>` / `poll_maybe:<pollId>` | vote selects in the ephemeral answer (handled before the button branch via `isStringSelectMenu`) | `handlePollVoteSelect` (polls) |
 
-Slash commands (guild-scoped, registered on ready): `/events` (list active events with the places sentence, public reply), `/register event:<autocomplete>` (replies with the website link), `/unregister event:<autocomplete>` (deletes the registration, removes role, promotes waitlist).
+Slash commands (`bot/commands.js`, guild-scoped, registered on ready): `/events` (list active events with the places sentence, public reply), `/register event:<autocomplete>` (replies with the website link), `/unregister event:<autocomplete>` (deletes the registration, removes role, promotes waitlist).
 
-## Exports
+## Exports of bot.js
 
-`client, startBot, whenBotSettled, stopBot, sendDM, sendChannelMessage, buildEventEmbed, assignRole, removeRole, getUserRoles, fetchMemberRoleIds, isGuildMember, searchGuildMembers, fetchGuildMember, getGuildName, getGuildIconUrl, getGuildRoles, getGuildChannels, getPublicGuildChannels, getGuildScheduledEvents, parseTemplate, startReminderScheduler, createEventChannels, addParticipantToEventChannels, removeParticipantFromEventChannels, deleteEventChannels, createScheduledEvent, getBotStatus, getBotSettings, saveBotSettings, getRunningEvents, sendGuestInvitation, buildEventComponents, canRegisterViaDiscord, refreshEventAnnouncements, isGoneDiscordError, buildSlotModal, buildRegisteredSlotReply, buildPollEmbed, buildPollComponents, buildPollVoteReply, refreshPollMessages, markPollMessagesDeleted`.
+`client, startBot, whenBotSettled, stopBot, sendDM, sendChannelMessage, refreshEventAnnouncements, isGoneDiscordError, buildPollEmbed, buildPollComponents, buildPollVoteReply, refreshPollMessages, markPollMessagesDeleted, buildSlotModal, buildRegisteredSlotReply, buildEventEmbed, assignRole, removeRole, getUserRoles, fetchMemberRoleIds, isGuildMember, searchGuildMembers, fetchGuildMember, getGuildName, getGuildIconUrl, getGuildRoles, getGuildChannels, getPublicGuildChannels, getGuildScheduledEvents, parseTemplate, startReminderScheduler, checkReminders, createEventChannels, addParticipantToEventChannels, removeParticipantFromEventChannels, deleteEventChannels, createScheduledEvent, getBotStatus, getBotSettings, saveBotSettings, getRunningEvents, sendGuestInvitation, buildEventComponents, canRegisterViaDiscord` (pinned in this order by `test/botModules.test.js`; `parseTemplate` is re-exported from `utils/template.js`).
 
-At the end of the file: `if (IS_MOCK_MODE) Object.assign(module.exports, require('./dev/mockBot'))` — in dev mock mode every Discord-facing export is replaced by a logging simulation (see [dev-mock-mode](dev-mock-mode.md)). Pure logic (`parseTemplate`, `buildEventEmbed`, `buildEventComponents`, settings, running events, `stopBot`) stays real.
+At the end of `bot.js`: `if (IS_MOCK_MODE) Object.assign(module.exports, require('./dev/mockBot'))` — in dev mock mode every Discord-facing export is replaced by a logging simulation (see [dev-mock-mode](dev-mock-mode.md)). Pure logic (`parseTemplate`, `buildEventEmbed`, `buildEventComponents`, settings, running events, `stopBot`) stays real. `bot.js` requires `dev/mockMode` before any `bot/` module, so the mock environment is set before `firebaseAdmin.js` loads. Because all other bot tests run in mock mode, `test/botRealExports.test.js` loads `bot.js` without it and pins the real helpers' neutral values while not ready.
 
 ## Rules for changes
 
-- Guard every new Discord call with `if (!isReady) return <neutral value>;` and `try/catch` + `console.error` — routes must keep working without a bot.
+- New Discord helper → into the module of its area (or a new `bot/<area>.js`), exported through `bot.js`, pinned in `test/botModules.test.js`, twin in `dev/mockBot.js` (otherwise mock mode calls the real, not ready function). Steps: [add-bot-feature](../howto/add-bot-feature.md).
+- Guard every new Discord call with `if (!state.isReady) return <neutral value>;` and `try/catch` + `console.error` — routes must keep working without a bot.
 - Use `flags: MessageFlags.Ephemeral` (not the deprecated `ephemeral: true`) and `Events.ClientReady`.
 - Modal limits: max 5 top-level components (the intro text display counts; slot events with more than one slot use one for the `alt_slots` select → `getModalFieldLimit`), label ≤45, description/placeholder ≤100 chars.
-- New Discord-facing export → also add a mock to `dev/mockBot.js`, otherwise mock mode calls the real (not ready) function.
-- Internal calls inside `bot.js` (e.g. `checkReminders` → `sendDM`) use the real function even in mock mode.
+- Calls between `bot/` modules (e.g. `checkReminders` → `sendDM`) use the real function even in mock mode.
+- Requires of `utils/registrationService`, `utils/eventUtils`, `utils/pollStore` and `utils/announcementRefresh` stay inside functions: those utils require `bot.js` at load time.
 
 ## Gotchas
 
 - Banners (W-12): `buildEventEmbed` and `createScheduledEvent` go through `bannerForDiscord` (`utils/bannerStore.js`). An external URL is passed on as is; an uploaded banner becomes `BASE_URL` + path in the embed (Discord fetches it, so it needs a public `BASE_URL` — with localhost the embed shows no image) and the file itself for the scheduled event cover (works without a public URL). A missing file means no image. No new Discord call, so `dev/mockBot.js` has no twin for it.
 - `sendChannelMessage` returns `{ channelId, messageId }` (it used to return `true`).
 - `slot_switch`, `slot_leave` and `/unregister` call `deferUpdate`/`deferReply` first and answer with `editReply` — their side effects can exceed Discord's 3 s limit. A guest decline promotes the waitlist after answering.
-- Event links come from `buildEventUrl` in `utils/eventUrl.js` (`#event/<id>`); a hand-built `#events/<id>` would open the event list — see [utils](utils.md).
+- Event links come from `buildEventUrl` in `utils/eventUrl.js` (`#event/<id>`); a hand-built `#events/<id>` would open the event list — see [utils](utils.md). `test/eventUrl.test.js` scans `bot.js` and `bot/`.

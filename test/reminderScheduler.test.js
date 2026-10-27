@@ -253,10 +253,15 @@ test('the deadline refresh runs with reminders off', async () => {
 
 test('the reminder switch no longer stops the scheduler (it also closes announcements at the deadline)', () => {
     const fs = require('fs');
-    const source = fs.readFileSync(path.join(__dirname, '..', 'bot.js'), 'utf8').replace(/\r\n/g, '\n');
+    // The function lives in bot.js or, since the split (B-01), in one of the bot/ modules
+    const repo = path.join(__dirname, '..');
+    const botDir = path.join(repo, 'bot');
+    const candidates = ['bot.js', ...(fs.existsSync(botDir) ? fs.readdirSync(botDir).map(name => `bot/${name}`) : [])];
+    const source = candidates.map(file => fs.readFileSync(path.join(repo, file), 'utf8').replace(/\r\n/g, '\n'))
+        .find(text => text.includes('async function applyBotSettings')) || '';
     const start = source.indexOf('async function applyBotSettings');
     const body = source.slice(start, source.indexOf('\n}\n', start));
     assert.ok(body.length > 100, 'applyBotSettings found');
-    assert.equal(/clearInterval\(reminderInterval\)|startReminderScheduler\(/.test(body), false,
+    assert.equal(/clearInterval\(reminderInterval\)|startReminderScheduler\(|stopReminderScheduler\(/.test(body), false,
         'applyBotSettings must not start or stop the reminder scheduler; reminderEnabled is checked inside checkReminders (B-02)');
 });

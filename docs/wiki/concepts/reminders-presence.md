@@ -3,7 +3,7 @@ id: reminders-presence
 title: Reminders, start notifications and bot presence
 type: concept
 tags: [reminders, scheduler, archive, presence, activity, bot-settings, bot-control]
-sources: [bot.js, utils/reminders.js, utils/notificationPrefs.js, utils/eventListing.js, utils/eventArchive.js, routes/admin.js, server.js, public/js/admin/bot-control.js]
+sources: [bot/scheduler.js, bot/settings.js, utils/reminders.js, utils/notificationPrefs.js, utils/eventListing.js, utils/eventArchive.js, routes/admin.js, server.js, public/js/admin/bot-control.js]
 depends_on: [bot, data-model]
 see_also: [event-lifecycle, discord-integration]
 ---

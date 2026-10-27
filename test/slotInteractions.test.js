@@ -12,6 +12,7 @@ process.env.DEV_SQLITE_PATH = path.join(tmpDir, 'interactions.sqlite');
 
 const bot = require('../bot');
 const { db, doc, getDoc, setDoc } = require('../firebaseAdmin');
+const { buildEventUrl } = require('../utils/eventUrl');
 
 after(async () => {
     await bot.client.destroy();
@@ -183,4 +184,71 @@ test('the announcement tells both deadlines', async () => {
     assert.equal(field('⏰ Abmeldung bis').value, new Date(event.unregisterDeadline).toLocaleString('de-DE', { timeZone: 'Europe/Berlin' }));
     const plain = bot.buildEventEmbed({ title: 'Ohne', startDate: event.startDate }, null).toJSON().fields;
     assert.equal(plain.some(entry => entry.name.includes('bis')), false);
+});
+
+// ── Paths pinned before splitting bot.js (B-01) ─────────────────────────
+
+test('/register answers with the website link of the event', async () => {
+    await setDoc(doc(db, 'events', 'int-reg-link'), { title: 'Link-Abend', status: 'active', approvalMode: 'instant', maxParticipants: 5 });
+
+    const interaction = createFakeInteraction({ kind: 'command', commandName: 'register', eventOption: 'int-reg-link', userId: 'int-reg-user' });
+    await dispatchInteraction(bot.client, interaction);
+
+    const [name, payload] = interaction.calls[0];
+    assert.equal(name, 'reply');
+    const embed = payload.embeds[0].toJSON();
+    assert.equal(embed.title, '🌐 Registrierung über Website erforderlich');
+    assert.match(embed.description, /\*\*Link-Abend\*\*/);
+    assert.equal(embed.fields[0].value, `[Hier klicken](${buildEventUrl('int-reg-link')})`);
+});
+
+test('/register for an unknown event says it was not found', async () => {
+    const interaction = createFakeInteraction({ kind: 'command', commandName: 'register', eventOption: 'int-missing', userId: 'int-reg-user' });
+    await dispatchInteraction(bot.client, interaction);
+    assert.equal(interaction.calls[0][1].content, '❌ Event nicht gefunden.');
+});
+
+test('the /register autocomplete offers active events matching the typed text', async () => {
+    await setDoc(doc(db, 'events', 'int-ac-raid'), { title: 'Autocomplete Raid', status: 'active' });
+    await setDoc(doc(db, 'events', 'int-ac-old'), { title: 'Autocomplete Alt', status: 'archived' });
+
+    const interaction = createFakeInteraction({ kind: 'autocomplete', commandName: 'register', focused: 'AUTOCOMPLETE', userId: 'int-ac-user' });
+    await dispatchInteraction(bot.client, interaction);
+
+    assert.deepEqual(interaction.calls, [['respond', [{ name: 'Autocomplete Raid', value: 'int-ac-raid' }]]]);
+});
+
+test('the /unregister autocomplete offers only events the user is registered for', async () => {
+    await setDoc(doc(db, 'events', 'int-ac-mine'), { title: 'Abmelde-Abend', status: 'active' });
+    await setDoc(doc(db, 'events', 'int-ac-other'), { title: 'Abmelde-Fremd', status: 'active' });
+    await seedRegistration('int-ac-reg', 'int-ac-mine', 'int-ac-member', { status: 'accepted' });
+
+    const interaction = createFakeInteraction({ kind: 'autocomplete', commandName: 'unregister', focused: 'abmelde', userId: 'int-ac-member' });
+    await dispatchInteraction(bot.client, interaction);
+
+    assert.deepEqual(interaction.calls, [['respond', [{ name: 'Abmelde-Abend', value: 'int-ac-mine' }]]]);
+});
+
+test('an accepted guest invitation adds the guest and answers in place', async () => {
+    await setDoc(doc(db, 'events', 'int-guest-yes'), { title: 'Gast-Abend', status: 'active', approvalMode: 'instant', maxParticipants: 4 });
+    await seedRegistration('int-guest-yes-host', 'int-guest-yes', 'int-host-2', {
+        status: 'accepted',
+        pendingGuests: [{ userId: 'int-guest-2', displayName: 'Gast Zwei', avatar: '', status: 'pending' }]
+    });
+
+    const interaction = createFakeInteraction({ kind: 'button', customId: 'guest_accept:int-guest-yes-host:int-guest-2', userId: 'int-guest-2' });
+    await dispatchInteraction(bot.client, interaction);
+
+    const [name, payload] = interaction.calls[0];
+    assert.equal(name, 'update');
+    assert.equal(payload.embeds[0].toJSON().title, '✅ Einladung angenommen');
+    const registration = (await getDoc(doc(db, 'registrations', 'int-guest-yes-host'))).data();
+    assert.deepEqual(registration.guests, ['int-guest-2']);
+    assert.equal(registration.pendingGuests[0].status, 'accepted');
+});
+
+test('a guest button pressed by somebody else is refused', async () => {
+    const interaction = createFakeInteraction({ kind: 'button', customId: 'guest_accept:int-guest-yes-host:int-guest-2', userId: 'int-stranger' });
+    await dispatchInteraction(bot.client, interaction);
+    assert.equal(interaction.calls[0][1].content, '❌ Diese Einladung ist nicht für dich.');
 });
