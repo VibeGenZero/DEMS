@@ -12,6 +12,7 @@ const BOT_PERMISSIONS = [
     { flag: Flags.ManageChannels, reason: 'Event-Channels erstellen/löschen' },
     { flag: Flags.SendMessages, reason: 'Nachrichten in Channels senden' },
     { flag: Flags.SendMessagesInThreads, reason: 'Nachrichten in Threads senden' },
+    { flag: Flags.CreatePublicThreads, reason: 'Diskussions-Threads zu Ankündigungen eröffnen' },
     { flag: Flags.EmbedLinks, reason: 'Rich Embeds senden' },
     { flag: Flags.MentionEveryone, reason: '@everyone und Rollen erwähnen' },
     { flag: Flags.ViewChannel, reason: 'Channels sehen' },

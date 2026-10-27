@@ -9,7 +9,6 @@
 const crypto = require('crypto');
 const { db, doc, getDoc, updateDoc } = require('../firebaseAdmin');
 const { GUILD, ROLES, CHANNELS, PERSONAS, MEMBERS, buildScheduledEvents, findMember } = require('./mockGuild');
-const { buildEventUrl } = require('../utils/eventUrl');
 
 const LOG_PREFIX = '\x1b[35m[MOCK-DISCORD]\x1b[0m';
 const startedAt = new Date();
@@ -189,15 +188,31 @@ async function sendDM(userId, message) {
     return true;
 }
 
-async function sendChannelMessage(channelId, embed, options = {}) {
+/**
+ * JSON of a Components V2 payload for the log, nested components included.
+ *
+ * @param {Object} payload -> `{ flags, components }` of a message builder.
+ * @returns {string} -> Indented JSON.
+ */
+function describePayload(payload) {
+    return JSON.stringify((payload?.components || []).map(toPayload), null, 2);
+}
+
+async function sendChannelMessage(channelId, payload, options = {}) {
     mockLog(`Nachricht in ${describeChannel(channelId)}`, {
-        text: options.text || '',
         roleIds: (options.roleIds || []).map(describeRole),
-        pingEveryone: !!options.pingEveryone,
-        embed: toPayload(embed),
-        components: (options.components || []).map(toPayload)
+        pingEveryone: !!options.pingEveryone
     });
-    return { channelId, messageId: fakeSnowflake() };
+    console.log(describePayload(payload));
+    return { channelId, messageId: fakeSnowflake(), guildId: GUILD.id };
+}
+
+async function ensureAnnouncementThread(sent, title, existing = null) {
+    // The mock cannot see deleted threads, so a stored one is always kept
+    if (existing && existing.threadId) return existing;
+    const thread = { guildId: GUILD.id, threadId: fakeSnowflake() };
+    mockLog(`Diskussions-Thread "${String(title).slice(0, 100)}" an Nachricht ${sent.messageId} eröffnet`, thread);
+    return thread;
 }
 
 async function refreshEventAnnouncements(eventId) {
@@ -209,13 +224,11 @@ async function refreshEventAnnouncements(eventId) {
     if (announcements.length === 0) return false;
 
     // Required lazily -> bot.js merges this module into its own exports
-    const { buildEventEmbed, buildEventComponents } = require('../bot');
+    const { buildEventAnnouncement } = require('../bot');
     const { loadEventRoster } = require('../utils/eventUtils');
     const roster = await loadEventRoster(eventId, event);
-    mockLog(`Ankündigung von "${event.title}" aktualisiert (${announcements.length}×)`, {
-        embed: toPayload(buildEventEmbed(event, buildEventUrl(eventId), roster)),
-        components: buildEventComponents(event, eventId, roster).map(toPayload)
-    });
+    mockLog(`Ankündigung von "${event.title}" aktualisiert (${announcements.length}×)`);
+    console.log(describePayload(buildEventAnnouncement(event, eventId, roster, announcements[0].intro || '')));
     return true;
 }
 
@@ -227,13 +240,11 @@ async function refreshPollMessages(pollId) {
     if (announcements.length === 0) return false;
 
     // Required lazily -> bot.js merges this module into its own exports
-    const { buildPollEmbed, buildPollComponents } = require('../bot');
+    const { buildPollMessage } = require('../bot');
     const { tallyPoll } = require('../utils/pollService');
     const tally = tallyPoll(poll, await loadPollVotes(pollId));
-    mockLog(`Abstimmung "${poll.title}" aktualisiert (${announcements.length}×)`, {
-        embed: toPayload(buildPollEmbed(poll, tally)),
-        components: buildPollComponents(poll).map(toPayload)
-    });
+    mockLog(`Abstimmung "${poll.title}" aktualisiert (${announcements.length}×)`);
+    console.log(describePayload(buildPollMessage(poll, tally, announcements[0].intro || '')));
     return true;
 }
 
@@ -327,6 +338,7 @@ module.exports = {
     getBotStatus,
     sendDM,
     sendChannelMessage,
+    ensureAnnouncementThread,
     refreshEventAnnouncements,
     refreshPollMessages,
     markPollMessagesDeleted,

@@ -99,11 +99,35 @@ export function renderSidebarDetails(event) {
         setSidebarRow('sidebar-location-row', 'bi-geo-alt', 'Ort', locHtml, true);
     }
 
+    renderThreadRow(event);
+
     if (event.createdByName) {
         setSidebarRow('sidebar-creator-row', 'bi-person', 'Erstellt von', event.createdByName);
     }
 
     renderSidebarCapacity(event);
+}
+
+// Discord ids are snowflakes: digits only
+const SNOWFLAKE = /^\d{17,20}$/;
+
+/**
+ * Sidebar row with the event's discussion thread in Discord (B-14); hidden
+ * without a thread, so the row of a previous event does not stay.
+ *
+ * @param {Object} event -> Event with optional `discordThread: { guildId, threadId }`.
+ * @returns {void}
+ */
+function renderThreadRow(event) {
+    const thread = event.discordThread;
+    if (!thread || !SNOWFLAKE.test(String(thread.guildId)) || !SNOWFLAKE.test(String(thread.threadId))) {
+        const row = document.getElementById('sidebar-thread-row');
+        if (row) row.style.display = 'none';
+        return;
+    }
+    const url = `https://discord.com/channels/${thread.guildId}/${thread.threadId}`;
+    setSidebarRow('sidebar-thread-row', 'bi-chat-dots', 'Diskussion',
+        `<a href="${escapeHtml(url)}" target="_blank" rel="noopener">Im Discord-Thread mitreden</a>`, true);
 }
 
 /**

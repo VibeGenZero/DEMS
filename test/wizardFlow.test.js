@@ -90,9 +90,18 @@ test('opening the wizard again clears the marks of the last attempt', async () =
     assert.equal(element('event-title-feedback').textContent, '');
 });
 
+// Components V2 message of the preview route (B-05)
+const previewMessage = (heading) => ({
+    components: [{
+        type: 17, accent_color: 0x8b5cf6,
+        components: [
+            { type: 10, content: `## ${heading}\nBringt Tränke mit.` },
+            { type: 1, components: [{ type: 2, style: 5, label: 'Zum Event', url: 'http://localhost:3000/#event/vorschau' }] }
+        ]
+    }]
+});
 const PREVIEW = {
-    embed: { title: '🎉 Raidnacht', description: 'Bringt Tränke mit.', color: 0x8b5cf6, fields: [{ name: 'Datum', value: 'TBA', inline: true }], footer: { text: 'DEMS — Event Management' } },
-    components: [{ type: 1, components: [{ type: 2, style: 5, label: 'Zum Event', url: 'http://localhost:3000/#event/vorschau' }] }],
+    message: previewMessage('🎉 Raidnacht'),
     places: { taken: 2, capacity: 6, guests: 0, pending: 0, waitlist: 0, text: '2 von 6 Plätzen belegt', waitlistText: '' },
     bot: { name: 'DEMS Bot', avatarUrl: null }
 };
@@ -114,7 +123,9 @@ test('the preview shows the card at once and the Discord message of the server',
 
     assert.ok(element('wizard-preview-card').innerHTML.includes('<h3 class="event-card-title">Raidnacht</h3>'));
     assert.ok(element('wizard-preview-card').innerHTML.includes('2 von 6 belegt'));
-    assert.ok(element('wizard-preview-discord').innerHTML.includes('<div class="discord-embed-title">🎉 Raidnacht</div>'));
+    const discordHtml = element('wizard-preview-discord').innerHTML;
+    assert.ok(discordHtml.includes('<div class="discord-container" data-style-border-color="#8b5cf6">'), discordHtml);
+    assert.ok(discordHtml.includes('🎉 Raidnacht'), discordHtml);
 });
 
 test('a failed preview keeps the card and says so', async () => {
@@ -134,7 +145,7 @@ test('an answer that arrives after switching back is dropped', async () => {
     await app.setWizardMode('edit');
     answer(PREVIEW);
     await pending;
-    assert.doesNotMatch(element('wizard-preview-discord').innerHTML, /discord-embed/);
+    assert.doesNotMatch(element('wizard-preview-discord').innerHTML, /discord-container/);
     assert.equal(isHidden(element('wizard-page-1')), false);
     assert.ok(isHidden(element('wizard-preview')));
 });
@@ -145,7 +156,7 @@ test('only the newest of two quick previews is shown', async () => {
     element('event-title').value = 'Raidnacht';
     const first = app.setWizardMode('preview');
     const second = app.setWizardMode('preview');
-    answers[1]({ ...PREVIEW, embed: { ...PREVIEW.embed, title: 'Zweite Fassung' } });
+    answers[1]({ ...PREVIEW, message: previewMessage('Zweite Fassung') });
     await second;
     answers[0](PREVIEW);
     await first;

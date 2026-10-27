@@ -1,6 +1,7 @@
 /**
- * Discord look of an event announcement: draws the JSON of
- * POST /api/admin/events/preview (embed and button rows of discord.js).
+ * Discord look of an event announcement: draws the Components V2 message of
+ * POST /api/admin/events/preview (container, text displays, sections with a
+ * button, media gallery, separator, button rows of discord.js; B-05).
  * Pure: no DOM, no fetch. Styles: block "DISCORD PREVIEW" in style.css.
  */
 import { escapeHtml, renderMarkdownSafe } from '../core/ui.js';
@@ -9,9 +10,11 @@ import { avatar } from '../core/components.js';
 // discord.js ButtonStyle -> class; 5 is a link button
 const BUTTON_STYLES = { 1: 'is-primary', 2: 'is-secondary', 3: 'is-success', 4: 'is-danger', 5: 'is-link' };
 const LINK_STYLE = 5;
+// discord.js ComponentType
+const TYPE = { ROW: 1, BUTTON: 2, SECTION: 9, TEXT: 10, GALLERY: 12, SEPARATOR: 14, CONTAINER: 17 };
 
 /**
- * Colour of an embed.
+ * Colour of a container.
  *
  * @param {number} value -> Colour as discord.js stores it (0xRRGGBB).
  * @returns {string} -> '#rrggbb', '' for anything else.
@@ -36,11 +39,7 @@ export function discordTime(value, now) {
     return `${date.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' })} ${time}`;
 }
 
-function renderField(field) {
-    const className = field?.inline ? 'discord-field' : 'discord-field is-wide';
-    return `<div class="${className}"><div class="discord-field-name">${escapeHtml(String(field?.name ?? ''))}</div>`
-        + `<div class="discord-field-value">${renderMarkdownSafe(String(field?.value ?? ''))}</div></div>`;
-}
+const listOf = (value) => (Array.isArray(value) ? value : []);
 
 function renderButton(button) {
     const style = BUTTON_STYLES[button?.style] || 'is-secondary';
@@ -49,42 +48,65 @@ function renderButton(button) {
     return `<span class="discord-button ${style}">${emoji}${escapeHtml(String(button?.label ?? ''))}${link}</span>`;
 }
 
-function renderEmbed(embed, footer) {
-    const color = discordColor(embed.color);
-    const fields = Array.isArray(embed.fields) && embed.fields.length > 0
-        ? `<div class="discord-embed-fields">${embed.fields.map(renderField).join('')}</div>`
-        : '';
-    const image = embed.image?.url
-        ? `<img class="discord-embed-image" src="${escapeHtml(String(embed.image.url))}" alt="" data-fallback="hide">`
-        : '';
-    return `<div class="discord-embed"${color ? ` data-style-border-color="${color}"` : ''}>`
-        + (embed.title ? `<div class="discord-embed-title">${escapeHtml(String(embed.title))}</div>` : '')
-        + (embed.description ? `<div class="discord-embed-description">${renderMarkdownSafe(String(embed.description))}</div>` : '')
-        + fields + image + footer + '</div>';
+function renderText(component) {
+    // Discord keeps single line breaks; Markdown needs two trailing spaces for that
+    const content = String(component?.content ?? '').replace(/\n/g, '  \n');
+    return `<div class="discord-text">${renderMarkdownSafe(content)}</div>`;
+}
+
+function renderGallery(component) {
+    const images = listOf(component.items)
+        .filter(item => item?.media?.url)
+        .map(item => `<img class="discord-gallery-image" src="${escapeHtml(String(item.media.url))}" alt="" data-fallback="hide">`)
+        .join('');
+    return `<div class="discord-gallery">${images}</div>`;
+}
+
+function renderSection(component) {
+    const texts = listOf(component.components).map(renderText).join('');
+    const accessory = component.accessory?.type === TYPE.BUTTON ? renderButton(component.accessory) : '';
+    return `<div class="discord-section"><div class="discord-section-text">${texts}</div>${accessory}</div>`;
+}
+
+function renderContainer(component) {
+    const color = discordColor(component.accent_color);
+    return `<div class="discord-container"${color ? ` data-style-border-color="${color}"` : ''}>`
+        + listOf(component.components).map(renderComponent).join('')
+        + '</div>';
 }
 
 /**
- * One Discord message with its embed and button rows.
+ * HTML of one V2 component; unknown types draw nothing.
  *
- * @param {Object} preview -> `{ embed, components, bot: { name, avatarUrl } }` of the preview route.
+ * @param {Object} component -> Component JSON.
+ * @returns {string} -> HTML.
+ */
+function renderComponent(component) {
+    switch (component?.type) {
+    case TYPE.CONTAINER: return renderContainer(component);
+    case TYPE.TEXT: return renderText(component);
+    case TYPE.SECTION: return renderSection(component);
+    case TYPE.GALLERY: return renderGallery(component);
+    case TYPE.SEPARATOR: return '<hr class="discord-separator">';
+    case TYPE.ROW: return `<div class="discord-buttons">${listOf(component.components).map(renderButton).join('')}</div>`;
+    default: return '';
+    }
+}
+
+/**
+ * One Discord message with its Components V2 content.
+ *
+ * @param {Object} preview -> `{ message: { components }, bot: { name, avatarUrl } }` of the preview route.
  * @param {Date} now -> Reference time for "Heute um …".
- * @returns {string} -> HTML of a div.discord-message; the embed colour sits in data-style-border-color (applyStyleData).
+ * @returns {string} -> HTML of a div.discord-message; the container colour sits in data-style-border-color (applyStyleData).
  */
 export function renderDiscordMessage(preview, now) {
-    const embed = preview?.embed || {};
     const botName = String(preview?.bot?.name || 'DEMS');
-    const footerParts = [embed.footer?.text, embed.timestamp ? discordTime(embed.timestamp, now) : '']
-        .filter(Boolean)
-        .map(part => escapeHtml(String(part)));
-    const footer = footerParts.length > 0 ? `<div class="discord-embed-footer">${footerParts.join(' • ')}</div>` : '';
-    const rows = (Array.isArray(preview?.components) ? preview.components : [])
-        .map(row => `<div class="discord-buttons">${(Array.isArray(row?.components) ? row.components : []).map(renderButton).join('')}</div>`)
-        .join('');
     return '<div class="discord-message">'
         + avatar({ url: preview?.bot?.avatarUrl, name: botName })
         + '<div class="discord-message-body">'
         + `<div class="discord-message-header"><span class="discord-message-author">${escapeHtml(botName)}</span>`
         + `<span class="discord-app-tag">APP</span><span class="discord-message-time">${escapeHtml(discordTime(null, now))}</span></div>`
-        + renderEmbed(embed, footer) + rows
+        + listOf(preview?.message?.components).map(renderComponent).join('')
         + '</div></div>';
 }

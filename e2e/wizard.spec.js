@@ -44,7 +44,9 @@ test('an admin builds a raid step by step, checks the preview and saves from it'
     await expect(page.locator('#wizard-page-3')).toBeHidden();
     await expect(page.locator('#wizard-preview-card .event-card-title')).toHaveText('E2E-Raidnacht');
     await expect(page.locator('#wizard-preview-card .capacity-text')).toHaveText('0 von 15 belegt');
-    await expect(page.locator('#wizard-preview-discord .discord-embed-title')).toHaveText('🎉 E2E-Raidnacht');
+    await expect(page.locator('#wizard-preview-discord .discord-container h2')).toHaveText('🎉 E2E-Raidnacht');
+    // Each slot button sits beside its line-up block (B-05)
+    await expect(page.locator('#wizard-preview-discord .discord-section')).toHaveCount(3);
     await expect(page.locator('#wizard-preview-discord .discord-button')).toHaveText([/Tank/, /Heiler/, /Schaden/, /Zum Event/]);
 
     // Save straight from the preview of the last step

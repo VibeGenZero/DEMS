@@ -1,8 +1,8 @@
 /**
- * Messages of the bot: DMs, channel messages, the event announcement embed with
- * its buttons, and refreshing stored announcements.
+ * Messages of the bot: DMs, channel messages, the event announcement as a
+ * Components V2 message with its buttons (B-05), and refreshing stored announcements.
  */
-const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, escapeMarkdown } = require('discord.js');
+const { ContainerBuilder, TextDisplayBuilder, ButtonBuilder, ButtonStyle, MessageFlags, escapeMarkdown } = require('discord.js');
 const { db, doc, getDoc, updateDoc } = require('../firebaseAdmin');
 const { debugLog } = require('../utils/debugLog');
 const { buildEventUrl } = require('../utils/eventUrl');
@@ -10,9 +10,10 @@ const { bannerForDiscord } = require('../utils/bannerStore');
 const { isRegistrationClosed } = require('../utils/eventListing');
 const { formatPlaces } = require('../utils/capacity');
 const { fitsIntoDiscordModal } = require('../utils/formFields');
-const { getSlots, hasSlots, formatSlotLabel } = require('../utils/slotService');
+const { hasSlots, formatSlotLabel, buildRoster } = require('../utils/slotService');
 const { client, state } = require('./client');
-const { TIMEZONE, REGISTER_BUTTON_PREFIX, SLOT_BUTTON_PREFIX, BUTTONS_PER_ROW, ROSTER_NAMES_MAX } = require('./constants');
+const { TIMEZONE, REGISTER_BUTTON_PREFIX, SLOT_BUTTON_PREFIX, ROSTER_NAMES_MAX } = require('./constants');
+const { toAccentColor, fitText, MESSAGE_TEXT_MAX } = require('./layout');
 
 /**
  * Send a DM to a user
@@ -36,17 +37,17 @@ async function sendDM(userId, message) {
 }
 
 /**
- * Send a rich embed message to a Discord channel
- * @param {string} channelId
- * @param {EmbedBuilder} embed
- * @param {Object} [options] - Additional options
- * @param {string} [options.text] - Text content above the embed
- * @param {string[]} [options.roleIds] - Role IDs to mention
- * @param {boolean} [options.pingEveryone] - Whether to mention @everyone
- * @param {ActionRowBuilder[]} [options.components] - Button rows below the embed
- * @returns {Promise<Object|false>} -> { channelId, messageId } of the sent message, false on failure.
+ * Post a Components V2 message (announcement or date poll) in a channel.
+ *
+ * The ping line is part of the payload (buildAnnouncementIntro); the options
+ * only decide who may actually be notified.
+ *
+ * @param {string} channelId -> Target text channel.
+ * @param {Object} payload -> From buildEventAnnouncement() or buildPollMessage().
+ * @param {Object} [options] -> `{ roleIds, pingEveryone }` as chosen in the announce dialog.
+ * @returns {Promise<Object|false>} -> `{ channelId, messageId, guildId }` of the sent message, false on failure.
  */
-async function sendChannelMessage(channelId, embed, options = {}) {
+async function sendChannelMessage(channelId, payload, options = {}) {
     if (!state.isReady) {
         console.warn('Bot not ready yet, cannot send channel message');
         return false;
@@ -58,38 +59,16 @@ async function sendChannelMessage(channelId, embed, options = {}) {
             return false;
         }
 
-        // Build content string with mentions
-        let contentParts = [];
-
-        // Role pings
-        if (options.roleIds && options.roleIds.length > 0) {
-            const roleMentions = options.roleIds.map(id => `<@&${id}>`).join(' ');
-            contentParts.push(roleMentions);
-        }
-
-        // @everyone ping
-        if (options.pingEveryone) {
-            contentParts.push('@everyone');
-        }
-
-        // Custom text
-        if (options.text && options.text.trim()) {
-            contentParts.push(options.text.trim());
-        }
-
-        const content = contentParts.length > 0 ? contentParts.join('\n') : undefined;
-
+        const roleIds = Array.isArray(options.roleIds) ? options.roleIds : [];
         const message = await channel.send({
-            content,
-            embeds: [embed],
-            components: options.components || [],
+            ...payload,
             allowedMentions: {
                 parse: options.pingEveryone ? ['everyone', 'roles'] : ['roles'],
-                roles: options.roleIds || []
+                roles: roleIds
             }
         });
         console.log(`📢 Announcement sent to channel ${channelId}`);
-        return { channelId: channel.id, messageId: message.id };
+        return { channelId: channel.id, messageId: message.id, guildId: channel.guildId || null };
     } catch (err) {
         console.error(`Failed to send channel message:`, err.message);
         return false;
@@ -97,82 +76,111 @@ async function sendChannelMessage(channelId, embed, options = {}) {
 }
 
 /**
- * Build an event announcement embed.
+ * Build an event announcement as a Components V2 message (B-05).
  *
- * With a roster the embed shows live numbers: the places sentence, the
- * waitlist and, for slot events, one field per slot with the first names.
+ * Ping line above a container in the event colour: banner, title and
+ * description, the facts, one block per slot (with its button while the
+ * event can be joined from Discord) and the button row. With a roster the
+ * message shows live numbers.
  *
  * @param {Object} event -> Event data.
- * @param {string} [registrationLink] -> Link to the event page.
+ * @param {string} eventId -> The event document ID.
  * @param {Object} [roster] -> Line-up from loadEventRoster().
- * @returns {EmbedBuilder} -> The embed.
+ * @param {string} [intro] -> Ping line from buildAnnouncementIntro(), '' for none.
+ * @returns {{ flags: number, components: Array }} -> Payload for channel.send() / message.edit().
+ * @example
+ * await channel.send(buildEventAnnouncement(event, eventId, roster, intro));
  */
-function buildEventEmbed(event, registrationLink, roster) {
-    const embed = new EmbedBuilder()
-        .setColor(0x8b5cf6)
-        .setTitle(`🎉 ${event.title}`)
-        .setDescription(cutForEmbed(event.description) || 'Keine Beschreibung.')
-        .addFields(
-            { name: '🗓️ Datum', value: event.startDate ? new Date(event.startDate).toLocaleString('de-DE', { timeZone: TIMEZONE }) : 'TBA', inline: true },
-            { name: '👥 Plätze', value: formatParticipantCount(event, roster), inline: true },
-            { name: '🔓 Zugang', value: event.accessMode === 'open' ? 'Offen für alle' : 'Rollen-Requirement', inline: true }
-        )
-        .setFooter({ text: 'DEMS — Event Management' })
-        .setTimestamp();
+function buildEventAnnouncement(event, eventId, roster, intro = '') {
+    const joinable = canRegisterViaDiscord(event);
+    const heading = `## 🎉 ${escapeMarkdown(String(event.title || ''))}`;
+    const facts = buildEventFacts(event, roster);
+    const blocks = hasSlots(event) ? buildLineupBlocks(event, eventId, roster, joinable) : [];
 
-    if (roster && roster.slots.length > 0) {
-        roster.slots.forEach(slot => {
-            embed.addFields({ name: formatRosterSlotTitle(slot), value: formatRosterMembers(slot), inline: true });
-        });
-    }
-    if (roster && roster.waitlistCount > 0) {
-        embed.addFields({ name: '⏳ Warteliste', value: String(roster.waitlistCount), inline: true });
-    }
+    // The description gets what the other texts leave of Discord's budget; the event page keeps the full text
+    const used = (intro || '').length + heading.length + 1 + facts.length + blocks.reduce((sum, block) => sum + block.text.length, 0);
+    const description = event.description ? fitText(event.description, MESSAGE_TEXT_MAX - used) : 'Keine Beschreibung.';
 
+    const container = new ContainerBuilder().setAccentColor(toAccentColor(event.accentColor));
     // External URL as is; an uploaded banner (W-12) as BASE_URL + path
     const banner = bannerForDiscord(event.bannerUrl);
     if (banner.url) {
-        embed.setImage(banner.url);
+        container.addMediaGalleryComponents(gallery => gallery.addItems(item => item.setURL(banner.url)));
     }
-
-    if (event.category) {
-        embed.addFields({ name: '🏷️ Kategorie', value: event.category, inline: true });
-    }
-
-    // Optional deadlines, in the format of the date field (W-03)
-    const deadlineFields = [['⏰ Anmeldung bis', event.registrationDeadline], ['⏰ Abmeldung bis', event.unregisterDeadline]];
-    deadlineFields.forEach(([name, value]) => {
-        if (value && !Number.isNaN(new Date(value).getTime())) {
-            embed.addFields({ name, value: new Date(value).toLocaleString('de-DE', { timeZone: TIMEZONE }), inline: true });
+    container.addTextDisplayComponents(
+        text => text.setContent(`${heading}\n${description}`),
+        text => text.setContent(facts)
+    );
+    container.addSeparatorComponents(separator => separator);
+    for (const block of blocks) {
+        if (block.button) {
+            container.addSectionComponents(section => section
+                .addTextDisplayComponents(text => text.setContent(block.text))
+                .setButtonAccessory(block.button));
+        } else {
+            container.addTextDisplayComponents(text => text.setContent(block.text));
         }
-    });
-
-    if (registrationLink) {
-        embed.addFields({ name: '📋 Anmeldung', value: `[Hier anmelden](${registrationLink})`, inline: false });
     }
+    container.addActionRowComponents(row => row.addComponents(...buildAnnouncementButtons(event, eventId, joinable)));
 
-    return embed;
+    const components = intro ? [new TextDisplayBuilder().setContent(intro), container] : [container];
+    return { flags: MessageFlags.IsComponentsV2, components };
 }
 
-// Discord refuses an embed description above 4096 characters; events allow 5000
-const EMBED_DESCRIPTION_MAX = 4096;
-
 /**
- * Event description as an embed takes it; the event page keeps the full text.
+ * Date in the configured time zone, as the announcement shows it.
  *
- * @param {string} [text] -> Description of the event.
- * @returns {string} -> The text, or its first characters and "…" when it is too long for Discord.
+ * @param {string} [value] -> ISO date.
+ * @returns {string} -> e.g. "1.12.2026, 19:00:00"; '' for no or an unreadable date.
  */
-function cutForEmbed(text) {
-    if (!text || text.length <= EMBED_DESCRIPTION_MAX) return text;
-    let cut = text.slice(0, EMBED_DESCRIPTION_MAX - 1);
-    // A cut through an emoji would leave half a character
-    if (/[\uD800-\uDBFF]$/.test(cut)) cut = cut.slice(0, -1);
-    return `${cut}…`;
+function formatDiscordDate(value) {
+    if (!value) return '';
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? '' : date.toLocaleString('de-DE', { timeZone: TIMEZONE });
 }
 
 /**
- * Participant field of the embed.
+ * Facts of an announcement, one line each.
+ *
+ * @param {Object} event -> Event data.
+ * @param {Object} [roster] -> Line-up with live numbers.
+ * @returns {string} -> Date, places, access, then waitlist, category and deadlines when set.
+ */
+function buildEventFacts(event, roster) {
+    const lines = [
+        `🗓️ **Datum:** ${formatDiscordDate(event.startDate) || 'TBA'}`,
+        `👥 **Plätze:** ${formatParticipantCount(event, roster)}`,
+        `🔓 **Zugang:** ${event.accessMode === 'open' ? 'Offen für alle' : 'Rollen-Requirement'}`
+    ];
+    if (roster && roster.waitlistCount > 0) lines.push(`⏳ **Warteliste:** ${roster.waitlistCount}`);
+    if (event.category) lines.push(`🏷️ **Kategorie:** ${escapeMarkdown(String(event.category))}`);
+    // Optional deadlines, in the format of the date (W-03)
+    for (const [label, value] of [['⏰ **Anmeldung bis:**', event.registrationDeadline], ['⏰ **Abmeldung bis:**', event.unregisterDeadline]]) {
+        const date = formatDiscordDate(value);
+        if (date) lines.push(`${label} ${date}`);
+    }
+    return lines.join('\n');
+}
+
+/**
+ * Line-up blocks of a slot event.
+ *
+ * @param {Object} event -> Event data.
+ * @param {string} eventId -> The event document ID.
+ * @param {Object} [roster] -> Line-up; without one every slot is empty.
+ * @param {boolean} joinable -> Whether the slot buttons are shown.
+ * @returns {Array<{ text: string, button: ButtonBuilder|null }>} -> One block per slot.
+ */
+function buildLineupBlocks(event, eventId, roster, joinable) {
+    const lineup = roster || buildRoster(event, []);
+    return lineup.slots.map(slot => ({
+        text: `**${escapeMarkdown(formatRosterSlotTitle(slot))}**\n${formatRosterMembers(slot)}`,
+        button: joinable ? buildSlotButton(eventId, slot, lineup) : null
+    }));
+}
+
+/**
+ * Places line of the announcement.
  *
  * @param {Object} event -> Event data.
  * @param {Object} [roster] -> Line-up with live numbers.
@@ -184,7 +192,7 @@ function formatParticipantCount(event, roster) {
 }
 
 /**
- * Field title of one slot, e.g. "🛡️ Tank 2/2 ✅".
+ * Block title of one slot, e.g. "🛡️ Tank 2/2 ✅".
  *
  * @param {Object} slot -> Roster slot.
  * @returns {string} -> Title with ✅ when full and ⚠️ when overbooked.
@@ -197,7 +205,7 @@ function formatRosterSlotTitle(slot) {
 }
 
 /**
- * Field value of one slot: the first names, then "+N".
+ * Line-up of one slot: the first names, then "+N".
  *
  * @param {Object} slot -> Roster slot.
  * @returns {string} -> Names, escaped for Discord markdown.
@@ -230,36 +238,28 @@ function canRegisterViaDiscord(event) {
 }
 
 /**
- * Build the button rows that are attached to an event announcement.
+ * Buttons of the last row of an announcement.
  *
- * Slot events get one button per slot, normal events the "Anmelden" button,
- * both only while the event can be joined from Discord. The link button is
- * always the last button.
+ * "Anmelden" for an event without slots while it can be joined from Discord
+ * (slot events carry their buttons beside the line-up), then always the link
+ * to the event page.
  *
  * @param {Object} event -> The event document data.
  * @param {string} eventId -> The event document ID.
- * @param {Object} [roster] -> Line-up, marks full slots.
- * @returns {ActionRowBuilder[]} -> Components array ready for channel.send().
- * @example
- * await channel.send({ embeds: [embed], components: buildEventComponents(event, eventId, roster) });
+ * @param {boolean} joinable -> Result of canRegisterViaDiscord(event).
+ * @returns {ButtonBuilder[]} -> One or two buttons.
  */
-function buildEventComponents(event, eventId, roster) {
+function buildAnnouncementButtons(event, eventId, joinable) {
     const buttons = [];
-
-    if (canRegisterViaDiscord(event)) {
-        if (hasSlots(event)) {
-            getSlots(event).forEach(slot => buttons.push(buildSlotButton(eventId, slot, roster)));
-        } else {
-            buttons.push(
-                new ButtonBuilder()
-                    .setCustomId(`${REGISTER_BUTTON_PREFIX}:${eventId}`)
-                    .setLabel('Anmelden')
-                    .setStyle(ButtonStyle.Success)
-                    .setEmoji('✅')
-            );
-        }
+    if (joinable && !hasSlots(event)) {
+        buttons.push(
+            new ButtonBuilder()
+                .setCustomId(`${REGISTER_BUTTON_PREFIX}:${eventId}`)
+                .setLabel('Anmelden')
+                .setStyle(ButtonStyle.Success)
+                .setEmoji('✅')
+        );
     }
-
     buttons.push(
         new ButtonBuilder()
             .setLabel('Zum Event')
@@ -267,12 +267,7 @@ function buildEventComponents(event, eventId, roster) {
             .setURL(buildEventUrl(eventId))
             .setEmoji('🔗')
     );
-
-    const rows = [];
-    for (let index = 0; index < buttons.length; index += BUTTONS_PER_ROW) {
-        rows.push(new ActionRowBuilder().addComponents(...buttons.slice(index, index + BUTTONS_PER_ROW)));
-    }
-    return rows;
+    return buttons;
 }
 
 /**
@@ -311,20 +306,33 @@ function isGoneDiscordError(err) {
 }
 
 /**
- * Edit every stored Discord message with the same payload.
+ * Re-render every stored Discord message as a Components V2 message.
  *
- * @param {Array<Object>} announcements -> `[{ channelId, messageId }]`.
- * @param {Object} payload -> Message edit payload.
- * @returns {Promise<Array<Object>>} -> The announcements that still exist.
+ * Each record gets its own payload (its ping line differs). A record posted
+ * before B-05 has no `intro`: its message text becomes the intro, and the
+ * same edit drops text and embed, so the old message turns into the new
+ * layout. Edits never notify anybody again.
+ *
+ * @param {Array<Object>} announcements -> `[{ channelId, messageId, intro? }]`.
+ * @param {function(Object): Object} buildPayload -> Record (with intro) -> V2 payload.
+ * @returns {Promise<Array<Object>>} -> The records that still exist; converted ones with their intro.
  */
-async function editStoredMessages(announcements, payload) {
+async function editStoredMessages(announcements, buildPayload) {
     const kept = [];
     for (const announcement of announcements) {
         try {
             const channel = await client.channels.fetch(announcement.channelId);
             const message = await channel.messages.fetch(announcement.messageId);
-            await message.edit(payload);
-            kept.push(announcement);
+            const record = typeof announcement.intro === 'string'
+                ? announcement
+                : { ...announcement, intro: message.content || '' };
+            await message.edit({
+                ...buildPayload(record),
+                content: null,
+                embeds: [],
+                allowedMentions: { parse: [] }
+            });
+            kept.push(record);
         } catch (err) {
             if (isGoneDiscordError(err)) continue;
             console.error('Failed to edit a stored message:', err.message);
@@ -355,12 +363,9 @@ async function refreshEventAnnouncements(eventId) {
 
         const { loadEventRoster } = require('../utils/eventUtils');
         const roster = await loadEventRoster(eventId, event);
-        const embed = buildEventEmbed(event, buildEventUrl(eventId), roster);
-        const components = buildEventComponents(event, eventId, roster);
+        const kept = await editStoredMessages(announcements, (record) => buildEventAnnouncement(event, eventId, roster, record.intro));
 
-        const kept = await editStoredMessages(announcements, { embeds: [embed], components });
-
-        if (kept.length !== announcements.length) {
+        if (recordsChanged(announcements, kept)) {
             await updateDoc(doc(db, 'events', eventId), { announcements: kept });
         }
         return true;
@@ -370,13 +375,24 @@ async function refreshEventAnnouncements(eventId) {
     }
 }
 
+/**
+ * Whether refreshed records differ from the stored ones (dropped or converted).
+ *
+ * @param {Array<Object>} before -> Stored records.
+ * @param {Array<Object>} after -> Result of editStoredMessages().
+ * @returns {boolean} -> True when they must be written back.
+ */
+function recordsChanged(before, after) {
+    return before.length !== after.length || after.some((record, index) => record !== before[index]);
+}
+
 module.exports = {
     sendDM,
     sendChannelMessage,
-    buildEventEmbed,
+    buildEventAnnouncement,
     canRegisterViaDiscord,
-    buildEventComponents,
     isGoneDiscordError,
     editStoredMessages,
+    recordsChanged,
     refreshEventAnnouncements
 };

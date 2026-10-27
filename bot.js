@@ -11,10 +11,10 @@ const { parseTemplate } = require('./utils/template');
 const { wireClient, startBot, whenBotSettled, stopBot } = require('./bot/lifecycle');
 const { client } = require('./bot/client');
 const {
-    sendDM, sendChannelMessage, buildEventEmbed, canRegisterViaDiscord, buildEventComponents,
+    sendDM, sendChannelMessage, buildEventAnnouncement, canRegisterViaDiscord,
     isGoneDiscordError, refreshEventAnnouncements
 } = require('./bot/messages');
-const { buildPollEmbed, buildPollComponents, buildPollVoteReply, refreshPollMessages, markPollMessagesDeleted } = require('./bot/polls');
+const { buildPollMessage, buildPollVoteReply, refreshPollMessages, markPollMessagesDeleted } = require('./bot/polls');
 const { buildSlotModal, buildRegisteredSlotReply } = require('./bot/registrationModal');
 const {
     assignRole, removeRole, getUserRoles, fetchMemberRoleIds, searchGuildMembers, fetchGuildMember,
@@ -27,6 +27,8 @@ const {
 const { checkReminders, startReminderScheduler } = require('./bot/scheduler');
 const { getBotStatus, getBotSettings, saveBotSettings, getRunningEvents } = require('./bot/settings');
 const { sendGuestInvitation } = require('./bot/guests');
+const { buildAnnouncementIntro } = require('./bot/layout');
+const { ensureAnnouncementThread } = require('./bot/threads');
 
 // Ready, error and interaction listeners, attached once when the bot is loaded
 wireClient();
@@ -40,14 +42,13 @@ module.exports = {
     sendChannelMessage,
     refreshEventAnnouncements,
     isGoneDiscordError,
-    buildPollEmbed,
-    buildPollComponents,
+    buildPollMessage,
     buildPollVoteReply,
     refreshPollMessages,
     markPollMessagesDeleted,
     buildSlotModal,
     buildRegisteredSlotReply,
-    buildEventEmbed,
+    buildEventAnnouncement,
     assignRole,
     removeRole,
     getUserRoles,
@@ -74,8 +75,9 @@ module.exports = {
     saveBotSettings,
     getRunningEvents,
     sendGuestInvitation,
-    buildEventComponents,
-    canRegisterViaDiscord
+    canRegisterViaDiscord,
+    buildAnnouncementIntro,
+    ensureAnnouncementThread
 };
 
 // Dev mock mode: every call that would reach Discord goes to the simulated

@@ -51,7 +51,8 @@ erDiagram
 | `registrationClosedRefreshed` | bool | announcements refreshed once after the registration deadline (W-03); reset when an edit moves the deadline (`keepDeadlineRefreshFlag`) |
 | `sourcePollId` | poll id or `''` | date poll the event was created from (informative) |
 | `slots` | `[{ id, name, emoji, capacity }]` or absent | role slots, see [role-slots](role-slots.md); with slots `maxParticipants = Σ capacity` and `allowGuests = false` |
-| `announcements` | `[{ channelId, messageId }]` (max 5) | Discord announcements that are kept up to date live |
+| `announcements` | `[{ channelId, messageId, intro }]` (max 5) | Discord announcements that are kept up to date live; `intro` = rendered ping line (role mentions, `@everyone`, text) kept on every refresh (B-05; records from before have none until their first refresh) |
+| `discordThread` | `{ guildId, threadId }`, `null` or absent | discussion thread of the event (B-14); written only by `POST /events/:id/announce`, never taken from a request body; `null` in duplicates and series copies; public (the event page links it) |
 | `createdAt`, `createdBy`, `updatedAt` | ISO, user id, ISO | |
 
 ## registrations (auto id) — written by `utils/registrationService.js`
@@ -76,7 +77,7 @@ Read in full by the admin member overview (W-15, `GET /api/admin/members`, `util
 
 ## polls (auto id) — written by `routes/admin.js` and `utils/pollStore.js`
 
-`{ title, description, options: [{ id, startDate, endDate }], deadline, status: open|closed|decided, accessMode, requiredRoles, labels: { yes, maybe, no }, winnerOptionId, eventId, announcements, createdBy, createdAt, updatedAt, closedAt }` — see [date-polls](date-polls.md).
+`{ title, description, options: [{ id, startDate, endDate }], deadline, status: open|closed|decided, accessMode, requiredRoles, labels: { yes, maybe, no }, winnerOptionId, eventId, announcements (`[{ channelId, messageId, intro }]`), createdBy, createdAt, updatedAt, closedAt }` — see [date-polls](date-polls.md).
 
 ## pollVotes (id = `<pollId>_<userId>`) — written by `utils/pollStore.js#savePollVote`
 
@@ -95,7 +96,7 @@ Read in full by the admin member overview (W-15, `GET /api/admin/members`, `util
 | Document | Fields |
 |---|---|
 | `botMessages/templates` | `registration`, `accepted`, `rejected` (template strings, ≤2000) |
-| `botSettings/config` | `statusType`, `activityType`, `activityText`, `dmNotifications`, `reminderEnabled`, `eventStartNotifications`, `autoChannelCreation`, `autoUpdatePresence`, `autoStatusCalendarEvents`, `announceChannel`, `welcomeMessage`, `updatedAt` |
+| `botSettings/config` | `statusType`, `activityType`, `activityText`, `dmNotifications`, `reminderEnabled`, `eventStartNotifications`, `autoChannelCreation`, `announcementThreads` (B-14), `autoUpdatePresence`, `autoStatusCalendarEvents`, `announceChannel`, `welcomeMessage`, `updatedAt` |
 | `maintenanceSettings/config` | `warningEnabled`, `warningText`, `loginDisabled`, `registrationDisabled`, `plannedMaintenance`, `plannedMaintenanceStart/End/Text`, `panicMode`, `panicActivatedAt`, `panicActivatedBy`, `updatedAt`, `updatedBy` |
 | `devMeta/seed` (mock only) | `seededAt` |
 

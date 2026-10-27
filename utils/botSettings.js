@@ -16,6 +16,7 @@ const DEFAULT_BOT_SETTINGS = Object.freeze({
     reminderEnabled: true,
     eventStartNotifications: true,
     autoChannelCreation: true,
+    announcementThreads: true,
     autoUpdatePresence: false,
     autoStatusCalendarEvents: false,
     announceChannel: '',
@@ -23,7 +24,7 @@ const DEFAULT_BOT_SETTINGS = Object.freeze({
 });
 
 // Switches that are on unless stored as false / off unless stored as true (same rules as PUT /bot/settings)
-const ON_BY_DEFAULT = ['dmNotifications', 'reminderEnabled', 'eventStartNotifications', 'autoChannelCreation'];
+const ON_BY_DEFAULT = ['dmNotifications', 'reminderEnabled', 'eventStartNotifications', 'autoChannelCreation', 'announcementThreads'];
 const OFF_BY_DEFAULT = ['autoUpdatePresence', 'autoStatusCalendarEvents'];
 
 let cached = null;

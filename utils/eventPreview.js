@@ -14,8 +14,8 @@ const HEX_COLOR = /^#(?:[0-9a-fA-F]{3}){1,2}$/;
 const textOf = (value, max = 2000) => (typeof value === 'string' ? value.slice(0, max) : '');
 
 /**
- * Banner address the embed may show: an http(s) URL or an uploaded banner path
- * (buildEventEmbed makes it absolute); discord.js refuses everything else.
+ * Banner address the announcement may show: an http(s) URL or an uploaded banner path
+ * (buildEventAnnouncement makes it absolute); discord.js refuses everything else.
  *
  * @param {*} value -> Banner URL from the wizard.
  * @returns {string} -> The URL, or '' when it is none.

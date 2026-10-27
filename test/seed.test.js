@@ -141,6 +141,19 @@ test('the raid event has a line-up with a fallback role and a waitlist', async (
     assert.ok(registrations.some(r => r.status === 'waitlisted' && r.slotId === null && r.preferredSlotId === 'tank'));
 });
 
+test('the raid event is announced with a ping line and has a discussion thread (B-05, B-14)', async () => {
+    const { GUILD, ROLE_ID, CHANNEL_ID } = require('../dev/mockGuild');
+    const raid = await getEvent(EVENT_ID.ROLE);
+    assert.equal(raid.announcements.length, 1);
+    assert.equal(raid.announcements[0].channelId, CHANNEL_ID.ANNOUNCEMENTS);
+    assert.ok(raid.announcements[0].intro.startsWith(`<@&${ROLE_ID.RAID_TEAM}>`));
+    assert.equal(raid.discordThread.guildId, GUILD.id);
+    assert.match(raid.discordThread.threadId, /^\d{17,20}$/);
+    // Every other event starts without a thread
+    const open = await getEvent(EVENT_ID.OPEN);
+    assert.ok(!open.discordThread);
+});
+
 test('the seed shows the profile a slot, a rejection and a cancelled event', async () => {
     const userIdOf = (personaId) => PERSONAS.find(persona => persona.id === personaId).userId;
     const registrations = (await getDocs(collection(db, 'registrations'))).docs.map(d => d.data());

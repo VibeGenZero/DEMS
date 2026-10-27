@@ -147,3 +147,41 @@ test('the check-in box of a registered event does not stay on the next event', a
     assert.notEqual(element('checkin-section').style.display, 'none');
     assert.deepEqual(toasts, []);
 });
+
+// ── Discussion thread row (B-14) ────────────────────────────────────────
+
+const THREAD = { guildId: '111111111111111111', threadId: '222222222222222222' };
+
+test('an event with a discussion thread links it in the sidebar; the next event without one hides the row', async () => {
+    const { app, element, state } = await loadFrontendApp(eventRoutes({
+        '/api/events/game-night': { ...GAME_NIGHT, discordThread: THREAD }
+    }));
+    state.currentUser = MEMBER;
+
+    await openEvent(app, 'game-night');
+    const row = element('sidebar-thread-row');
+    assert.equal(row.style.display, 'flex');
+    assert.ok(row.innerHTML.includes('<div class="sidebar-label">Diskussion</div>'), row.innerHTML);
+    assert.ok(row.innerHTML.includes('<a href="https://discord.com/channels/111111111111111111/222222222222222222" target="_blank" rel="noopener">Im Discord-Thread mitreden</a>'), row.innerHTML);
+    assert.ok(row.innerHTML.includes('bi-chat-dots'));
+
+    await openEvent(app, 'open-event');
+    assert.equal(element('sidebar-thread-row').style.display, 'none');
+});
+
+test('a thread with broken ids shows no row', async () => {
+    for (const discordThread of [{ guildId: 'abc', threadId: '222222222222222222' }, { guildId: THREAD.guildId, threadId: '"><img src=x>' }, null, 'kaputt']) {
+        const { app, element, state } = await loadFrontendApp(eventRoutes({
+            '/api/events/open-event': { ...OPEN_EVENT, discordThread }
+        }));
+        state.currentUser = MEMBER;
+        await openEvent(app, 'open-event');
+        assert.equal(element('sidebar-thread-row').style.display, 'none', JSON.stringify(discordThread));
+        assert.doesNotMatch(element('sidebar-thread-row').innerHTML, /<img/);
+    }
+});
+
+test('the thread row starts hidden in the markup', () => {
+    const html = require('fs').readFileSync(require('path').join(__dirname, '..', 'public', 'index.html'), 'utf8');
+    assert.ok(html.includes('<div id="sidebar-thread-row" class="sidebar-detail-row is-hidden"></div>'));
+});

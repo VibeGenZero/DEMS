@@ -5,7 +5,7 @@
  * All dates are relative to `now`, so the events never go stale, and every
  * document has a fixed ID, so seeding is repeatable and links stay stable.
  */
-const { PERSONAS, MEMBERS, ROLE_ID, CHANNEL_ID, defaultAvatar } = require('./mockGuild');
+const { GUILD, PERSONAS, MEMBERS, ROLE_ID, CHANNEL_ID, defaultAvatar } = require('./mockGuild');
 const { FORM_FIELD_TYPE, formatEntityAnswer } = require('../utils/formFields');
 
 const MINUTE = 60 * 1000;
@@ -203,7 +203,14 @@ function buildEvents(clock) {
             endDate: clock.slot(5, 23),
             category: 'Raid',
             accentColor: '#22c55e',
-            location: { text: 'Event-Voice', channelId: CHANNEL_ID.EVENT_VOICE, channelType: 'voice' }
+            location: { text: 'Event-Voice', channelId: CHANNEL_ID.EVENT_VOICE, channelType: 'voice' },
+            // Announced once with a ping for the raid team, with its discussion thread (B-05, B-14)
+            announcements: [{
+                channelId: CHANNEL_ID.ANNOUNCEMENTS,
+                messageId: '130000000000000001',
+                intro: `<@&${ROLE_ID.RAID_TEAM}>\nDie Schattenfestung wartet!`
+            }],
+            discordThread: { guildId: GUILD.id, threadId: '130000000000000002' }
         }),
         [EVENT_ID.BIG_FORM]: buildEvent(clock, {
             title: 'Workshop: Streaming-Setup',

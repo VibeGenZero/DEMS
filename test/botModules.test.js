@@ -25,15 +25,16 @@ after(async () => {
 
 const EXPORTS = [
     'client', 'startBot', 'whenBotSettled', 'stopBot', 'sendDM', 'sendChannelMessage',
-    'refreshEventAnnouncements', 'isGoneDiscordError', 'buildPollEmbed', 'buildPollComponents',
+    'refreshEventAnnouncements', 'isGoneDiscordError', 'buildPollMessage',
     'buildPollVoteReply', 'refreshPollMessages', 'markPollMessagesDeleted', 'buildSlotModal',
-    'buildRegisteredSlotReply', 'buildEventEmbed', 'assignRole', 'removeRole', 'getUserRoles',
+    'buildRegisteredSlotReply', 'buildEventAnnouncement', 'assignRole', 'removeRole', 'getUserRoles',
     'fetchMemberRoleIds', 'isGuildMember', 'searchGuildMembers', 'fetchGuildMember', 'getGuildName',
     'getGuildIconUrl', 'getGuildRoles', 'getGuildChannels', 'getPublicGuildChannels',
     'getGuildScheduledEvents', 'parseTemplate', 'startReminderScheduler', 'checkReminders',
     'createEventChannels', 'addParticipantToEventChannels', 'removeParticipantFromEventChannels',
     'deleteEventChannels', 'createScheduledEvent', 'getBotStatus', 'getBotSettings', 'saveBotSettings',
-    'getRunningEvents', 'sendGuestInvitation', 'buildEventComponents', 'canRegisterViaDiscord'
+    'getRunningEvents', 'sendGuestInvitation', 'canRegisterViaDiscord', 'buildAnnouncementIntro',
+    'ensureAnnouncementThread'
 ];
 
 const lineCount = (file) => fs.readFileSync(file, 'utf8').split(/\r?\n/).length;
