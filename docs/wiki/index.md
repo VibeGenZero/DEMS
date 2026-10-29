@@ -48,7 +48,7 @@ sources: [scripts/wiki-graph.js, docs/wiki/graph.json, CLAUDE.md]
 | run locally / debug | run-and-debug, dev-mock-mode |
 | write tests | testing |
 | configure / deploy | configuration, docker, deployment |
-| CI pipeline, GitLab runner | ci, testing, docker |
+| CI pipeline (GitHub Actions), GitLab runner | ci, testing, docker |
 | security-sensitive change | security, known-issues |
 | translate a German term from a ticket | glossary |
 
@@ -90,7 +90,7 @@ sources: [scripts/wiki-graph.js, docs/wiki/graph.json, CLAUDE.md]
 | `e2e/*`, `playwright.config.js` | testing |
 | `scripts/style-snapshot.js` | testing |
 | `Dockerfile`, `compose*.yaml` | docker, deployment |
-| `.gitlab-ci.yml`, `ci/runner/*` | ci |
+| `.github/workflows/*`, `.gitlab-ci.yml`, `ci/runner/*` | ci |
 | `.env.example` | configuration |
 | `landing/*` | landing-page |
 

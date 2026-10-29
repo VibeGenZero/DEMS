@@ -1,0 +1,78 @@
+# CI for DEMS on GitHub Actions: tests on every run, a Docker image check where it matters.
+# Job details: docs/wiki/ops/ci.md
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ['*']
+  pull_request:
+  workflow_dispatch:
+
+# A new commit cancels the older run of the same branch or PR.
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      # Same Node major as the Dockerfile. The runner image ships python3, make and g++,
+      # which npm's implicit node-gyp step for better-sqlite3 needs.
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: node --version && npm --version
+      - run: npm ci --no-audit --no-fund
+      - run: npm test
+
+  docker-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      # Always on main, tags and manual runs; in a PR only when Docker or package files change.
+      - name: Check whether the image is affected
+        id: scope
+        run: |
+          if [ "${{ github.event_name }}" != "pull_request" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          changed=$(git diff --name-only "origin/${{ github.base_ref }}...HEAD")
+          echo "$changed"
+          if echo "$changed" | grep -qE '^(Dockerfile|\.dockerignore|package\.json|package-lock\.json|compose[^/]*\.yaml)$'; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "No Docker or package files changed, skipping the image build."
+          fi
+      - name: Build runtime and dev images
+        if: steps.scope.outputs.run == 'true'
+        run: |
+          docker build --target runtime --tag dems:ci .
+          docker build --target dev --tag dems:ci-dev .
+      # Start the production image once and wait for its HEALTHCHECK (GET /healthz).
+      - name: Wait for the runtime healthcheck
+        if: steps.scope.outputs.run == 'true'
+        run: |
+          docker run --detach --name dems-ci --env SESSION_SECRET=ci-only-secret dems:ci
+          for i in $(seq 1 40); do
+            status=$(docker inspect --format '{{.State.Health.Status}}' dems-ci)
+            echo "health: $status"
+            if [ "$status" = healthy ]; then exit 0; fi
+            if [ "$status" = unhealthy ]; then break; fi
+            sleep 3
+          done
+          docker logs dems-ci
+          exit 1

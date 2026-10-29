@@ -24,6 +24,7 @@ scripts/
 test/
 landing/
 ci/
+.github/
 .gitlab-ci.yml
 *.md
 logs/
