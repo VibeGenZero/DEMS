@@ -15,6 +15,7 @@ const { buildSlotButton } = require('./messages');
 const {
     resolveInteractionRoles, checkRegistrationConditions, handleEventRegisterButton, replyWithFailure
 } = require('./registration');
+const { handleMyEventsCommand } = require('./myEvents');
 
 // Discord allows at most five buttons per action row
 const BUTTONS_PER_ROW = 5;
@@ -47,7 +48,7 @@ function buildEventCommand(name, germanName, description) {
 /**
  * Definitions of all slash commands as Discord expects them.
  *
- * @returns {Object[]} -> JSON bodies of /events, /register (/anmelden) and /unregister (/abmelden).
+ * @returns {Object[]} -> JSON bodies of /events, /register (/anmelden), /unregister (/abmelden) and /my-events (/meine-events).
  */
 function buildSlashCommands() {
     return [
@@ -55,7 +56,12 @@ function buildSlashCommands() {
             .setName('events')
             .setDescription('Zeigt aktive Events an'),
         buildEventCommand('register', 'anmelden', 'Melde dich für ein Event an'),
-        buildEventCommand('unregister', 'abmelden', 'Melde dich von einem Event ab')
+        buildEventCommand('unregister', 'abmelden', 'Melde dich von einem Event ab'),
+        new SlashCommandBuilder()
+            .setName('my-events')
+            .setNameLocalizations({ de: 'meine-events' })
+            .setDescription('Zeigt deine kommenden Anmeldungen')
+            .setDescriptionLocalizations({ de: 'Zeigt deine kommenden Anmeldungen' })
     ].map(command => command.toJSON());
 }
 
@@ -187,7 +193,7 @@ async function handleRegisterCommand(interaction, eventId) {
 }
 
 /**
- * Answer the slash commands /events, /register and /unregister.
+ * Answer the slash commands /events, /register, /unregister and /my-events.
  *
  * @param {Object} interaction -> Chat input command interaction.
  */
@@ -254,6 +260,16 @@ async function handleChatCommand(interaction) {
         } catch (err) {
             console.error('Slash /register error:', err);
             await replyWithFailure(interaction);
+        }
+    }
+
+    // /my-events command (/meine-events, B-04)
+    if (interaction.commandName === 'my-events') {
+        try {
+            await handleMyEventsCommand(interaction);
+        } catch (err) {
+            console.error('Slash /my-events error:', err);
+            await replyWithFailure(interaction, '❌ Fehler beim Laden deiner Events.');
         }
     }
 

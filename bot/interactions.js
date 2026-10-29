@@ -5,7 +5,8 @@ const { MessageFlags } = require('discord.js');
 const { handleAutocomplete, handleChatCommand } = require('./commands');
 const {
     REGISTER_BUTTON_PREFIX, REGISTER_MODAL_PREFIX, SLOT_BUTTON_PREFIX, SLOT_MODAL_PREFIX, SLOT_SWITCH_PREFIX,
-    SLOT_LEAVE_PREFIX, POLL_VOTE_PREFIX, POLL_YES_PREFIX, POLL_MAYBE_PREFIX
+    SLOT_LEAVE_PREFIX, POLL_VOTE_PREFIX, POLL_YES_PREFIX, POLL_MAYBE_PREFIX,
+    MY_LEAVE_PREFIX, MY_LEAVE_CANCEL_PREFIX, MY_SWITCH_PREFIX
 } = require('./constants');
 const {
     handleEventRegisterButton, handleEventRegisterModal, replyWithFailure, handleEventSlotButton,
@@ -13,6 +14,7 @@ const {
 } = require('./registration');
 const { handlePollVoteButton, handlePollVoteSelect } = require('./polls');
 const { handleGuestButton } = require('./guests');
+const { handleMyLeaveButton, handleMyLeaveCancelButton, handleMySwitchButton } = require('./myEvents');
 const { state } = require('./client');
 
 /**
@@ -96,6 +98,19 @@ async function handleInteraction(interaction) {
             } catch (err) {
                 console.error('Slot button error:', err);
                 await replyWithFailure(interaction);
+            }
+            return;
+        }
+
+        // Buttons of the /my-events overview and its confirmation (B-04)
+        if ([MY_LEAVE_PREFIX, MY_LEAVE_CANCEL_PREFIX, MY_SWITCH_PREFIX].includes(buttonAction) && buttonEventId) {
+            try {
+                if (buttonAction === MY_LEAVE_PREFIX) await handleMyLeaveButton(interaction, buttonEventId);
+                else if (buttonAction === MY_LEAVE_CANCEL_PREFIX) await handleMyLeaveCancelButton(interaction);
+                else await handleMySwitchButton(interaction, buttonEventId);
+            } catch (err) {
+                console.error('My events button error:', err);
+                await replyWithFailure(interaction, '❌ Fehler bei der Aktion.');
             }
             return;
         }

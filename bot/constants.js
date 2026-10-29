@@ -35,6 +35,10 @@ const SLOT_MODAL_PREFIX = 'event_slot_modal';
 const SLOT_SWITCH_PREFIX = 'slot_switch';
 const SLOT_LEAVE_PREFIX = 'slot_leave';
 const ALT_SLOTS_FIELD_ID = 'alt_slots';
+// Buttons of the /my-events overview (B-04)
+const MY_LEAVE_PREFIX = 'my_leave';
+const MY_LEAVE_CANCEL_PREFIX = 'my_leave_cancel';
+const MY_SWITCH_PREFIX = 'my_switch';
 
 // Names listed per slot in the announcement
 const ROSTER_NAMES_MAX = 5;
@@ -63,6 +67,9 @@ module.exports = {
     SLOT_SWITCH_PREFIX,
     SLOT_LEAVE_PREFIX,
     ALT_SLOTS_FIELD_ID,
+    MY_LEAVE_PREFIX,
+    MY_LEAVE_CANCEL_PREFIX,
+    MY_SWITCH_PREFIX,
     ROSTER_NAMES_MAX,
     POLL_VOTE_PREFIX,
     POLL_YES_PREFIX,

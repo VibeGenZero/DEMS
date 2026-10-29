@@ -31,4 +31,17 @@ function buildPollUrl(pollId) {
     return `${baseUrl}/#poll/${pollId}`;
 }
 
-module.exports = { buildEventUrl, buildPollUrl };
+/**
+ * Build the absolute URL of a page of the web interface without an ID.
+ *
+ * @param {string} page -> Router page, e.g. `profile` or `events`.
+ * @returns {string} -> URL that opens the page.
+ * @example
+ * buildSiteUrl('profile'); // 'https://dms.example.org/#profile'
+ */
+function buildSiteUrl(page) {
+    const baseUrl = process.env.BASE_URL || DEFAULT_BASE_URL;
+    return `${baseUrl}/#${page}`;
+}
+
+module.exports = { buildEventUrl, buildPollUrl, buildSiteUrl };
