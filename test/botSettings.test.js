@@ -36,6 +36,7 @@ test('normalizeBotSettings gives every setting its default', () => {
         autoUpdatePresence: false,
         autoStatusCalendarEvents: false,
         announceChannel: '',
+        approvalChannel: '',
         welcomeMessage: ''
     });
     assert.deepEqual(settings.normalizeBotSettings(null), settings.normalizeBotSettings({}));

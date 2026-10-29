@@ -54,6 +54,10 @@ Admin changes go through `PUT /api/admin/registrations/:id/status` (allowed targ
 
 Discord after the end: `canRegisterViaDiscord` is false, so a refreshed announcement keeps only "Zum Event"; an old button (`checkRegistrationConditions`) and a modal sent after the end (`handleEventRegisterModal`, `handleEventSlotModal`) answer ephemerally "Das Event ist schon vorbei.". After the registration deadline the same places answer "Die Anmeldung für dieses Event ist geschlossen." (W-03).
 
+## Approval in Discord (B-06)
+
+Pending registrations can also be decided in the approval channel of the bot center: the request message's buttons run `changeRegistrationStatus({ …, expectStatus: 'pending' })` from `utils/registrationStatus.js` — the same function as `PUT /api/admin/registrations/:id/status` (slot choice, DM, waitlist moves up after a rejection, audit log with the deciding admin). A request decided elsewhere stays as it is. Every way a request ends closes its message; see [discord-integration](discord-integration.md).
+
 ## Bulk actions (W-08)
 
 `POST /api/admin/events/:id/registrations/bulk` changes up to 200 registrations of one event at once (dialog: checkboxes + action bar). Accept applies to pending/waitlisted, waitlist to pending/accepted, reject to all three; the rest is skipped. Accept goes oldest first and **never overbooks**, unlike the single ✓: it fills `maxParticipants` next to the places of the unselected pending/accepted registrations (guests and open invitations count), on slot events the main or a fallback role with a free place; what does not fit goes on the waitlist (`full`). Every changed member gets the DM of the single action, and a newly waitlisted one the waitlist DM (W-16 choice respected). Waitlisting alone moves nobody up; rejections promote the waitlist once. Rules: `planBulkAction` in [utils](../modules/utils.md).

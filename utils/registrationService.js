@@ -9,6 +9,7 @@ const { findMissingRequiredFields } = require('./formFields');
 const { buildEventUrl } = require('./eventUrl');
 const { withEventLock } = require('./eventLock');
 const { notifyRegistrationsChanged } = require('./announcementRefresh');
+const { closePendingRequests } = require('./approvalRequests');
 const { wantsDm } = require('./notificationPrefs');
 const { OCCUPYING_STATUSES, countOccupiedPlaces } = require('./capacity');
 const { isEventOver, isRegistrationClosed, isUnregisterClosed, REGISTRATION_CLOSED_MESSAGE, UNREGISTER_CLOSED_MESSAGE } = require('./eventListing');
@@ -401,6 +402,7 @@ async function registerUserForEvent({ eventId, user, formAnswers = {}, guests = 
     const slot = findSlot(slots, registration.slotId);
     const isAlt = !!slot && registration.slotId !== registration.preferredSlotId;
     await notifyRegistration({ user, eventId, event, status: registration.status, slot, isAlt, registrationId });
+    if (registration.status === REGISTRATION_STATUS.PENDING) postApprovalRequest(registrationId);
     notifyRegistrationsChanged(eventId);
 
     return {
@@ -412,6 +414,18 @@ async function registerUserForEvent({ eventId, user, formAnswers = {}, guests = 
         slotId: registration.slotId || null,
         isAlt
     };
+}
+
+/**
+ * Post the approval request of a pending registration in the background (B-06).
+ * Fire and forget like guest invitations -> Discord must not delay the answer.
+ *
+ * @param {string} registrationId -> The registration document ID.
+ */
+function postApprovalRequest(registrationId) {
+    // Required lazily -> mock mode merges dev/mockBot.js into the bot exports
+    Promise.resolve(require('../bot').sendApprovalRequest(registrationId))
+        .catch(err => console.error('[registrationService] sendApprovalRequest failed:', err.message));
 }
 
 /**
@@ -614,6 +628,8 @@ async function unregisterUserFromEvent({ eventId, userId }) {
             await promoteFromWaitlist(eventId, event);
         }
     }
+    // A withdrawn request no longer needs a decision in the approval channel (B-06)
+    await closePendingRequests([registration], { status: 'withdrawn' }, event);
 
     notifyRegistrationsChanged(eventId);
     return { ok: true, registration, event };

@@ -6,7 +6,8 @@ const { handleAutocomplete, handleChatCommand } = require('./commands');
 const {
     REGISTER_BUTTON_PREFIX, REGISTER_MODAL_PREFIX, SLOT_BUTTON_PREFIX, SLOT_MODAL_PREFIX, SLOT_SWITCH_PREFIX,
     SLOT_LEAVE_PREFIX, POLL_VOTE_PREFIX, POLL_YES_PREFIX, POLL_MAYBE_PREFIX,
-    MY_LEAVE_PREFIX, MY_LEAVE_CANCEL_PREFIX, MY_SWITCH_PREFIX
+    MY_LEAVE_PREFIX, MY_LEAVE_CANCEL_PREFIX, MY_SWITCH_PREFIX,
+    APPROVAL_ACCEPT_PREFIX, APPROVAL_REJECT_PREFIX, APPROVAL_WAITLIST_PREFIX
 } = require('./constants');
 const {
     handleEventRegisterButton, handleEventRegisterModal, replyWithFailure, handleEventSlotButton,
@@ -15,6 +16,7 @@ const {
 const { handlePollVoteButton, handlePollVoteSelect } = require('./polls');
 const { handleGuestButton } = require('./guests');
 const { handleMyLeaveButton, handleMyLeaveCancelButton, handleMySwitchButton } = require('./myEvents');
+const { handleApprovalButton } = require('./approvals');
 const { state } = require('./client');
 
 /**
@@ -98,6 +100,18 @@ async function handleInteraction(interaction) {
             } catch (err) {
                 console.error('Slot button error:', err);
                 await replyWithFailure(interaction);
+            }
+            return;
+        }
+
+        // Decisions on approval requests in the approval channel (B-06)
+        if ([APPROVAL_ACCEPT_PREFIX, APPROVAL_REJECT_PREFIX, APPROVAL_WAITLIST_PREFIX].includes(buttonAction) && buttonEventId) {
+            try {
+                // The second segment carries the registration ID here
+                await handleApprovalButton(interaction, buttonAction, buttonEventId);
+            } catch (err) {
+                console.error('Approval button error:', err);
+                await replyWithFailure(interaction, '❌ Fehler bei der Freigabe.');
             }
             return;
         }

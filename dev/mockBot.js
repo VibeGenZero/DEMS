@@ -255,6 +255,25 @@ async function markPollMessagesDeleted(poll) {
     return true;
 }
 
+async function sendApprovalRequest(registrationId) {
+    const { loadApprovalRequest, storeApprovalMessage } = require('../utils/approvalRequests');
+    const request = await loadApprovalRequest(registrationId);
+    if (!request) return null;
+    mockLog(`Freigabe-Anfrage in ${describeChannel(request.channelId)} für ${describeUser(request.registration.userId)} ("${request.event.title}")`, {
+        formAnswers: request.registration.formAnswers || {}
+    });
+    return storeApprovalMessage(registrationId, { channelId: request.channelId, messageId: fakeSnowflake() });
+}
+
+async function closeApprovalRequest(registration, outcome, event = null) {
+    const { formatOutcome, eventForClosing, storedApprovalMessage } = require('../utils/approvalRequests');
+    const stored = storedApprovalMessage(registration);
+    if (!stored) return false;
+    const eventData = await eventForClosing(registration, event);
+    mockLog(`Freigabe-Anfrage ${stored.messageId} geschlossen ("${eventData.title || registration.eventId}"): ${formatOutcome(outcome)}`);
+    return true;
+}
+
 async function sendGuestInvitation(guestUserId, registrant, event, registrationId) {
     dmsSent++;
     mockLog(`Gäste-Einladung an ${describeUser(guestUserId)}`, {
@@ -343,6 +362,8 @@ module.exports = {
     refreshPollMessages,
     markPollMessagesDeleted,
     sendGuestInvitation,
+    sendApprovalRequest,
+    closeApprovalRequest,
     assignRole,
     removeRole,
     createEventChannels,

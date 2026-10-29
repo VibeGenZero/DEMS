@@ -3,7 +3,7 @@ id: utils
 title: utils/ — domain helpers
 type: module
 tags: [utils, registration, form-fields, waitlist, audit-log, profile, debug, change-notice, banner]
-sources: [utils/registrationService.js, utils/formFields.js, utils/eventUtils.js, utils/eventListing.js, utils/profileEvents.js, utils/eventUrl.js, utils/userProfile.js, utils/avatar.js, utils/botPermissions.js, utils/csv.js, utils/template.js, utils/sessionStore.js, utils/reminders.js, utils/debugLog.js, utils/capacity.js, utils/slotService.js, utils/eventLock.js, utils/announcementRefresh.js, utils/pollService.js, utils/pollStore.js, utils/eventPreview.js, utils/eventArchive.js, utils/eventChangeNotice.js, utils/notificationPrefs.js, utils/memberOverview.js, utils/insights.js, utils/participantMessage.js, utils/bannerStore.js, utils/bulkRegistrations.js, utils/eventSeries.js, utils/eventTemplates.js, utils/botSettings.js]
+sources: [utils/registrationService.js, utils/registrationStatus.js, utils/approvalRequests.js, utils/formFields.js, utils/eventUtils.js, utils/eventListing.js, utils/profileEvents.js, utils/eventUrl.js, utils/userProfile.js, utils/avatar.js, utils/botPermissions.js, utils/csv.js, utils/template.js, utils/sessionStore.js, utils/reminders.js, utils/debugLog.js, utils/capacity.js, utils/slotService.js, utils/eventLock.js, utils/announcementRefresh.js, utils/pollService.js, utils/pollStore.js, utils/eventPreview.js, utils/eventArchive.js, utils/eventChangeNotice.js, utils/notificationPrefs.js, utils/memberOverview.js, utils/insights.js, utils/participantMessage.js, utils/bannerStore.js, utils/bulkRegistrations.js, utils/eventSeries.js, utils/eventTemplates.js, utils/botSettings.js]
 part_of: [architecture]
 depends_on: [data-layer, bot]
 see_also: [registration-flow, form-fields, role-slots]
@@ -153,6 +153,14 @@ Days and clock times count in `TIMEZONE` (`Intl.DateTimeFormat`, no library). `f
 ## utils/pollService.js, utils/pollStore.js
 
 `pollService.js` (pure): `normalizePollInput`, `normalizeVote`, `isPollOpen`, `effectivePollStatus`, `canVote`, `tallyPoll`, `rankOptions`, `getFavoriteOptionId`, `formatPollOption`. `pollStore.js`: `loadPoll`, `loadPollVotes`, `loadUserVote`, `savePollVote`, `updatePoll`, `closePoll`, `validateDecision`, `decidePoll`, `closeExpiredPolls`, `deletePoll`, `deleteUserPollVotes`, `startPollScheduler`/`stopPollScheduler`; writes run under `withEventLock('poll:<id>')`. Rules: [date-polls](../concepts/date-polls.md).
+
+## utils/registrationStatus.js
+
+`changeRegistrationStatus({ registrationId, status, actor, expectStatus })` — the admin status change (accept, reject, waitlist), shared by `PUT /api/admin/registrations/:id/status` and the Discord approval buttons (B-06). Under `withEventLock`: slot cleared on waitlist/reject, check-in cleared unless accepted, acceptance of a slot-less registration picks a slot (`resolveAcceptanceSlot`, overbooking `warning`). Then `notifyStatusChange` (accepted/rejected), `promoteFromWaitlist` after a rejection, `notifyRegistrationsChanged`, `addAuditLog('UPDATE_REGISTRATION_STATUS', actor.id, …)`. `expectStatus` (Discord: `'pending'`) is checked inside the lock; a different current status returns `{ ok: false, code: 'already_decided', registration }` without changes. Unknown id → `{ ok: false, code: 'not_found' }`.
+
+## utils/approvalRequests.js
+
+Data side of the Discord approval requests (B-06), without discord.js (so `dev/mockBot.js` can use it): `loadApprovalRequest(registrationId)` (null without `approvalChannel` or unless the registration is pending), `storeApprovalMessage`, `storedApprovalMessage`, `eventForClosing`, `formatOutcome({ status, actorName })` (result lines "✅ Angenommen von …", "↩️ Vom Mitglied zurückgezogen", "🚫 Event abgesagt", "🗑️ Event gelöscht" …), `closePendingRequests(registrations, outcome, event)` (closes every pending one with a stored message; used by cancel, delete, bulk and unregister), `actorName(user)`.
 
 ## utils/eventUrl.js
 

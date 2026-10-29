@@ -191,8 +191,31 @@ export async function loadBotRunningEvents() {
  * @returns {string} -> Option elements.
  */
 export function announceChannelOptions(channels, selected) {
+    return textChannelOptions(channels, selected, 'Standard aus .env');
+}
+
+/**
+ * Options of the approval channel dropdown (B-06): "Keiner" first, then like the announcement channel.
+ *
+ * @param {Array<Object>} channels -> `GET /api/admin/channels` (`{ id, name, type }`).
+ * @param {string} selected -> Stored channel id or ''.
+ * @returns {string} -> Option elements.
+ */
+export function approvalChannelOptions(channels, selected) {
+    return textChannelOptions(channels, selected, 'Keiner – Freigaben nur auf der Website');
+}
+
+/**
+ * Text channels of the server as options after an empty first entry.
+ *
+ * @param {Array<Object>} channels -> Channel list.
+ * @param {string} selected -> Stored channel id or ''.
+ * @param {string} emptyLabel -> Label of the empty first option.
+ * @returns {string} -> Option elements; a stored channel the bot cannot list stays selectable.
+ */
+function textChannelOptions(channels, selected, emptyLabel) {
     const text = (Array.isArray(channels) ? channels : []).filter(channel => channel.type === 'text');
-    const options = ['<option value="">Standard aus .env</option>']
+    const options = [`<option value="">${escapeHtml(emptyLabel)}</option>`]
         .concat(text.map(channel => `<option value="${escapeHtml(channel.id)}">#${escapeHtml(channel.name)}</option>`));
     if (selected && !text.some(channel => channel.id === selected)) {
         options.push(`<option value="${escapeHtml(selected)}">Gespeicherter Kanal (${escapeHtml(selected)})</option>`);
@@ -216,6 +239,9 @@ export async function loadBotSettings() {
         const select = document.getElementById('bot-announce-channel');
         select.innerHTML = announceChannelOptions(channels, settings.announceChannel || '');
         select.value = settings.announceChannel || '';
+        const approvalSelect = document.getElementById('bot-approval-channel');
+        approvalSelect.innerHTML = approvalChannelOptions(channels, settings.approvalChannel || '');
+        approvalSelect.value = settings.approvalChannel || '';
 
         document.getElementById('bot-status-type').value = settings.statusType || 'online';
         document.getElementById('bot-activity-type').value = settings.activityType || 'WATCHING';
@@ -247,6 +273,7 @@ export async function saveBotSettingsForm() {
         announcementThreads: document.getElementById('bot-announcement-threads').checked,
         welcomeMessage: document.getElementById('bot-welcome-message').value,
         announceChannel: document.getElementById('bot-announce-channel').value,
+        approvalChannel: document.getElementById('bot-approval-channel').value,
     };
 
     try {

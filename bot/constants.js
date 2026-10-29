@@ -39,6 +39,10 @@ const ALT_SLOTS_FIELD_ID = 'alt_slots';
 const MY_LEAVE_PREFIX = 'my_leave';
 const MY_LEAVE_CANCEL_PREFIX = 'my_leave_cancel';
 const MY_SWITCH_PREFIX = 'my_switch';
+// Decisions on approval requests in the approval channel (B-06)
+const APPROVAL_ACCEPT_PREFIX = 'approval_accept';
+const APPROVAL_REJECT_PREFIX = 'approval_reject';
+const APPROVAL_WAITLIST_PREFIX = 'approval_waitlist';
 
 // Names listed per slot in the announcement
 const ROSTER_NAMES_MAX = 5;
@@ -70,6 +74,9 @@ module.exports = {
     MY_LEAVE_PREFIX,
     MY_LEAVE_CANCEL_PREFIX,
     MY_SWITCH_PREFIX,
+    APPROVAL_ACCEPT_PREFIX,
+    APPROVAL_REJECT_PREFIX,
+    APPROVAL_WAITLIST_PREFIX,
     ROSTER_NAMES_MAX,
     POLL_VOTE_PREFIX,
     POLL_YES_PREFIX,

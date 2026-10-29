@@ -20,6 +20,8 @@ const DEFAULT_BOT_SETTINGS = Object.freeze({
     autoUpdatePresence: false,
     autoStatusCalendarEvents: false,
     announceChannel: '',
+    // Channel for approval requests (B-06); empty -> approvals only on the website
+    approvalChannel: '',
     welcomeMessage: ''
 });
 

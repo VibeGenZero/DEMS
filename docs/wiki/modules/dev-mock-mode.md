@@ -38,5 +38,6 @@ see_also: [run-and-debug, testing, docker]
 - Rate limiters are skipped (`skip: () => IS_MOCK_MODE` in `server.js`).
 - Reminder DMs from `checkReminders` call the real (not ready) `sendDM` → only "Bot not ready" warnings.
 - Dates are relative to the first seed; after a few days the sample events are in the past (and a day after their end the archive scheduler moves them into the archive tab) → `npm run dev:reset` (a dev database seeded before D-04 also needs it once for the banners).
+- Approval requests (B-06): `sendApprovalRequest` / `closeApprovalRequest` log `Freigabe-Anfrage in #<channel> für <member> ("<event>")` and `Freigabe-Anfrage <id> geschlossen ("<event>"): <result>` and store a fake `approvalMessage`. To try it: as Mori choose "#events" as Freigabe-Kanal in the bot center, register Lena for "Turnier: Arena-Cup" (manual approval with form), then accept or reject her on the website and watch the log. The seed's pending requests have no `approvalMessage` (they were never posted).
 
 Design: `docs/superpowers/specs/2026-09-29-dev-mock-mode-design.md`, plan: `docs/superpowers/plans/2026-09-29-dev-mock-mode.md`.

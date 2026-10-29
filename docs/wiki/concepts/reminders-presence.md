@@ -42,6 +42,7 @@ see_also: [event-lifecycle, discord-integration]
 | `autoStatusCalendarEvents` (needs `autoUpdatePresence`) | `dnd` while an event runs (started and not `isEventOver`: end, else start + 2 h), `online` if one is upcoming, else `idle` |
 | `reminderEnabled` | off → due reminder DMs are dropped (marked sent); the scheduler keeps running (B-02) |
 | `eventStartNotifications` | off → no start DM; the event is marked as notified anyway (B-02) |
+| `approvalChannel` | text channel for approval requests of pending registrations (B-06, `bot/approvals.js`); empty (default) → approvals only on the website; validated like `announceChannel` (400 "Freigabe-Kanal nicht gefunden.") |
 
 ## Bot control center (admin `#bot-control`)
 

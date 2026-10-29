@@ -343,6 +343,27 @@ async function editStoredMessages(announcements, buildPayload) {
 }
 
 /**
+ * Replace one posted V2 message.
+ *
+ * @param {string} channelId -> Channel of the message.
+ * @param {string} messageId -> The message.
+ * @param {Object} payload -> New V2 payload.
+ * @returns {Promise<boolean>} -> True when edited; false while offline, for a deleted message or on errors (logged).
+ */
+async function editChannelMessage(channelId, messageId, payload) {
+    if (!state.isReady) return false;
+    try {
+        const channel = await client.channels.fetch(channelId);
+        const message = await channel.messages.fetch(messageId);
+        await message.edit({ ...payload, content: null, embeds: [], allowedMentions: { parse: [] } });
+        return true;
+    } catch (err) {
+        if (!isGoneDiscordError(err)) console.error('Failed to edit a channel message:', err.message);
+        return false;
+    }
+}
+
+/**
  * Re-render every stored announcement of an event with the live line-up.
  *
  * Deleted messages are dropped from `event.announcements`; other errors are
@@ -394,6 +415,7 @@ module.exports = {
     buildSlotButton,
     isGoneDiscordError,
     editStoredMessages,
+    editChannelMessage,
     recordsChanged,
     refreshEventAnnouncements
 };

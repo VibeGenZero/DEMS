@@ -59,7 +59,9 @@ test('every Discord helper answers with its neutral value while the bot is not r
         removeParticipantFromEventChannels: [[event, 'u1'], false],
         deleteEventChannels: [['ev'], false],
         sendGuestInvitation: [['g2', { id: 'u1', displayName: 'Host' }, event, 'reg1'], false],
-        ensureAnnouncementThread: [[{ channelId: 'c1', messageId: 'm1' }, 'Abend', null], null]
+        ensureAnnouncementThread: [[{ channelId: 'c1', messageId: 'm1' }, 'Abend', null], null],
+        sendApprovalRequest: [['reg1'], null],
+        closeApprovalRequest: [[{ id: 'reg1', eventId: 'ev', approvalMessage: { channelId: 'c1', messageId: 'm1' } }, { status: 'accepted', actorName: 'Mori' }], false]
     };
     for (const [name, [args, expected]] of Object.entries(neutral)) {
         assert.deepEqual(await bot[name](...args), expected, name);
@@ -90,4 +92,23 @@ test('the bot status has the same keys and reflects scheduler, counters and stop
 test('without a token the bot does not start and settles with false', async () => {
     assert.equal(await bot.startBot(''), false);
     assert.equal(await bot.whenBotSettled(1000), false);
+});
+
+test('closing a request whose message was deleted in Discord answers false without throwing', async () => {
+    const { state } = require('../bot/client');
+    const originalFetch = bot.client.channels.fetch;
+    const errors = [];
+    const originalError = console.error;
+    state.isReady = true;
+    bot.client.channels.fetch = async () => { throw Object.assign(new Error('Unknown Message'), { code: 10008 }); };
+    console.error = (...args) => errors.push(args.join(' '));
+    try {
+        const registration = { id: 'reg1', eventId: 'ev', userId: 'u1', approvalMessage: { channelId: 'c1', messageId: 'm1' } };
+        assert.equal(await bot.closeApprovalRequest(registration, { status: 'accepted', actorName: 'Mori' }, { title: 'Abend' }), false);
+        assert.deepEqual(errors, [], 'a gone message is not logged as an error');
+    } finally {
+        state.isReady = false;
+        bot.client.channels.fetch = originalFetch;
+        console.error = originalError;
+    }
 });
