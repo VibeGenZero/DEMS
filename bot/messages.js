@@ -391,6 +391,7 @@ module.exports = {
     sendChannelMessage,
     buildEventAnnouncement,
     canRegisterViaDiscord,
+    buildSlotButton,
     isGoneDiscordError,
     editStoredMessages,
     recordsChanged,

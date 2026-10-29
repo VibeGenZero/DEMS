@@ -2,46 +2,72 @@
  * Slash commands of the bot: registering them with Discord, the event
  * autocomplete and the answers to /events, /register and /unregister.
  */
-const { EmbedBuilder, MessageFlags, REST, Routes, SlashCommandBuilder } = require('discord.js');
+const { ActionRowBuilder, EmbedBuilder, MessageFlags, REST, Routes, SlashCommandBuilder } = require('discord.js');
 const { db, collection, doc, getDoc, getDocs, query, where } = require('../firebaseAdmin');
 const { buildEventUrl } = require('../utils/eventUrl');
 const { summarizePlaces, formatPlaces } = require('../utils/capacity');
+const { debugLog } = require('../utils/debugLog');
+const { fitsIntoDiscordModal, getModalFieldLimit } = require('../utils/formFields');
+const { getSlots, buildRoster } = require('../utils/slotService');
 const { client } = require('./client');
 const { TIMEZONE } = require('./constants');
+const { buildSlotButton } = require('./messages');
+const {
+    resolveInteractionRoles, checkRegistrationConditions, handleEventRegisterButton, replyWithFailure
+} = require('./registration');
+
+// Discord allows at most five buttons per action row
+const BUTTONS_PER_ROW = 5;
+
+/**
+ * Build one command with an event option, named in German for German clients.
+ *
+ * Discord keeps sending the base name as `commandName`, so routing and
+ * autocomplete only ever see `register` / `unregister`.
+ *
+ * @param {string} name -> Base command name.
+ * @param {string} germanName -> Name shown to clients with the language "de".
+ * @param {string} description -> German description (base and "de").
+ * @returns {SlashCommandBuilder} -> The command definition.
+ */
+function buildEventCommand(name, germanName, description) {
+    return new SlashCommandBuilder()
+        .setName(name)
+        .setNameLocalizations({ de: germanName })
+        .setDescription(description)
+        .setDescriptionLocalizations({ de: description })
+        .addStringOption(opt => opt
+            .setName('event')
+            .setDescription('Name des Events')
+            .setRequired(true)
+            .setAutocomplete(true)
+        );
+}
+
+/**
+ * Definitions of all slash commands as Discord expects them.
+ *
+ * @returns {Object[]} -> JSON bodies of /events, /register (/anmelden) and /unregister (/abmelden).
+ */
+function buildSlashCommands() {
+    return [
+        new SlashCommandBuilder()
+            .setName('events')
+            .setDescription('Zeigt aktive Events an'),
+        buildEventCommand('register', 'anmelden', 'Melde dich für ein Event an'),
+        buildEventCommand('unregister', 'abmelden', 'Melde dich von einem Event ab')
+    ].map(command => command.toJSON());
+}
 
 /**
  * Register slash commands
  */
 async function registerSlashCommands() {
     try {
-        const commands = [
-            new SlashCommandBuilder()
-                .setName('events')
-                .setDescription('Zeigt aktive Events an'),
-            new SlashCommandBuilder()
-                .setName('register')
-                .setDescription('Registriere dich für ein Event')
-                .addStringOption(opt => opt
-                    .setName('event')
-                    .setDescription('Name des Events')
-                    .setRequired(true)
-                    .setAutocomplete(true)
-                ),
-            new SlashCommandBuilder()
-                .setName('unregister')
-                .setDescription('Melde dich von einem Event ab')
-                .addStringOption(opt => opt
-                    .setName('event')
-                    .setDescription('Name des Events')
-                    .setRequired(true)
-                    .setAutocomplete(true)
-                )
-        ];
-
         const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_BOT_TOKEN);
         await rest.put(
             Routes.applicationGuildCommands(client.user.id, process.env.DISCORD_GUILD_ID),
-            { body: commands.map(c => c.toJSON()) }
+            { body: buildSlashCommands() }
         );
         console.log('✅ Slash Commands registriert');
     } catch (err) {
@@ -108,6 +134,59 @@ async function handleAutocomplete(interaction) {
 }
 
 /**
+ * Handle /register (German client: /anmelden) for one event.
+ *
+ * Events without slots take the path of the "Anmelden" button. Slot events
+ * are checked the same way and then answer privately with one button per
+ * slot; a click continues in handleEventSlotButton like on the announcement.
+ *
+ * @param {import('discord.js').ChatInputCommandInteraction} interaction -> The slash command.
+ * @param {string} eventId -> The event document ID from the autocomplete option.
+ * @returns {Promise<void>} -> Resolves once the interaction was answered.
+ */
+async function handleRegisterCommand(interaction, eventId) {
+    debugLog('bot.registerCommand', { eventId, userId: interaction.user.id });
+
+    const eventSnap = await getDoc(doc(db, 'events', eventId));
+    if (!eventSnap.exists()) {
+        return interaction.reply({ content: '❌ Event nicht gefunden.', flags: MessageFlags.Ephemeral });
+    }
+
+    const event = eventSnap.data();
+    const slots = getSlots(event);
+    if (slots.length === 0) {
+        return handleEventRegisterButton(interaction, eventId);
+    }
+
+    const roleIds = await resolveInteractionRoles(interaction);
+    const conditionError = await checkRegistrationConditions({ event, eventId, userId: interaction.user.id, roleIds });
+    if (conditionError) {
+        return interaction.reply({ content: `❌ ${conditionError}`, flags: MessageFlags.Ephemeral });
+    }
+
+    if (!fitsIntoDiscordModal(event)) {
+        return interaction.reply({
+            content: `📝 Für dieses Event ist das Formular zu umfangreich für Discord (max. ${getModalFieldLimit(event)} Felder). Bitte melde dich hier an: ${buildEventUrl(eventId)}`,
+            flags: MessageFlags.Ephemeral
+        });
+    }
+
+    const { loadEventRegistrations } = require('../utils/eventUtils');
+    const roster = buildRoster(event, await loadEventRegistrations(eventId));
+    const rows = [];
+    for (let i = 0; i < slots.length; i += BUTTONS_PER_ROW) {
+        const buttons = slots.slice(i, i + BUTTONS_PER_ROW).map(slot => buildSlotButton(eventId, slot, roster));
+        rows.push(new ActionRowBuilder().addComponents(buttons));
+    }
+
+    await interaction.reply({
+        content: `Wähle deine Rolle für **${event.title}**:`,
+        components: rows,
+        flags: MessageFlags.Ephemeral
+    });
+}
+
+/**
  * Answer the slash commands /events, /register and /unregister.
  *
  * @param {Object} interaction -> Chat input command interaction.
@@ -168,34 +247,13 @@ async function handleChatCommand(interaction) {
         }
     }
 
-    // /register command - DISABLED: Redirect to website for security
+    // /register command (/anmelden) -> same flow as the "Anmelden" and slot buttons (B-03)
     if (interaction.commandName === 'register') {
         try {
-            const eventId = interaction.options.getString('event');
-            const eventSnap = await getDoc(doc(db, 'events', eventId));
-
-            if (!eventSnap.exists()) {
-                return interaction.reply({ content: '❌ Event nicht gefunden.', flags: MessageFlags.Ephemeral });
-            }
-
-            const event = eventSnap.data();
-            const registrationUrl = buildEventUrl(eventId);
-
-            const embed = new EmbedBuilder()
-                .setTitle('🌐 Registrierung über Website erforderlich')
-                .setColor(0x8b5cf6)
-                .setDescription(
-                    `Um dich für **${event.title}** anzumelden, besuche bitte die Website.\n\n` +
-                    `Dies stellt sicher, dass alle erforderlichen Informationen korrekt ausgefüllt werden.`
-                )
-                .addFields({ name: '🔗 Zur Anmeldung', value: `[Hier klicken](${registrationUrl})` })
-                .setFooter({ text: 'DEMS — Event Management' })
-                .setTimestamp();
-
-            await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
+            await handleRegisterCommand(interaction, interaction.options.getString('event'));
         } catch (err) {
             console.error('Slash /register error:', err);
-            await interaction.reply({ content: '❌ Fehler.', flags: MessageFlags.Ephemeral });
+            await replyWithFailure(interaction);
         }
     }
 
@@ -242,7 +300,9 @@ async function handleChatCommand(interaction) {
 }
 
 module.exports = {
+    buildSlashCommands,
     registerSlashCommands,
     handleAutocomplete,
+    handleRegisterCommand,
     handleChatCommand
 };

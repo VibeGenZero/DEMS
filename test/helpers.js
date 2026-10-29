@@ -199,7 +199,7 @@ function createClient(baseUrl) {
  * Discord interaction double that records every answer in call order.
  * `answered` resolves with the first answer that is not a defer.
  *
- * @param {Object} options -> `{ kind: 'button'|'select'|'command'|'modal'|'autocomplete', customId, userId, commandName, eventOption, focused, values, roles }`; a modal answers every field empty, an autocomplete reads `focused` as the typed text.
+ * @param {Object} options -> `{ kind: 'button'|'select'|'command'|'modal'|'autocomplete', customId, userId, commandName, eventOption, focused, values, roles }`; a modal answers every field empty, an autocomplete reads `focused` as the typed text, `showModal` counts as an answer.
  * @returns {Object} -> The fake interaction.
  */
 function createFakeInteraction({ kind, customId, userId, commandName, eventOption, focused = '', values = [], roles = null }) {
@@ -224,7 +224,8 @@ function createFakeInteraction({ kind, customId, userId, commandName, eventOptio
         async update(payload) { calls.push(['update', payload]); interaction.replied = true; resolveAnswered(); },
         async reply(payload) { calls.push(['reply', payload]); interaction.replied = true; resolveAnswered(); },
         async editReply(payload) { calls.push(['editReply', payload]); resolveAnswered(); },
-        async respond(choices) { calls.push(['respond', choices]); resolveAnswered(); }
+        async respond(choices) { calls.push(['respond', choices]); resolveAnswered(); },
+        async showModal(modal) { calls.push(['showModal', modal]); resolveAnswered(); }
     };
     return interaction;
 }
