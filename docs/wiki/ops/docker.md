@@ -45,7 +45,7 @@ GitLab CI builds both targets and waits for the runtime HEALTHCHECK in the `dock
 
 ## .dockerignore
 
-Excludes `node_modules/`, `.env*` (except `.env.example`), `data/`, `*.sqlite*`, `.git/`, IDE folders, `docs/`, `scripts/`, `test/`, `landing/`, `ci/`, `.gitlab-ci.yml`, `*.md`, Docker files. The image therefore contains no secrets, docs, tests or CI files.
+Excludes `node_modules/`, `.env*` (except `.env.example`), `data/`, `*.sqlite*`, `.git/`, IDE folders, `docs/`, `scripts/`, `test/`, `landing/`, `ci/`, `.github/`, `.gitlab-ci.yml`, `*.md`, Docker files. The image therefore contains no secrets, docs, tests or CI files.
 
 ## Gotchas
 

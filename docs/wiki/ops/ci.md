@@ -1,15 +1,30 @@
 ---
 id: ci
-title: CI — GitLab pipeline and runner
+title: CI — GitHub Actions, GitLab pipeline and runner
 type: ops
-tags: [ci, gitlab, pipeline, runner, docker-in-docker, auto-devops]
-sources: [.gitlab-ci.yml, ci/runner/compose.yaml, ci/runner/config.toml.example]
+tags: [ci, github-actions, gitlab, pipeline, runner, docker-in-docker, auto-devops]
+sources: [.github/workflows/ci.yml, .gitlab-ci.yml, ci/runner/compose.yaml, ci/runner/config.toml.example]
 depends_on: [testing, docker]
 see_also: [deployment]
 ---
-# CI — GitLab pipeline and runner
+# CI — GitHub Actions, GitLab pipeline and runner
 
-> TL;DR: `.gitlab-ci.yml` runs `npm ci` + `npm test` in every pipeline (MRs, `main`, tags, branches without an open MR). The `docker-build` job builds the `runtime` and `dev` images and waits for the runtime HEALTHCHECK — always on `main` and tags, in MRs only when Docker or package files change. Jobs run on a self-hosted GitLab Runner next to GitLab (`ci/runner/`): an unprivileged runner for tests and a privileged Docker-in-Docker runner for jobs tagged `docker`.
+> TL;DR: The repository lives on GitHub (`VibeGenZero/DEMS`, private) since 2026-10-29. `.github/workflows/ci.yml` runs `npm ci` + `npm test` on pushes to `main`, tags, every PR and manual runs; its `docker-build` job builds the `runtime` and `dev` images and waits for the runtime HEALTHCHECK — always on `main`, tags and manual runs, in PRs only when Docker or package files change. The older GitLab setup does the same with `.gitlab-ci.yml` on a self-hosted GitLab Runner (`ci/runner/`): an unprivileged runner for tests and a privileged Docker-in-Docker runner for jobs tagged `docker`.
+
+## GitHub Actions (`.github/workflows/ci.yml`)
+
+| Job | Runs | What it does |
+|---|---|---|
+| `test` | every run | `ubuntu-latest` (ships python3, make, g++ for npm's implicit `node-gyp rebuild` of better-sqlite3), `actions/setup-node` with Node 24 and the npm cache keyed on `package-lock.json`, `npm ci`, `npm test` (includes the wiki validation; `npm run test:e2e` does not run in CI) |
+| `docker-build` | always on `main`, tags, manual runs; in PRs only when `Dockerfile`, `.dockerignore`, `package*.json` or `compose*.yaml` change | the runner's own Docker (no dind needed); builds `--target runtime` and `--target dev`, starts the runtime image with a dummy `SESSION_SECRET` and polls `docker inspect` until the HEALTHCHECK reports `healthy` (about 2 minutes at most). Nothing is pushed. |
+
+- Triggers: `push` to `main` and tags, `pull_request`, `workflow_dispatch` (Actions tab → CI → *Run workflow*). A branch without a PR gets no run, like a GitLab branch with an open MR gets no branch pipeline.
+- `concurrency` cancels the older run of the same PR or ref when a new commit arrives.
+- The PR file check in `docker-build` diffs against `origin/<base>`, so its checkout uses `fetch-depth: 0`. A skipped image build shows up as green steps marked *skipped*.
+- `permissions: contents: read` — the workflow needs no write access.
+- Runs use GitHub-hosted minutes of the org (private repo).
+
+The sections below describe the GitLab pipeline, which still runs as long as the GitLab project exists.
 
 ## Pipeline (`.gitlab-ci.yml`)
 
