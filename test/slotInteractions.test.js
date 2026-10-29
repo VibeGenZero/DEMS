@@ -11,7 +11,7 @@ process.env.DEV_MOCK = 'true';
 process.env.DEV_SQLITE_PATH = path.join(tmpDir, 'interactions.sqlite');
 
 const bot = require('../bot');
-const { db, doc, getDoc, setDoc } = require('../firebaseAdmin');
+const { db, collection, doc, getDoc, getDocs, query, setDoc, where } = require('../firebaseAdmin');
 const { buildEventUrl } = require('../utils/eventUrl');
 
 after(async () => {
@@ -197,18 +197,137 @@ test('the announcement tells both deadlines', async () => {
 
 // ── Paths pinned before splitting bot.js (B-01) ─────────────────────────
 
-test('/register answers with the website link of the event', async () => {
-    await setDoc(doc(db, 'events', 'int-reg-link'), { title: 'Link-Abend', status: 'active', approvalMode: 'instant', maxParticipants: 5 });
+// ── /register registers in Discord (B-03) ───────────────────────────────
 
-    const interaction = createFakeInteraction({ kind: 'command', commandName: 'register', eventOption: 'int-reg-link', userId: 'int-reg-user' });
+async function registrationsOf(eventId) {
+    const snapshot = await getDocs(query(collection(db, 'registrations'), where('eventId', '==', eventId)));
+    return snapshot.docs.map(entry => entry.data());
+}
+
+async function runRegisterCommand(eventId, userId) {
+    const interaction = createFakeInteraction({ kind: 'command', commandName: 'register', eventOption: eventId, userId });
     await dispatchInteraction(bot.client, interaction);
+    // The registration answers with editReply after the defer
+    await waitFor(() => interaction.calls.some(([name]) => name !== 'deferReply'));
+    return interaction;
+}
+
+const waitFor = async (check, timeoutMs = 3000) => {
+    const start = Date.now();
+    while (!check()) {
+        if (Date.now() - start > timeoutMs) throw new Error('condition not met');
+        await sleep(10);
+    }
+};
+
+test('/register registers for an event without slots and form at once', async () => {
+    await setDoc(doc(db, 'events', 'int-reg-direct'), { title: 'Direkt-Abend', status: 'active', approvalMode: 'instant', maxParticipants: 5 });
+
+    const interaction = await runRegisterCommand('int-reg-direct', 'int-reg-user');
+
+    assert.deepEqual(interaction.calls.map(([name]) => name), ['deferReply', 'editReply']);
+    assert.equal(interaction.calls[1][1].embeds[0].toJSON().title, '✅ Anmeldung bestätigt');
+    const registrations = await registrationsOf('int-reg-direct');
+    assert.equal(registrations.length, 1);
+    assert.equal(registrations[0].userId, 'int-reg-user');
+    assert.equal(registrations[0].source, 'discord');
+});
+
+test('/register opens the registration modal for an event with a small form', async () => {
+    await setDoc(doc(db, 'events', 'int-reg-form'), {
+        title: 'Formular-Abend', status: 'active', approvalMode: 'instant', maxParticipants: 5,
+        formFields: [{ label: 'Charakter', type: 'text' }, { label: 'Erfahrung', type: 'text' }]
+    });
+
+    const interaction = await runRegisterCommand('int-reg-form', 'int-reg-user');
+
+    const [name, modal] = interaction.calls[0];
+    assert.equal(name, 'showModal');
+    assert.equal(modal.toJSON().custom_id, 'event_register_modal:int-reg-form');
+    assert.equal((await registrationsOf('int-reg-form')).length, 0);
+});
+
+test('/register refuses a member who is already registered', async () => {
+    await setDoc(doc(db, 'events', 'int-reg-twice'), { title: 'Doppel-Abend', status: 'active', approvalMode: 'instant', maxParticipants: 5 });
+    await seedRegistration('int-reg-twice-reg', 'int-reg-twice', 'int-reg-user', { status: 'accepted' });
+
+    const interaction = await runRegisterCommand('int-reg-twice', 'int-reg-user');
+
+    assert.equal(interaction.calls[0][0], 'reply');
+    assert.equal(interaction.calls[0][1].content, '❌ Du bist bereits für dieses Event registriert.');
+    assert.equal((await registrationsOf('int-reg-twice')).length, 1);
+});
+
+test('/register refuses after the registration deadline', async () => {
+    await setDoc(doc(db, 'events', 'int-reg-late'), {
+        title: 'Spät-Abend', status: 'active', approvalMode: 'instant', maxParticipants: 5,
+        registrationDeadline: new Date(Date.now() - 60 * 60 * 1000).toISOString()
+    });
+
+    const interaction = await runRegisterCommand('int-reg-late', 'int-reg-user');
+
+    assert.equal(interaction.calls[0][1].content, '❌ Die Anmeldung für dieses Event ist geschlossen.');
+    assert.equal((await registrationsOf('int-reg-late')).length, 0);
+});
+
+test('/register offers the slots of a slot event as buttons', async () => {
+    await seedSlotEvent('int-reg-slots');
+    await seedRegistration('int-reg-slots-tank', 'int-reg-slots', 'int-reg-other', { status: 'accepted', slotId: 'tank', preferredSlotId: 'tank', altSlotIds: [] });
+
+    const interaction = await runRegisterCommand('int-reg-slots', 'int-reg-user');
 
     const [name, payload] = interaction.calls[0];
     assert.equal(name, 'reply');
-    const embed = payload.embeds[0].toJSON();
-    assert.equal(embed.title, '🌐 Registrierung über Website erforderlich');
-    assert.match(embed.description, /\*\*Link-Abend\*\*/);
-    assert.equal(embed.fields[0].value, `[Hier klicken](${buildEventUrl('int-reg-link')})`);
+    assert.match(payload.content, /\*\*Raid int-reg-slots\*\*/);
+    const buttons = payload.components.flatMap(row => row.toJSON().components);
+    assert.deepEqual(buttons.map(button => [button.label, button.custom_id]), [
+        ['Tank (voll)', 'event_slot:int-reg-slots:tank'],
+        ['Heiler', 'event_slot:int-reg-slots:heal']
+    ]);
+    assert.equal((await registrationsOf('int-reg-slots')).length, 1);
+});
+
+test('a slot button of the /register answer continues in the slot flow', async () => {
+    await seedSlotEvent('int-reg-pick');
+
+    const interaction = createFakeInteraction({ kind: 'button', customId: 'event_slot:int-reg-pick:heal', userId: 'int-reg-user' });
+    await dispatchInteraction(bot.client, interaction);
+
+    // Two slots -> the slot modal asks for fallback roles
+    const [name, modal] = interaction.calls[0];
+    assert.equal(name, 'showModal');
+    assert.equal(modal.toJSON().custom_id, 'event_slot_modal:int-reg-pick:heal');
+});
+
+test('/register sends members to the website when the form is too big for Discord', async () => {
+    await setDoc(doc(db, 'events', 'int-reg-big'), {
+        title: 'Groß-Abend', status: 'active', approvalMode: 'instant', maxParticipants: 5,
+        formFields: ['A', 'B', 'C', 'D', 'E', 'F'].map(label => ({ label, type: 'text' }))
+    });
+    // Five fields fit a plain modal, but a slot event needs one row for the fallback roles
+    await setDoc(doc(db, 'events', 'int-reg-big-slots'), {
+        title: 'Groß-Raid', status: 'active', approvalMode: 'instant', slots: SLOTS, maxParticipants: 2,
+        formFields: ['A', 'B', 'C', 'D', 'E'].map(label => ({ label, type: 'text' }))
+    });
+
+    for (const eventId of ['int-reg-big', 'int-reg-big-slots']) {
+        const interaction = await runRegisterCommand(eventId, 'int-reg-user');
+        assert.equal(interaction.calls[0][0], 'reply');
+        assert.ok(interaction.calls[0][1].content.includes(buildEventUrl(eventId)), eventId);
+        assert.equal((await registrationsOf(eventId)).length, 0);
+    }
+});
+
+test('/register and /unregister carry German names for German clients', () => {
+    const { buildSlashCommands } = require('../bot/commands');
+    const commands = Object.fromEntries(buildSlashCommands().map(command => [command.name, command]));
+
+    assert.deepEqual(Object.keys(commands), ['events', 'register', 'unregister']);
+    assert.equal(commands.register.name_localizations.de, 'anmelden');
+    assert.equal(commands.unregister.name_localizations.de, 'abmelden');
+    assert.equal(commands.register.description_localizations.de, 'Melde dich für ein Event an');
+    assert.equal(commands.unregister.description_localizations.de, 'Melde dich von einem Event ab');
+    assert.equal(commands.events.name_localizations, undefined);
 });
 
 test('/register for an unknown event says it was not found', async () => {

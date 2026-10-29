@@ -466,6 +466,7 @@ async function handleSlotLeaveButton(interaction, eventId) {
 module.exports = {
     resolveInteractionRoles,
     ensureUserProfile,
+    checkRegistrationConditions,
     handleEventRegisterButton,
     handleEventRegisterModal,
     replyWithFailure,

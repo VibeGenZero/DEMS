@@ -3,7 +3,7 @@ id: registration-flow
 title: Registration flow — rules, statuses, waitlist, guests
 type: concept
 tags: [registration, waitlist, guests, approval, capacity, discord, web]
-sources: [utils/registrationService.js, utils/eventUtils.js, routes/events.js, routes/admin.js, bot.js, bot/registration.js]
+sources: [utils/registrationService.js, utils/eventUtils.js, routes/events.js, routes/admin.js, bot.js, bot/registration.js, bot/commands.js]
 depends_on: [data-model, form-fields, maintenance-mode]
 see_also: [discord-integration, routes-events, event-lifecycle, role-slots]
 ---
@@ -64,6 +64,7 @@ Discord after the end: `canRegisterViaDiscord` is false, so a refreshed announce
 |---|---|
 | Web | `POST /api/events/:id/register` → `submitRegistration()` in `public/js/events/registration-form.js` |
 | Discord button | `event_register:<eventId>` → `handleEventRegisterButton` → pre-checks → modal if the event has form fields that fit (≤5) → `handleEventRegisterModal` → `completeDiscordRegistration` → `registerUserForEvent({ source: 'discord' })` → `ensureUserProfile` |
+| Discord `/register` (`/anmelden`, B-03) | `handleRegisterCommand` (`bot/commands.js`) → no slots: `handleEventRegisterButton` as above; slots: pre-checks → private answer with the `event_slot:` buttons → slot button path below |
 | Discord slot button | `event_slot:<eventId>:<slotId>` → `handleEventSlotButton` → slot modal (`alt_slots` select + form) → `handleEventSlotModal` → `completeDiscordRegistration({ slotId, altSlotIds })` |
 | Admin entry (W-06) | registrations dialog → `GET /api/admin/events/:id/member-search?q=` (Discord member search, hits marked `alreadyRegistered`) → `POST /api/admin/events/:id/registrations { userId, slotId? }` → `fetchGuildMember` (404 no member, 503 Discord unreachable) → `addRegistrationByAdmin` (see below) |
 | Unregister | `unregisterUserFromEvent`: web `DELETE /api/events/:id/register`, Discord `/unregister` and the "Abmelden" button; refused with `unregister_closed` (400, "Abmelden ist nicht mehr möglich. Wende dich an einen Admin.") once the optional `unregisterDeadline` is reached (`isUnregisterClosed`). Without that deadline members can unregister any time, even after the end. |
