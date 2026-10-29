@@ -156,7 +156,7 @@ Days and clock times count in `TIMEZONE` (`Intl.DateTimeFormat`, no library). `f
 
 ## utils/eventUrl.js
 
-`buildEventUrl(eventId)` → `<BASE_URL>/#event/<id>` (fallback `http://localhost:3000`). Every event link that leaves the server is built with it: announcement and its "Zum Event" button, `/events` command, event channel embed, DMs, guest invitation, `{event.url}`. `test/eventUrl.test.js` fails when server code builds `#events/<id>` links again. `buildPollUrl(pollId)` → `<BASE_URL>/#poll/<id>` for poll messages and DMs.
+`buildEventUrl(eventId)` → `<BASE_URL>/#event/<id>` (fallback `http://localhost:3000`). Every event link that leaves the server is built with it: announcement and its "Zum Event" button, `/events` command, event channel embed, DMs, guest invitation, `{event.url}`. `test/eventUrl.test.js` fails when server code builds `#events/<id>` links again. `buildPollUrl(pollId)` → `<BASE_URL>/#poll/<id>` for poll messages and DMs. `buildSiteUrl(page)` → `<BASE_URL>/#<page>` for pages without an ID (`profile`, `events`; used by `/my-events`).
 
 ## utils/avatar.js
 

@@ -2,7 +2,7 @@ const { test, afterEach } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');
 const path = require('path');
-const { buildEventUrl } = require('../utils/eventUrl');
+const { buildEventUrl, buildSiteUrl } = require('../utils/eventUrl');
 
 const REPO_ROOT = path.join(__dirname, '..');
 const originalBaseUrl = process.env.BASE_URL;
@@ -28,6 +28,13 @@ test('event links open the detail page of the web interface', () => {
 test('event links fall back to localhost without BASE_URL', () => {
     delete process.env.BASE_URL;
     assert.equal(buildEventUrl('abc'), 'http://localhost:3000/#event/abc');
+});
+
+test('site links open a page of the web interface', () => {
+    process.env.BASE_URL = 'https://dms.example.org';
+    assert.equal(buildSiteUrl('profile'), 'https://dms.example.org/#profile');
+    delete process.env.BASE_URL;
+    assert.equal(buildSiteUrl('events'), 'http://localhost:3000/#events');
 });
 
 test('no server code links an event to the list route #events/<id>', () => {

@@ -171,6 +171,28 @@ test('the seed shows the profile a slot, a rejection and a cancelled event', asy
     assert.equal(find('raider', EVENT_ID.ROLE), undefined);
 });
 
+test('the seed covers the /meine-events overview of the personas (B-04)', async () => {
+    const { loadUpcomingRegistrations } = require('../bot/myEvents');
+    const { getSlots, countSlotOccupancy, hasFreePlace } = require('../utils/slotService');
+    const userIdOf = (personaId) => PERSONAS.find(persona => persona.id === personaId).userId;
+
+    const admin = await loadUpcomingRegistrations(userIdOf('admin'));
+    const raid = admin.find(item => item.registration.eventId === EVENT_ID.ROLE);
+    assert.equal(raid.registration.slotId, 'dps');
+    // "Slot wechseln" offers Heiler, Tank is full
+    const raidRegistrations = (await getDocs(collection(db, 'registrations'))).docs.map(d => d.data())
+        .filter(registration => registration.eventId === EVENT_ID.ROLE);
+    const slots = getSlots(raid.event);
+    const occupancy = countSlotOccupancy(slots, raidRegistrations);
+    const free = slots.filter(slot => slot.id !== 'dps' && hasFreePlace(slot, occupancy)).map(slot => slot.name);
+    assert.deepEqual(free, ['Heiler']);
+
+    const member = await loadUpcomingRegistrations(userIdOf('member'));
+    const statuses = member.map(item => item.entry.status);
+    for (const status of ['pending', 'waitlisted', 'rejected']) assert.ok(statuses.includes(status), status);
+    assert.ok(member.find(item => item.entry.status === 'waitlisted').entry.waitlistPosition);
+});
+
 test('the newcomer persona has no profile yet', async () => {
     const newcomer = PERSONAS.find(persona => persona.isNewcomer);
     assert.equal((await getDoc(doc(db, 'users', newcomer.userId))).exists(), false);
