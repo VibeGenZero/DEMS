@@ -91,6 +91,8 @@ async function announcePromotions(eventId, event, promotions) {
                 await sendAutomaticDM(promotion.userId,
                     `📋 Ein Platz wurde frei bei **${event.title}**! Deine Anfrage wird jetzt geprüft.${slotLine}`
                 );
+                // Manual events: the request goes to the approval channel (B-06)
+                if (promotion.registrationId) await require('../bot').sendApprovalRequest(promotion.registrationId);
             }
         } catch (err) {
             console.error('Promotion notification failed:', err.message);

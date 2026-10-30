@@ -3,7 +3,7 @@ id: discord-integration
 title: Discord integration — what DEMS does in Discord
 type: concept
 tags: [discord, announcements, roles, channels, scheduled-events, dm, slash-commands, permissions, intents]
-sources: [bot.js, bot/messages.js, bot/polls.js, bot/threads.js, bot/layout.js, bot/guild.js, bot/channels.js, routes/admin.js, utils/registrationService.js, utils/eventUtils.js, utils/eventUrl.js, utils/botPermissions.js, utils/eventChangeNotice.js, utils/notificationPrefs.js, utils/participantMessage.js, utils/botSettings.js]
+sources: [bot.js, bot/messages.js, bot/approvals.js, utils/approvalRequests.js, bot/polls.js, bot/threads.js, bot/layout.js, bot/guild.js, bot/channels.js, routes/admin.js, utils/registrationService.js, utils/eventUtils.js, utils/eventUrl.js, utils/botPermissions.js, utils/eventChangeNotice.js, utils/notificationPrefs.js, utils/participantMessage.js, utils/botSettings.js]
 depends_on: [bot]
 see_also: [form-fields, registration-flow, reminders-presence, configuration]
 ---
@@ -43,6 +43,10 @@ see_also: [form-fields, registration-flow, reminders-presence, configuration]
 - Discord lets a bot grant only permissions it has itself: everything `addParticipantToEventChannels` allows (ViewChannel, Connect, SendMessages) must be in `BOT_PERMISSIONS`. "Mit Discord synchronisieren" (`createScheduledEvent`) needs CreateEvents. Discussion threads need CreatePublicThreads (and SendMessagesInThreads). A bot invited with an older URL lacks Connect, CreateEvents or CreatePublicThreads → re-invite with the logged URL or grant them to the bot role in the server settings.
 - Gateway intents: Guilds, **GuildMembers (privileged — enable "Server Members Intent" in the developer portal)**, GuildMessages, DirectMessages, GuildScheduledEvents.
 - The bot's role must be above `assignRoleId` roles to assign them.
+
+## Approval requests (B-06)
+
+With a Freigabe-Kanal chosen in the bot center (`approvalChannel`, no env variable), every registration that becomes `pending` (new registration in a manual event, `registerUserForEvent`; moving up into a manual event, `announcePromotions`) gets a request message there (`sendApprovalRequest`, fire and forget). „Annehmen“, „Ablehnen“, „Warteliste“ are allowed only for members whose interaction roles contain `DISCORD_ADMIN_ROLE_ID` at the click and run `changeRegistrationStatus` (`utils/registrationStatus.js`) like the website. The message is closed (`closeApprovalRequest`: no buttons, grey, result line) by every decision — Discord, website single action (inside the service), bulk action — and when the member withdraws (`unregisterUserFromEvent`), the event is cancelled or deleted (single and series, `closePendingRequests` in `utils/approvalRequests.js`). Without a channel or while the bot is offline nothing is posted; requests are never re-posted later. Events that end or get archived keep their open messages.
 
 ## Announcement buttons
 

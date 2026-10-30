@@ -19,7 +19,7 @@ const { trackedEventIds, memberStats, memberBase, buildMemberList, buildMemberHi
 const { DEFAULT_RANGE, isValidRange, buildInsights } = require('../utils/insights');
 const { MESSAGE_GROUPS, messageRecipients, recipientCounts, validateMessageText, sendParticipantMessage } = require('../utils/participantMessage');
 const { describePlaces, formatPlaces, formatWaitlist, waitlistPositions } = require('../utils/capacity');
-const { getSlots, findSlot, formatSlotLabel, normalizeSlots, sumCapacity, resolveAcceptanceSlot, buildRoster, validateSlotChange } = require('../utils/slotService');
+const { getSlots, findSlot, formatSlotLabel, normalizeSlots, sumCapacity, buildRoster, validateSlotChange } = require('../utils/slotService');
 const { buildPreviewEvent } = require('../utils/eventPreview');
 const { normalizePollInput, tallyPoll } = require('../utils/pollService');
 const {
@@ -28,6 +28,8 @@ const {
 const { withEventLock } = require('../utils/eventLock');
 const { moveRegistrationToSlot, addRegistrationByAdmin, isOnRegistrationList, notifyStatusChange } = require('../utils/registrationService');
 const { notifyRegistrationsChanged } = require('../utils/announcementRefresh');
+const { changeRegistrationStatus } = require('../utils/registrationStatus');
+const { closePendingRequests, actorName } = require('../utils/approvalRequests');
 const { debugLog } = require('../utils/debugLog');
 const { buildEventUrl } = require('../utils/eventUrl');
 const { MAX_BANNER_BYTES, detectImageType, saveBanner, releaseBanners } = require('../utils/bannerStore');
@@ -732,6 +734,7 @@ router.put('/events/:id/cancel', async (req, res) => {
             if (sent) notifiedCount++;
         }
 
+        await closePendingRequests(regs.docs.map(regDoc => regDoc.data()), { status: 'cancelled' }, event);
         await addAuditLog('CANCEL_EVENT', req.session.user.id, `Cancelled event "${event.title}" and notified ${notifiedCount} users${optedOutNote(optedOut)}`, eventId);
         notifyRegistrationsChanged(eventId);
 
@@ -830,6 +833,7 @@ router.delete('/events/:id', async (req, res) => {
             deletePromises.push(deleteDoc(doc(db, 'registrations', docSnap.id)));
         });
         await Promise.all(deletePromises);
+        await closePendingRequests(regs.docs.map(docSnap => docSnap.data()), { status: 'deleted' }, event);
         if (event) await releaseBanners([event.bannerUrl]);
 
         await addAuditLog('DELETE_EVENT', req.session.user.id, `Deleted event ${req.params.id}`, req.params.id);
@@ -850,10 +854,12 @@ router.delete('/events/series/:seriesId', async (req, res) => {
         const snapshot = await getDocs(collection(db, 'events'));
         const eventIds = [];
         const banners = [];
+        const eventsById = new Map();
         snapshot.forEach(docSnap => {
             if (docSnap.data().seriesId === seriesId) {
                 eventIds.push(docSnap.id);
                 banners.push(docSnap.data().bannerUrl);
+                eventsById.set(docSnap.id, docSnap.data());
             }
         });
 
@@ -874,6 +880,7 @@ router.delete('/events/series/:seriesId', async (req, res) => {
                 deletePromises.push(deleteDoc(doc(db, 'registrations', regDoc.id)));
             });
             await Promise.all(deletePromises);
+            await closePendingRequests(regs.docs.map(regDoc => regDoc.data()), { status: 'deleted' }, eventsById.get(eventId));
         }
         await releaseBanners(banners);
 
@@ -1201,6 +1208,10 @@ router.post('/events/:id/registrations/bulk', async (req, res) => {
                 slotId: change.slotId === undefined ? registrationsById.get(change.id).slotId : change.slotId
             });
         }
+        // Requests in the approval channel show the decision (B-06)
+        for (const change of plan.changes) {
+            await closePendingRequests([registrationsById.get(change.id)], { status: change.to, actorName: actorName(req.session.user) }, event);
+        }
         const counts = { accepted: 0, waitlisted: 0, rejected: 0 };
         plan.changes.forEach(change => { counts[change.to] += 1; });
         if (counts.rejected > 0) await promoteFromWaitlist(eventId, event);
@@ -1332,55 +1343,16 @@ router.get('/events/:id/registrations/export', async (req, res) => {
  */
 router.put('/registrations/:id/status', validateRegStatus, async (req, res) => {
     try {
-        const { status } = req.body;
-        const regSnap = await getDoc(doc(db, 'registrations', req.params.id));
-        if (!regSnap.exists()) {
-            return res.status(404).json({ error: 'Anmeldung nicht gefunden' });
-        }
-
-        const reg = { id: req.params.id, ...regSnap.data() };
-        const eventSnap = await getDoc(doc(db, 'events', reg.eventId));
-        const event = eventSnap.exists() ? eventSnap.data() : {};
-        const slots = getSlots(event);
-
-        // Status and slot change under the event lock -> no race with new registrations
-        const { slotId, warning } = await withEventLock(reg.eventId, async () => {
-            const update = { status };
-            let overbookedWarning = null;
-            // Waitlisted and rejected registrations give up their place -> a later acceptance picks a slot again
-            if (slots.length > 0 && (status === 'waitlisted' || status === 'rejected')) {
-                update.slotId = null;
-            }
-            // Only accepted registrations carry a check-in (badges count every checkedIn)
-            if (status !== 'accepted' && reg.checkedIn) {
-                update.checkedIn = false;
-                update.checkedInAt = null;
-            }
-            if (slots.length > 0 && status === 'accepted' && !findSlot(slots, reg.slotId)) {
-                const registrations = await loadEventRegistrations(reg.eventId);
-                const choice = resolveAcceptanceSlot(slots, registrations, reg);
-                update.slotId = choice.slotId;
-                if (choice.overbooked) {
-                    overbookedWarning = `Slot „${findSlot(slots, choice.slotId).name}“ ist jetzt überbucht.`;
-                }
-            }
-            await updateDoc(doc(db, 'registrations', req.params.id), update);
-            return { slotId: 'slotId' in update ? update.slotId : reg.slotId, warning: overbookedWarning };
+        const result = await changeRegistrationStatus({
+            registrationId: req.params.id,
+            status: req.body.status,
+            actor: req.session.user
         });
-        debugLog('admin.updateRegStatus', { regId: req.params.id, newStatus: status });
-
-        // The single action tells only accepted and rejected members (no waitlist DM here)
-        if (status === 'accepted' || status === 'rejected') {
-            await notifyStatusChange({ registration: reg, eventId: reg.eventId, event, status, slotId });
+        if (!result.ok) {
+            return res.status(404).json({ error: result.error });
         }
-        if (status === 'rejected') {
-            await promoteFromWaitlist(reg.eventId, event);
-        }
-
-        notifyRegistrationsChanged(reg.eventId);
-        await addAuditLog('UPDATE_REGISTRATION_STATUS', req.session.user.id, `Set status to ${status} for user ${reg.userName}`, req.params.id);
-
-        res.json({ id: req.params.id, status, slotId: slotId || null, ...(warning ? { warning } : {}) });
+        const { status, slotId, warning } = result;
+        res.json({ id: req.params.id, status, slotId, ...(warning ? { warning } : {}) });
     } catch (err) {
         console.error('Update registration status error:', err);
         res.status(500).json({ error: 'Fehler beim Aktualisieren des Status' });
@@ -1965,7 +1937,7 @@ router.put('/bot/settings', async (req, res) => {
             statusType, activityType, activityText,
             dmNotifications, reminderEnabled, eventStartNotifications,
             autoChannelCreation, announcementThreads, autoUpdatePresence, autoStatusCalendarEvents,
-            announceChannel, welcomeMessage
+            announceChannel, approvalChannel, welcomeMessage
         } = req.body;
 
         const settings = {
@@ -1980,16 +1952,23 @@ router.put('/bot/settings', async (req, res) => {
             autoUpdatePresence: !!autoUpdatePresence,
             autoStatusCalendarEvents: !!autoStatusCalendarEvents,
             announceChannel: announceChannel || '',
+            approvalChannel: approvalChannel || '',
             welcomeMessage: welcomeMessage || '',
         };
 
         // Only text channels of the server; while the list cannot be read, only the stored value or none (B-02)
         const stored = await getBotSettings();
-        if (settings.announceChannel && settings.announceChannel !== stored.announceChannel) {
+        const changedChannels = [
+            ['announceChannel', 'Ankündigungskanal nicht gefunden.'],
+            ['approvalChannel', 'Freigabe-Kanal nicht gefunden.']
+        ].filter(([key]) => settings[key] && settings[key] !== stored[key]);
+        if (changedChannels.length > 0) {
             const guildId = process.env.DISCORD_GUILD_ID;
             const channels = guildId ? await getGuildChannels(guildId) : [];
-            if (!channels.some(channel => channel.id === settings.announceChannel && channel.type === 'text')) {
-                return res.status(400).json({ error: 'Ankündigungskanal nicht gefunden.' });
+            for (const [key, error] of changedChannels) {
+                if (!channels.some(channel => channel.id === settings[key] && channel.type === 'text')) {
+                    return res.status(400).json({ error });
+                }
             }
         }
 

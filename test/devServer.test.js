@@ -3051,6 +3051,123 @@ test('an announcement channel that is not a text channel of the server is refuse
     assert.equal(after.welcomeMessage, before.welcomeMessage, 'nothing saved');
 });
 
+// ── Approval channel (B-06) ─────────────────────────────────────────────
+
+test('the bot center stores the approval channel, empty by default', async () => {
+    const admin = await loginAs('admin');
+    const current = await (await admin.request('/api/admin/bot/settings')).json();
+    assert.equal(current.approvalChannel, '');
+    await withBotSettings(admin, { approvalChannel: CHANNEL_ID.EVENTS }, async () => {
+        const saved = await (await admin.request('/api/admin/bot/settings')).json();
+        assert.equal(saved.approvalChannel, CHANNEL_ID.EVENTS);
+        // Saving again with the same channel does not need the channel list
+        const again = await admin.send('PUT', '/api/admin/bot/settings', { ...saved, welcomeMessage: saved.welcomeMessage });
+        assert.equal(again.status, 200, await again.clone().text());
+    });
+    assert.equal((await (await admin.request('/api/admin/bot/settings')).json()).approvalChannel, '');
+});
+
+test('an approval channel that is not a text channel of the server is refused', async () => {
+    const admin = await loginAs('admin');
+    const before = await (await admin.request('/api/admin/bot/settings')).json();
+    for (const approvalChannel of ['999999999999999999', CHANNEL_ID.LOBBY]) {
+        const res = await admin.send('PUT', '/api/admin/bot/settings', { ...before, approvalChannel, welcomeMessage: 'geändert' });
+        assert.equal(res.status, 400, approvalChannel);
+        assert.deepEqual(await res.json(), { error: 'Freigabe-Kanal nicht gefunden.' });
+    }
+    const after = await (await admin.request('/api/admin/bot/settings')).json();
+    assert.equal(after.welcomeMessage, before.welcomeMessage, 'nothing saved');
+});
+
+/** Manual event with requests of `personas`, posted to the approval channel; returns event and registration ids. */
+async function createRequests(admin, title, personas, fields = {}) {
+    const event = await createEventAs(admin, { title, approvalMode: 'manual', ...fields });
+    const ids = [];
+    for (const personaId of personas) {
+        const client = await loginAs(personaId);
+        const res = await client.send('POST', `/api/events/${event.id}/register`, {});
+        const body = await res.json();
+        assert.equal(body.status, 'pending', JSON.stringify(body));
+        ids.push(body.id);
+        await server.waitForOutput(`Freigabe-Anfrage in #events für`);
+    }
+    return { event, ids };
+}
+
+const closedLine = (title, line) => `geschlossen ("${title}"): ${line}`;
+
+test('a request is posted and closed when an admin decides on the website', async () => {
+    const admin = await loginAs('admin');
+    await withBotSettings(admin, { approvalChannel: CHANNEL_ID.EVENTS }, async () => {
+        const { ids } = await createRequests(admin, 'Freigabe-Web', ['member']);
+        const res = await admin.send('PUT', `/api/admin/registrations/${ids[0]}/status`, { status: 'accepted' });
+        assert.equal(res.status, 200, await res.clone().text());
+        await server.waitForOutput(closedLine('Freigabe-Web', '✅ Angenommen von Mori (Admin)'));
+    });
+});
+
+test('a bulk action closes every request it decides', async () => {
+    const admin = await loginAs('admin');
+    await withBotSettings(admin, { approvalChannel: CHANNEL_ID.EVENTS }, async () => {
+        const { event, ids } = await createRequests(admin, 'Freigabe-Sammel', ['member', 'raider']);
+        const before = server.output().split(closedLine('Freigabe-Sammel', '❌ Abgelehnt von Mori (Admin)')).length;
+        const res = await admin.send('POST', `/api/admin/events/${event.id}/registrations/bulk`, { action: 'reject', ids });
+        assert.equal(res.status, 200, await res.clone().text());
+        await server.waitForOutput(closedLine('Freigabe-Sammel', '❌ Abgelehnt von Mori (Admin)'));
+        const deadline = Date.now() + 3000;
+        while (server.output().split(closedLine('Freigabe-Sammel', '❌ Abgelehnt von Mori (Admin)')).length - before < 2 && Date.now() < deadline) {
+            await new Promise(resolve => setTimeout(resolve, 20));
+        }
+        assert.equal(server.output().split(closedLine('Freigabe-Sammel', '❌ Abgelehnt von Mori (Admin)')).length - before, 2);
+    });
+});
+
+test('a member who withdraws a request closes its message', async () => {
+    const admin = await loginAs('admin');
+    await withBotSettings(admin, { approvalChannel: CHANNEL_ID.EVENTS }, async () => {
+        const { event } = await createRequests(admin, 'Freigabe-Rückzug', ['member']);
+        const member = await loginAs('member');
+        assert.equal((await member.send('DELETE', `/api/events/${event.id}/register`)).status, 200);
+        await server.waitForOutput(closedLine('Freigabe-Rückzug', '↩️ Vom Mitglied zurückgezogen'));
+    });
+});
+
+test('cancelling or deleting events closes their open requests', async () => {
+    const admin = await loginAs('admin');
+    await withBotSettings(admin, { approvalChannel: CHANNEL_ID.EVENTS }, async () => {
+        const cancelled = await createRequests(admin, 'Freigabe-Absage', ['member']);
+        assert.equal((await admin.send('PUT', `/api/admin/events/${cancelled.event.id}/cancel`)).status, 200);
+        await server.waitForOutput(closedLine('Freigabe-Absage', '🚫 Event abgesagt'));
+
+        const deleted = await createRequests(admin, 'Freigabe-Löschen', ['member']);
+        assert.equal((await admin.send('DELETE', `/api/admin/events/${deleted.event.id}`)).status, 200);
+        await server.waitForOutput(closedLine('Freigabe-Löschen', '🗑️ Event gelöscht'));
+
+        const res = await admin.send('POST', '/api/admin/events', {
+            title: 'Freigabe-Serie', status: 'active', accessMode: 'open', approvalMode: 'manual',
+            recurring: true, recurringInterval: 'weekly', startDate: futureDate(5), recurringUntil: futureDate(13).slice(0, 10)
+        });
+        const { events } = await res.json();
+        const member = await loginAs('member');
+        assert.equal((await (await member.send('POST', `/api/events/${events[0].id}/register`, {})).json()).status, 'pending');
+        await server.waitForOutput('Freigabe-Anfrage in #events für');
+        assert.equal((await admin.send('DELETE', `/api/admin/events/series/${events[0].seriesId}`)).status, 200);
+        await server.waitForOutput(closedLine('Freigabe-Serie', '🗑️ Event gelöscht'));
+    });
+});
+
+test('without an approval channel nothing is posted or closed', async () => {
+    const admin = await loginAs('admin');
+    const event = await createEventAs(admin, { title: 'Ohne-Freigabekanal', approvalMode: 'manual' });
+    const member = await loginAs('member');
+    const body = await (await member.send('POST', `/api/events/${event.id}/register`, {})).json();
+    assert.equal(body.status, 'pending');
+    assert.equal((await admin.send('PUT', `/api/admin/registrations/${body.id}/status`, { status: 'accepted' })).status, 200);
+    await new Promise(resolve => setTimeout(resolve, 200));
+    // Neither a posted request nor a closing names the event
+    assert.ok(!server.output().includes('("Ohne-Freigabekanal")'));
+});
+
 // ── V2 announcements and discussion threads (B-05, B-14) ───────────────
 
 const { GUILD } = require('../dev/mockGuild');

@@ -59,6 +59,8 @@ erDiagram
 
 `{ eventId, userId, userName, status: pending|accepted|waitlisted|rejected, formAnswers: { [fieldLabel]: string|boolean }, guests: userId[], pendingGuests: [{ userId, displayName, avatar, status: pending|accepted }], source: web|discord|admin (admin = entered by an admin, W-06), createdAt, checkedIn?, checkedInAt? (code or admin check-in; only `accepted` registrations carry one, cleared to `false`/`null`), slotId?, preferredSlotId?, altSlotIds? }`
 
+`approvalMessage?: { channelId, messageId }` (B-06) = where the request of a pending registration was posted in the approval channel; set by `sendApprovalRequest`, read when the request is closed; not secret, never shown to members.
+
 Slot fields exist only on slot events: `slotId` = the slot actually taken (`null` on the waitlist), `preferredSlotId` = main role, `altSlotIds` = fallback roles in slot order.
 
 ## users (id = Discord user id) — written by `utils/userProfile.js`, `bot/registration.js#ensureUserProfile`

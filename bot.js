@@ -29,6 +29,7 @@ const { getBotStatus, getBotSettings, saveBotSettings, getRunningEvents } = requ
 const { sendGuestInvitation } = require('./bot/guests');
 const { buildAnnouncementIntro } = require('./bot/layout');
 const { ensureAnnouncementThread } = require('./bot/threads');
+const { sendApprovalRequest, closeApprovalRequest } = require('./bot/approvals');
 
 // Ready, error and interaction listeners, attached once when the bot is loaded
 wireClient();
@@ -77,7 +78,9 @@ module.exports = {
     sendGuestInvitation,
     canRegisterViaDiscord,
     buildAnnouncementIntro,
-    ensureAnnouncementThread
+    ensureAnnouncementThread,
+    sendApprovalRequest,
+    closeApprovalRequest
 };
 
 // Dev mock mode: every call that would reach Discord goes to the simulated
