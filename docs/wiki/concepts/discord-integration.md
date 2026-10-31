@@ -33,7 +33,7 @@ see_also: [form-fields, registration-flow, reminders-presence, configuration]
 | Private event channels | `event.autoCreateChannels` + `channelConfig.type` (`voice`/`text`/`both`); globally locked while "Auto Channel-Erstellung" is off in the bot center (`createEventChannelsAllowed` in `routes/admin.js`, B-02; the wizard disables the option) | `createEventChannels` in `DISCORD_EVENT_CATEGORY_ID`, `@everyone` denied, accepted users allowed; `add/removeParticipantToEventChannels`; `deleteEventChannels(eventId)` reads the ids from the event → called before an event or series is deleted |
 | Scheduled event sync | admin "Mit Discord synchronisieren" | `createScheduledEvent` (voice channel if `discordChannelId`, else external location "TBD"; guild-only; banner image) |
 | Scheduled event import | admin import dialog | `getGuildScheduledEvents` → prefills the create wizard |
-| Reminders / start DMs / presence | scheduler, bot settings | [reminders-presence](reminders-presence.md) |
+| Reminders / start DMs / presence | scheduler, bot settings; the reminder DM carries „Zum Event“ and „Ich kann doch nicht“ (B-08) | [reminders-presence](reminders-presence.md) |
 | Guild data for the UI | role pickers, channel pickers, server name and icon | `getGuildRoles`, `getGuildChannels`, `getPublicGuildChannels`, `getGuildName`, `getGuildIconUrl` |
 
 ## Discord application setup

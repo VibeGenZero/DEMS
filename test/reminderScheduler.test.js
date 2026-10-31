@@ -70,7 +70,7 @@ test('a due reminder goes out once and is stored as sent before the DMs', async 
         });
         assert.equal(first.length, 1);
         assert.equal(first[0].userId, PARTICIPANT);
-        assert.match(first[0].message, /Erinnerung/);
+        assert.match(textOf(first[0].message), /Erinnerung/);
         assert.deepEqual((await storedEvent('due')).reminderHours, [{ hours: 24, sent: true }, { hours: 1, sent: false }]);
 
         assert.deepEqual(await runPass(), []);
@@ -234,7 +234,7 @@ test('reminders off leave the start DM alone, start notifications off leave remi
     try {
         const sent = await runPassWith({ eventStartNotifications: false });
         assert.equal(sent.length, 1);
-        assert.match(sent[0].message, /Erinnerung/);
+        assert.match(textOf(sent[0].message), /Erinnerung/);
     } finally {
         await removeEvent('mixed-2');
     }
@@ -392,4 +392,92 @@ test('bot offline: nothing is marked, the invitation follows once the bot is bac
     } finally {
         await removeEvent('ci-offline');
     }
+});
+
+// ── Reminder buttons (B-08) ─────────────────────────────────────────────
+
+const { buildReminderMessage } = require('../bot/scheduler');
+const { buildEventUrl } = require('../utils/eventUrl');
+
+const buttonsOfPayload = (payload) => payload.components.flatMap(row => row.toJSON().components);
+
+test('the reminder keeps its text and offers „Zum Event“ and „Ich kann doch nicht“', () => {
+    const payload = buildReminderMessage({ title: 'Raid-Nacht', startDate: inHours(2) }, 'rb-ev', NOW);
+
+    assert.match(payload.content, /^⏰ \*\*Erinnerung!\*\* Das Event \*\*Raid-Nacht\*\* startet am .+\. Sei bereit!$/);
+    const buttons = buttonsOfPayload(payload);
+    assert.deepEqual(buttons.map(button => button.label), ['Zum Event', 'Ich kann doch nicht']);
+    assert.equal(buttons[0].url, buildEventUrl('rb-ev'));
+    assert.equal(buttons[1].custom_id, 'my_leave:rb-ev');
+    assert.ok(!buttons.some(button => /Kalender/.test(button.label)), 'no calendar button');
+});
+
+test('after the unregister deadline the reminder only links the event', () => {
+    const closed = buildReminderMessage({ title: 'Raid-Nacht', startDate: inHours(1), unregisterDeadline: inHours(-12) }, 'rb-ev', NOW);
+    assert.deepEqual(buttonsOfPayload(closed).map(button => button.label), ['Zum Event']);
+
+    const open = buildReminderMessage({ title: 'Raid-Nacht', startDate: inHours(30), unregisterDeadline: inHours(12) }, 'rb-ev', NOW);
+    assert.deepEqual(buttonsOfPayload(open).map(button => button.label), ['Zum Event', 'Ich kann doch nicht']);
+});
+
+test('a due reminder goes out with its buttons', async () => {
+    await storeEvent('rb-due', { startDate: inHours(2), reminderHours: [{ hours: 24, sent: false }] });
+    try {
+        const [dm] = await runPass();
+        assert.equal(dm.userId, PARTICIPANT);
+        assert.match(dm.message.content, /Erinnerung/);
+        assert.deepEqual(buttonsOfPayload(dm.message).map(button => button.label), ['Zum Event', 'Ich kann doch nicht']);
+    } finally {
+        await removeEvent('rb-due');
+    }
+});
+
+// "Ich kann doch nicht" is the my_leave button of /my-events; asking, cancelling and confirming
+// without a guild member (as in a DM) are pinned in test/myEventsCommand.test.js
+
+const { createFakeInteraction, dispatchInteraction } = require('./helpers');
+
+/** Click a button in a DM (no member) and wait for the answer after a defer. */
+async function clickInDm(customId, userId) {
+    const interaction = createFakeInteraction({ kind: 'button', customId, userId });
+    await dispatchInteraction(bot.client, interaction);
+    const start = Date.now();
+    while (!interaction.calls.some(([name]) => name === 'editReply') && Date.now() - start < 3000) {
+        await new Promise(resolve => setTimeout(resolve, 10));
+    }
+    return interaction.calls.find(([name]) => name === 'editReply')?.[1].content;
+}
+
+test('confirming from the reminder lets the waitlist move up', async () => {
+    await setDoc(doc(db, 'events', 'rb-full'), {
+        title: 'Raid-Nacht', status: 'active', approvalMode: 'instant', maxParticipants: 1,
+        startDate: new Date(Date.now() + 2 * HOUR).toISOString()
+    });
+    await setDoc(doc(db, 'registrations', 'rb-full-me'), { eventId: 'rb-full', userId: 'rb-me', status: 'accepted', createdAt: inHours(-48) });
+    await setDoc(doc(db, 'registrations', 'rb-full-wait'), { eventId: 'rb-full', userId: 'rb-wait', status: 'waitlisted', createdAt: inHours(-24) });
+
+    const answer = await clickInDm('slot_leave:rb-full', 'rb-me');
+
+    assert.equal(answer, '✅ Du wurdest von **Raid-Nacht** abgemeldet.');
+    assert.equal((await getDoc(doc(db, 'registrations', 'rb-full-me'))).exists(), false);
+    const start = Date.now();
+    let moved;
+    do {
+        moved = (await getDoc(doc(db, 'registrations', 'rb-full-wait'))).data().status;
+        if (moved !== 'accepted') await new Promise(resolve => setTimeout(resolve, 20));
+    } while (moved !== 'accepted' && Date.now() - start < 3000);
+    assert.equal(moved, 'accepted');
+});
+
+test('confirming an old reminder after the unregister deadline is refused', async () => {
+    await setDoc(doc(db, 'events', 'rb-closed'), {
+        title: 'Raid-Nacht', status: 'active', startDate: new Date(Date.now() + 2 * HOUR).toISOString(),
+        unregisterDeadline: new Date(Date.now() - HOUR).toISOString()
+    });
+    await setDoc(doc(db, 'registrations', 'rb-closed-me'), { eventId: 'rb-closed', userId: 'rb-me', status: 'accepted' });
+
+    const answer = await clickInDm('slot_leave:rb-closed', 'rb-me');
+
+    assert.equal(answer, '❌ Abmelden ist nicht mehr möglich. Wende dich an einen Admin.');
+    assert.equal((await getDoc(doc(db, 'registrations', 'rb-closed-me'))).exists(), true);
 });

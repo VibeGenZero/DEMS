@@ -2,18 +2,19 @@
  * Reminder scheduler of the bot: reminder and start DMs, closing announcements
  * at the registration deadline, every 5 minutes.
  */
+const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { db, collection, doc, getDocs, updateDoc, query, where } = require('../firebaseAdmin');
 const { loadBotSettings } = require('../utils/botSettings');
 const { debugLog } = require('../utils/debugLog');
 const { buildEventUrl } = require('../utils/eventUrl');
 const { normalizeReminderHours, findDueReminders } = require('../utils/reminders');
 const { filterByPreference } = require('../utils/notificationPrefs');
-const { isEventOver, isRegistrationClosed } = require('../utils/eventListing');
+const { isEventOver, isRegistrationClosed, isUnregisterClosed } = require('../utils/eventListing');
 const { isCheckinRunning } = require('../utils/checkin');
 const { sendDM } = require('./messages');
 const { inviteToCheckin } = require('./checkin');
 const { state } = require('./client');
-const { TIMEZONE } = require('./constants');
+const { TIMEZONE, MY_LEAVE_PREFIX } = require('./constants');
 
 /**
  * Reminder scheduler — every 5 min: DM accepted participants when a reminder
@@ -22,6 +23,34 @@ const { TIMEZONE } = require('./constants');
  * written before the DMs go out: a restart or a crash while sending never repeats them.
  */
 let reminderInterval = null;
+
+/**
+ * Reminder DM with its actions (B-08): „Zum Event“ and „Ich kann doch nicht“.
+ * The second one is the my_leave button of /my-events, so a click asks first and
+ * unregisters through handleSlotLeaveButton (waitlist moves up). It is left out
+ * once the unregister deadline has passed. The same payload goes to every recipient.
+ *
+ * @param {Object} event -> Event data (`title`, `startDate`, optional `unregisterDeadline`).
+ * @param {string} eventId -> Event document id.
+ * @param {Date} [now] -> Send time, for the deadline.
+ * @returns {{ content: string, components: ActionRowBuilder[] }} -> Classic message payload.
+ */
+function buildReminderMessage(event, eventId, now = new Date()) {
+    const timeStr = new Date(event.startDate).toLocaleString('de-DE', { timeZone: TIMEZONE });
+    const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setLabel('Zum Event').setStyle(ButtonStyle.Link).setURL(buildEventUrl(eventId))
+    );
+    if (!isUnregisterClosed(event, now)) {
+        row.addComponents(new ButtonBuilder()
+            .setCustomId(`${MY_LEAVE_PREFIX}:${eventId}`)
+            .setLabel('Ich kann doch nicht')
+            .setStyle(ButtonStyle.Danger));
+    }
+    return {
+        content: `⏰ **Erinnerung!** Das Event **${event.title}** startet am ${timeStr}. Sei bereit!`,
+        components: [row]
+    };
+}
 
 /**
  * Accepted participants of an event who want reminders (W-16).
@@ -43,7 +72,7 @@ async function acceptedReminderRecipients(eventId) {
  * DM every accepted participant of an event who wants reminders (W-16).
  *
  * @param {string} eventId -> Event document id.
- * @param {string} message -> DM text.
+ * @param {string|Object} message -> DM text or payload with buttons (buildReminderMessage).
  * @param {Function} send -> DM function (userId, message).
  * @returns {Promise<number>} -> Number of recipients messaged.
  */
@@ -103,9 +132,7 @@ async function checkReminders({ now = new Date(), send = sendDM, refresh = (even
                 await updateDoc(doc(db, 'events', eventId), { reminderHours });
 
                 console.log(`⏰ Sending reminder for event: ${event.title}`);
-                const timeStr = startTime.toLocaleString('de-DE', { timeZone: TIMEZONE });
-                const recipientCount = await messageAcceptedParticipants(eventId,
-                    `⏰ **Erinnerung!** Das Event **${event.title}** startet am ${timeStr}. Sei bereit!`, send);
+                const recipientCount = await messageAcceptedParticipants(eventId, buildReminderMessage(event, eventId, now), send);
                 debugLog('bot.sendReminder', { eventId, recipientCount });
             }
 
@@ -163,6 +190,7 @@ function isReminderSchedulerRunning() {
 }
 
 module.exports = {
+    buildReminderMessage,
     checkReminders,
     startReminderScheduler,
     stopReminderScheduler,
