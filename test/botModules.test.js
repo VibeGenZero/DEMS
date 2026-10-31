@@ -34,7 +34,7 @@ const EXPORTS = [
     'createEventChannels', 'addParticipantToEventChannels', 'removeParticipantFromEventChannels',
     'deleteEventChannels', 'createScheduledEvent', 'getBotStatus', 'getBotSettings', 'saveBotSettings',
     'getRunningEvents', 'sendGuestInvitation', 'canRegisterViaDiscord', 'buildAnnouncementIntro',
-    'ensureAnnouncementThread', 'sendApprovalRequest', 'closeApprovalRequest'
+    'ensureAnnouncementThread', 'sendApprovalRequest', 'closeApprovalRequest', 'sendCheckinInvitations'
 ];
 
 const lineCount = (file) => fs.readFileSync(file, 'utf8').split(/\r?\n/).length;

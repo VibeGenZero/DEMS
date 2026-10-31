@@ -422,11 +422,13 @@ function buildRegistrations(clock) {
             }
         }),
 
-        // Running event -> Tom is not checked in yet and can use CHECKIN_CODE
+        // Running event -> Tom is not checked in yet and can use CHECKIN_CODE; he has no Discord check-in
+        // invitation yet, so generating a new code shows one in the mock log (B-07). Jonas got his
+        // invitation at the start and has not clicked „Einchecken“ yet
         entry('running-tom', EVENT_ID.RUNNING, tom),
         entry('running-lena', EVENT_ID.RUNNING, lena, checkedIn(clock.offset(-20 * MINUTE))),
         entry('running-kira', EVENT_ID.RUNNING, kira, checkedIn(clock.offset(-15 * MINUTE))),
-        entry('running-jonas', EVENT_ID.RUNNING, jonas),
+        entry('running-jonas', EVENT_ID.RUNNING, jonas, { checkinInvitedAt: clock.offset(-30 * MINUTE) }),
 
         // Past event with check-ins
         entry('past-lena', EVENT_ID.PAST, lena, checkedIn(clock.slot(-7, 19))),

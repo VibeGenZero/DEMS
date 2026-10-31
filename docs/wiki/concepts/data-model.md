@@ -3,7 +3,7 @@ id: data-model
 title: Data model — collections and document shapes
 type: concept
 tags: [data-model, schema, collections, events, registrations, users, firestore]
-sources: [routes/admin.js, utils/registrationService.js, utils/userProfile.js, utils/sessionStore.js, routes/events.js, utils/eventUtils.js, bot/registration.js, dev/seedData.js, utils/eventTemplates.js, utils/botSettings.js]
+sources: [routes/admin.js, utils/registrationService.js, utils/userProfile.js, utils/sessionStore.js, routes/events.js, utils/eventUtils.js, bot/registration.js, utils/checkin.js, dev/seedData.js, utils/eventTemplates.js, utils/botSettings.js]
 depends_on: [data-layer]
 see_also: [registration-flow, event-lifecycle, maintenance-mode, glossary]
 ---
@@ -57,7 +57,9 @@ erDiagram
 
 ## registrations (auto id) — written by `utils/registrationService.js`
 
-`{ eventId, userId, userName, status: pending|accepted|waitlisted|rejected, formAnswers: { [fieldLabel]: string|boolean }, guests: userId[], pendingGuests: [{ userId, displayName, avatar, status: pending|accepted }], source: web|discord|admin (admin = entered by an admin, W-06), createdAt, checkedIn?, checkedInAt? (code or admin check-in; only `accepted` registrations carry one, cleared to `false`/`null`), slotId?, preferredSlotId?, altSlotIds? }`
+`{ eventId, userId, userName, status: pending|accepted|waitlisted|rejected, formAnswers: { [fieldLabel]: string|boolean }, guests: userId[], pendingGuests: [{ userId, displayName, avatar, status: pending|accepted }], source: web|discord|admin (admin = entered by an admin, W-06), createdAt, checkedIn?, checkedInAt? (code, admin or Discord check-in; only `accepted` registrations carry one, cleared to `false`/`null`), slotId?, preferredSlotId?, altSlotIds? }`
+
+`checkinInvitedAt?` (B-07, ISO string) = when the Discord check-in invitation was sent (written before the DM; at most one per registration, kept when a new code is generated); never contains the code.
 
 `approvalMessage?: { channelId, messageId }` (B-06) = where the request of a pending registration was posted in the approval channel; set by `sendApprovalRequest`, read when the request is closed; not secret, never shown to members.
 

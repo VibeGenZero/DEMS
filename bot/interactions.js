@@ -7,7 +7,7 @@ const {
     REGISTER_BUTTON_PREFIX, REGISTER_MODAL_PREFIX, SLOT_BUTTON_PREFIX, SLOT_MODAL_PREFIX, SLOT_SWITCH_PREFIX,
     SLOT_LEAVE_PREFIX, POLL_VOTE_PREFIX, POLL_YES_PREFIX, POLL_MAYBE_PREFIX,
     MY_LEAVE_PREFIX, MY_LEAVE_CANCEL_PREFIX, MY_SWITCH_PREFIX,
-    APPROVAL_ACCEPT_PREFIX, APPROVAL_REJECT_PREFIX, APPROVAL_WAITLIST_PREFIX
+    APPROVAL_ACCEPT_PREFIX, APPROVAL_REJECT_PREFIX, APPROVAL_WAITLIST_PREFIX, CHECKIN_BUTTON_PREFIX
 } = require('./constants');
 const {
     handleEventRegisterButton, handleEventRegisterModal, replyWithFailure, handleEventSlotButton,
@@ -17,6 +17,7 @@ const { handlePollVoteButton, handlePollVoteSelect } = require('./polls');
 const { handleGuestButton } = require('./guests');
 const { handleMyLeaveButton, handleMyLeaveCancelButton, handleMySwitchButton } = require('./myEvents');
 const { handleApprovalButton } = require('./approvals');
+const { handleCheckinButton } = require('./checkin');
 const { state } = require('./client');
 
 /**
@@ -112,6 +113,17 @@ async function handleInteraction(interaction) {
             } catch (err) {
                 console.error('Approval button error:', err);
                 await replyWithFailure(interaction, '❌ Fehler bei der Freigabe.');
+            }
+            return;
+        }
+
+        // „Einchecken“ in the check-in invitation DM (B-07)
+        if (buttonAction === CHECKIN_BUTTON_PREFIX && buttonEventId) {
+            try {
+                await handleCheckinButton(interaction, buttonEventId);
+            } catch (err) {
+                console.error('Check-in button error:', err);
+                await replyWithFailure(interaction, '❌ Fehler beim Check-in.');
             }
             return;
         }

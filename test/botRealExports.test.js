@@ -61,7 +61,8 @@ test('every Discord helper answers with its neutral value while the bot is not r
         sendGuestInvitation: [['g2', { id: 'u1', displayName: 'Host' }, event, 'reg1'], false],
         ensureAnnouncementThread: [[{ channelId: 'c1', messageId: 'm1' }, 'Abend', null], null],
         sendApprovalRequest: [['reg1'], null],
-        closeApprovalRequest: [[{ id: 'reg1', eventId: 'ev', approvalMessage: { channelId: 'c1', messageId: 'm1' } }, { status: 'accepted', actorName: 'Mori' }], false]
+        closeApprovalRequest: [[{ id: 'reg1', eventId: 'ev', approvalMessage: { channelId: 'c1', messageId: 'm1' } }, { status: 'accepted', actorName: 'Mori' }], false],
+        sendCheckinInvitations: [['ev'], 0]
     };
     for (const [name, [args, expected]] of Object.entries(neutral)) {
         assert.deepEqual(await bot[name](...args), expected, name);

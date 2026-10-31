@@ -43,6 +43,8 @@ const MY_SWITCH_PREFIX = 'my_switch';
 const APPROVAL_ACCEPT_PREFIX = 'approval_accept';
 const APPROVAL_REJECT_PREFIX = 'approval_reject';
 const APPROVAL_WAITLIST_PREFIX = 'approval_waitlist';
+// „Einchecken“ in the check-in invitation DM (B-07)
+const CHECKIN_BUTTON_PREFIX = 'event_checkin';
 
 // Names listed per slot in the announcement
 const ROSTER_NAMES_MAX = 5;
@@ -77,6 +79,7 @@ module.exports = {
     APPROVAL_ACCEPT_PREFIX,
     APPROVAL_REJECT_PREFIX,
     APPROVAL_WAITLIST_PREFIX,
+    CHECKIN_BUTTON_PREFIX,
     ROSTER_NAMES_MAX,
     POLL_VOTE_PREFIX,
     POLL_YES_PREFIX,
