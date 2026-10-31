@@ -160,7 +160,10 @@ function buildEvents(clock) {
             category: 'Gaming',
             accentColor: '#8b5cf6',
             reminderHours: [{ hours: 24, sent: false }, { hours: 1, sent: false }],
-            location: { text: 'Lobby', channelId: CHANNEL_ID.LOBBY, channelType: 'voice' }
+            location: { text: 'Lobby', channelId: CHANNEL_ID.LOBBY, channelType: 'voice' },
+            // Synced to Discord (B-09): saving or cancelling it shows the server event in the mock log
+            discordScheduledEventId: '180000000000000001',
+            discordScheduledEventStatus: 'scheduled'
         }),
         [EVENT_ID.FORM]: buildEvent(clock, {
             title: 'Turnier: Arena-Cup',
@@ -231,7 +234,10 @@ function buildEvents(clock) {
             checkinEnabled: true,
             checkinCode: CHECKIN_CODE,
             checkinMessage: 'Schön, dass du da bist! Viel Spaß beim Marathon.',
-            eventStartNotificationSent: true
+            eventStartNotificationSent: true,
+            // Its Discord server event runs; „Beenden“ completes it (B-09)
+            discordScheduledEventId: '180000000000000002',
+            discordScheduledEventStatus: 'active'
         }),
         [EVENT_ID.PAST]: buildEvent(clock, {
             title: 'Retro-Spieleabend',

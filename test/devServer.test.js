@@ -3341,3 +3341,141 @@ test('deleting a mirrored comment on the website removes its thread copy', async
     assert.deepEqual([res.status, await res.json()], [200, { success: true }]);
     await server.waitForOutput(messageId + ' im Thread');
 });
+
+// ── Discord server events in step (B-09) ───────────────────────────────
+
+/** An event of the admin, synced to Discord by writing its scheduled event id. */
+async function createSyncedEvent(admin, title, fields = {}, { sync = true } = {}) {
+    const res = await admin.send('POST', '/api/admin/events', {
+        title, description: 'Server-Event-Test', status: 'active', accessMode: 'open', approvalMode: 'instant',
+        maxParticipants: 10, startDate: futureDate(5), endDate: futureDate(5, 20), ...fields
+    });
+    const body = await res.json();
+    assert.equal(res.status, 200, JSON.stringify(body));
+    if (sync) await patchEvent(body.id, { discordScheduledEventId: `se-${body.id}`, discordScheduledEventStatus: 'scheduled' });
+    return body.id;
+}
+
+/** Stored event, read straight from the server's database. */
+async function storedEventOf(id) {
+    const { db, doc, getDoc } = serverStore();
+    const snap = await getDoc(doc(db, 'events', id));
+    return snap.exists() ? { id, ...snap.data() } : null;
+}
+
+/** Wait until a stored event field has a value (fire-and-forget writes). */
+async function waitForEventField(id, field, expected, timeoutMs = 3000) {
+    const start = Date.now();
+    let value;
+    do {
+        value = (await storedEventOf(id))?.[field];
+        if (value === expected) return value;
+        await new Promise(resolve => setTimeout(resolve, 20));
+    } while (Date.now() - start < timeoutMs);
+    return value;
+}
+
+test('saving a synced event updates its Discord server event, an unsynced one does not', async () => {
+    const admin = await loginAs('admin');
+    const id = await createSyncedEvent(admin, 'B09 Speichern');
+    assert.equal((await saveDate(admin, await storedEventOf(id), { title: 'B09 Gespeichert' })).status, 200);
+    await server.waitForOutput('Server-Event "B09 Gespeichert" aktualisiert');
+
+    const plain = await createSyncedEvent(admin, 'B09 Ohne Sync', {}, { sync: false });
+    assert.equal((await saveDate(admin, await storedEventOf(plain), { title: 'B09 Ohne Sync 2' })).status, 200);
+    await new Promise(resolve => setTimeout(resolve, 200));
+    assert.doesNotMatch(server.output(), /Server-Event "B09 Ohne Sync 2"/);
+});
+
+test('a series save with the following dates updates every synced date', async () => {
+    const admin = await loginAs('admin');
+    const dates = await createSeries(admin, { title: 'B09 Serie' });
+    for (const date of dates.slice(1, 3)) await patchEvent(date.id, { discordScheduledEventId: `se-${date.id}` });
+    const res = await saveDate(admin, dates[1], { title: 'B09 Serie neu', applyTo: 'following' });
+    assert.equal(res.status, 200);
+    await server.waitForOutput('Server-Event "B09 Serie neu" aktualisiert');
+    const start = Date.now();
+    while ((server.output().match(/Server-Event "B09 Serie neu" aktualisiert/g) || []).length < 2 && Date.now() - start < 3000) {
+        await new Promise(resolve => setTimeout(resolve, 20));
+    }
+    assert.equal((server.output().match(/Server-Event "B09 Serie neu" aktualisiert/g) || []).length, 2);
+});
+
+test('cancelling or drafting a synced event removes its Discord server event', async () => {
+    const admin = await loginAs('admin');
+    const cancelled = await createSyncedEvent(admin, 'B09 Absage');
+    assert.equal((await admin.send('PUT', `/api/admin/events/${cancelled}/cancel`)).status, 200);
+    await server.waitForOutput('Server-Event "B09 Absage" entfernt');
+    assert.equal(await waitForEventField(cancelled, 'discordScheduledEventId', null), null);
+
+    const drafted = await createSyncedEvent(admin, 'B09 Entwurf');
+    assert.equal((await admin.send('PUT', `/api/admin/events/${drafted}/status`, { status: 'draft' })).status, 200);
+    await server.waitForOutput('Server-Event "B09 Entwurf" entfernt');
+    assert.equal(await waitForEventField(drafted, 'discordScheduledEventId', null), null);
+    assert.equal((await storedEventOf(drafted)).discordScheduledEventStatus, null);
+});
+
+test('deleting a synced event or its series removes the Discord server events', async () => {
+    const admin = await loginAs('admin');
+    const single = await createSyncedEvent(admin, 'B09 Loeschen');
+    assert.equal((await admin.send('DELETE', `/api/admin/events/${single}`)).status, 200);
+    await server.waitForOutput('Server-Event "B09 Loeschen" entfernt');
+
+    const dates = await createSeries(admin, { title: 'B09 Serie weg' });
+    for (const date of dates.slice(0, 2)) await patchEvent(date.id, { discordScheduledEventId: `se-${date.id}` });
+    assert.equal((await admin.send('DELETE', `/api/admin/events/series/${dates[0].seriesId}`)).status, 200);
+    await server.waitForOutput('Server-Event "B09 Serie weg" entfernt');
+    assert.equal((server.output().match(/Server-Event "B09 Serie weg" entfernt/g) || []).length, 2);
+});
+
+test('„Starten“ and „Beenden“ set the Discord status at once', async () => {
+    const admin = await loginAs('admin');
+    const id = await createSyncedEvent(admin, 'B09 Status');
+    assert.equal((await admin.send('POST', `/api/admin/events/${id}/start`)).status, 200);
+    await server.waitForOutput('Server-Event "B09 Status" läuft');
+    assert.equal(await waitForEventField(id, 'discordScheduledEventStatus', 'active'), 'active');
+
+    assert.equal((await admin.send('POST', `/api/admin/events/${id}/end`)).status, 200);
+    await server.waitForOutput('Server-Event "B09 Status" beendet');
+    assert.equal(await waitForEventField(id, 'discordScheduledEventStatus', 'completed'), 'completed');
+});
+
+test('syncing stores the Discord server event as scheduled', async () => {
+    const admin = await loginAs('admin');
+    const id = await createSyncedEvent(admin, 'B09 Sync', {}, { sync: false });
+    const res = await admin.send('POST', `/api/admin/events/${id}/sync-discord`);
+    assert.equal(res.status, 200);
+    const stored = await storedEventOf(id);
+    assert.match(stored.discordScheduledEventId, /^\d+$/);
+    assert.equal(stored.discordScheduledEventStatus, 'scheduled');
+});
+
+test('a Discord server event deleted in Discord is forgotten on the next save', async () => {
+    const admin = await loginAs('admin');
+    const id = await createSyncedEvent(admin, 'B09 Weg');
+    // The mock treats ids starting with "gone" as deleted in Discord
+    await patchEvent(id, { discordScheduledEventId: `gone-${id}` });
+    assert.equal((await saveDate(admin, await storedEventOf(id), { title: 'B09 Weg 2' })).status, 200);
+    assert.equal(await waitForEventField(id, 'discordScheduledEventId', null), null);
+    assert.equal((await storedEventOf(id)).discordScheduledEventStatus, null);
+});
+
+test('copies are never linked to the Discord server event of the original', async () => {
+    const admin = await loginAs('admin');
+    const id = await createSyncedEvent(admin, 'B09 Original');
+    const copy = await (await admin.send('POST', `/api/admin/events/${id}/duplicate`)).json();
+    const storedCopy = await storedEventOf(copy.id);
+    assert.equal(storedCopy.discordScheduledEventId, null);
+    assert.equal(storedCopy.discordScheduledEventStatus, null);
+
+    const dates = await createSeries(admin, { title: 'B09 Serie Kopie' });
+    await patchEvent(dates[3].id, { discordScheduledEventId: `se-${dates[3].id}`, discordScheduledEventStatus: 'scheduled' });
+    const res = await saveDate(admin, dates[1], { recurringUntil: localDay(futureDate(38), SERIES_TZ) });
+    assert.equal(res.status, 200);
+    const created = (await seriesDatesOf(dates[0].seriesId)).slice(4);
+    assert.equal(created.length, 2);
+    for (const event of created) {
+        assert.equal(event.discordScheduledEventId, null);
+        assert.equal(event.discordScheduledEventStatus, null);
+    }
+});
