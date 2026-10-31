@@ -12,6 +12,7 @@ const { hasSlots, withSlotSummary } = require('../utils/slotService');
 const { describePlaces, waitlistPositions } = require('../utils/capacity');
 const { debugLog } = require('../utils/debugLog');
 const { avatarUrlOf, repairAvatarUrl } = require('../utils/avatar');
+const { checkInMember } = require('../utils/checkin');
 
 /**
  * Event with its places: the numbers and the one sentence every view shows
@@ -499,27 +500,14 @@ router.post('/:id/checkin', requireAuth, checkinLimiter, async (req, res) => {
             return res.status(400).json({ error: 'Ungültiger Check-in Code.' });
         }
 
-        // Find user's accepted registration
-        const regQ = query(
-            collection(db, 'registrations'),
-            where('eventId', '==', req.params.id),
-            where('userId', '==', req.session.user.id),
-            where('status', '==', 'accepted')
-        );
-        const regs = await getDocs(regQ);
-        if (regs.empty) {
+        // Shared with the Discord button (B-07); the code check-in has no time window
+        const result = await checkInMember({ eventId: req.params.id, userId: req.session.user.id });
+        if (!result.ok) {
             return res.status(400).json({ error: 'Keine akzeptierte Anmeldung gefunden.' });
         }
-
-        const regDoc = regs.docs[0];
-        if (regDoc.data().checkedIn) {
+        if (result.alreadyCheckedIn) {
             return res.json({ success: true, alreadyCheckedIn: true, checkinMessage: event.checkinMessage || '' });
         }
-
-        await updateDoc(doc(db, 'registrations', regDoc.id), {
-            checkedIn: true,
-            checkedInAt: new Date().toISOString()
-        });
 
         res.json({ success: true, checkinMessage: event.checkinMessage || '' });
     } catch (err) {

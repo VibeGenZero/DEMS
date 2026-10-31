@@ -9,7 +9,7 @@ const { requireAuth, requireAdmin, safeEqual } = require('../middleware/auth');
 const { csvCell } = require('../utils/csv');
 const { checkEventFields, validateEvent, validateRegStatus, validateBotMessages } = require('../middleware/validators');
 const { MAX_TEMPLATES, pickTemplateSettings, normalizeTemplateName, nameTaken } = require('../utils/eventTemplates');
-const { sendDM, getGuildRoles, sendChannelMessage, buildEventAnnouncement, buildAnnouncementIntro, ensureAnnouncementThread, getGuildScheduledEvents, createEventChannels, deleteEventChannels, createScheduledEvent, getBotStatus, getBotSettings, saveBotSettings, getRunningEvents, getGuildChannels, buildPollMessage, searchGuildMembers, fetchGuildMember } = require('../bot');
+const { sendDM, getGuildRoles, sendChannelMessage, buildEventAnnouncement, buildAnnouncementIntro, ensureAnnouncementThread, getGuildScheduledEvents, createEventChannels, deleteEventChannels, createScheduledEvent, getBotStatus, getBotSettings, saveBotSettings, getRunningEvents, getGuildChannels, buildPollMessage, searchGuildMembers, fetchGuildMember, sendCheckinInvitations } = require('../bot');
 const { promoteFromWaitlist, addAuditLog, loadEventRoster, loadEventRegistrations, saveEventWithSlots } = require('../utils/eventUtils');
 const { mergeReminderHours } = require('../utils/reminders');
 const { keepDeadlineRefreshFlag } = require('../utils/eventListing');
@@ -1058,6 +1058,8 @@ router.post('/events/:id/generate-checkin', async (req, res) => {
             checkinEnabled: true
         });
         await addAuditLog('GENERATE_CHECKIN', req.session.user.id, `Generated check-in code for event`, req.params.id);
+        // Event already running -> check-in invitations by DM right away (B-07); before the start the scheduler sends them
+        sendCheckinInvitations(req.params.id).catch(err => console.error('Check-in invitations error:', err.message));
         res.json({ code });
     } catch (err) {
         console.error('Generate checkin error:', err);

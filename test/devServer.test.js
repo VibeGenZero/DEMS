@@ -296,6 +296,25 @@ test('the member persona can check in to the running event', async () => {
     assert.equal((await right.json()).success, true);
 });
 
+test('the code check-in keeps its answers (B-07 shares its rules with Discord)', async () => {
+    const newbie = await loginAs('newbie');
+    const wrong = await newbie.send('POST', `/api/events/${EVENT_ID.RUNNING}/checkin`, { code: '000000' });
+    assert.deepEqual([wrong.status, (await wrong.json()).error], [400, 'Ungültiger Check-in Code.']);
+
+    const unregistered = await newbie.send('POST', `/api/events/${EVENT_ID.RUNNING}/checkin`, { code: CHECKIN_CODE });
+    assert.deepEqual([unregistered.status, (await unregistered.json()).error], [400, 'Keine akzeptierte Anmeldung gefunden.']);
+
+    const noCheckin = await newbie.send('POST', `/api/events/${EVENT_ID.FULL}/checkin`, { code: CHECKIN_CODE });
+    assert.equal(noCheckin.status, 400);
+
+    // Lena is checked in by the seed data: a repeat says so and keeps the message
+    const raider = await loginAs('raider');
+    const again = await raider.send('POST', `/api/events/${EVENT_ID.RUNNING}/checkin`, { code: CHECKIN_CODE });
+    const body = await again.json();
+    assert.equal(again.status, 200);
+    assert.deepEqual([body.success, body.alreadyCheckedIn, body.checkinMessage], [true, true, 'Schön, dass du da bist! Viel Spaß beim Marathon.']);
+});
+
 test('no event answer outside the admin area contains a check-in code', async () => {
     const admin = await loginAs('admin');
     assert.equal((await admin.send('POST', `/api/admin/events/${SERIES_EVENT_IDS[0]}/generate-checkin`)).status, 200);
@@ -3251,4 +3270,35 @@ test('posting a poll stores its ping line and opens no thread', async () => {
     assert.equal(poll.announcements.at(-1).intro, 'Abstimmen!');
     assert.ok(!poll.discordThread);
     assert.doesNotMatch(server.output(), /Diskussions-Thread "[^"]*Termin/);
+});
+
+// ── Check-in per Discord (B-07) ─────────────────────────────────────────
+
+test('generating the code during an event invites the open participants at once', async () => {
+    const { db, doc, getDoc, setDoc } = serverStore();
+    const invitedAt = async (id) => (await getDoc(doc(db, 'registrations', id))).data().checkinInvitedAt;
+    await setDoc(doc(db, 'registrations', 'b07-late'), {
+        eventId: EVENT_ID.RUNNING, userId: '200000000000000099', userName: 'Spät', status: 'accepted', createdAt: new Date().toISOString()
+    });
+    const admin = await loginAs('admin');
+    try {
+        assert.equal((await admin.send('POST', `/api/admin/events/${EVENT_ID.RUNNING}/generate-checkin`)).status, 200);
+        const start = Date.now();
+        while (!(await invitedAt('b07-late')) && Date.now() - start < 3000) await new Promise(resolve => setTimeout(resolve, 20));
+        const first = await invitedAt('b07-late');
+        assert.ok(first, 'invited right away');
+        assert.equal(await invitedAt('dev-reg-running-lena'), undefined, 'checked in -> no invitation');
+
+        // A new code does not invite again
+        assert.equal((await admin.send('POST', `/api/admin/events/${EVENT_ID.RUNNING}/generate-checkin`)).status, 200);
+        await new Promise(resolve => setTimeout(resolve, 200));
+        assert.equal(await invitedAt('b07-late'), first);
+
+        // Before the start nothing is sent
+        assert.equal((await admin.send('POST', `/api/admin/events/${EVENT_ID.FULL}/generate-checkin`)).status, 200);
+        await new Promise(resolve => setTimeout(resolve, 200));
+        assert.equal(await invitedAt('dev-reg-full-lena'), undefined);
+    } finally {
+        await patchEvent(EVENT_ID.RUNNING, { checkinCode: CHECKIN_CODE });
+    }
 });

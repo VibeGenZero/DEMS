@@ -9,7 +9,10 @@ const { buildEventUrl } = require('../utils/eventUrl');
 const { normalizeReminderHours, findDueReminders } = require('../utils/reminders');
 const { filterByPreference } = require('../utils/notificationPrefs');
 const { isEventOver, isRegistrationClosed } = require('../utils/eventListing');
+const { isCheckinRunning } = require('../utils/checkin');
 const { sendDM } = require('./messages');
+const { inviteToCheckin } = require('./checkin');
+const { state } = require('./client');
 const { TIMEZONE } = require('./constants');
 
 /**
@@ -21,6 +24,22 @@ const { TIMEZONE } = require('./constants');
 let reminderInterval = null;
 
 /**
+ * Accepted participants of an event who want reminders (W-16).
+ *
+ * @param {string} eventId -> Event document id.
+ * @returns {Promise<string[]>} -> Unique user ids.
+ */
+async function acceptedReminderRecipients(eventId) {
+    const regs = await getDocs(query(
+        collection(db, 'registrations'),
+        where('eventId', '==', eventId),
+        where('status', '==', 'accepted')
+    ));
+    const { userIds } = await filterByPreference(regs.docs.map(regDoc => regDoc.data().userId), 'reminders');
+    return userIds;
+}
+
+/**
  * DM every accepted participant of an event who wants reminders (W-16).
  *
  * @param {string} eventId -> Event document id.
@@ -29,12 +48,7 @@ let reminderInterval = null;
  * @returns {Promise<number>} -> Number of recipients messaged.
  */
 async function messageAcceptedParticipants(eventId, message, send) {
-    const regs = await getDocs(query(
-        collection(db, 'registrations'),
-        where('eventId', '==', eventId),
-        where('status', '==', 'accepted')
-    ));
-    const { userIds } = await filterByPreference(regs.docs.map(regDoc => regDoc.data().userId), 'reminders');
+    const userIds = await acceptedReminderRecipients(eventId);
     for (const userId of userIds) {
         await send(userId, message);
     }
@@ -49,9 +63,10 @@ async function messageAcceptedParticipants(eventId, message, send) {
  * @param {Function} [options.send] -> DM function (userId, message), default sendDM.
  * @param {Function} [options.refresh] -> Announcement refresh (eventId), default notifyRegistrationsChanged.
  * @param {Object} [options.settings] -> Bot center settings, default loadBotSettings() (B-02).
+ * @param {Function} [options.canInvite] -> Whether check-in invitations can go out now (B-07), default: the bot is ready.
  * @returns {Promise<void>}
  */
-async function checkReminders({ now = new Date(), send = sendDM, refresh = (eventId) => require('../utils/announcementRefresh').notifyRegistrationsChanged(eventId), settings = null } = {}) {
+async function checkReminders({ now = new Date(), send = sendDM, refresh = (eventId) => require('../utils/announcementRefresh').notifyRegistrationsChanged(eventId), settings = null, canInvite = () => state.isReady } = {}) {
     try {
         // Switches of the bot center (B-02): a due reminder or start DM is marked
         // either way, so nothing is sent late after a switch is turned on again
@@ -96,12 +111,25 @@ async function checkReminders({ now = new Date(), send = sendDM, refresh = (even
 
             // Event-start notification during the first 5 minutes
             const fiveMinutes = 5 * 60 * 1000;
+            let startRecipients = [];
             if (now >= startTime && now < new Date(startTime.getTime() + fiveMinutes) && !event.eventStartNotificationSent) {
                 await updateDoc(doc(db, 'events', eventId), { eventStartNotificationSent: true });
 
                 console.log(`🎯 Event started: ${event.title}`);
-                if (eventStartNotifications) await messageAcceptedParticipants(eventId,
-                    `🎯 **${event.title}** hat gerade begonnen! Viel Spaß!\n\n🔗 Event ansehen: ${buildEventUrl(eventId)}`, send);
+                if (eventStartNotifications) startRecipients = await acceptedReminderRecipients(eventId);
+            }
+
+            // Check-in invitations (B-07): independent of the start switch and the reminder choice;
+            // a member who gets the start DM as well gets one message with the start text and the button.
+            // While the bot cannot send, nothing is marked, so the invitations follow once it is back.
+            let invited = new Set();
+            if (isCheckinRunning(event, now) && canInvite()) {
+                invited = await inviteToCheckin(eventId, event, { now, send, startRecipients: new Set(startRecipients) });
+            }
+
+            const startMessage = `🎯 **${event.title}** hat gerade begonnen! Viel Spaß!\n\n🔗 Event ansehen: ${buildEventUrl(eventId)}`;
+            for (const userId of startRecipients) {
+                if (!invited.has(userId)) await send(userId, startMessage);
             }
         }
     } catch (err) {

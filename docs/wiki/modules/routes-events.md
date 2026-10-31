@@ -3,7 +3,7 @@ id: routes-events
 title: routes/events.js — event endpoints for logged-in members
 type: module
 tags: [api, events, registration, checkin, comments, series, participants]
-sources: [routes/events.js, utils/registrationService.js, utils/eventUtils.js, utils/eventListing.js]
+sources: [routes/events.js, utils/checkin.js, utils/registrationService.js, utils/eventUtils.js, utils/eventListing.js]
 part_of: [architecture]
 depends_on: [middleware, utils, data-layer, bot]
 see_also: [registration-flow, event-lifecycle, api-index]
@@ -25,7 +25,7 @@ see_also: [registration-flow, event-lifecycle, api-index]
 | DELETE | `/:id/register` | user | `unregisterUserFromEvent`: 400 "Abmelden ist nicht mehr möglich. Wende dich an einen Admin." once the `unregisterDeadline` has passed (W-03); otherwise deletes the own registration, removes role/channel access if it was accepted, promotes the waitlist, refreshes announcements |
 | GET | `/:id/my-registration` | user | own registration (a waitlisted one also `waitlistPosition: { position, total }`, W-05; only the own place, never other members' times), or only `{ registered: true, asGuest: true, id, status }` of the inviting registration when the user is an accepted guest (never its `formAnswers` or guest list), or `{ registered: false }` |
 | GET | `/:id/participants` | user | first 20 accepted participants `{ displayName, avatar }` + `total`; slot events also get `slots` (line-up with members) and `waitlist` |
-| POST | `/:id/checkin` | user + `checkinLimiter` (10 failed attempts / 15 min per member, also in mock mode → 429 "Zu viele Check-in-Versuche …") | body `{ code }`; requires `checkinEnabled` + matching `checkinCode` + own accepted registration; sets `checkedIn`, `checkedInAt` |
+| POST | `/:id/checkin` | user + `checkinLimiter` (10 failed attempts / 15 min per member, also in mock mode → 429 "Zu viele Check-in-Versuche …") | body `{ code }`; requires `checkinEnabled` + matching `checkinCode` + own accepted registration; sets `checkedIn`, `checkedInAt` through `checkInMember` (`utils/checkin.js`, shared with the Discord button of B-07; no time window here); a repeat answers `alreadyCheckedIn: true` |
 | GET | `/:id/comments` | user | comments of the event, sorted by `createdAt` ascending |
 | POST | `/:id/comments` | user | body `{ text (≤1000), replyTo }` |
 | DELETE | `/:id/comments/:commentId` | user (owner or admin) | deletes one comment |

@@ -274,6 +274,22 @@ async function closeApprovalRequest(registration, outcome, event = null) {
     return true;
 }
 
+async function sendCheckinInvitations(eventId) {
+    const { isCheckinRunning, listCheckinInvitees, markInvited } = require('../utils/checkin');
+    const { withEventLock } = require('../utils/eventLock');
+    const eventSnap = await getDoc(doc(db, 'events', eventId));
+    if (!eventSnap.exists() || !isCheckinRunning(eventSnap.data())) return 0;
+    const event = eventSnap.data();
+    return withEventLock(`checkin:${eventId}`, async () => {
+        const invitees = await listCheckinInvitees(eventId);
+        for (const { id, userId } of invitees) {
+            await markInvited(id);
+            mockLog(`Check-in-Einladung an ${describeUser(userId)} ("${event.title}") mit Button „Einchecken“`);
+        }
+        return invitees.length;
+    });
+}
+
 async function sendGuestInvitation(guestUserId, registrant, event, registrationId) {
     dmsSent++;
     mockLog(`Gäste-Einladung an ${describeUser(guestUserId)}`, {
@@ -364,6 +380,7 @@ module.exports = {
     sendGuestInvitation,
     sendApprovalRequest,
     closeApprovalRequest,
+    sendCheckinInvitations,
     assignRole,
     removeRole,
     createEventChannels,

@@ -3,7 +3,7 @@ id: event-lifecycle
 title: Event lifecycle — status, series, check-in
 type: concept
 tags: [events, status, draft, archive, auto-archive, ended, cancel, series, recurring, checkin, duplicate]
-sources: [routes/admin.js, routes/events.js, public/js/admin/event-actions.js, public/js/admin/wizard.js, public/js/admin/wizard-notify.js, utils/eventArchive.js, utils/eventListing.js, utils/eventChangeNotice.js]
+sources: [routes/admin.js, routes/events.js, public/js/admin/event-actions.js, public/js/admin/wizard.js, public/js/admin/wizard-notify.js, utils/eventArchive.js, utils/eventListing.js, utils/eventChangeNotice.js, utils/checkin.js, bot/checkin.js]
 depends_on: [data-model]
 see_also: [routes-admin, reminders-presence, registration-flow]
 ---
@@ -65,7 +65,8 @@ Visibility: `GET /api/events` returns only `active` (admins may pass `?status=`)
 1. Admin: `POST /api/admin/events/:id/generate-checkin` → `checkinCode` (6 digits) + `checkinEnabled: true`; `GET .../checkin-stats` shows `{ total, checkedIn, code }`.
 2. Member with an `accepted` registration: event page → `POST /api/events/:id/checkin { code }` → `checkedIn: true`, `checkedInAt`; optional `checkinMessage` shown.
 3. Admin (W-07): registrations dialog, column "Check-in" → `PUT /api/admin/registrations/:id/checkin { checkedIn }` ticks an `accepted` registration off or takes it back — at any time (also after the end and for archived events), without a code; audit log `CHECKIN_REGISTRATION` / `UNDO_CHECKIN_REGISTRATION`. It writes the same fields as the code check-in.
-4. Check-ins (code or admin) feed the profile number "Check-ins", the badge `perfect-attendance`, the "Eingecheckt" chips and `checkin-stats`.
+4. Discord (B-07): while an event with check-in runs, every accepted participant gets one DM with „Einchecken“ (scheduler, or right away when the code is generated during the event); the click checks in until the event is over. Rules shared with the code route in `utils/checkin.js`; details in [discord-integration](discord-integration.md).
+5. Check-ins (code, admin or Discord) feed the profile number "Check-ins", the badge `perfect-attendance`, the "Eingecheckt" chips and `checkin-stats`.
 
 ## Time handling
 

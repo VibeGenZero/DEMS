@@ -3,7 +3,7 @@ id: discord-integration
 title: Discord integration — what DEMS does in Discord
 type: concept
 tags: [discord, announcements, roles, channels, scheduled-events, dm, slash-commands, permissions, intents]
-sources: [bot.js, bot/messages.js, bot/approvals.js, utils/approvalRequests.js, bot/polls.js, bot/threads.js, bot/layout.js, bot/guild.js, bot/channels.js, routes/admin.js, utils/registrationService.js, utils/eventUtils.js, utils/eventUrl.js, utils/botPermissions.js, utils/eventChangeNotice.js, utils/notificationPrefs.js, utils/participantMessage.js, utils/botSettings.js]
+sources: [bot.js, bot/messages.js, bot/approvals.js, utils/approvalRequests.js, bot/checkin.js, utils/checkin.js, bot/polls.js, bot/threads.js, bot/layout.js, bot/guild.js, bot/channels.js, routes/admin.js, utils/registrationService.js, utils/eventUtils.js, utils/eventUrl.js, utils/botPermissions.js, utils/eventChangeNotice.js, utils/notificationPrefs.js, utils/participantMessage.js, utils/botSettings.js]
 depends_on: [bot]
 see_also: [form-fields, registration-flow, reminders-presence, configuration]
 ---
@@ -47,6 +47,10 @@ see_also: [form-fields, registration-flow, reminders-presence, configuration]
 ## Approval requests (B-06)
 
 With a Freigabe-Kanal chosen in the bot center (`approvalChannel`, no env variable), every registration that becomes `pending` (new registration in a manual event, `registerUserForEvent`; moving up into a manual event, `announcePromotions`) gets a request message there (`sendApprovalRequest`, fire and forget). „Annehmen“, „Ablehnen“, „Warteliste“ are allowed only for members whose interaction roles contain `DISCORD_ADMIN_ROLE_ID` at the click and run `changeRegistrationStatus` (`utils/registrationStatus.js`) like the website. The message is closed (`closeApprovalRequest`: no buttons, grey, result line) by every decision — Discord, website single action (inside the service), bulk action — and when the member withdraws (`unregisterUserFromEvent`), the event is cancelled or deleted (single and series, `closePendingRequests` in `utils/approvalRequests.js`). Without a channel or while the bot is offline nothing is posted; requests are never re-posted later. Events that end or get archived keep their open messages.
+
+## Check-in invitations (B-07)
+
+When an event with check-in (admin generated a code: `checkinEnabled` + `checkinCode`) has started and is not over, every accepted participant who is neither checked in nor invited gets one DM with „Einchecken“ (`event_checkin:<eventId>`) and „Zum Event“ — from the reminder scheduler (merged with the start DM into one message for members who get both) or right away when `generate-checkin` runs during the event (`sendCheckinInvitations`). It ignores the start switch and the „Erinnerungen“ choice; `checkinInvitedAt` on the registration (written before the DM) makes it at most once, also across new codes. The DM never contains the code. A click runs `checkInMember({ requireRunning: true })` (`utils/checkin.js`): "✅ Du bist eingecheckt!" + `checkinMessage`, "ℹ️ Du bist bereits eingecheckt." and "⌛ Der Check-in für dieses Event ist vorbei." edit the DM (button gone, link stays); not active / deleted, check-in off and no accepted registration answer privately. The website code stays as alternative.
 
 ## Announcement buttons
 
