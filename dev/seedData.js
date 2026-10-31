@@ -462,7 +462,7 @@ function buildRegistrations(clock) {
 
 function buildComments(clock) {
     const { mori, lena, kira, jonas, ben } = people;
-    const comment = (person, eventId, text, createdAt, replyTo = null) => ({
+    const comment = (person, eventId, text, createdAt, replyTo = null, fields = {}) => ({
         eventId,
         userId: person.userId,
         userName: person.displayName,
@@ -470,7 +470,8 @@ function buildComments(clock) {
         text,
         isAdmin: person === mori,
         replyTo,
-        createdAt
+        createdAt,
+        ...fields
     });
 
     return {
@@ -479,7 +480,13 @@ function buildComments(clock) {
         'dev-comment-open-3': comment(mori, EVENT_ID.OPEN, 'Start ist pünktlich um 19 Uhr, die Lobby ist 15 Minuten vorher offen.', clock.offset(-1 * DAY)),
         'dev-comment-form-1': comment(ben, EVENT_ID.FORM, 'Darf man als Duo antreten oder nur solo?', clock.offset(-3 * DAY)),
         'dev-comment-form-2': comment(mori, EVENT_ID.FORM, 'Nur solo — die Paarungen werden am Turniertag ausgelost.', clock.offset(-3 * DAY + 3 * HOUR), 'dev-comment-form-1'),
-        'dev-comment-running-1': comment(lena, EVENT_ID.RUNNING, 'Stream läuft, kommt rein!', clock.offset(-10 * MINUTE))
+        'dev-comment-running-1': comment(lena, EVENT_ID.RUNNING, 'Stream läuft, kommt rein!', clock.offset(-10 * MINUTE)),
+        // Raid with discussion thread (B-16): Kira wrote in Discord, Lena answered on the website
+        // and her answer was mirrored into the thread
+        'dev-comment-role-1': comment(kira, EVENT_ID.ROLE, 'Bringt bitte Tränke mit, der Endboss ist zäh.', clock.offset(-1 * DAY),
+            null, { source: 'discord', discordMessageId: '150000000000000101' }),
+        'dev-comment-role-2': comment(lena, EVENT_ID.ROLE, 'Ich hab 20 Stück dabei!', clock.offset(-1 * DAY + HOUR),
+            'dev-comment-role-1', { source: 'web', discordMessageId: '150000000000000102' })
     };
 }
 

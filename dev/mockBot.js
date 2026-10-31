@@ -290,6 +290,26 @@ async function sendCheckinInvitations(eventId) {
     });
 }
 
+async function mirrorCommentToThread(commentId) {
+    const { isThreadSyncEnabled, loadCommentWithEvent, storeDiscordMessageId, webhookName } = require('../utils/threadSync');
+    if (!isThreadSyncEnabled()) return null;
+    const loaded = await loadCommentWithEvent(commentId);
+    if (!loaded) return null;
+    const { comment, event } = loaded;
+    if (!event.discordThread?.threadId || comment.source === 'discord' || comment.discordMessageId) return null;
+    const messageId = fakeSnowflake();
+    mockLog(`Kommentar in Thread "${event.title}" als „${webhookName(comment.userName)}“: ${comment.text}`);
+    await storeDiscordMessageId(commentId, messageId);
+    return messageId;
+}
+
+async function deleteMirroredMessage(comment, event) {
+    const { isThreadSyncEnabled } = require('../utils/threadSync');
+    if (!isThreadSyncEnabled() || !comment?.discordMessageId || !event?.discordThread?.threadId) return false;
+    mockLog(`Kommentar-Kopie ${comment.discordMessageId} im Thread "${event.title || ''}" gelöscht`);
+    return true;
+}
+
 async function sendGuestInvitation(guestUserId, registrant, event, registrationId) {
     dmsSent++;
     mockLog(`Gäste-Einladung an ${describeUser(guestUserId)}`, {
@@ -381,6 +401,8 @@ module.exports = {
     sendApprovalRequest,
     closeApprovalRequest,
     sendCheckinInvitations,
+    mirrorCommentToThread,
+    deleteMirroredMessage,
     assignRole,
     removeRole,
     createEventChannels,

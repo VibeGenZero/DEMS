@@ -10,6 +10,7 @@ const { registerSlashCommands } = require('./commands');
 const { applyBotSettings, stopPresenceUpdates } = require('./settings');
 const { handleInteraction } = require('./interactions');
 const { stopReminderScheduler } = require('./scheduler');
+const { handleThreadMessage, handleThreadMessageUpdate, handleThreadMessageDelete } = require('./threadSync');
 
 // Settles with true once the bot is ready, with false when it will not start
 let settleBotStart;
@@ -42,6 +43,17 @@ function wireClient() {
     });
 
     client.on('interactionCreate', handleInteraction);
+
+    // Comment ↔ thread sync (B-16); the handlers return at once without DISCORD_THREAD_SYNC
+    client.on(Events.MessageCreate, (message) => {
+        handleThreadMessage(message).catch(err => console.error('Thread message sync error:', err.message));
+    });
+    client.on(Events.MessageUpdate, (oldMessage, newMessage) => {
+        handleThreadMessageUpdate(oldMessage, newMessage).catch(err => console.error('Thread edit sync error:', err.message));
+    });
+    client.on(Events.MessageDelete, (message) => {
+        handleThreadMessageDelete(message).catch(err => console.error('Thread delete sync error:', err.message));
+    });
 }
 
 /**
