@@ -15,6 +15,7 @@ const { isGoneDiscordError } = require('./messages');
 
 const WEBHOOK_NAME = 'DEMS Kommentare';
 const UNKNOWN_WEBHOOK = 10015;
+const MISSING_PERMISSIONS = 50013;
 
 // channelId -> Webhook of the bot
 const webhooks = new Map();
@@ -35,6 +36,38 @@ function clearWebhookCache() {
  */
 function messageUrl(thread, messageId) {
     return `https://discord.com/channels/${thread.guildId}/${thread.threadId}/${messageId}`;
+}
+
+/**
+ * Where a permission is missing, for the log.
+ *
+ * @param {Object|null} channel -> Channel or thread (discord.js), when known.
+ * @returns {string} -> "in #events", "im Thread „Raid“" or "im Ankündigungskanal".
+ */
+function channelLabel(channel) {
+    if (!channel?.name) return 'im Ankündigungskanal';
+    return channel.isThread?.() ? `im Thread „${channel.name}“` : `in #${channel.name}`;
+}
+
+/**
+ * Log a failed sync call. A missing permission names the right, the place and the fix,
+ * because the usual cause is a bot invited before B-16 that kept its old rights.
+ *
+ * @param {string} action -> Short English description for other errors.
+ * @param {Error} err -> The Discord error.
+ * @param {Object} [hint]
+ * @param {string} [hint.permission] -> German name of the right the call needs.
+ * @param {Object|null} [hint.channel] -> Channel or thread of the call.
+ */
+function logSyncError(action, err, { permission, channel = null } = {}) {
+    if (err.code === MISSING_PERMISSIONS && permission) {
+        console.error(`⚠️ Kommentar-Sync: Dem Bot fehlt das Recht „${permission}“ ${channelLabel(channel)}. `
+            + 'Lösung: den Invite-Link aus dem Start-Log erneut öffnen (überträgt die Rechte auf die Bot-Rolle) '
+            + 'oder das Recht an der Bot-Rolle bzw. in den Kanal-Berechtigungen erlauben. '
+            + `(Discord: ${err.message})`);
+        return;
+    }
+    console.error(`${action}:`, err.message);
 }
 
 /**
@@ -129,6 +162,7 @@ async function threadParent(threadId) {
  */
 async function mirrorCommentToThread(commentId) {
     if (!state.isReady || !isThreadSyncEnabled()) return null;
+    let parent = null;
     try {
         const loaded = await loadCommentWithEvent(commentId);
         if (!loaded) return null;
@@ -136,12 +170,12 @@ async function mirrorCommentToThread(commentId) {
         if (!event.discordThread?.threadId || comment.source === 'discord' || comment.discordMessageId) return null;
 
         const answered = await loadAnsweredComment(comment.replyTo);
-        const parent = await threadParent(event.discordThread.threadId);
+        parent = await threadParent(event.discordThread.threadId);
         const message = await postWithWebhook(parent, client.user.id, buildThreadPost(comment, event, answered));
         await storeDiscordMessageId(commentId, message.id);
         return message.id;
     } catch (err) {
-        console.error('Could not mirror the comment into the thread:', err.message);
+        logSyncError('Could not mirror the comment into the thread', err, { permission: 'Webhooks verwalten', channel: parent });
         return null;
     }
 }
@@ -157,18 +191,24 @@ async function mirrorCommentToThread(commentId) {
 async function deleteMirroredMessage(comment, event) {
     if (!state.isReady || !isThreadSyncEnabled() || !comment?.discordMessageId || !event?.discordThread?.threadId) return false;
     const threadId = event.discordThread.threadId;
+    const fromDiscord = comment.source === 'discord';
+    let channel = null;
     try {
-        if (comment.source === 'discord') {
-            const thread = await client.channels.fetch(threadId);
-            await thread.messages.delete(comment.discordMessageId);
+        if (fromDiscord) {
+            channel = await client.channels.fetch(threadId);
+            await channel.messages.delete(comment.discordMessageId);
         } else {
-            const parent = await threadParent(threadId);
-            await withWebhook(parent, client.user.id, webhook => webhook.deleteMessage(comment.discordMessageId, threadId));
+            channel = await threadParent(threadId);
+            await withWebhook(channel, client.user.id, webhook => webhook.deleteMessage(comment.discordMessageId, threadId));
         }
         return true;
     } catch (err) {
         if (isGoneDiscordError(err)) return true;
-        console.error('Could not delete the thread message of a comment:', err.message);
+        // A member's message needs "Nachrichten verwalten"; the webhook copy needs the webhook
+        logSyncError('Could not delete the thread message of a comment', err, {
+            permission: fromDiscord ? 'Nachrichten verwalten' : 'Webhooks verwalten',
+            channel
+        });
         return false;
     }
 }

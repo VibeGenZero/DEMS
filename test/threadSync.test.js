@@ -488,3 +488,65 @@ test('a refused deletion is logged and answers false', async () => {
     }
     assert.ok(errors.some(line => line.includes('Missing Permissions')));
 });
+
+// ── Helpful log on missing permissions ──────────────────────────────────
+
+/** Run fn and return the console.error lines it printed. */
+async function captureErrors(fn) {
+    const errors = [];
+    const original = console.error;
+    console.error = (...args) => errors.push(args.join(' '));
+    try {
+        await fn();
+    } finally {
+        console.error = original;
+    }
+    return errors;
+}
+
+const missingPermissions = () => Object.assign(new Error('Missing Permissions'), { code: 50013 });
+
+test('a mirror without "Webhooks verwalten" names the right, the channel and the fix', async () => {
+    await seedEvent('perm-ev', 'thread-perm-1');
+    await seedComment('perm-c', { eventId: 'perm-ev', source: 'web' });
+    const parent = { id: 'parent-perm', name: 'events', isThread: () => false, async fetchWebhooks() { throw missingPermissions(); } };
+    const thread = { id: 'thread-perm-1', name: 'Raid', parent, parentId: 'parent-perm', isThread: () => true };
+
+    let result;
+    const errors = await captureErrors(() => withStubbedClient({ 'thread-perm-1': thread, 'parent-perm': parent }, async () => {
+        result = await realSync.mirrorCommentToThread('perm-c');
+    }));
+
+    assert.equal(result, null);
+    const line = errors.join('\n');
+    assert.match(line, /„Webhooks verwalten“/);
+    assert.match(line, /#events/);
+    assert.match(line, /Invite-Link/);
+    assert.match(line, /Missing Permissions/, 'keeps the Discord message');
+});
+
+test('deleting a member message without "Nachrichten verwalten" names that right', async () => {
+    const thread = { id: 'thread-perm-2', name: 'Raid', isThread: () => true, messages: { async delete() { throw missingPermissions(); } } };
+    const event = { discordThread: { guildId: GUILD_ID, threadId: 'thread-perm-2' } };
+
+    const errors = await captureErrors(() => withStubbedClient({ 'thread-perm-2': thread }, async () => {
+        assert.equal(await realSync.deleteMirroredMessage({ source: 'discord', discordMessageId: 'm' }, event), false);
+    }));
+
+    const line = errors.join('\n');
+    assert.match(line, /„Nachrichten verwalten“/);
+    assert.match(line, /Thread „Raid“/);
+});
+
+test('other Discord errors keep the short log line', async () => {
+    const thread = { id: 'thread-perm-3', isThread: () => true, messages: { async delete() { throw Object.assign(new Error('Internal Server Error'), { code: 0 }); } } };
+    const event = { discordThread: { guildId: GUILD_ID, threadId: 'thread-perm-3' } };
+
+    const errors = await captureErrors(() => withStubbedClient({ 'thread-perm-3': thread }, async () => {
+        await realSync.deleteMirroredMessage({ source: 'discord', discordMessageId: 'm' }, event);
+    }));
+
+    assert.equal(errors.length, 1);
+    assert.match(errors[0], /Internal Server Error/);
+    assert.doesNotMatch(errors[0], /verwalten/);
+});

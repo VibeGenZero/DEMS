@@ -44,6 +44,7 @@ see_also: [docker, deployment, dev-mock-mode]
 
 ## Gotchas
 
+- `⚠️ Kommentar-Sync: Dem Bot fehlt das Recht „Webhooks verwalten“ …` (or „Nachrichten verwalten“) in the log: the bot was invited before B-16 and kept its old rights — a new invite URL in the start log changes nothing until it is opened. Open it again for the same server (Discord moves the rights onto the bot role) or grant the right to the bot role; a channel overwrite that denies it in the announcement channel blocks it too.
 - `DISCORD_THREAD_SYNC=true` without the *Message Content* intent in the Developer Portal → `❌ Bot login fehlgeschlagen: Used disallowed intents`; the web app keeps running without bot. Remove the variable or switch the intent on, then restart.
 - `README.md` still shows a `DISCORD_REDIRECT_URI` variable — it is not read anywhere; the redirect is derived from `BASE_URL`.
 - Compose: variables in a project `.env` reach the container only via `env_file:` (or explicit `environment:`); see [deployment](deployment.md).
