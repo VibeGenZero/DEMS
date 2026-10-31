@@ -376,6 +376,29 @@ async function createScheduledEvent(event) {
     return id;
 }
 
+// A Discord server event id starting with "gone" counts as deleted in Discord (B-09, for tests)
+const isGoneScheduledEvent = (event) => String(event?.discordScheduledEventId || '').startsWith('gone');
+
+async function updateScheduledEvent(event, { bannerChanged = false } = {}) {
+    if (!event?.discordScheduledEventId) return false;
+    if (isGoneScheduledEvent(event)) return 'gone';
+    mockLog(`Server-Event "${event.title}" aktualisiert${bannerChanged ? ' (neues Bild)' : ''}`, { startDate: event.startDate, endDate: event.endDate });
+    return 'updated';
+}
+
+async function removeScheduledEvent(event) {
+    if (!event?.discordScheduledEventId) return false;
+    if (!isGoneScheduledEvent(event)) mockLog(`Server-Event "${event.title}" entfernt`);
+    return true;
+}
+
+async function setScheduledEventStatus(event, target) {
+    if (!event?.discordScheduledEventId) return false;
+    if (isGoneScheduledEvent(event)) return 'gone';
+    mockLog(`Server-Event "${event.title}" ${target === 'completed' ? 'beendet' : 'läuft'}`);
+    return target;
+}
+
 module.exports = {
     startBot,
     whenBotSettled,
@@ -409,5 +432,8 @@ module.exports = {
     addParticipantToEventChannels,
     removeParticipantFromEventChannels,
     deleteEventChannels,
-    createScheduledEvent
+    createScheduledEvent,
+    updateScheduledEvent,
+    removeScheduledEvent,
+    setScheduledEventStatus
 };

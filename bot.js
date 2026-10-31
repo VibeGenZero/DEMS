@@ -21,9 +21,11 @@ const {
     isGuildMember, getGuildName, getGuildIconUrl, getGuildRoles, getGuildChannels, getPublicGuildChannels
 } = require('./bot/guild');
 const {
-    getGuildScheduledEvents, createScheduledEvent, createEventChannels, addParticipantToEventChannels,
-    removeParticipantFromEventChannels, deleteEventChannels
+    createEventChannels, addParticipantToEventChannels, removeParticipantFromEventChannels, deleteEventChannels
 } = require('./bot/channels');
+const {
+    getGuildScheduledEvents, createScheduledEvent, updateScheduledEvent, removeScheduledEvent, setScheduledEventStatus
+} = require('./bot/scheduledEvents');
 const { checkReminders, startReminderScheduler } = require('./bot/scheduler');
 const { getBotStatus, getBotSettings, saveBotSettings, getRunningEvents } = require('./bot/settings');
 const { sendGuestInvitation } = require('./bot/guests');
@@ -85,7 +87,10 @@ module.exports = {
     closeApprovalRequest,
     sendCheckinInvitations,
     mirrorCommentToThread,
-    deleteMirroredMessage
+    deleteMirroredMessage,
+    updateScheduledEvent,
+    removeScheduledEvent,
+    setScheduledEventStatus
 };
 
 // Dev mock mode: every call that would reach Discord goes to the simulated

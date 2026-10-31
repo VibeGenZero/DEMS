@@ -3,7 +3,7 @@ id: event-lifecycle
 title: Event lifecycle — status, series, check-in
 type: concept
 tags: [events, status, draft, archive, auto-archive, ended, cancel, series, recurring, checkin, duplicate]
-sources: [routes/admin.js, routes/events.js, public/js/admin/event-actions.js, public/js/admin/wizard.js, public/js/admin/wizard-notify.js, utils/eventArchive.js, utils/eventListing.js, utils/eventChangeNotice.js, utils/checkin.js, bot/checkin.js]
+sources: [routes/admin.js, bot/scheduledEvents.js, routes/events.js, public/js/admin/event-actions.js, public/js/admin/wizard.js, public/js/admin/wizard-notify.js, utils/eventArchive.js, utils/eventListing.js, utils/eventChangeNotice.js, utils/checkin.js, bot/checkin.js]
 depends_on: [data-model]
 see_also: [routes-admin, reminders-presence, registration-flow]
 ---
@@ -18,9 +18,9 @@ see_also: [routes-admin, reminders-presence, registration-flow]
 | Create | `POST /api/admin/events` | status from wizard (default `active`); channels if `autoCreateChannels` + active |
 | Edit | `PUT /api/admin/events/:id` | full replace of whitelisted fields; channels created/deleted on activation changes; optional change DM (see below) |
 | Change status | `PUT /api/admin/events/:id/status` | any of the 4 statuses; channel create/delete |
-| Start | `POST /api/admin/events/:id/start` | `active`, `startDate = now` if empty |
-| End | `POST /api/admin/events/:id/end` | `archived`, `endDate = now`, channels deleted |
-| Cancel | `PUT /api/admin/events/:id/cancel` | `cancelled`, DM to accepted + pending except members with "Änderungen" off (W-16), channels deleted |
+| Start | `POST /api/admin/events/:id/start` | `active`, `startDate = now` if empty; synced Discord server event → running (B-09) |
+| End | `POST /api/admin/events/:id/end` | `archived`, `endDate = now`, channels deleted; synced Discord server event → completed (B-09) |
+| Cancel | `PUT /api/admin/events/:id/cancel` | `cancelled`, DM to accepted + pending except members with "Änderungen" off (W-16), channels deleted; synced Discord server event removed and unlinked (B-09) |
 | Duplicate | `POST /api/admin/events/:id/duplicate` | new `draft` "(Kopie)", check-in code cleared |
 | Delete | `DELETE /api/admin/events/:id` | event + registrations deleted (comments stay) |
 | Archive (automatic) | scheduler `archiveEndedEvents` (`utils/eventArchive.js`) | `archived` 24 h after the end; audit log `AUTO_ARCHIVE_EVENT` with adminId `system` (shown as "System"); stored announcements refreshed (buttons go away); channels and event role stay |

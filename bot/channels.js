@@ -1,94 +1,11 @@
 /**
- * Event channels and Discord scheduled events of the bot.
+ * Event channels of the bot (scheduled events: bot/scheduledEvents.js).
  */
 const { EmbedBuilder, PermissionsBitField, ChannelType } = require('discord.js');
 const { db, collection, doc, getDoc, getDocs, updateDoc, query, where } = require('../firebaseAdmin');
 const { buildEventUrl } = require('../utils/eventUrl');
-const { bannerForDiscord } = require('../utils/bannerStore');
 const { client, state } = require('./client');
 const { TIMEZONE } = require('./constants');
-
-/**
- * Get all scheduled events from the guild
- */
-async function getGuildScheduledEvents(guildId) {
-    if (!state.isReady) return [];
-    try {
-        const guild = await client.guilds.fetch(guildId);
-        const events = await guild.scheduledEvents.fetch();
-        return events.map(e => ({
-            id: e.id,
-            name: e.name,
-            description: e.description,
-            scheduledStartTimestamp: e.scheduledStartTimestamp,
-            scheduledEndTimestamp: e.scheduledEndTimestamp,
-            image: e.coverImageURL({ size: 1024 }),
-            location: e.entityMetadata?.location || 'Discord',
-            url: e.url
-        }));
-    } catch (err) {
-        console.error('Failed to fetch guild scheduled events:', err.message);
-        return [];
-    }
-}
-
-/**
- * Create a native Discord Scheduled Event
- */
-async function createScheduledEvent(event) {
-    if (!state.isReady) return null;
-    try {
-        const guildId = process.env.DISCORD_GUILD_ID;
-        const guild = await client.guilds.fetch(guildId);
-
-        let entityType = 3; // GuildScheduledEventEntityType.External
-        let channelId = null;
-        let entityMetadata = { location: 'TBD' };
-
-        if (event.discordChannelId) {
-            entityType = 2; // GuildScheduledEventEntityType.Voice
-            channelId = event.discordChannelId;
-            entityMetadata = undefined;
-        }
-
-        const scheduledStartTime = event.startDate ? new Date(event.startDate) : new Date(Date.now() + 60 * 60 * 1000);
-        let scheduledEndTime = event.endDate ? new Date(event.endDate) : new Date(scheduledStartTime.getTime() + 2 * 60 * 60 * 1000);
-
-        // Ensure end time is strictly after start time
-        if (scheduledEndTime <= scheduledStartTime) {
-            scheduledEndTime = new Date(scheduledStartTime.getTime() + 2 * 60 * 60 * 1000);
-        }
-
-        const scheduledEvent = await guild.scheduledEvents.create({
-            name: event.title.substring(0, 100),
-            scheduledStartTime,
-            scheduledEndTime,
-            privacyLevel: 2, // GUILD_ONLY
-            entityType,
-            channel: channelId,
-            entityMetadata,
-            description: (event.description || '').substring(0, 1000),
-            reason: 'DEMS Sync'
-        });
-
-        // Set Image: an uploaded banner (W-12) as the file itself, so it works
-        // without a public BASE_URL; an external one as its URL
-        const banner = bannerForDiscord(event.bannerUrl);
-        if (banner.file || banner.url) {
-            try {
-                await scheduledEvent.setImage(banner.file || banner.url);
-            } catch (e) {
-                console.warn('Could not set banner image for scheduled event:', e.message);
-            }
-        }
-
-        console.log(`✅ Scheduled Event created: ${scheduledEvent.name} (${scheduledEvent.id})`);
-        return scheduledEvent.id;
-    } catch (err) {
-        console.error('Failed to create scheduled event:', err);
-        return null;
-    }
-}
 
 /**
  * Create private voice and/or text channels for an event
@@ -283,8 +200,6 @@ async function deleteEventChannels(eventId) {
 }
 
 module.exports = {
-    getGuildScheduledEvents,
-    createScheduledEvent,
     createEventChannels,
     addParticipantToEventChannels,
     removeParticipantFromEventChannels,

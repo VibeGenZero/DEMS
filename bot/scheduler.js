@@ -13,6 +13,7 @@ const { isEventOver, isRegistrationClosed, isUnregisterClosed } = require('../ut
 const { isCheckinRunning } = require('../utils/checkin');
 const { sendDM } = require('./messages');
 const { inviteToCheckin } = require('./checkin');
+const { setScheduledEventStatus } = require('./scheduledEvents');
 const { state } = require('./client');
 const { TIMEZONE, MY_LEAVE_PREFIX } = require('./constants');
 
@@ -23,6 +24,33 @@ const { TIMEZONE, MY_LEAVE_PREFIX } = require('./constants');
  * written before the DMs go out: a restart or a crash while sending never repeats them.
  */
 let reminderInterval = null;
+
+/**
+ * Discord server event status of a synced event (B-09): running from the start, completed
+ * once the event is over. The status is stored after a successful call, so a failed or
+ * offline call is tried again in the next pass; 'gone' forgets the link.
+ *
+ * @param {string} eventId -> Event document id.
+ * @param {Object} event -> Event data.
+ * @param {Date} now -> Pass time.
+ * @param {Function} scheduledStatus -> (event, target) => 'active' | 'completed' | 'gone' | false.
+ * @returns {Promise<void>}
+ */
+async function syncScheduledEventStatus(eventId, event, now, scheduledStatus) {
+    if (!event.discordScheduledEventId) return;
+    const current = event.discordScheduledEventStatus;
+    let target = null;
+    if (isEventOver(event, now)) target = 'completed';
+    else if (now >= new Date(event.startDate)) target = 'active';
+    if (!target || current === 'completed' || current === target) return;
+
+    const result = await scheduledStatus({ id: eventId, ...event }, target);
+    if (result === 'gone') {
+        await updateDoc(doc(db, 'events', eventId), { discordScheduledEventId: null, discordScheduledEventStatus: null });
+    } else if (result === 'active' || result === 'completed') {
+        await updateDoc(doc(db, 'events', eventId), { discordScheduledEventStatus: result });
+    }
+}
 
 /**
  * Reminder DM with its actions (B-08): „Zum Event“ and „Ich kann doch nicht“.
@@ -93,9 +121,10 @@ async function messageAcceptedParticipants(eventId, message, send) {
  * @param {Function} [options.refresh] -> Announcement refresh (eventId), default notifyRegistrationsChanged.
  * @param {Object} [options.settings] -> Bot center settings, default loadBotSettings() (B-02).
  * @param {Function} [options.canInvite] -> Whether check-in invitations can go out now (B-07), default: the bot is ready.
+ * @param {Function} [options.scheduledStatus] -> Sets the Discord server event status (B-09), default setScheduledEventStatus.
  * @returns {Promise<void>}
  */
-async function checkReminders({ now = new Date(), send = sendDM, refresh = (eventId) => require('../utils/announcementRefresh').notifyRegistrationsChanged(eventId), settings = null, canInvite = () => state.isReady } = {}) {
+async function checkReminders({ now = new Date(), send = sendDM, refresh = (eventId) => require('../utils/announcementRefresh').notifyRegistrationsChanged(eventId), settings = null, canInvite = () => state.isReady, scheduledStatus = setScheduledEventStatus } = {}) {
     try {
         // Switches of the bot center (B-02): a due reminder or start DM is marked
         // either way, so nothing is sent late after a switch is turned on again
@@ -158,6 +187,8 @@ async function checkReminders({ now = new Date(), send = sendDM, refresh = (even
             for (const userId of startRecipients) {
                 if (!invited.has(userId)) await send(userId, startMessage);
             }
+
+            await syncScheduledEventStatus(eventId, event, now, scheduledStatus);
         }
     } catch (err) {
         console.error('Reminder check error:', err.message);

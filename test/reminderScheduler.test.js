@@ -481,3 +481,75 @@ test('confirming an old reminder after the unregister deadline is refused', asyn
     assert.equal(answer, '❌ Abmelden ist nicht mehr möglich. Wende dich an einen Admin.');
     assert.equal((await getDoc(doc(db, 'registrations', 'rb-closed-me'))).exists(), true);
 });
+
+// ── Discord server event status (B-09) ─────────────────────────────────
+
+/** One pass with a recording status function; returns its calls as [eventId, target]. */
+async function runStatusPass(answer = (event, target) => target, now = NOW) {
+    const calls = [];
+    await bot.checkReminders({
+        now,
+        settings: normalizeBotSettings({}),
+        send: async () => {},
+        refresh: () => {},
+        canInvite: () => false,
+        scheduledStatus: async (event, target) => { calls.push([event.id, target]); return answer(event, target); }
+    });
+    return calls;
+}
+
+const SYNCED = { discordScheduledEventId: 'se-1', discordScheduledEventStatus: 'scheduled', reminderHours: [], eventStartNotificationSent: true };
+
+test('a synced event that started is set running and stored as active', async () => {
+    await storeEvent('se-start', { ...SYNCED, startDate: inHours(-0.5), endDate: inHours(2) });
+    try {
+        assert.deepEqual(await runStatusPass(), [['se-start', 'active']]);
+        assert.equal((await storedEvent('se-start')).discordScheduledEventStatus, 'active');
+        assert.deepEqual(await runStatusPass(), [], 'no call once it is active');
+    } finally {
+        await removeEvent('se-start');
+    }
+});
+
+test('a synced event that is over is completed, also without an end date', async () => {
+    await storeEvent('se-over', { ...SYNCED, discordScheduledEventStatus: 'active', startDate: inHours(-4), endDate: inHours(-1) });
+    await storeEvent('se-noend', { ...SYNCED, startDate: inHours(-3) });
+    try {
+        const calls = await runStatusPass();
+        assert.deepEqual(calls.sort(), [['se-noend', 'completed'], ['se-over', 'completed']]);
+        assert.equal((await storedEvent('se-over')).discordScheduledEventStatus, 'completed');
+        assert.equal((await storedEvent('se-noend')).discordScheduledEventStatus, 'completed');
+        assert.deepEqual(await runStatusPass(), []);
+    } finally {
+        await removeEvent('se-over');
+        await removeEvent('se-noend');
+    }
+});
+
+test('offline stores nothing and the next pass tries again; gone forgets the link', async () => {
+    await storeEvent('se-offline', { ...SYNCED, startDate: inHours(-0.5), endDate: inHours(2) });
+    await storeEvent('se-gone', { ...SYNCED, startDate: inHours(-0.5), endDate: inHours(2) });
+    try {
+        const offline = await runStatusPass((event) => (event.id === 'se-gone' ? 'gone' : false));
+        assert.equal(offline.length, 2);
+        assert.equal((await storedEvent('se-offline')).discordScheduledEventStatus, 'scheduled');
+        const gone = await storedEvent('se-gone');
+        assert.deepEqual([gone.discordScheduledEventId, gone.discordScheduledEventStatus], [null, null]);
+
+        assert.deepEqual(await runStatusPass(), [['se-offline', 'active']], 'tried again, the forgotten one not');
+    } finally {
+        await removeEvent('se-offline');
+        await removeEvent('se-gone');
+    }
+});
+
+test('unsynced and not yet started events get no status call', async () => {
+    await storeEvent('se-none', { reminderHours: [], eventStartNotificationSent: true, startDate: inHours(-0.5), endDate: inHours(2) });
+    await storeEvent('se-later', { ...SYNCED, startDate: inHours(5), endDate: inHours(7) });
+    try {
+        assert.deepEqual(await runStatusPass(), []);
+    } finally {
+        await removeEvent('se-none');
+        await removeEvent('se-later');
+    }
+});

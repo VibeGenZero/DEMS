@@ -9,7 +9,7 @@ const { requireAuth, requireAdmin, safeEqual } = require('../middleware/auth');
 const { csvCell } = require('../utils/csv');
 const { checkEventFields, validateEvent, validateRegStatus, validateBotMessages } = require('../middleware/validators');
 const { MAX_TEMPLATES, pickTemplateSettings, normalizeTemplateName, nameTaken } = require('../utils/eventTemplates');
-const { sendDM, getGuildRoles, sendChannelMessage, buildEventAnnouncement, buildAnnouncementIntro, ensureAnnouncementThread, getGuildScheduledEvents, createEventChannels, deleteEventChannels, createScheduledEvent, getBotStatus, getBotSettings, saveBotSettings, getRunningEvents, getGuildChannels, buildPollMessage, searchGuildMembers, fetchGuildMember, sendCheckinInvitations } = require('../bot');
+const { sendDM, getGuildRoles, sendChannelMessage, buildEventAnnouncement, buildAnnouncementIntro, ensureAnnouncementThread, getGuildScheduledEvents, createEventChannels, deleteEventChannels, createScheduledEvent, updateScheduledEvent, removeScheduledEvent, setScheduledEventStatus, getBotStatus, getBotSettings, saveBotSettings, getRunningEvents, getGuildChannels, buildPollMessage, searchGuildMembers, fetchGuildMember, sendCheckinInvitations } = require('../bot');
 const { promoteFromWaitlist, addAuditLog, loadEventRoster, loadEventRegistrations, saveEventWithSlots } = require('../utils/eventUtils');
 const { mergeReminderHours } = require('../utils/reminders');
 const { keepDeadlineRefreshFlag } = require('../utils/eventListing');
@@ -472,6 +472,50 @@ function buildFollowingUpdates(edited, slots, oldEvent) {
  * @param {Object} params -> `{ eventId, oldEvent, updates, notify, adminId }`.
  * @returns {Promise<number>} -> Participants notified successfully.
  */
+/**
+ * Store what a Discord server event call reached (B-09): 'gone' forgets the link, so
+ * „Mit Discord synchronisieren“ is offered again; a status is kept to skip repeated calls.
+ *
+ * @param {string} eventId -> Event document id (still existing).
+ * @param {string|boolean} result -> Result of updateScheduledEvent / setScheduledEventStatus, or 'gone'.
+ * @returns {Promise<void>}
+ */
+async function storeScheduledEventResult(eventId, result) {
+    if (result === 'gone') {
+        await updateDoc(doc(db, 'events', eventId), { discordScheduledEventId: null, discordScheduledEventStatus: null });
+    } else if (result === 'active' || result === 'completed') {
+        await updateDoc(doc(db, 'events', eventId), { discordScheduledEventStatus: result });
+    }
+}
+
+/**
+ * Keep the Discord server event of a synced event in step after a change (B-09):
+ * cancelled or draft -> removed, archived -> completed, active -> updated.
+ * Meant to run fire and forget; never throws.
+ *
+ * @param {string} eventId -> Event document id.
+ * @param {Object} event -> The event as it is now (with `discordScheduledEventId`).
+ * @param {Object} [options]
+ * @param {boolean} [options.bannerChanged] -> Upload the banner again.
+ * @returns {Promise<void>}
+ */
+async function syncScheduledEventAfterChange(eventId, event, { bannerChanged = false } = {}) {
+    if (!event?.discordScheduledEventId) return;
+    try {
+        let result;
+        if (event.status === 'cancelled' || event.status === 'draft') {
+            result = (await removeScheduledEvent(event)) ? 'gone' : false;
+        } else if (event.status === 'archived') {
+            result = await setScheduledEventStatus(event, 'completed');
+        } else {
+            result = await updateScheduledEvent(event, { bannerChanged });
+        }
+        await storeScheduledEventResult(eventId, result);
+    } catch (err) {
+        console.error('Discord server event sync error:', err.message);
+    }
+}
+
 async function applySavedEvent({ eventId, oldEvent, updates, notify, adminId }) {
     // Following dates of a series keep their status -> it is not in their updates
     const status = updates.status || oldEvent.status;
@@ -484,6 +528,11 @@ async function applySavedEvent({ eventId, oldEvent, updates, notify, adminId }) 
     } else if ((oldEvent.autoCreateChannels && wasActive) && (!updates.autoCreateChannels || !isNowActive)) {
         deleteEventChannels(eventId).catch(console.error);
     }
+
+    // The synced Discord server event follows the saved event (B-09)
+    syncScheduledEventAfterChange(eventId, { ...oldEvent, ...updates, status }, {
+        bannerChanged: updates.bannerUrl !== undefined && updates.bannerUrl !== oldEvent.bannerUrl
+    });
 
     // More places or new slots can let waitlisted members move up
     await promoteFromWaitlist(eventId, { ...oldEvent, ...updates });
@@ -547,6 +596,9 @@ async function extendSeries({ seriesId, editedId, starts, newUntil, adminId }) {
             discordThread: null,
             discordChannelId: null,
             discordTextChannelId: null,
+            // A new date is not linked to the Discord server event of the copied one (B-09)
+            discordScheduledEventId: null,
+            discordScheduledEventStatus: null,
             reminderHours: mergeReminderHours(base.reminderHours, null, times.startDate),
             eventStartNotificationSent: false,
             registrationClosedRefreshed: false,
@@ -684,6 +736,7 @@ router.put('/events/:id/status', async (req, res) => {
         await updateDoc(doc(db, 'events', req.params.id), { status, updatedAt: new Date().toISOString() });
         await addAuditLog('UPDATE_EVENT_STATUS', req.session.user.id, `Changed status to ${status}`, req.params.id);
         notifyRegistrationsChanged(req.params.id);
+        syncScheduledEventAfterChange(req.params.id, { ...oldEvent, status });
 
         if (oldEvent.autoCreateChannels) {
             if (status === 'active' && oldEvent.status !== 'active') {
@@ -713,6 +766,7 @@ router.put('/events/:id/cancel', async (req, res) => {
 
         // 1. Update status
         await updateDoc(doc(db, 'events', eventId), { status: 'cancelled', updatedAt: new Date().toISOString() });
+        syncScheduledEventAfterChange(eventId, { ...event, status: 'cancelled' });
 
         if (event.autoCreateChannels && event.status === 'active') {
             deleteEventChannels(eventId).catch(console.error);
@@ -769,6 +823,11 @@ router.post('/events/:id/start', async (req, res) => {
         await updateDoc(doc(col, eventId), updates);
         await addAuditLog('START_EVENT', req.session.user.id, `Manually started event "${data.title}"`, eventId);
         notifyRegistrationsChanged(eventId);
+        if (data.discordScheduledEventId) {
+            setScheduledEventStatus({ ...data, ...updates }, 'active')
+                .then(result => storeScheduledEventResult(eventId, result))
+                .catch(err => console.error('Discord server event start error:', err.message));
+        }
 
         if (data.autoCreateChannels && data.status !== 'active') {
             createEventChannelsAllowed({ id: eventId, ...data, ...updates }).catch(console.error);
@@ -801,6 +860,11 @@ router.post('/events/:id/end', async (req, res) => {
         await updateDoc(doc(col, eventId), updates);
         await addAuditLog('END_EVENT', req.session.user.id, `Manually ended event "${data.title}"`, eventId);
         notifyRegistrationsChanged(eventId);
+        if (data.discordScheduledEventId) {
+            setScheduledEventStatus({ ...data, ...updates }, 'completed')
+                .then(result => storeScheduledEventResult(eventId, result))
+                .catch(err => console.error('Discord server event end error:', err.message));
+        }
 
         if (data.autoCreateChannels && data.status === 'active') {
             deleteEventChannels(eventId).catch(console.error);
@@ -823,6 +887,10 @@ router.delete('/events/:id', async (req, res) => {
 
         // deleteEventChannels reads the channel ids from the event -> before the event is gone
         if (event) await deleteEventChannels(req.params.id);
+        // The Discord server event goes too (B-09); it only needs the stored id
+        if (event?.discordScheduledEventId) {
+            removeScheduledEvent(event).catch(err => console.error('Discord server event delete error:', err.message));
+        }
 
         await deleteDoc(doc(db, 'events', req.params.id));
         // Also delete all registrations for this event
@@ -871,6 +939,10 @@ router.delete('/events/series/:seriesId', async (req, res) => {
         for (const eventId of eventIds) {
             // Channels first: deleteEventChannels reads their ids from the event
             await deleteEventChannels(eventId);
+            const seriesEvent = eventsById.get(eventId);
+            if (seriesEvent.discordScheduledEventId) {
+                removeScheduledEvent(seriesEvent).catch(err => console.error('Discord server event delete error:', err.message));
+            }
             await deleteDoc(doc(db, 'events', eventId));
 
             const regQ = query(collection(db, 'registrations'), where('eventId', '==', eventId));
@@ -1032,6 +1104,8 @@ router.post('/events/:id/duplicate', async (req, res) => {
             checkinCode: '',  // Reset check-in code
             announcements: [],  // Each copy is announced on its own
             discordThread: null,  // and opens its own discussion thread (B-14)
+            discordScheduledEventId: null,  // and is synced to Discord on its own (B-09)
+            discordScheduledEventStatus: null,
             reminderHours: mergeReminderHours(original.reminderHours, null, original.startDate),  // nothing sent for the copy yet
             eventStartNotificationSent: false,
         };
@@ -1546,6 +1620,7 @@ router.post('/events/:id/sync-discord', async (req, res) => {
         if (scheduledEventId) {
             await updateDoc(doc(db, 'events', req.params.id), {
                 discordScheduledEventId: scheduledEventId,
+                discordScheduledEventStatus: 'scheduled',
                 updatedAt: new Date().toISOString()
             });
             await addAuditLog('SYNC_DISCORD_EVENT', req.session.user.id, `Synced event "${event.title}" to Discord`, req.params.id);
