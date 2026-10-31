@@ -3,7 +3,7 @@ id: discord-integration
 title: Discord integration — what DEMS does in Discord
 type: concept
 tags: [discord, announcements, roles, channels, scheduled-events, dm, slash-commands, permissions, intents]
-sources: [bot.js, bot/messages.js, bot/approvals.js, utils/approvalRequests.js, bot/checkin.js, utils/checkin.js, bot/polls.js, bot/threads.js, bot/layout.js, bot/guild.js, bot/channels.js, routes/admin.js, utils/registrationService.js, utils/eventUtils.js, utils/eventUrl.js, utils/botPermissions.js, utils/eventChangeNotice.js, utils/notificationPrefs.js, utils/participantMessage.js, utils/botSettings.js]
+sources: [bot.js, bot/messages.js, bot/approvals.js, utils/approvalRequests.js, bot/checkin.js, utils/checkin.js, bot/threadSync.js, utils/threadSync.js, bot/polls.js, bot/threads.js, bot/layout.js, bot/guild.js, bot/channels.js, routes/admin.js, utils/registrationService.js, utils/eventUtils.js, utils/eventUrl.js, utils/botPermissions.js, utils/eventChangeNotice.js, utils/notificationPrefs.js, utils/participantMessage.js, utils/botSettings.js]
 depends_on: [bot]
 see_also: [form-fields, registration-flow, reminders-presence, configuration]
 ---
@@ -51,6 +51,16 @@ With a Freigabe-Kanal chosen in the bot center (`approvalChannel`, no env variab
 ## Check-in invitations (B-07)
 
 When an event with check-in (admin generated a code: `checkinEnabled` + `checkinCode`) has started and is not over, every accepted participant who is neither checked in nor invited gets one DM with „Einchecken“ (`event_checkin:<eventId>`) and „Zum Event“ — from the reminder scheduler (merged with the start DM into one message for members who get both) or right away when `generate-checkin` runs during the event (`sendCheckinInvitations`). It ignores the start switch and the „Erinnerungen“ choice; `checkinInvitedAt` on the registration (written before the DM) makes it at most once, also across new codes. The DM never contains the code. A click runs `checkInMember({ requireRunning: true })` (`utils/checkin.js`): "✅ Du bist eingecheckt!" + `checkinMessage`, "ℹ️ Du bist bereits eingecheckt." and "⌛ Der Check-in für dieses Event ist vorbei." edit the DM (button gone, link stays); not active / deleted, check-in off and no accepted registration answer privately. The website code stays as alternative.
+
+## Comment ↔ thread sync (B-16)
+
+Opt-in with `DISCORD_THREAD_SYNC=true` (then the client requests the privileged *Message Content* intent, see [configuration](../ops/configuration.md)). Only events with a `discordThread` (B-14) are mirrored; nothing is backfilled.
+
+- Website → thread: `POST /api/events/:id/comments` saves the comment (`source: 'web'`) and calls `mirrorCommentToThread` fire and forget. The bot posts through its own webhook „DEMS Kommentare“ on the thread's parent channel (found or created on first use, kept only in memory, never stored) as „<Name> (Web)“ with the member's avatar, `allowedMentions: { parse: [] }` (no pings). Webhooks cannot send real replies, so a web reply starts with `-# ↪ Antwort an **<Name>**` and a jump link when the answered comment has a Discord message. The message id is stored as `discordMessageId`.
+- Thread → website: `messageCreate` in an event's thread becomes a comment with the member's display name and avatar, `isAdmin` from `DISCORD_ADMIN_ROLE_ID`, `source: 'discord'`, `discordMessageId`; mentions become `@name`/`#name`, custom emojis `:name:`, attachments one URL line each, cut to 1000 characters (`formatDiscordContent`). Messages of bots and webhooks (also the bot's own) are ignored, so nothing loops. A Discord reply to a mirrored message becomes a reply to its top comment.
+- Deleting: the website delete calls `deleteMirroredMessage` (webhook copy via the webhook, a member's message needs „Nachrichten verwalten“; refused → logged, the comment is deleted anyway); `messageDelete` of a mirrored message deletes its comment.
+- Editing: `messageUpdate` of a member message updates its comment and sets `editedAt` (the page shows „(bearbeitet)“); the website has no editing.
+- Offline gaps are not reconciled: what happens while the bot is offline stays on its side.
 
 ## Announcement buttons
 

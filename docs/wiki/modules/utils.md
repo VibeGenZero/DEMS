@@ -3,7 +3,7 @@ id: utils
 title: utils/ — domain helpers
 type: module
 tags: [utils, registration, form-fields, waitlist, audit-log, profile, debug, change-notice, banner]
-sources: [utils/registrationService.js, utils/registrationStatus.js, utils/approvalRequests.js, utils/checkin.js, utils/formFields.js, utils/eventUtils.js, utils/eventListing.js, utils/profileEvents.js, utils/eventUrl.js, utils/userProfile.js, utils/avatar.js, utils/botPermissions.js, utils/csv.js, utils/template.js, utils/sessionStore.js, utils/reminders.js, utils/debugLog.js, utils/capacity.js, utils/slotService.js, utils/eventLock.js, utils/announcementRefresh.js, utils/pollService.js, utils/pollStore.js, utils/eventPreview.js, utils/eventArchive.js, utils/eventChangeNotice.js, utils/notificationPrefs.js, utils/memberOverview.js, utils/insights.js, utils/participantMessage.js, utils/bannerStore.js, utils/bulkRegistrations.js, utils/eventSeries.js, utils/eventTemplates.js, utils/botSettings.js]
+sources: [utils/registrationService.js, utils/registrationStatus.js, utils/approvalRequests.js, utils/checkin.js, utils/threadSync.js, utils/formFields.js, utils/eventUtils.js, utils/eventListing.js, utils/profileEvents.js, utils/eventUrl.js, utils/userProfile.js, utils/avatar.js, utils/botPermissions.js, utils/csv.js, utils/template.js, utils/sessionStore.js, utils/reminders.js, utils/debugLog.js, utils/capacity.js, utils/slotService.js, utils/eventLock.js, utils/announcementRefresh.js, utils/pollService.js, utils/pollStore.js, utils/eventPreview.js, utils/eventArchive.js, utils/eventChangeNotice.js, utils/notificationPrefs.js, utils/memberOverview.js, utils/insights.js, utils/participantMessage.js, utils/bannerStore.js, utils/bulkRegistrations.js, utils/eventSeries.js, utils/eventTemplates.js, utils/botSettings.js]
 part_of: [architecture]
 depends_on: [data-layer, bot]
 see_also: [registration-flow, form-fields, role-slots]
@@ -161,6 +161,10 @@ Days and clock times count in `TIMEZONE` (`Intl.DateTimeFormat`, no library). `f
 ## utils/checkin.js
 
 Check-in rules shared by `POST /api/events/:id/checkin` and the Discord button (B-07), without discord.js: `isCheckinActive(event)` (active + `checkinEnabled` + `checkinCode`), `isCheckinRunning(event, now)` (active, started, not `isEventOver`), `findAcceptedRegistration(eventId, userId)`, `checkInMember({ eventId, userId, now, requireRunning })` → `{ ok: true, alreadyCheckedIn, checkedInAt, event }` or `{ ok: false, code }` (`not_found`, `not_active`, `disabled`, `not_started`, `over`, `no_registration`; status and time window only with `requireRunning`, so the code route keeps its old rules; a repeat keeps the first time), `listCheckinInvitees(eventId)` (accepted, not checked in, no `checkinInvitedAt`), `markInvited(registrationId, now)`.
+
+## utils/threadSync.js
+
+Data side of the comment ↔ thread sync (B-16), without discord.js: `isThreadSyncEnabled()` (`DISCORD_THREAD_SYNC === 'true'`), `formatDiscordContent({ content, names: { users, roles, channels }, attachments })` (mentions → `@name`/`#name`, unknown → `@unbekannt`, custom emojis → `:name:`, one line per attachment URL, cut to `COMMENT_MAX_LENGTH` 1000 with "…"), `webhookName(name)` („<Name> (Web)“, ≤ 80, without the word "discord", empty → „Mitglied“), `topLevelReplyTarget(comment)`, `findEventByThreadId(threadId)` (memory map threadId → eventId, re-checked on every hit, full scan on miss), `commentByDiscordMessageId`, `storeDiscordMessageId`, `loadCommentWithEvent`, `loadAnsweredComment`. `bot/client.js` reads the switch at load time.
 
 ## utils/approvalRequests.js
 

@@ -4,7 +4,7 @@ const router = express.Router();
 const { db, collection, doc, getDoc, getDocs, addDoc, deleteDoc, updateDoc, query, where, orderBy } = require('../firebaseAdmin');
 const { requireAuth } = require('../middleware/auth');
 const { checkRegistrationAllowed } = require('../middleware/maintenance');
-const { getGuildRoles, getPublicGuildChannels } = require('../bot');
+const { getGuildRoles, getPublicGuildChannels, mirrorCommentToThread, deleteMirroredMessage } = require('../bot');
 const { loadEventRoster, loadEventRegistrations, toPublicEvent, isEventVisibleTo } = require('../utils/eventUtils');
 const { isEventOver, pickSeriesRepresentative, myRegistrationStatus } = require('../utils/eventListing');
 const { registerUserForEvent, switchOwnSlot, unregisterUserFromEvent, REGISTRATION_SOURCE } = require('../utils/registrationService');
@@ -565,10 +565,13 @@ router.post('/:id/comments', requireAuth, async (req, res) => {
             text: text.trim(),
             isAdmin: !!user.isAdmin,
             replyTo: replyTo || null,
-            createdAt: new Date().toISOString()
+            createdAt: new Date().toISOString(),
+            source: 'web'
         };
 
         const ref = await addDoc(collection(db, 'comments'), comment);
+        // Into the event's Discord discussion thread (B-16, only with DISCORD_THREAD_SYNC=true)
+        mirrorCommentToThread(ref.id).catch(err => console.error('Comment mirror error:', err.message));
         res.json({ id: ref.id, ...comment });
     } catch (err) {
         console.error('Error posting comment:', err);
@@ -595,6 +598,12 @@ router.delete('/:id/comments/:commentId', requireAuth, async (req, res) => {
         }
 
         await deleteDoc(doc(db, 'comments', req.params.commentId));
+        // Its copy in the Discord discussion thread goes too (B-16)
+        if (comment.discordMessageId) {
+            getDoc(doc(db, 'events', comment.eventId))
+                .then(eventSnap => deleteMirroredMessage(comment, eventSnap.exists() ? eventSnap.data() : null))
+                .catch(err => console.error('Comment mirror delete error:', err.message));
+        }
         res.json({ success: true });
     } catch (err) {
         console.error('Error deleting comment:', err);

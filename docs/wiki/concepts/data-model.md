@@ -3,7 +3,7 @@ id: data-model
 title: Data model — collections and document shapes
 type: concept
 tags: [data-model, schema, collections, events, registrations, users, firestore]
-sources: [routes/admin.js, utils/registrationService.js, utils/userProfile.js, utils/sessionStore.js, routes/events.js, utils/eventUtils.js, bot/registration.js, utils/checkin.js, dev/seedData.js, utils/eventTemplates.js, utils/botSettings.js]
+sources: [routes/admin.js, utils/registrationService.js, utils/userProfile.js, utils/sessionStore.js, routes/events.js, utils/eventUtils.js, bot/registration.js, utils/checkin.js, bot/threadSync.js, dev/seedData.js, utils/eventTemplates.js, utils/botSettings.js]
 depends_on: [data-layer]
 see_also: [registration-flow, event-lifecycle, maintenance-mode, glossary]
 ---
@@ -73,7 +73,7 @@ Read in full by the admin member overview (W-15, `GET /api/admin/members`, `util
 
 ## comments (auto id) — `POST /api/events/:id/comments`
 
-`{ eventId, userId, userName, userAvatar, text (≤1000), isAdmin, replyTo (comment id|null), createdAt }` — `userAvatar` is the session avatar URL at posting time; comments written before F-11 store it wrapped (`cdn.discordapp.com/avatars/<id>/<URL>.png?size=64`), `GET /api/events/:id/comments` unwraps it.
+`{ eventId, userId, userName, userAvatar, text (≤1000), isAdmin, replyTo (comment id|null), createdAt, source?: web|discord (missing = web), discordMessageId?, editedAt? }` — the last three come from the thread sync (B-16): `discordMessageId` = the thread copy of a web comment or the Discord message a comment came from; `editedAt` = last Discord edit — `userAvatar` is the session avatar URL at posting time; comments written before F-11 store it wrapped (`cdn.discordapp.com/avatars/<id>/<URL>.png?size=64`), `GET /api/events/:id/comments` unwraps it.
 
 ## auditLogs (auto id) — `utils/eventUtils.js#addAuditLog`
 

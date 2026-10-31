@@ -48,6 +48,8 @@ function applyMockEnvironment() {
     env.DISCORD_EVENT_CATEGORY_ID = '';
     env.BASE_URL = `http://localhost:${env.PORT || 3000}`;
 
+    // Comment ↔ thread sync (B-16) on, so the mock log shows it; DISCORD_THREAD_SYNC=false turns it off
+    if (!env.DISCORD_THREAD_SYNC) env.DISCORD_THREAD_SYNC = 'true';
     if (!env.SESSION_SECRET) env.SESSION_SECRET = 'dems-dev-mock-secret';
     if (!env.ADMIN_RESET_PASSWORD) env.ADMIN_RESET_PASSWORD = 'dev';
 

@@ -3302,3 +3302,42 @@ test('generating the code during an event invites the open participants at once'
         await patchEvent(EVENT_ID.RUNNING, { checkinCode: CHECKIN_CODE });
     }
 });
+
+// ── Comments ↔ discussion thread (B-16) ────────────────────────────────
+
+/** Wait until a stored comment has a field, or give up. */
+async function waitForCommentField(commentId, field, timeoutMs = 3000) {
+    const { db, doc, getDoc } = serverStore();
+    const start = Date.now();
+    while (Date.now() - start < timeoutMs) {
+        const snap = await getDoc(doc(db, 'comments', commentId));
+        if (snap.exists() && snap.data()[field]) return snap.data()[field];
+        await new Promise(resolve => setTimeout(resolve, 20));
+    }
+    return undefined;
+}
+
+test('a comment on an event with thread is mirrored, one without thread is not', async () => {
+    const admin = await loginAs('admin');
+    const res = await admin.send('POST', `/api/events/${EVENT_ID.ROLE}/comments`, { text: 'Treffpunkt 19:45 im Voice.' });
+    assert.equal(res.status, 200);
+    const body = await res.json();
+    assert.deepEqual([body.text, body.source, body.replyTo], ['Treffpunkt 19:45 im Voice.', 'web', null]);
+    assert.match(await waitForCommentField(body.id, 'discordMessageId'), /^\d+$/);
+
+    // Earlier tests announce the open event (and open a thread) -> take it away again
+    await patchEvent(EVENT_ID.OPEN, { discordThread: null });
+    const plain = await (await admin.send('POST', `/api/events/${EVENT_ID.OPEN}/comments`, { text: 'Ohne Thread' })).json();
+    assert.equal(await waitForCommentField(plain.id, 'discordMessageId', 300), undefined);
+});
+
+test('deleting a mirrored comment on the website removes its thread copy', async () => {
+    const admin = await loginAs('admin');
+    const created = await (await admin.send('POST', `/api/events/${EVENT_ID.ROLE}/comments`, { text: 'Wird gelöscht' })).json();
+    const messageId = await waitForCommentField(created.id, 'discordMessageId');
+    assert.ok(messageId);
+
+    const res = await admin.send('DELETE', `/api/events/${EVENT_ID.ROLE}/comments/${created.id}`);
+    assert.deepEqual([res.status, await res.json()], [200, { success: true }]);
+    await server.waitForOutput(messageId + ' im Thread');
+});

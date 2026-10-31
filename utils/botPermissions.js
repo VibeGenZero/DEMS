@@ -19,7 +19,9 @@ const BOT_PERMISSIONS = [
     { flag: Flags.ReadMessageHistory, reason: 'Nachrichtenverlauf lesen' },
     { flag: Flags.UseExternalEmojis, reason: 'Externe Emojis verwenden' },
     { flag: Flags.Connect, reason: 'Teilnehmern Zugang zu Event-Voice-Channels geben' },
-    { flag: Flags.CreateEvents, reason: 'Server-Events anlegen („Mit Discord synchronisieren“)' }
+    { flag: Flags.CreateEvents, reason: 'Server-Events anlegen („Mit Discord synchronisieren“)' },
+    { flag: Flags.ManageWebhooks, reason: 'Webhook für den Kommentar-Sync mit dem Diskussions-Thread anlegen' },
+    { flag: Flags.ManageMessages, reason: 'Auf der Website gelöschte Kommentare auch im Discord-Thread entfernen' }
 ];
 
 /**

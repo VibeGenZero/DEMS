@@ -20,7 +20,7 @@ const EXPECTED_COUNTS = {
     events: 14,
     users: 12,
     registrations: 38,
-    comments: 6,
+    comments: 8,
     auditLogs: 10,
     polls: 2,
     pollVotes: 5,

@@ -43,3 +43,10 @@ test('the invite asks for the right to open discussion threads', () => {
     assert.equal(permissions.has(Flags.CreatePublicThreads), true);
     assert.equal(permissions.has(Flags.SendMessagesInThreads), true);
 });
+
+test('the invite asks for the rights of the comment sync (B-16)', () => {
+    // The bot creates its own webhook and removes members' thread messages whose comment was deleted
+    const permissions = permissionsOf(buildBotInviteUrl('123'));
+    assert.equal(permissions.has(Flags.ManageWebhooks), true, 'ManageWebhooks');
+    assert.equal(permissions.has(Flags.ManageMessages), true, 'ManageMessages');
+});

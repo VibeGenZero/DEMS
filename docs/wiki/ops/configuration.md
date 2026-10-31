@@ -20,6 +20,7 @@ see_also: [docker, deployment, dev-mock-mode]
 | `DISCORD_ADMIN_ROLE_ID` | practically yes | — | members with this role are admins; empty → nobody is admin |
 | `DISCORD_ANNOUNCE_CHANNEL_ID` | fallback | — | announcement channel of events and date polls while the bot center has no "Ankündigungskanal" chosen (B-02); with neither, announcing answers 400 |
 | `DISCORD_EVENT_CATEGORY_ID` | no | — | parent category for auto-created event channels |
+| `DISCORD_THREAD_SYNC` | no | off (`true` in dev mock mode) | `true` → comments of the event page and the event's Discord discussion thread are mirrored (B-16, [discord-integration](../concepts/discord-integration.md)); the bot then requests the privileged *Message Content* intent and needs „Webhooks verwalten“ + „Nachrichten verwalten“. Switch the intent on in the Developer Portal first, otherwise the login fails with "Used disallowed intents" and the bot stays offline |
 | `SERVER_NAME` | no | Discord guild name / `DEMS` | name shown in the UI (`/api/server-info`) |
 | `FIREBASE_API_KEY`, `_AUTH_DOMAIN`, `_PROJECT_ID`, `_STORAGE_BUCKET`, `_MESSAGING_SENDER_ID`, `_APP_ID` | all or none | — | all six → Firestore; none → SQLite; partial → exit 1 |
 | `SQLITE_PATH` | no | `./data/dems.sqlite` | SQLite file (Docker: `/app/data/dems.sqlite`) |
@@ -43,6 +44,7 @@ see_also: [docker, deployment, dev-mock-mode]
 
 ## Gotchas
 
+- `DISCORD_THREAD_SYNC=true` without the *Message Content* intent in the Developer Portal → `❌ Bot login fehlgeschlagen: Used disallowed intents`; the web app keeps running without bot. Remove the variable or switch the intent on, then restart.
 - `README.md` still shows a `DISCORD_REDIRECT_URI` variable — it is not read anywhere; the redirect is derived from `BASE_URL`.
 - Compose: variables in a project `.env` reach the container only via `env_file:` (or explicit `environment:`); see [deployment](deployment.md).
 - Secrets containing `$` are mangled by Compose interpolation; prefer hex secrets (`openssl rand -hex 32`).
