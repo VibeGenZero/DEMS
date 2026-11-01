@@ -3596,3 +3596,74 @@ test('a copy does not carry the clean-up marker', async () => {
     const copy = await (await admin.send('POST', `/api/admin/events/${id}/duplicate`)).json();
     assert.equal((await storedEventOf(copy.id)).discordCleanup, null);
 });
+
+// ── Announcement channel per event (B-11) ───────────────────────────────
+
+const OWN_CHANNEL = '199000000000000011';
+
+async function createEventWith(admin, fields) {
+    const res = await admin.send('POST', '/api/admin/events', {
+        title: 'B11 Event', description: 'Kanal', status: 'active', accessMode: 'open', approvalMode: 'instant',
+        maxParticipants: 5, startDate: futureDate(6), endDate: futureDate(6, 20), ...fields
+    });
+    return { res, body: await res.json() };
+}
+
+test('the announcement channel is stored on create and save, empty by default', async () => {
+    const admin = await loginAs('admin');
+    const { res, body } = await createEventWith(admin, { title: 'B11 Eigener Kanal', announceChannelId: OWN_CHANNEL });
+    assert.equal(res.status, 200, JSON.stringify(body));
+    assert.equal((await storedEventOf(body.id)).announceChannelId, OWN_CHANNEL);
+
+    const saved = await saveDate(admin, await storedEventOf(body.id), { announceChannelId: '' });
+    assert.equal(saved.status, 200);
+    assert.equal((await storedEventOf(body.id)).announceChannelId, '');
+
+    const plain = await createEventWith(admin, { title: 'B11 Standard' });
+    assert.equal((await storedEventOf(plain.body.id)).announceChannelId, '');
+});
+
+test('an invalid announcement channel is refused', async () => {
+    const admin = await loginAs('admin');
+    const { res, body } = await createEventWith(admin, { title: 'B11 Kaputt', announceChannelId: 'abc' });
+    assert.equal(res.status, 400);
+    assert.match(body.error, /Ankündigungskanal ist ungültig\./);
+
+    const ok = await createEventWith(admin, { title: 'B11 Später kaputt' });
+    const put = await saveDate(admin, await storedEventOf(ok.body.id), { announceChannelId: '12' });
+    assert.equal(put.status, 400);
+});
+
+test('„Ankündigen“ posts to the event channel; a duplicate keeps it', async () => {
+    const admin = await loginAs('admin');
+    const { body } = await createEventWith(admin, { title: 'B11 Ankündigen', announceChannelId: OWN_CHANNEL });
+    const res = await admin.send('POST', `/api/admin/events/${body.id}/announce`, { text: '', roleIds: [], pingEveryone: false });
+    assert.equal(res.status, 200);
+    await server.waitForOutput(`Nachricht in ${OWN_CHANNEL}`);
+    assert.equal((await storedEventOf(body.id)).announcements[0].channelId, OWN_CHANNEL);
+
+    const copy = await (await admin.send('POST', `/api/admin/events/${body.id}/duplicate`)).json();
+    assert.equal((await storedEventOf(copy.id)).announceChannelId, OWN_CHANNEL);
+});
+
+test('following dates and new dates of a series take the channel', async () => {
+    const admin = await loginAs('admin');
+    const dates = await createSeries(admin, { title: 'B11 Serie' });
+    const res = await saveDate(admin, dates[1], {
+        announceChannelId: OWN_CHANNEL, applyTo: 'following', recurringUntil: localDay(futureDate(38), SERIES_TZ)
+    });
+    assert.equal(res.status, 200, await res.clone().text());
+    const stored = await seriesDatesOf(dates[0].seriesId);
+    assert.equal(stored[0].announceChannelId, '', 'the earlier date stays');
+    for (const date of stored.slice(1)) assert.equal(date.announceChannelId, OWN_CHANNEL, date.id);
+    assert.ok(stored.length > 4, 'the series was extended');
+});
+
+test('the bot settings answer the effective default announcement channel (B-11)', async () => {
+    const admin = await loginAs('admin');
+    const settings = await (await admin.request('/api/admin/bot/settings')).json();
+    assert.equal(typeof settings.defaultAnnounceChannel, 'string');
+    // Bot center choice, else the .env default of mock mode (the mock guild's announcement channel)
+    const { CHANNEL_ID } = require('../dev/mockGuild');
+    assert.equal(settings.defaultAnnounceChannel, settings.announceChannel || CHANNEL_ID.ANNOUNCEMENTS);
+});

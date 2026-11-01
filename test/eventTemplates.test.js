@@ -25,6 +25,7 @@ const FULL_EVENT = {
     autoCreateChannels: true,
     channelConfig: { type: 'voice', voiceName: 'Raid', textName: '' },
     customBotMessages: { registration: 'Danke', accepted: '', rejected: '' },
+    announceChannelId: '120000000000000003',
     // Never part of a template
     startDate: '2099-03-06T19:00:00.000Z',
     endDate: '2099-03-06T22:00:00.000Z',
@@ -56,6 +57,13 @@ test('a template keeps exactly the recurring event settings', () => {
     assert.deepEqual(settings.requiredRoles, ['r1']);
     assert.equal(settings.autoCreateChannels, true);
     assert.deepEqual(settings.location, { text: 'Raid-Kanal', channelId: 'c1', channelType: 'voice' });
+});
+
+test('a template keeps the announcement channel as a string (B-11)', () => {
+    assert.equal(TEMPLATE_FIELDS.includes('announceChannelId'), true);
+    assert.equal(pickTemplateSettings(FULL_EVENT).settings.announceChannelId, '120000000000000003');
+    assert.equal(pickTemplateSettings({ announceChannelId: 42 }).settings.announceChannelId, '');
+    assert.equal(pickTemplateSettings({}).settings.announceChannelId, '');
 });
 
 test('a template never holds date or lifecycle data', () => {

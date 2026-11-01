@@ -33,7 +33,7 @@ const { debugLog } = require('../utils/debugLog');
 const { buildEventUrl } = require('../utils/eventUrl');
 const { MAX_BANNER_BYTES, detectImageType, saveBanner, releaseBanners } = require('../utils/bannerStore');
 const { sharedSessionStore } = require('../utils/sessionStore');
-const { loadBotSettings } = require('../utils/botSettings');
+const { loadBotSettings, announceChannelId } = require('../utils/botSettings');
 const { BULK_ACTIONS, MAX_BULK_IDS, planBulkAction } = require('../utils/bulkRegistrations');
 const { followingDates, transferTime, planExtension, seriesUpdateFields, slotsForDate } = require('../utils/eventSeries');
 const { cleanupEvent, restoreEventRole } = require('../utils/eventCleanup');
@@ -366,7 +366,7 @@ function buildEventUpdates(body, slots, oldEvent) {
         approvalMode, assignRoleId, formFields,
         startDate, endDate, bannerUrl, category, status, reminderHours, checkinMessage,
         customBotMessages, autoCreateChannels, channelConfig, allowGuests,
-        accentColor, location, registrationDeadline, unregisterDeadline
+        accentColor, location, registrationDeadline, unregisterDeadline, announceChannelId
     } = body;
     // A date of a series keeps its rhythm; "Wiederholen bis" changes only by an extension (W-11)
     const inSeries = !!oldEvent.seriesId;
@@ -394,6 +394,8 @@ function buildEventUpdates(body, slots, oldEvent) {
         customBotMessages: customBotMessages || {},
         autoCreateChannels: !!autoCreateChannels,
         channelConfig: channelConfig || {},
+        // Own announcement channel, '' = default (B-11)
+        announceChannelId: announceChannelId || '',
         allowGuests: slots.length > 0 ? false : allowGuests !== false,
         slots,
         sourcePollId: oldEvent.sourcePollId || '',
@@ -1901,7 +1903,8 @@ router.get('/bot/status', async (req, res) => {
 router.get('/bot/settings', async (req, res) => {
     try {
         const settings = await getBotSettings();
-        res.json(settings);
+        // The channel announcements use without an own event channel, also the .env one (B-11)
+        res.json({ ...settings, defaultAnnounceChannel: announceChannelId(settings) });
     } catch (err) {
         console.error('Bot settings error:', err);
         res.status(500).json({ error: 'Fehler beim Laden der Bot-Einstellungen' });

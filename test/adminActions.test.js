@@ -146,3 +146,42 @@ test('announcing a poll stores the message', async () => {
     assert.equal(offline.status, 400);
     assert.deepEqual(await announcePoll('poll-missing', ADMIN), { ok: false, status: 404, error: 'Abstimmung nicht gefunden' });
 });
+
+// ── Own announcement channel (B-11) ─────────────────────────────────────
+
+const OWN_CHANNEL = '199000000000000021';
+
+/** Run fn while the (mock) channel post fails. */
+async function withFailingSend(fn) {
+    const original = bot.sendChannelMessage;
+    bot.sendChannelMessage = async () => false;
+    try {
+        return await fn();
+    } finally {
+        bot.sendChannelMessage = original;
+    }
+}
+
+test('an event with its own channel is announced there, also without a default', async () => {
+    const id = await storeEvent({ announceChannelId: OWN_CHANNEL });
+    const result = await announceEvent(id, ADMIN);
+    assert.equal(result.sent.channelId, OWN_CHANNEL);
+
+    const other = await storeEvent({ announceChannelId: OWN_CHANNEL });
+    const offline = await withoutAnnounceChannel(() => announceEvent(other, ADMIN));
+    assert.equal(offline.ok, true);
+    assert.equal(offline.sent.channelId, OWN_CHANNEL);
+});
+
+test('an unreachable own channel is named and nothing is stored', async () => {
+    const id = await storeEvent({ announceChannelId: OWN_CHANNEL });
+    const result = await withFailingSend(() => announceEvent(id, ADMIN));
+    assert.deepEqual(result, {
+        ok: false, status: 500, error: 'Der Ankündigungskanal des Events ist nicht erreichbar – wähle im Assistenten einen anderen.'
+    });
+    assert.equal((await eventOf(id)).announcements, undefined);
+    assert.deepEqual(await auditOf('ANNOUNCE_EVENT', id), []);
+
+    const plain = await storeEvent({});
+    assert.equal((await withFailingSend(() => announceEvent(plain, ADMIN))).error, 'Konnte nicht in den Channel posten.');
+});

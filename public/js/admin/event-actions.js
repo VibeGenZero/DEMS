@@ -121,6 +121,33 @@ export function renderAnnounceButtonsPreview(event) {
     container.innerHTML = registerLine + linkLine;
 }
 
+/**
+ * Where an announcement goes (B-11): the event's own channel, else the default.
+ *
+ * @param {Object|null} event -> Event of GET /api/events/:id.
+ * @param {Array<Object>} channels -> GET /api/admin/channels.
+ * @param {Object|null} settings -> GET /api/admin/bot/settings (`defaultAnnounceChannel`).
+ * @returns {string} -> German sentence for #announce-target.
+ */
+export function announceTargetText(event, channels, settings) {
+    const nameOf = (id) => (Array.isArray(channels) ? channels : []).find(channel => channel.id === id)?.name;
+    const own = event?.announceChannelId || '';
+    if (own) return nameOf(own) ? `Wird in #${nameOf(own)} gepostet.` : `Wird in Kanal ${own} gepostet.`;
+    const fallback = settings?.defaultAnnounceChannel || '';
+    if (!fallback) return 'Kein Ankündigungskanal festgelegt – bitte in der Bot-Zentrale wählen.';
+    return nameOf(fallback) ? `Wird in #${nameOf(fallback)} (Standard) gepostet.` : `Wird im Standardkanal (${fallback}) gepostet.`;
+}
+
+/** JSON of a GET, or null when it fails. */
+async function fetchJsonOrNull(url) {
+    try {
+        const res = await fetch(url);
+        return res.ok ? await res.json() : null;
+    } catch {
+        return null;
+    }
+}
+
 export async function announceEvent(eventId) {
     // Open the announce modal instead of a simple confirm
     document.getElementById('announce-event-id').value = eventId;
@@ -130,10 +157,17 @@ export async function announceEvent(eventId) {
     // Show which buttons Discord will get for this event
     const previewContainer = document.getElementById('announce-buttons-preview');
     if (previewContainer) previewContainer.innerHTML = 'Wird geladen...';
-    fetch(`/api/events/${eventId}`)
-        .then(res => (res.ok ? res.json() : null))
-        .then(renderAnnounceButtonsPreview)
-        .catch(() => renderAnnounceButtonsPreview(null));
+    // Buttons preview and target channel (B-11) load next to the roles
+    const targetEl = document.getElementById('announce-target');
+    if (targetEl) targetEl.textContent = 'Wird geladen...';
+    const details = Promise.all([
+        fetchJsonOrNull(`/api/events/${eventId}`),
+        fetchJsonOrNull('/api/admin/channels'),
+        fetchJsonOrNull('/api/admin/bot/settings')
+    ]).then(([event, channels, settings]) => {
+        renderAnnounceButtonsPreview(event);
+        if (targetEl) targetEl.textContent = announceTargetText(event, channels, settings);
+    });
 
     // Load roles for checkboxes
     const container = document.getElementById('announce-role-checkboxes');
@@ -172,6 +206,7 @@ export async function announceEvent(eventId) {
         container.innerHTML = '<span class="text-danger">Netzwerkfehler.</span>';
     }
 
+    await details;
     const modal = new bootstrap.Modal(document.getElementById('announceModal'));
     modal.show();
 }

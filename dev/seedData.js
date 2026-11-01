@@ -191,6 +191,8 @@ function buildEvents(clock) {
         [EVENT_ID.ROLE]: buildEvent(clock, {
             title: 'Raid: Schattenfestung',
             description: 'Nur für Mitglieder mit der Rolle **Raid-Team**.',
+            // „Ankündigen“ posts in #events instead of the default channel (B-11)
+            announceChannelId: CHANNEL_ID.EVENTS,
             maxParticipants: 6,
             allowGuests: false,
             slots: [

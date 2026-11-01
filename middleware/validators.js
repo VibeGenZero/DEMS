@@ -63,6 +63,13 @@ async function checkEventFields(body, { template = false } = {}) {
         errors.push(`Genehmigungsmodus muss einer der folgenden sein: ${validApprovalModes.join(', ')}`);
     }
 
+    // Own announcement channel of the event or template, '' = default (B-11)
+    const { announceChannelId } = body;
+    if (announceChannelId !== undefined && announceChannelId !== null && announceChannelId !== ''
+        && !(typeof announceChannelId === 'string' && /^\d{17,20}$/.test(announceChannelId))) {
+        errors.push('Ankündigungskanal ist ungültig.');
+    }
+
     // Templates store no status, dates or deadlines (W-10)
     if (template) return checkContentFields(body, errors);
 
