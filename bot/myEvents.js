@@ -77,6 +77,22 @@ function formatStatus(entry) {
 }
 
 /**
+ * Status line with the held slot or the slot wish, as /my-events and
+ * /event info (B-12) show it.
+ *
+ * @param {Object} entry -> Profile entry with `status`, `waitlistPosition` and `slot`.
+ * @returns {string} -> e.g. "✅ Angemeldet · ⚔️ Schaden".
+ */
+function formatStatusWithSlot(entry) {
+    let status = formatStatus(entry);
+    if (entry.slot) {
+        const label = [entry.slot.emoji, entry.slot.name].filter(Boolean).join(' ');
+        status += entry.slot.wish ? ` · Wunsch: ${label}` : ` · ${label}`;
+    }
+    return status;
+}
+
+/**
  * Text block of one entry: title, start, status and slot.
  *
  * @param {{ entry: Object, event: Object }} item -> Loaded registration.
@@ -86,12 +102,7 @@ function formatEntry({ entry, event }) {
     const start = parseDate(event.startDate);
     const lines = [`**${escapeMarkdown(String(event.title || ''))}**`];
     if (start) lines.push(`📅 ${start.toLocaleString('de-DE', { timeZone: TIMEZONE })}`);
-    let status = formatStatus(entry);
-    if (entry.slot) {
-        const label = [entry.slot.emoji, entry.slot.name].filter(Boolean).join(' ');
-        status += entry.slot.wish ? ` · Wunsch: ${label}` : ` · ${label}`;
-    }
-    lines.push(status);
+    lines.push(formatStatusWithSlot(entry));
     return lines.join('\n');
 }
 
@@ -272,6 +283,7 @@ async function handleMySwitchButton(interaction, eventId) {
 }
 
 module.exports = {
+    formatStatusWithSlot,
     loadUpcomingRegistrations,
     buildMyEventsMessage,
     handleMyEventsCommand,
