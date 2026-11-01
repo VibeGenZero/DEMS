@@ -213,7 +213,7 @@ export function approvalChannelOptions(channels, selected) {
  * @param {string} emptyLabel -> Label of the empty first option.
  * @returns {string} -> Option elements; a stored channel the bot cannot list stays selectable.
  */
-function textChannelOptions(channels, selected, emptyLabel) {
+export function textChannelOptions(channels, selected, emptyLabel) {
     const text = (Array.isArray(channels) ? channels : []).filter(channel => channel.type === 'text');
     const options = [`<option value="">${escapeHtml(emptyLabel)}</option>`]
         .concat(text.map(channel => `<option value="${escapeHtml(channel.id)}">#${escapeHtml(channel.name)}</option>`));

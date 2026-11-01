@@ -72,7 +72,7 @@ Shared by `routes/admin.js` and `bot/adminCommands.js`; bot helpers are required
 | `buildNewEvent(input, createdBy)` | document of a new event (wizard defaults, slots → places and no guests, reminder merge); `slots` must be normalized |
 | `createEventChannelsAllowed(event)` | event channels unless „Auto Channel-Erstellung“ is off in the bot center (B-02) |
 | `publishDraft(eventId, adminId, { via })` | only a `draft` with a start → `active`, `UPDATE_EVENT_STATUS`, announcement refresh, channels; else `{ ok: false, code: missing\|not_draft\|no_start }` |
-| `announceEvent(eventId, adminId, { pings, via })` | announcement post + record (max 5) + thread (bot center switch) + `ANNOUNCE_EVENT`; `{ ok: false, status, error }` with the German route texts |
+| `announceEvent(eventId, adminId, { pings, via })` | target: the event's `announceChannelId` (B-11), else `announceTarget`; an own channel that refuses the post → „Der Ankündigungskanal des Events ist nicht erreichbar – …“; announcement post + record (max 5) + thread (bot center switch) + `ANNOUNCE_EVENT`; `{ ok: false, status, error }` with the German route texts |
 | `createPoll(input, adminId, { via })` / `announcePoll(pollId, adminId, { pings, via })` | open poll (`normalizePollInput`) + `CREATE_POLL`; poll post + record + `ANNOUNCE_POLL` |
 
 `via: 'discord'` appends „ in Discord“ to the audit detail.

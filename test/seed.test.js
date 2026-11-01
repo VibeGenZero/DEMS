@@ -66,6 +66,12 @@ test('the seed has an open poll with a future deadline for /abstimmungen (B-12)'
     assert.ok(poll.options.length >= 2);
 });
 
+test('the raid announces in its own channel (B-11)', async () => {
+    const { CHANNEL_ID } = require('../dev/mockGuild');
+    assert.equal((await getEvent(EVENT_ID.ROLE)).announceChannelId, CHANNEL_ID.EVENTS);
+    assert.notEqual(CHANNEL_ID.EVENTS, CHANNEL_ID.ANNOUNCEMENTS);
+});
+
 test('seedIfEmpty does not seed twice', async () => {
     assert.equal(await seedIfEmpty(), null);
     assert.equal(await countDocs('events'), EXPECTED_COUNTS.events);

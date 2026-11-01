@@ -11,7 +11,8 @@ export async function loadChannelsForAutocomplete() {
     if (_cachedChannels !== null) return _cachedChannels;
     try {
         const res = await fetch('/api/admin/channels');
-        _cachedChannels = await res.json();
+        const channels = res.ok ? await res.json() : [];
+        _cachedChannels = Array.isArray(channels) ? channels : [];
         return _cachedChannels;
     } catch { return []; }
 }

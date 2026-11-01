@@ -44,6 +44,7 @@ erDiagram
 | `reminderHours` | `[{ hours, sent }]` (legacy: number, normalized by `utils/reminders.js`) | `sent` is the only duplicate protection; kept on save while `startDate` is unchanged — see [reminders-presence](reminders-presence.md) |
 | `customBotMessages` | `{ registration?, accepted?, rejected? }` | per-event DM templates |
 | `checkinMessage` / `checkinEnabled` / `checkinCode` | string / bool / 6-digit string | code never leaves the admin area (`toPublicEvent`); admins read it via `checkin-stats` |
+| `announceChannelId` | string | own announcement channel of the event (B-11), `''` = default (bot center, else `DISCORD_ANNOUNCE_CHANNEL_ID`); `''` or a Discord id (`checkEventFields`); shared by series (`SERIES_FIELDS`) and templates (`TEMPLATE_FIELDS`) |
 | `autoCreateChannels`, `channelConfig` | bool, `{ type: voice\|text\|both, voiceName?, textName? }` | private event channels |
 | `discordChannelId`, `discordTextChannelId`, `discordScheduledEventId` | id or null | set by the bot; duplicates and new series dates start without `discordScheduledEventId` |
 | `discordScheduledEventStatus` | `scheduled` \| `active` \| `completed` \| null | last status the bot set on the Discord server event (B-09); cleared with the id |

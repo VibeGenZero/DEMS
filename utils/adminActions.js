@@ -19,6 +19,7 @@ const { debugLog } = require('./debugLog');
 // Announcement records kept per event or poll (older ones are no longer refreshed)
 const MAX_TRACKED_ANNOUNCEMENTS = 5;
 const SEND_FAILED = 'Konnte nicht in den Channel posten.';
+const OWN_CHANNEL_FAILED = 'Der Ankündigungskanal des Events ist nicht erreichbar – wähle im Assistenten einen anderen.';
 
 const bot = () => require('../bot');
 /** Audit detail suffix for actions done through the Discord commands. */
@@ -58,6 +59,8 @@ function buildNewEvent(input, createdBy) {
         customBotMessages: input.customBotMessages || {},
         autoCreateChannels: !!input.autoCreateChannels,
         channelConfig: input.channelConfig || {},
+        // Own announcement channel, '' = bot center / .env default (B-11)
+        announceChannelId: input.announceChannelId || '',
         allowGuests: slots.length > 0 ? false : input.allowGuests !== false,
         slots,
         sourcePollId: input.sourcePollId || '',
@@ -127,14 +130,15 @@ async function publishDraft(eventId, adminId, { via } = {}) {
  * @returns {Promise<{ ok: true, sent: Object, event: Object } | { ok: false, status: number, error: string }>}
  */
 async function announceEvent(eventId, adminId, { pings = {}, via } = {}) {
-    const settings = await loadBotSettings();
-    // Bot center choice, else DISCORD_ANNOUNCE_CHANNEL_ID (B-02)
-    const target = announceTarget(settings);
-    if (target.error) return { ok: false, status: 400, error: target.error };
-
     const snap = await getDoc(doc(db, 'events', eventId));
     if (!snap.exists()) return { ok: false, status: 404, error: 'Event nicht gefunden' };
     const event = snap.data();
+
+    const settings = await loadBotSettings();
+    // The event's own channel (B-11), else the bot center choice, else DISCORD_ANNOUNCE_CHANNEL_ID (B-02)
+    const ownChannel = event.announceChannelId || '';
+    const target = ownChannel ? { channelId: ownChannel } : announceTarget(settings);
+    if (target.error) return { ok: false, status: 400, error: target.error };
 
     const { buildAnnouncementIntro, buildEventAnnouncement, sendChannelMessage, ensureAnnouncementThread } = bot();
     const ping = {
@@ -146,7 +150,7 @@ async function announceEvent(eventId, adminId, { pings = {}, via } = {}) {
     const intro = buildAnnouncementIntro(ping);
     const roster = await loadEventRoster(eventId, event);
     const sent = await sendChannelMessage(target.channelId, buildEventAnnouncement(event, eventId, roster, intro), ping);
-    if (!sent) return { ok: false, status: 500, error: SEND_FAILED };
+    if (!sent) return { ok: false, status: 500, error: ownChannel ? OWN_CHANNEL_FAILED : SEND_FAILED };
 
     const announcements = [
         ...(Array.isArray(event.announcements) ? event.announcements : []),

@@ -205,6 +205,16 @@ test('a valid event modal saves a draft and offers publish, announce and the web
     assert.equal(created.details, 'Created event "Discord-Abend" in Discord');
 });
 
+test('a template with its own announcement channel passes it to the draft (B-11)', async () => {
+    const templateId = 'test-template-channel';
+    await setDoc(doc(db, 'eventTemplates', templateId), {
+        name: 'Mit Kanal', settings: { title: 'Mit Kanal', slots: [], announceChannelId: '120000000000000003' }
+    });
+    await submitEventModal({ title: 'Kanal aus Vorlage', start: typedDate(13, '20:00') }, { templateId });
+    const [event] = await eventsTitled('Kanal aus Vorlage');
+    assert.equal(event.announceChannelId, '120000000000000003');
+});
+
 test('a slot template gives slots, places and access of the template', async () => {
     await submitEventModal({ title: 'Raid aus Discord', start: typedDate(11, '20:00'), description: '' }, { templateId: RAID_TEMPLATE });
     const [event] = await eventsTitled('Raid aus Discord');

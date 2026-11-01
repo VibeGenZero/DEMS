@@ -15,7 +15,7 @@ const CHANGEABLE_STATUSES = ['draft', 'active'];
 const SERIES_FIELDS = [
     'title', 'description', 'bannerUrl', 'accentColor', 'location', 'category', 'maxParticipants', 'slots',
     'allowGuests', 'accessMode', 'requiredRoles', 'approvalMode', 'assignRoleId', 'formFields', 'reminderHours',
-    'checkinMessage', 'customBotMessages', 'autoCreateChannels', 'channelConfig'
+    'checkinMessage', 'customBotMessages', 'autoCreateChannels', 'channelConfig', 'announceChannelId'
 ];
 
 /**
