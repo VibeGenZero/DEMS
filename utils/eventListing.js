@@ -9,7 +9,7 @@
 // Without an end date an event counts as two hours long
 const DEFAULT_DURATION_MS = 2 * 60 * 60 * 1000;
 // Own registrations that put the member on the event's list
-const OWN_STATUSES = ['accepted', 'pending', 'waitlisted'];
+const OWN_STATUSES = ['accepted', 'pending', 'waitlisted', 'offered'];
 // Registrations whose guests count as taking part
 const HOST_STATUSES = ['accepted', 'pending'];
 // German answers once a deadline has passed (W-03), shared by the service and the bot

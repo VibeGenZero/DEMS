@@ -332,6 +332,27 @@
               </div>
             </div>
 
+            <!-- Waitlist offer (events/offer.js, B-15) -->
+            <div class="is-hidden" id="detail-offer">
+              <div class="glass-card p-4 mb-4">
+                <div class="d-flex align-items-center gap-3 flex-wrap">
+                  <i class="bi bi-hourglass-split text-warning icon-xl"></i>
+                  <div class="flex-grow-1">
+                    <h5 class="mb-1">Ein Platz ist frei!</h5>
+                    <p class="text-secondary mb-0" id="detail-offer-text"></p>
+                  </div>
+                  <div class="d-flex gap-2">
+                    <button class="btn btn-accent" data-click="confirmOffer" id="offer-confirm-btn">
+                      <i class="bi bi-check-lg me-1"></i>Platz annehmen
+                    </button>
+                    <button class="btn btn-outline-secondary" data-click="declineOffer" id="offer-decline-btn">
+                      <i class="bi bi-x-lg me-1"></i>Doch nicht
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             <!-- No access -->
             <div class="is-hidden" id="detail-no-access">
               <div class="glass-card p-4 mb-4">
@@ -1014,6 +1035,19 @@
                       <i class="bi bi-chat-dots me-1"></i>Diskussions-Thread zu Ankündigungen
                     </label>
                     <small class="d-block text-muted">Öffnet beim Ankündigen eines Events einen Thread für Fragen und Absprachen. Aus = keine neuen Threads; vorhandene bleiben verlinkt.</small>
+                  </div>
+                  <!-- Waitlist offers (admin/bot-control.js, B-15) -->
+                  <div class="form-check form-switch mb-2">
+                    <input class="form-check-input" type="checkbox" id="bot-waitlist-confirmation" checked>
+                    <label class="form-check-label" for="bot-waitlist-confirmation">
+                      <i class="bi bi-hourglass-split me-1"></i>Nachrücken bestätigen
+                    </label>
+                    <small class="d-block text-muted">Ein frei gewordener Platz wird angeboten und muss bestätigt werden, sonst rückt der Nächste nach. Aus = sofort nachrücken.</small>
+                  </div>
+                  <div class="mb-3 ms-4">
+                    <label class="form-label small text-muted" for="bot-waitlist-confirm-hours">Bestätigungsfrist (Stunden)</label>
+                    <input type="number" class="form-control form-control-sm" id="bot-waitlist-confirm-hours" min="1" max="72" step="1" value="12">
+                    <small class="d-block text-muted">1–72 Stunden, höchstens bis 1 Stunde vor Beginn.</small>
                   </div>
                 </div>
               </div>

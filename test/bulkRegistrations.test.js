@@ -16,9 +16,10 @@ const toById = (plan) => Object.fromEntries(plan.changes.map(change => [change.i
 
 test('the actions and the id limit', () => {
     assert.deepEqual(BULK_ACTIONS, {
-        accept: ['pending', 'waitlisted'],
-        waitlist: ['pending', 'accepted'],
-        reject: ['pending', 'waitlisted', 'accepted']
+        // offered = a waitlist offer (B-15), decided like a waitlisted registration
+        accept: ['pending', 'waitlisted', 'offered'],
+        waitlist: ['pending', 'accepted', 'offered'],
+        reject: ['pending', 'waitlisted', 'accepted', 'offered']
     });
     assert.equal(MAX_BULK_IDS, 200);
 });

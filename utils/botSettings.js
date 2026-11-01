@@ -22,11 +22,28 @@ const DEFAULT_BOT_SETTINGS = Object.freeze({
     announceChannel: '',
     // Channel for approval requests (B-06); empty -> approvals only on the website
     approvalChannel: '',
-    welcomeMessage: ''
+    welcomeMessage: '',
+    // A freed waitlist place is offered and must be confirmed within the period (B-15)
+    waitlistConfirmation: true,
+    waitlistConfirmHours: 12
 });
 
+// Allowed confirmation period in hours (B-15)
+const CONFIRM_HOURS_MIN = 1;
+const CONFIRM_HOURS_MAX = 72;
+
+/**
+ * Whether a value is a whole number of hours the confirmation period allows.
+ *
+ * @param {*} value -> Stored or submitted value.
+ * @returns {boolean}
+ */
+function isValidConfirmHours(value) {
+    return Number.isInteger(value) && value >= CONFIRM_HOURS_MIN && value <= CONFIRM_HOURS_MAX;
+}
+
 // Switches that are on unless stored as false / off unless stored as true (same rules as PUT /bot/settings)
-const ON_BY_DEFAULT = ['dmNotifications', 'reminderEnabled', 'eventStartNotifications', 'autoChannelCreation', 'announcementThreads'];
+const ON_BY_DEFAULT = ['dmNotifications', 'reminderEnabled', 'eventStartNotifications', 'autoChannelCreation', 'announcementThreads', 'waitlistConfirmation'];
 const OFF_BY_DEFAULT = ['autoUpdatePresence', 'autoStatusCalendarEvents'];
 
 let cached = null;
@@ -44,6 +61,9 @@ function normalizeBotSettings(raw) {
     for (const key of OFF_BY_DEFAULT) settings[key] = !!stored[key];
     for (const key of ['statusType', 'activityType']) settings[key] = stored[key] || DEFAULT_BOT_SETTINGS[key];
     for (const key of ['activityText', 'announceChannel', 'welcomeMessage']) settings[key] = typeof stored[key] === 'string' ? stored[key] : '';
+    settings.waitlistConfirmHours = isValidConfirmHours(stored.waitlistConfirmHours)
+        ? stored.waitlistConfirmHours
+        : DEFAULT_BOT_SETTINGS.waitlistConfirmHours;
     return settings;
 }
 
@@ -150,6 +170,7 @@ function announceTarget(settings) {
 }
 
 module.exports = {
+    isValidConfirmHours,
     sendWelcomeOnce,
     announceTarget,
     DEFAULT_BOT_SETTINGS,

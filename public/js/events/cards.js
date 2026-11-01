@@ -19,6 +19,8 @@ export const STATUS_CHIPS = {
     accepted: { label: 'Angemeldet', className: 'chip-success', icon: 'check-circle-fill' },
     pending: { label: 'Ausstehend', className: 'chip-warning', icon: 'hourglass-split' },
     waitlisted: { label: 'Warteliste', className: 'chip-info', icon: 'list-ol' },
+    // A freed place waiting for the member's confirmation (B-15)
+    offered: { label: 'Platz angeboten', className: 'chip-warning', icon: 'hourglass-split' },
     guest: { label: 'Als Gast', className: 'chip-accent', icon: 'person-plus' }
 };
 

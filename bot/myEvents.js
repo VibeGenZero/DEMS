@@ -13,6 +13,7 @@ const { getSlots, countSlotOccupancy, hasFreePlace } = require('../utils/slotSer
 const { isRegistrationClosed, isUnregisterClosed, parseDate } = require('../utils/eventListing');
 const { buildEventUrl, buildSiteUrl } = require('../utils/eventUrl');
 const { DEMS_ACCENT } = require('./layout');
+const { formatDeadline } = require('./waitlistOffers');
 const {
     TIMEZONE, MY_LEAVE_PREFIX, MY_LEAVE_CANCEL_PREFIX, MY_SWITCH_PREFIX, SLOT_LEAVE_PREFIX, SLOT_SWITCH_PREFIX
 } = require('./constants');
@@ -67,6 +68,9 @@ async function loadUpcomingRegistrations(userId) {
  * @returns {string} -> German status with its symbol.
  */
 function formatStatus(entry) {
+    if (entry.status === 'offered') {
+        return entry.offerExpiresAt ? `⏳ Platz angeboten – bestätigen bis ${formatDeadline(entry.offerExpiresAt)}` : '⏳ Platz angeboten';
+    }
     if (entry.status === 'pending') return '📋 Anfrage ausstehend';
     if (entry.status === 'rejected') return '❌ Abgelehnt';
     if (entry.status === 'waitlisted') {

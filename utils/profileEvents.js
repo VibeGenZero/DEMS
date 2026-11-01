@@ -45,6 +45,8 @@ function toProfileEntry(registration, event, waitlistPosition = null) {
         createdAt: registration.createdAt || '',
         slot: event ? profileSlot(registration, event) : null,
         waitlistPosition,
+        // Deadline of a waitlist offer (B-15), '' otherwise
+        offerExpiresAt: registration.status === 'offered' ? (registration.offer?.expiresAt || '') : '',
         event: event ? {
             id: registration.eventId,
             title: event.title || '',

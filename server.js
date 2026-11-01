@@ -15,6 +15,7 @@ const rateLimit = require('express-rate-limit');
 const { startBot, whenBotSettled, startReminderScheduler, stopBot, getGuildName, getGuildIconUrl, fetchMemberRoleIds } = require('./bot');
 const { startPollScheduler, stopPollScheduler } = require('./utils/pollStore');
 const { startArchiveScheduler, stopArchiveScheduler } = require('./utils/eventArchive');
+const { startOfferScheduler, stopOfferScheduler } = require('./utils/waitlistOffers');
 const { createCsrfToken, createRoleRefresh } = require('./middleware/auth');
 const { sharedSessionStore } = require('./utils/sessionStore');
 const { BANNER_FILE, bannerDir, sweepOrphanBanners } = require('./utils/bannerStore');
@@ -300,6 +301,8 @@ startPollScheduler();
 // Archives events a day after their end; the first run catches up after a pause and
 // waits for the bot, so the Discord announcements of archived events get refreshed (W-01)
 startArchiveScheduler({ waitFor: whenBotSettled() });
+// Waitlist offers that were not confirmed in time go to the next member (B-15)
+startOfferScheduler({ waitFor: whenBotSettled() });
 // Uploaded banners no event uses and older than a day (wizard closed without saving, W-12)
 sweepOrphanBanners().then((count) => {
     if (count > 0) console.log(`🧹 ${count} verwaiste Banner gelöscht.`);
@@ -313,6 +316,7 @@ function gracefulShutdown(signal) {
         stopBot();
         stopPollScheduler();
         stopArchiveScheduler();
+        stopOfferScheduler();
         console.log('✅ Bot & Scheduler gestoppt. Auf Wiedersehen!');
         process.exit(0);
     });

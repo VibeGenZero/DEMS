@@ -5,7 +5,8 @@ const { db, collection, doc, getDoc, getDocs, addDoc, deleteDoc, updateDoc, quer
 const { requireAuth } = require('../middleware/auth');
 const { checkRegistrationAllowed } = require('../middleware/maintenance');
 const { getGuildRoles, getPublicGuildChannels, mirrorCommentToThread, deleteMirroredMessage } = require('../bot');
-const { loadEventRoster, loadEventRegistrations, toPublicEvent, isEventVisibleTo } = require('../utils/eventUtils');
+const { loadEventRoster, loadEventRegistrations, toPublicEvent, isEventVisibleTo, findUserRegistration } = require('../utils/eventUtils');
+const { confirmOffer, declineOffer } = require('../utils/waitlistOffers');
 const { isEventOver, pickSeriesRepresentative, myRegistrationStatus } = require('../utils/eventListing');
 const { registerUserForEvent, switchOwnSlot, unregisterUserFromEvent, REGISTRATION_SOURCE } = require('../utils/registrationService');
 const { hasSlots, withSlotSummary } = require('../utils/slotService');
@@ -355,6 +356,33 @@ router.put('/:id/register/slot', requireAuth, checkRegistrationAllowed, async (r
 /**
  * DELETE /api/events/:id/register — Unregister from an event
  */
+/**
+ * POST /api/events/:id/offer/confirm and /offer/decline — answer the own
+ * waitlist offer (B-15): confirm moves up like an instant move-up, decline
+ * removes the registration and offers the place to the next entry.
+ */
+for (const answer of ['confirm', 'decline']) {
+    router.post(`/:id/offer/${answer}`, requireAuth, checkRegistrationAllowed, async (req, res) => {
+        try {
+            const userId = req.session.user.id;
+            const own = await findUserRegistration(req.params.id, userId);
+            if (!own) return res.status(404).json({ error: 'Keine Anmeldung gefunden.' });
+            const result = answer === 'confirm'
+                ? await confirmOffer({ registrationId: own.id, userId })
+                : await declineOffer({ registrationId: own.id, userId });
+            if (!result.ok) {
+                return result.code === 'missing'
+                    ? res.status(404).json({ error: 'Keine Anmeldung gefunden.' })
+                    : res.status(409).json({ error: 'Das Angebot ist nicht mehr gültig.' });
+            }
+            res.json(answer === 'confirm' ? { success: true, status: result.status } : { success: true });
+        } catch (err) {
+            console.error('Waitlist offer answer error:', err);
+            res.status(500).json({ error: 'Fehler bei der Antwort auf das Angebot.' });
+        }
+    });
+}
+
 router.delete('/:id/register', requireAuth, async (req, res) => {
     try {
         const result = await unregisterUserFromEvent({ eventId: req.params.id, userId: req.session.user.id });
