@@ -322,8 +322,8 @@ test('/register and /unregister carry German names for German clients', () => {
     const { buildSlashCommands } = require('../bot/commands');
     const commands = Object.fromEntries(buildSlashCommands().map(command => [command.name, command]));
 
-    // event and poll are the admin commands of B-13 (test/adminCommands.test.js)
-    assert.deepEqual(Object.keys(commands), ['events', 'register', 'unregister', 'my-events', 'event', 'poll']);
+    // polls is B-12 (test/infoCommands.test.js), event and poll the admin commands of B-13 (test/adminCommands.test.js)
+    assert.deepEqual(Object.keys(commands), ['events', 'register', 'unregister', 'my-events', 'polls', 'event', 'poll']);
     assert.equal(commands['my-events'].name_localizations.de, 'meine-events');
     assert.equal(commands['my-events'].description_localizations.de, 'Zeigt deine kommenden Anmeldungen');
     assert.equal(commands.register.name_localizations.de, 'anmelden');

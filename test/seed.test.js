@@ -59,6 +59,13 @@ test('the seed has a template with and one without slots for /event erstellen (B
     assert.ok(plain[0].settings.maxParticipants > 0, 'the plain template prefills the places');
 });
 
+test('the seed has an open poll with a future deadline for /abstimmungen (B-12)', async () => {
+    const poll = (await getDoc(doc(db, 'polls', POLL_ID.OPEN))).data();
+    assert.equal(poll.status, 'open');
+    assert.ok(new Date(poll.deadline) > new Date(), 'deadline in the future');
+    assert.ok(poll.options.length >= 2);
+});
+
 test('seedIfEmpty does not seed twice', async () => {
     assert.equal(await seedIfEmpty(), null);
     assert.equal(await countDocs('events'), EXPECTED_COUNTS.events);
