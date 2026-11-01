@@ -3,7 +3,7 @@ id: bot
 title: bot.js and bot/ — Discord bot and Discord helpers
 type: module
 tags: [discord, bot, discordjs, slash-commands, modals, buttons, dm, roles, channels]
-sources: [bot.js, bot, dev/mockBot.js, test/adminCommands.test.js, test/infoCommands.test.js, test/botModules.test.js, test/botRealExports.test.js, test/eventAnnouncement.test.js, test/announcementDelivery.test.js, test/botThreads.test.js, test/botLayout.test.js, test/myEventsCommand.test.js, test/discordApprovals.test.js, test/discordCheckin.test.js, test/threadSync.test.js, test/scheduledEventSync.test.js]
+sources: [bot.js, bot, dev/mockBot.js, test/eventChannels.test.js, test/adminCommands.test.js, test/infoCommands.test.js, test/botModules.test.js, test/botRealExports.test.js, test/eventAnnouncement.test.js, test/announcementDelivery.test.js, test/botThreads.test.js, test/botLayout.test.js, test/myEventsCommand.test.js, test/discordApprovals.test.js, test/discordCheckin.test.js, test/threadSync.test.js, test/scheduledEventSync.test.js]
 part_of: [architecture]
 depends_on: [data-layer, utils, middleware]
 see_also: [discord-integration, reminders-presence, form-fields]
