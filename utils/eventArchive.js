@@ -2,12 +2,15 @@
  * Automatic archive of ended events (W-01): an active event is archived 24
  * hours after its end (endDate, else start + 2 hours, see eventEndTime). The
  * scheduler runs once at start, so events that ended during a pause are
- * caught up, then every 5 minutes. Channels and the event role stay (B-10).
+ * caught up, then every 5 minutes. Each archived event is cleaned up in
+ * Discord (channels, event role); a pass also retries clean-ups the bot could
+ * not run before (B-10).
  */
 const { db, collection, doc, getDocs, query, updateDoc, where } = require('../firebaseAdmin');
 const { eventEndTime } = require('./eventListing');
 const { addAuditLog } = require('./eventUtils');
 const { notifyRegistrationsChanged } = require('./announcementRefresh');
+const { cleanupEvent, retryPendingCleanups } = require('./eventCleanup');
 
 const ARCHIVE_DELAY_MS = 24 * 60 * 60 * 1000;
 const ARCHIVE_INTERVAL_MS = 5 * 60 * 1000;
@@ -29,8 +32,9 @@ function isDueForArchive(event, now) {
 }
 
 /**
- * Archive every active event that is due, log each one as done by the system
- * and refresh its stored announcements (their buttons go away).
+ * Archive every active event that is due, log each one as done by the system,
+ * refresh its stored announcements (their buttons go away) and clean it up in
+ * Discord; then retry the clean-ups that are still pending.
  *
  * @param {Object} [options] -> Overrides for tests.
  * @param {Date} [options.now] -> Reference time.
@@ -46,12 +50,15 @@ async function archiveEndedEvents({ now = new Date() } = {}) {
             await updateDoc(doc(db, 'events', eventDoc.id), { status: 'archived', updatedAt: now.toISOString() });
             await addAuditLog('AUTO_ARCHIVE_EVENT', 'system', `Archived "${event.title}" 24 hours after its end`, eventDoc.id);
             notifyRegistrationsChanged(eventDoc.id);
+            await cleanupEvent(eventDoc.id);
             count++;
         } catch (err) {
             console.error('Auto archive failed for', eventDoc.id, err.message);
         }
     }
     if (count > 0) console.log(`🗄️ Archived ${count} ended event(s)`);
+    const caughtUp = await retryPendingCleanups();
+    if (caughtUp > 0) console.log(`🧹 Caught up ${caughtUp} event clean-up(s)`);
     return count;
 }
 

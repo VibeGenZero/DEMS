@@ -37,6 +37,29 @@ const { sharedSessionStore } = require('../utils/sessionStore');
 const { loadBotSettings, announceTarget } = require('../utils/botSettings');
 const { BULK_ACTIONS, MAX_BULK_IDS, planBulkAction } = require('../utils/bulkRegistrations');
 const { followingDates, transferTime, planExtension, seriesUpdateFields, slotsForDate } = require('../utils/eventSeries');
+const { cleanupEvent, restoreEventRole } = require('../utils/eventCleanup');
+
+// Statuses after which an event is over for good -> clean-up in Discord (B-10)
+const OVER_STATUSES = ['archived', 'cancelled'];
+
+/**
+ * Clean-up or role hand-back after a status change (B-10), fire and forget:
+ * archived/cancelled from another status -> channels and event role go;
+ * active again -> the role comes back (see utils/eventCleanup.js).
+ *
+ * @param {string} eventId -> Event document id.
+ * @param {Object} oldEvent -> The event before the change.
+ * @param {string} status -> The status after the change.
+ * @returns {boolean} -> True when a clean-up was started (it deletes the channels itself).
+ */
+function followStatusInDiscord(eventId, oldEvent, status) {
+    if (OVER_STATUSES.includes(status) && !OVER_STATUSES.includes(oldEvent.status)) {
+        cleanupEvent(eventId).catch(console.error);
+        return true;
+    }
+    if (status === 'active') restoreEventRole(eventId, oldEvent).catch(console.error);
+    return false;
+}
 
 // Days and clock times of series dates (W-11)
 const SERIES_TIMEZONE = process.env.TIMEZONE || 'Europe/Berlin';
@@ -523,9 +546,10 @@ async function applySavedEvent({ eventId, oldEvent, updates, notify, adminId }) 
     const wasActive = oldEvent.status === 'active';
 
     const hasChannels = !!(oldEvent.discordChannelId || oldEvent.discordTextChannelId);
+    const cleaningUp = followStatusInDiscord(eventId, oldEvent, status);
     if (updates.autoCreateChannels && isNowActive && !hasChannels) {
         createEventChannelsAllowed({ id: eventId, ...updates }).catch(console.error);
-    } else if ((oldEvent.autoCreateChannels && wasActive) && (!updates.autoCreateChannels || !isNowActive)) {
+    } else if (!cleaningUp && (oldEvent.autoCreateChannels && wasActive) && (!updates.autoCreateChannels || !isNowActive)) {
         deleteEventChannels(eventId).catch(console.error);
     }
 
@@ -599,6 +623,7 @@ async function extendSeries({ seriesId, editedId, starts, newUntil, adminId }) {
             // A new date is not linked to the Discord server event of the copied one (B-09)
             discordScheduledEventId: null,
             discordScheduledEventStatus: null,
+            discordCleanup: null,
             reminderHours: mergeReminderHours(base.reminderHours, null, times.startDate),
             eventStartNotificationSent: false,
             registrationClosedRefreshed: false,
@@ -737,11 +762,12 @@ router.put('/events/:id/status', async (req, res) => {
         await addAuditLog('UPDATE_EVENT_STATUS', req.session.user.id, `Changed status to ${status}`, req.params.id);
         notifyRegistrationsChanged(req.params.id);
         syncScheduledEventAfterChange(req.params.id, { ...oldEvent, status });
+        const cleaningUp = followStatusInDiscord(req.params.id, oldEvent, status);
 
         if (oldEvent.autoCreateChannels) {
             if (status === 'active' && oldEvent.status !== 'active') {
                 createEventChannelsAllowed({ id: req.params.id, ...oldEvent, status }).catch(console.error);
-            } else if (status !== 'active' && oldEvent.status === 'active') {
+            } else if (!cleaningUp && status !== 'active' && oldEvent.status === 'active') {
                 deleteEventChannels(req.params.id).catch(console.error);
             }
         }
@@ -767,10 +793,8 @@ router.put('/events/:id/cancel', async (req, res) => {
         // 1. Update status
         await updateDoc(doc(db, 'events', eventId), { status: 'cancelled', updatedAt: new Date().toISOString() });
         syncScheduledEventAfterChange(eventId, { ...event, status: 'cancelled' });
-
-        if (event.autoCreateChannels && event.status === 'active') {
-            deleteEventChannels(eventId).catch(console.error);
-        }
+        // Channels and event role go (B-10); an event over already was cleaned up then
+        if (!OVER_STATUSES.includes(event.status)) cleanupEvent(eventId).catch(console.error);
 
         // 2. Notify participants
         const regQ = query(
@@ -866,9 +890,8 @@ router.post('/events/:id/end', async (req, res) => {
                 .catch(err => console.error('Discord server event end error:', err.message));
         }
 
-        if (data.autoCreateChannels && data.status === 'active') {
-            deleteEventChannels(eventId).catch(console.error);
-        }
+        // Channels and event role go (B-10); an event over already was cleaned up then
+        if (!OVER_STATUSES.includes(data.status)) cleanupEvent(eventId).catch(console.error);
 
         res.json({ success: true, updates });
     } catch (err) {
@@ -885,8 +908,8 @@ router.delete('/events/:id', async (req, res) => {
         const eventSnap = await getDoc(doc(db, 'events', req.params.id));
         const event = eventSnap.exists() ? eventSnap.data() : null;
 
-        // deleteEventChannels reads the channel ids from the event -> before the event is gone
-        if (event) await deleteEventChannels(req.params.id);
+        // The clean-up reads the channel ids and the registrations -> before they are gone (B-10)
+        if (event) await cleanupEvent(req.params.id);
         // The Discord server event goes too (B-09); it only needs the stored id
         if (event?.discordScheduledEventId) {
             removeScheduledEvent(event).catch(err => console.error('Discord server event delete error:', err.message));
@@ -937,8 +960,8 @@ router.delete('/events/series/:seriesId', async (req, res) => {
 
         // Delete all events and their registrations
         for (const eventId of eventIds) {
-            // Channels first: deleteEventChannels reads their ids from the event
-            await deleteEventChannels(eventId);
+            // Clean-up first: it reads the channel ids and the registrations (B-10)
+            await cleanupEvent(eventId);
             const seriesEvent = eventsById.get(eventId);
             if (seriesEvent.discordScheduledEventId) {
                 removeScheduledEvent(seriesEvent).catch(err => console.error('Discord server event delete error:', err.message));
@@ -1106,6 +1129,7 @@ router.post('/events/:id/duplicate', async (req, res) => {
             discordThread: null,  // and opens its own discussion thread (B-14)
             discordScheduledEventId: null,  // and is synced to Discord on its own (B-09)
             discordScheduledEventStatus: null,
+            discordCleanup: null,  // and is cleaned up on its own (B-10)
             reminderHours: mergeReminderHours(original.reminderHours, null, original.startDate),  // nothing sent for the copy yet
             eventStartNotificationSent: false,
         };

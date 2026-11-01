@@ -47,6 +47,7 @@ erDiagram
 | `autoCreateChannels`, `channelConfig` | bool, `{ type: voice\|text\|both, voiceName?, textName? }` | private event channels |
 | `discordChannelId`, `discordTextChannelId`, `discordScheduledEventId` | id or null | set by the bot; duplicates and new series dates start without `discordScheduledEventId` |
 | `discordScheduledEventStatus` | `scheduled` \| `active` \| `completed` \| null | last status the bot set on the Discord server event (B-09); cleared with the id |
+| `discordCleanup` | `pending` | `done` | null | clean-up after archive/cancel (channels, event role, B-10): `pending` while the bot could not run it, `done` afterwards, null after a reactivation; server-only, copies start without it |
 | `recurring`, `recurringInterval`, `recurringUntil`, `seriesId` | bool, `weekly`\|`biweekly`\|other=monthly, `YYYY-MM-DD`, uuid | series instances share `seriesId` |
 | `eventStartNotificationSent` | bool | start DM sent once |
 | `registrationClosedRefreshed` | bool | announcements refreshed once after the registration deadline (W-03); reset when an edit moves the deadline (`keepDeadlineRefreshFlag`) |

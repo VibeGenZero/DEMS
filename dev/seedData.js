@@ -237,7 +237,11 @@ function buildEvents(clock) {
             eventStartNotificationSent: true,
             // Its Discord server event runs; „Beenden“ completes it (B-09)
             discordScheduledEventId: '180000000000000002',
-            discordScheduledEventStatus: 'active'
+            discordScheduledEventStatus: 'active',
+            // „Beenden“ takes the role from its accepted members and deletes the channels (B-10)
+            assignRoleId: ROLE_ID.EVENT,
+            discordChannelId: '190000000000000001',
+            discordTextChannelId: '190000000000000002'
         }),
         [EVENT_ID.PAST]: buildEvent(clock, {
             title: 'Retro-Spieleabend',
@@ -250,7 +254,12 @@ function buildEvents(clock) {
             checkinEnabled: true,
             checkinCode: '481516',
             eventStartNotificationSent: true,
-            createdAt: clock.offset(-21 * DAY)
+            createdAt: clock.offset(-21 * DAY),
+            // Archived at start a day after its end, then cleaned up: the channels go and
+            // Aylin loses the role; Lena and Tom keep it for the running event (B-10)
+            assignRoleId: ROLE_ID.EVENT,
+            discordChannelId: '190000000000000003',
+            discordTextChannelId: '190000000000000004'
         }),
         // Ended three hours ago: over, but archived only a day after its end (W-01)
         [EVENT_ID.ENDED]: buildEvent(clock, {

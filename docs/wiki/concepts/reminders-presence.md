@@ -3,7 +3,7 @@ id: reminders-presence
 title: Reminders, start notifications and bot presence
 type: concept
 tags: [reminders, scheduler, archive, presence, activity, bot-settings, bot-control]
-sources: [bot/scheduler.js, bot/scheduledEvents.js, bot/checkin.js, utils/checkin.js, bot/settings.js, utils/reminders.js, utils/notificationPrefs.js, utils/eventListing.js, utils/eventArchive.js, routes/admin.js, server.js, public/js/admin/bot-control.js]
+sources: [bot/scheduler.js, bot/scheduledEvents.js, bot/checkin.js, utils/checkin.js, bot/settings.js, utils/reminders.js, utils/notificationPrefs.js, utils/eventListing.js, utils/eventArchive.js, utils/eventCleanup.js, routes/admin.js, server.js, public/js/admin/bot-control.js]
 depends_on: [bot, data-model]
 see_also: [event-lifecycle, discord-integration]
 ---
@@ -29,7 +29,7 @@ see_also: [event-lifecycle, discord-integration]
 ## Archive scheduler (`utils/eventArchive.js`, W-01)
 
 - `startArchiveScheduler({ waitFor: whenBotSettled() })` is started by `server.js` (independent of the bot settings) and stopped in the graceful shutdown. Its first run waits until the bot is ready (the refresh of the archived announcements needs it) or will not start (no token, failed login, 2 min without the ready event), then it runs `archiveEndedEvents()` every 5 min (`ARCHIVE_INTERVAL_MS`, timer `unref`'d).
-- `isDueForArchive(event, now)`: `status === 'active'` and `now >= end + 24 h` (`ARCHIVE_DELAY_MS`; end rule of `eventEndTime`). Each due event gets `status: 'archived'`, an audit entry `AUTO_ARCHIVE_EVENT` by `system` and `notifyRegistrationsChanged` (announcement refresh); an error on one event is logged and the others go on. The log line `🗄️ Archived N ended event(s)` appears only when N > 0.
+- `isDueForArchive(event, now)`: `status === 'active'` and `now >= end + 24 h` (`ARCHIVE_DELAY_MS`; end rule of `eventEndTime`). Each due event gets `status: 'archived'`, an audit entry `AUTO_ARCHIVE_EVENT` by `system` and `notifyRegistrationsChanged` (announcement refresh); an error on one event is logged and the others go on. The log line `🗄️ Archived N ended event(s)` appears only when N > 0. Each archived event is cleaned up right away (`cleanupEvent`: channels, event role, B-10); afterwards the pass runs `retryPendingCleanups()` for archived/cancelled events whose clean-up is still `pending` (bot was not ready), logging `🧹 Caught up N event clean-up(s)`.
 - Rules: [event-lifecycle](event-lifecycle.md).
 
 ## Presence (`applyBotSettings`)

@@ -48,6 +48,40 @@ async function removeRole(userId, roleId, guildId) {
 }
 
 /**
+ * Take one role from several members of the configured guild, e.g. the event
+ * role after an event is over (B-10). A member that cannot be fetched (left
+ * the server) or refused counts as failed; the others still lose the role.
+ *
+ * @param {string} roleId -> Role to take.
+ * @param {Array<string>} userIds -> Discord user ids.
+ * @returns {Promise<{ removed: number, failed: number }|false>} -> Counts, or false while the bot is not ready.
+ */
+async function removeRoleFromMembers(roleId, userIds) {
+    if (!state.isReady) return false;
+    debugLog('bot.removeRoleFromMembers', { roleId, count: userIds.length });
+    const result = { removed: 0, failed: 0 };
+    let guild;
+    try {
+        guild = await client.guilds.fetch(process.env.DISCORD_GUILD_ID);
+    } catch (err) {
+        console.error(`Failed to fetch the guild to remove role ${roleId}:`, err.message);
+        return { removed: 0, failed: userIds.length };
+    }
+    for (const userId of userIds) {
+        try {
+            const member = await guild.members.fetch(userId);
+            await member.roles.remove(roleId);
+            result.removed++;
+        } catch (err) {
+            console.error(`Failed to remove role ${roleId} from ${userId}:`, err.message);
+            result.failed++;
+        }
+    }
+    console.log(`🎭 Role ${roleId} removed from ${result.removed} member(s)`);
+    return result;
+}
+
+/**
  * Get a user's roles in the guild
  */
 async function getUserRoles(userId, guildId) {
@@ -259,6 +293,7 @@ async function getPublicGuildChannels(guildId) {
 module.exports = {
     assignRole,
     removeRole,
+    removeRoleFromMembers,
     getUserRoles,
     fetchMemberRoleIds,
     searchGuildMembers,
