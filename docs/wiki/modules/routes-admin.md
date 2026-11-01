@@ -3,7 +3,7 @@ id: routes-admin
 title: routes/admin.js — admin API
 type: module
 tags: [api, admin, events, registrations, discord, bot-control, maintenance, audit-log, csv]
-sources: [routes/admin.js, middleware/validators.js, utils/eventUtils.js, utils/capacity.js, utils/memberOverview.js, utils/insights.js, utils/participantMessage.js, utils/eventTemplates.js]
+sources: [routes/admin.js, middleware/validators.js, utils/eventUtils.js, utils/capacity.js, utils/memberOverview.js, utils/insights.js, utils/participantMessage.js, utils/eventTemplates.js, utils/adminActions.js]
 part_of: [architecture]
 depends_on: [middleware, utils, data-layer, bot]
 see_also: [event-lifecycle, maintenance-mode, discord-integration, api-index]
@@ -48,7 +48,7 @@ see_also: [event-lifecycle, maintenance-mode, discord-integration, api-index]
 | PUT | `/registrations/:id/slot` | body `{ slotId }` → `moveRegistrationToSlot` (may overbook → `warning`), promotes the waitlist | `MOVE_REGISTRATION_SLOT` |
 | GET | `/events/:id/message-recipients` | W-09: `{ accepted, all }` = how many people each group of the participant message reaches (numbers only); 404 "Event nicht gefunden" | — |
 | POST | `/events/:id/message` | W-09: body `{ text, group }`; group not `accepted`/`all` → 400 "Ungültige Empfängerauswahl.", text empty or > 1500 after trimming → 400, unknown event → 404, nobody addressed → 400 "Niemand in dieser Auswahl." (no audit entry); else `sendParticipantMessage` with `sendDM` (DM choices of W-16 do not apply), answers `{ recipients, delivered }` | `MESSAGE_PARTICIPANTS` (details "<group>: delivered/recipients zugestellt – „<first 100 chars>“", target = event) |
-| POST | `/events/:id/announce` | body `{ text, roleIds, pingEveryone }` → `sendChannelMessage` to the announcement channel (`announceTarget(loadBotSettings())`: bot center choice, else `DISCORD_ANNOUNCE_CHANNEL_ID`; neither → 400 „Kein Ankündigungskanal festgelegt – bitte in der Bot-Zentrale wählen.“, B-02) with the V2 announcement (live line-up) and the ping line `buildAnnouncementIntro(body)`; stores `{ channelId, messageId, intro }` in `event.announcements` (max 5); with the bot center switch `announcementThreads` on, `ensureAnnouncementThread` keeps or opens the event's discussion thread and stores it as `discordThread` (a failed thread does not change the answer) | `ANNOUNCE_EVENT` |
+| POST | `/events/:id/announce` | body `{ text, roleIds, pingEveryone }` → `announceEvent` (`utils/adminActions.js`, shared with `/event erstellen`, B-13): `sendChannelMessage` to the announcement channel (`announceTarget(loadBotSettings())`: bot center choice, else `DISCORD_ANNOUNCE_CHANNEL_ID`; neither → 400 „Kein Ankündigungskanal festgelegt – bitte in der Bot-Zentrale wählen.“, B-02) with the V2 announcement (live line-up) and the ping line `buildAnnouncementIntro(body)`; stores `{ channelId, messageId, intro }` in `event.announcements` (max 5); with the bot center switch `announcementThreads` on, `ensureAnnouncementThread` keeps or opens the event's discussion thread and stores it as `discordThread` (a failed thread does not change the answer) | `ANNOUNCE_EVENT` |
 | POST | `/events/:id/sync-discord` | creates a Discord scheduled event once, stores `discordScheduledEventId` + `discordScheduledEventStatus: 'scheduled'`; from then on `syncScheduledEventAfterChange` (called by `applySavedEvent`, status and cancel) updates, completes or removes it, start/end set its status, delete and series delete remove it (B-09) | `SYNC_DISCORD_EVENT` |
 | GET / PUT | `/bot-messages` | templates `registration`, `accepted`, `rejected` (`validateBotMessages`, ≤2000 chars) | `UPDATE_TEMPLATES` |
 | GET | `/audit-log` | paginated, newest first | — |
@@ -56,10 +56,10 @@ see_also: [event-lifecycle, maintenance-mode, discord-integration, api-index]
 | GET | `/insights` | W-14: `?range=30\|90\|365\|all` (missing = `90`, anything else → 400 "Ungültiger Zeitraum."); three full reads, then `buildInsights` ([utils](utils.md)) → `{ range, totals, members, categories, events }`; no codes, answers, guests or DM settings | — |
 | GET | `/members/:id` | W-15: `{ member: { …, acceptInvitations, notifications }, stats, history }`; history = every own registration via `buildMemberHistory` (no form answers, guests or check-in code); "tracked" events need the registrations of each event of the history (`loadEventRegistrations`); unknown id → 404 "Mitglied nicht gefunden." | — |
 | DELETE | `/reset` | body `{ password, targets[] }`; target `events` also releases the uploaded banners of the wiped events (W-12); `ADMIN_RESET_PASSWORD` required (`safeEqual`); wipes `events`, `users`, `registrations`, `comments`, `auditLogs`, `polls`, `pollVotes` | (console only) |
-| POST | `/polls` | `normalizePollInput` → new open poll | `CREATE_POLL` |
+| POST | `/polls` | `createPoll` (`utils/adminActions.js`, shared with `/abstimmung erstellen`): `normalizePollInput` → new open poll | `CREATE_POLL` |
 | PUT | `/polls/:id` | `updatePoll` (open polls only; dates with votes stay) | `UPDATE_POLL` |
 | POST | `/polls/:id/close` | `closePoll` | `CLOSE_POLL` |
-| POST | `/polls/:id/announce` | posts the V2 poll message (`buildPollMessage`) to the same announcement channel as events (B-02), stores `{ channelId, messageId, intro }` (max 5); no thread | `ANNOUNCE_POLL` |
+| POST | `/polls/:id/announce` | `announcePoll` (`utils/adminActions.js`): posts the V2 poll message (`buildPollMessage`) to the same announcement channel as events (B-02), stores `{ channelId, messageId, intro }` (max 5); no thread | `ANNOUNCE_POLL` |
 | DELETE | `/polls/:id` | `deletePoll` (votes too; posted messages become a notice) | `DELETE_POLL` |
 | GET | `/bot/status` | `getBotStatus()` | — |
 | GET / PUT | `/bot/settings` | presence + feature toggles + `announceChannel` + `welcomeMessage`; GET answers every key with its default (`utils/botSettings.js`); PUT refuses a new `announceChannel` that is not a text channel of the server (`getGuildChannels`; empty list while the bot is offline → only `''` or the stored id) with 400 „Ankündigungskanal nicht gefunden.“ (B-02); `saveBotSettings` → cache + `applyBotSettings` | `UPDATE_BOT_SETTINGS` |

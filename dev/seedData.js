@@ -677,6 +677,35 @@ function buildEventTemplates(clock) {
             createdBy: people.mori.userId,
             updatedAt: null,
             updatedBy: null
+        },
+        // Without slots: /event erstellen prefills title, description and places from it (B-13)
+        'dev-template-community': {
+            name: 'Community-Abend',
+            settings: {
+                title: 'Community-Abend',
+                description: 'Brettspiele, Quatschen und Snacks im Voice.',
+                bannerUrl: '',
+                accentColor: '#f59e0b',
+                category: 'Community',
+                location: null,
+                maxParticipants: 12,
+                accessMode: 'open',
+                requiredRoles: [],
+                approvalMode: 'instant',
+                allowGuests: true,
+                slots: [],
+                assignRoleId: '',
+                formFields: [],
+                reminderHours: [{ hours: 24 }],
+                checkinMessage: '',
+                autoCreateChannels: false,
+                channelConfig: {},
+                customBotMessages: {}
+            },
+            createdAt: clock.offset(-4 * DAY),
+            createdBy: people.mori.userId,
+            updatedAt: null,
+            updatedBy: null
         }
     };
 }

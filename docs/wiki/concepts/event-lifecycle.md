@@ -3,7 +3,7 @@ id: event-lifecycle
 title: Event lifecycle — status, series, check-in
 type: concept
 tags: [events, status, draft, archive, auto-archive, ended, cancel, series, recurring, checkin, duplicate]
-sources: [routes/admin.js, bot/scheduledEvents.js, routes/events.js, public/js/admin/event-actions.js, public/js/admin/wizard.js, public/js/admin/wizard-notify.js, utils/eventArchive.js, utils/eventCleanup.js, utils/eventListing.js, utils/eventChangeNotice.js, utils/checkin.js, bot/checkin.js]
+sources: [routes/admin.js, bot/scheduledEvents.js, routes/events.js, public/js/admin/event-actions.js, public/js/admin/wizard.js, public/js/admin/wizard-notify.js, utils/eventArchive.js, utils/eventCleanup.js, utils/adminActions.js, bot/adminCommands.js, utils/eventListing.js, utils/eventChangeNotice.js, utils/checkin.js, bot/checkin.js]
 depends_on: [data-model]
 see_also: [routes-admin, reminders-presence, registration-flow]
 ---
@@ -15,7 +15,8 @@ see_also: [routes-admin, reminders-presence, registration-flow]
 
 | Action (admin) | Endpoint | Result / side effects |
 |---|---|---|
-| Create | `POST /api/admin/events` | status from wizard (default `active`); channels if `autoCreateChannels` + active |
+| Create | `POST /api/admin/events` | status from wizard (default `active`); channels if `autoCreateChannels` + active; the document comes from `buildNewEvent` (`utils/adminActions.js`) |
+| Create in Discord | `/event erstellen [vorlage]` (B-13) | always `draft` (template settings + modal values); „Nur veröffentlichen“ / „Veröffentlichen & ankündigen“ in the answer → `publishDraft` (`active`, `UPDATE_EVENT_STATUS`, channels) and optionally `announceEvent` — see [discord-integration](discord-integration.md) |
 | Edit | `PUT /api/admin/events/:id` | full replace of whitelisted fields; channels created/deleted on activation changes; optional change DM (see below) |
 | Change status | `PUT /api/admin/events/:id/status` | any of the 4 statuses; channel create/delete; to `archived`/`cancelled` → clean-up, to `active` → event role back (B-10) |
 | Start | `POST /api/admin/events/:id/start` | `active`, `startDate = now` if empty; synced Discord server event → running (B-09) |
