@@ -3,7 +3,7 @@ id: event-lifecycle
 title: Event lifecycle — status, series, check-in
 type: concept
 tags: [events, status, draft, archive, auto-archive, ended, cancel, series, recurring, checkin, duplicate]
-sources: [routes/admin.js, bot/scheduledEvents.js, routes/events.js, public/js/admin/event-actions.js, public/js/admin/wizard.js, public/js/admin/wizard-notify.js, utils/eventArchive.js, utils/eventListing.js, utils/eventChangeNotice.js, utils/checkin.js, bot/checkin.js]
+sources: [routes/admin.js, bot/scheduledEvents.js, routes/events.js, public/js/admin/event-actions.js, public/js/admin/wizard.js, public/js/admin/wizard-notify.js, utils/eventArchive.js, utils/eventCleanup.js, utils/eventListing.js, utils/eventChangeNotice.js, utils/checkin.js, bot/checkin.js]
 depends_on: [data-model]
 see_also: [routes-admin, reminders-presence, registration-flow]
 ---
@@ -17,13 +17,13 @@ see_also: [routes-admin, reminders-presence, registration-flow]
 |---|---|---|
 | Create | `POST /api/admin/events` | status from wizard (default `active`); channels if `autoCreateChannels` + active |
 | Edit | `PUT /api/admin/events/:id` | full replace of whitelisted fields; channels created/deleted on activation changes; optional change DM (see below) |
-| Change status | `PUT /api/admin/events/:id/status` | any of the 4 statuses; channel create/delete |
+| Change status | `PUT /api/admin/events/:id/status` | any of the 4 statuses; channel create/delete; to `archived`/`cancelled` → clean-up, to `active` → event role back (B-10) |
 | Start | `POST /api/admin/events/:id/start` | `active`, `startDate = now` if empty; synced Discord server event → running (B-09) |
-| End | `POST /api/admin/events/:id/end` | `archived`, `endDate = now`, channels deleted; synced Discord server event → completed (B-09) |
-| Cancel | `PUT /api/admin/events/:id/cancel` | `cancelled`, DM to accepted + pending except members with "Änderungen" off (W-16), channels deleted; synced Discord server event removed and unlinked (B-09) |
+| End | `POST /api/admin/events/:id/end` | `archived`, `endDate = now`, clean-up (channels, event role, B-10); synced Discord server event → completed (B-09) |
+| Cancel | `PUT /api/admin/events/:id/cancel` | `cancelled`, DM to accepted + pending except members with "Änderungen" off (W-16), clean-up (channels, event role, B-10); synced Discord server event removed and unlinked (B-09) |
 | Duplicate | `POST /api/admin/events/:id/duplicate` | new `draft` "(Kopie)", check-in code cleared |
-| Delete | `DELETE /api/admin/events/:id` | event + registrations deleted (comments stay) |
-| Archive (automatic) | scheduler `archiveEndedEvents` (`utils/eventArchive.js`) | `archived` 24 h after the end; audit log `AUTO_ARCHIVE_EVENT` with adminId `system` (shown as "System"); stored announcements refreshed (buttons go away); channels and event role stay |
+| Delete | `DELETE /api/admin/events/:id` | clean-up first (channels, event role, B-10), then event + registrations deleted (comments stay) |
+| Archive (automatic) | scheduler `archiveEndedEvents` (`utils/eventArchive.js`) | `archived` 24 h after the end; audit log `AUTO_ARCHIVE_EVENT` with adminId `system` (shown as "System"); stored announcements refreshed (buttons go away); clean-up (channels, event role, B-10) |
 
 Active events need a `startDate`: creating, editing and publishing through `/status` refuse one without it, drafts may wait (D-10). The wizard checks each step before „Weiter“ (`admin/wizard-checks.js`) and previews the overview card and the Discord announcement of the unsaved input (`POST /api/admin/events/preview`).
 
@@ -37,6 +37,14 @@ Visibility: `GET /api/events` returns only `active` (admins may pass `?status=`)
 - From the end on, an event takes no registration and no slot change: web and Discord answer "Das Event ist schon vorbei." (`event_ended`, see [registration-flow](registration-flow.md)), the Discord announcement keeps only "Zum Event", the event page shows "Dieses Event ist vorbei." instead of the form and the countdown. Registered members still see their own status. Unregistering stays possible, but nobody moves up from the waitlist any more (no promotion after the end).
 - 24 h after the end the archive scheduler sets `archived` (table row above). It runs once at server start, so events that ended while the server was down are caught up, then every 5 minutes — see [reminders-presence](reminders-presence.md). Until then the admin table shows the event as "Vorbei" with the main action "Archivieren".
 - Events that never become `active` (drafts, cancelled) are not touched; an event that is already archived stays archived.
+
+## Clean-up after the event (B-10)
+
+- When an event becomes `archived` or `cancelled` (automatic archive, „Jetzt beenden“, status change, saving it with that status, absagen) or is deleted (also a series), `cleanupEvent` (`utils/eventCleanup.js`) deletes its event channels — whenever channel ids are stored, also without „Auto Channel-Erstellung“ — and takes `assignRoleId` from every member with an `accepted` registration (`removeRoleFromMembers`, one guild fetch). Pending, waitlisted and rejected members never got the role.
+- A member keeps the role while they are accepted for another `draft` or `active` event with the same `assignRoleId` (e.g. the next date of a series). Back to draft changes nothing.
+- `discordCleanup` on the event: `pending` while the bot was not ready (the archive scheduler retries every pass while the event is still archived or cancelled), `done` afterwards. A member who left the server counts as failed and does not block it. Each finished clean-up writes `DISCORD_CLEANUP` by `system` ("Removed role … from n member(s) (k failed); deleted the event channels").
+- „Wieder aktivieren“ (or saving as active) of a cleaned-up event gives the role back to its accepted members (`restoreEventRole`) and clears the marker; a still pending clean-up is dropped. The channels come back through „Auto Channel-Erstellung“ as before.
+- Events archived before B-10 carry no marker and are never cleaned up. Copies (duplicate, series extension) start without the marker. The role is taken even when the member had it before registering — DEMS cannot tell, as with a plain unregistration.
 
 ## Change DMs (W-04)
 
@@ -75,4 +83,3 @@ Dates are stored as ISO strings; the wizard uses Flatpickr (German locale). Bot 
 ## Gotchas
 
 - `draft` and `archived` events do not exist for non-admins: every `/api/events/:id…` route answers 404, series answers leave them out (`isEventVisibleTo`); `cancelled` events stay readable by id — see [security](security.md).
-- Deleting an event does not delete its auto-created Discord channels (order bug in `DELETE /events/:id`).

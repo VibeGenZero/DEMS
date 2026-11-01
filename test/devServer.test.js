@@ -3479,3 +3479,120 @@ test('copies are never linked to the Discord server event of the original', asyn
         assert.equal(event.discordScheduledEventStatus, null);
     }
 });
+
+// ── Clean-up after the event (B-10) ─────────────────────────────────────
+
+let cleanupCounter = 0;
+/**
+ * An active event with channels, an accepted and a pending member. Each event
+ * gets its own role id (the mock logs unknown roles by id), so the log lines of
+ * the tests differ and no other test event shares the role.
+ */
+async function createCleanupEvent(admin, fields = {}) {
+    const n = ++cleanupCounter;
+    const roleId = `b10-role-${n}`;
+    const { eventId } = await eventWithRegistrations(admin, { title: `B10 Event ${n}`, assignRoleId: roleId, ...fields }, [
+        { key: 'kira', status: 'accepted', member: KIRA },
+        { key: 'jonas', status: 'pending', member: JONAS }
+    ]);
+    await patchEvent(eventId, { discordChannelId: `b10-voice-${n}`, discordTextChannelId: `b10-text-${n}` });
+    return { id: eventId, roleId };
+}
+
+async function cleanupAudit(admin, eventId) {
+    const { data: logs } = await (await admin.request('/api/admin/audit-log?limit=500')).json();
+    return logs.filter(entry => entry.action === 'DISCORD_CLEANUP' && entry.targetId === eventId);
+}
+
+async function assertCleanedUp(admin, { id, roleId }) {
+    await server.waitForOutput(`Rolle ${roleId} von 1 Mitglied entfernt`);
+    assert.equal(await waitForEventField(id, 'discordCleanup', 'done'), 'done');
+    const event = await storedEventOf(id);
+    assert.equal(event.discordChannelId, null);
+    assert.equal(event.discordTextChannelId, null);
+    const [entry] = await cleanupAudit(admin, id);
+    assert.ok(entry, 'DISCORD_CLEANUP entry');
+    assert.match(entry.details, /from 1 member/);
+}
+
+test('ending an event by hand takes the role and deletes the channels', async () => {
+    const admin = await loginAs('admin');
+    const event = await createCleanupEvent(admin);
+    assert.equal((await admin.send('POST', `/api/admin/events/${event.id}/end`)).status, 200);
+    await assertCleanedUp(admin, event);
+});
+
+test('archiving or cancelling through the status, and absagen, clean up', async () => {
+    const admin = await loginAs('admin');
+    const archived = await createCleanupEvent(admin);
+    assert.equal((await admin.send('PUT', `/api/admin/events/${archived.id}/status`, { status: 'archived' })).status, 200);
+    await assertCleanedUp(admin, archived);
+
+    const cancelledByStatus = await createCleanupEvent(admin);
+    assert.equal((await admin.send('PUT', `/api/admin/events/${cancelledByStatus.id}/status`, { status: 'cancelled' })).status, 200);
+    await assertCleanedUp(admin, cancelledByStatus);
+
+    const cancelled = await createCleanupEvent(admin);
+    assert.equal((await admin.send('PUT', `/api/admin/events/${cancelled.id}/cancel`)).status, 200);
+    await assertCleanedUp(admin, cancelled);
+});
+
+test('channels go on archive also without "Auto Channel-Erstellung"', async () => {
+    const admin = await loginAs('admin');
+    const event = await createCleanupEvent(admin, { autoCreateChannels: false });
+    assert.equal((await admin.send('PUT', `/api/admin/events/${event.id}/status`, { status: 'archived' })).status, 200);
+    await assertCleanedUp(admin, event);
+});
+
+test('back to draft keeps the role', async () => {
+    const admin = await loginAs('admin');
+    const event = await createCleanupEvent(admin);
+    assert.equal((await admin.send('PUT', `/api/admin/events/${event.id}/status`, { status: 'draft' })).status, 200);
+    await new Promise(resolve => setTimeout(resolve, 300));
+    assert.equal((await storedEventOf(event.id)).discordCleanup, undefined);
+    assert.deepEqual(await cleanupAudit(admin, event.id), []);
+    assert.doesNotMatch(server.output(), new RegExp(`Rolle ${event.roleId} von`));
+});
+
+test('saving an event as archived cleans it up', async () => {
+    const admin = await loginAs('admin');
+    const event = await createCleanupEvent(admin);
+    const res = await saveDate(admin, await storedEventOf(event.id), { status: 'archived' });
+    assert.equal(res.status, 200, await res.clone().text());
+    await assertCleanedUp(admin, event);
+});
+
+test('reactivating a cleaned-up event hands the role back', async () => {
+    const admin = await loginAs('admin');
+    const event = await createCleanupEvent(admin);
+    assert.equal((await admin.send('PUT', `/api/admin/events/${event.id}/status`, { status: 'archived' })).status, 200);
+    await assertCleanedUp(admin, event);
+
+    assert.equal((await admin.send('PUT', `/api/admin/events/${event.id}/status`, { status: 'active' })).status, 200);
+    await server.waitForOutput(`Rolle ${event.roleId} an Kira (${KIRA.userId}) vergeben`);
+    assert.equal(await waitForEventField(event.id, 'discordCleanup', null), null);
+});
+
+test('deleting an event or a series takes the role before the registrations go', async () => {
+    const admin = await loginAs('admin');
+    const event = await createCleanupEvent(admin);
+    assert.equal((await admin.send('DELETE', `/api/admin/events/${event.id}`)).status, 200);
+    await server.waitForOutput(`Rolle ${event.roleId} von 1 Mitglied entfernt`);
+    assert.equal(await storedEventOf(event.id), null);
+
+    const dates = await createSeries(admin, { title: 'B10 Serie', assignRoleId: 'b10-role-series' });
+    const { db, doc, setDoc } = serverStore();
+    await setDoc(doc(db, 'registrations', `b10-series-${dates[0].id}`), {
+        eventId: dates[0].id, userId: KIRA.userId, userName: KIRA.displayName, status: 'accepted', source: 'web', formAnswers: {}
+    });
+    assert.equal((await admin.send('DELETE', `/api/admin/events/series/${dates[0].seriesId}`)).status, 200);
+    await server.waitForOutput('Rolle b10-role-series von 1 Mitglied entfernt');
+});
+
+test('a copy does not carry the clean-up marker', async () => {
+    const admin = await loginAs('admin');
+    const { id } = await createCleanupEvent(admin);
+    await patchEvent(id, { discordCleanup: 'done' });
+    const copy = await (await admin.send('POST', `/api/admin/events/${id}/duplicate`)).json();
+    assert.equal((await storedEventOf(copy.id)).discordCleanup, null);
+});

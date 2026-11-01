@@ -42,6 +42,7 @@ test('every Discord helper answers with its neutral value while the bot is not r
         markPollMessagesDeleted: [[{ id: 'poll', messages: [] }], false],
         assignRole: [['u1', 'r1', 'g1'], false],
         removeRole: [['u1', 'r1', 'g1'], false],
+        removeRoleFromMembers: [['r1', ['u1', 'u2']], false],
         getUserRoles: [['u1', 'g1'], []],
         fetchMemberRoleIds: [['u1'], null],
         searchGuildMembers: [['ab'], []],

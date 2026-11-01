@@ -330,6 +330,12 @@ async function removeRole(userId, roleId) {
     return true;
 }
 
+async function removeRoleFromMembers(roleId, userIds) {
+    const members = userIds.length === 1 ? '1 Mitglied' : `${userIds.length} Mitgliedern`;
+    mockLog(`Rolle ${describeRole(roleId)} von ${members} entfernt`, userIds.map(describeUser));
+    return { removed: userIds.length, failed: 0 };
+}
+
 // ── Channels & scheduled events ─────────────────────────────────────────
 
 async function createEventChannels(event) {
@@ -428,6 +434,7 @@ module.exports = {
     deleteMirroredMessage,
     assignRole,
     removeRole,
+    removeRoleFromMembers,
     createEventChannels,
     addParticipantToEventChannels,
     removeParticipantFromEventChannels,

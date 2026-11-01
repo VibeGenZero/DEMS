@@ -17,7 +17,7 @@ const {
 const { buildPollMessage, buildPollVoteReply, refreshPollMessages, markPollMessagesDeleted } = require('./bot/polls');
 const { buildSlotModal, buildRegisteredSlotReply } = require('./bot/registrationModal');
 const {
-    assignRole, removeRole, getUserRoles, fetchMemberRoleIds, searchGuildMembers, fetchGuildMember,
+    assignRole, removeRole, removeRoleFromMembers, getUserRoles, fetchMemberRoleIds, searchGuildMembers, fetchGuildMember,
     isGuildMember, getGuildName, getGuildIconUrl, getGuildRoles, getGuildChannels, getPublicGuildChannels
 } = require('./bot/guild');
 const {
@@ -90,7 +90,8 @@ module.exports = {
     deleteMirroredMessage,
     updateScheduledEvent,
     removeScheduledEvent,
-    setScheduledEventStatus
+    setScheduledEventStatus,
+    removeRoleFromMembers
 };
 
 // Dev mock mode: every call that would reach Discord goes to the simulated

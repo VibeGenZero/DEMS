@@ -78,6 +78,42 @@ test('the scheduler runs on events without a date', async () => {
     assert.equal(await statusOf(dateless), 'active');
 });
 
+// ── Clean-up after the archive (B-10) ───────────────────────────────────
+
+const eventOf = async (id) => (await getDoc(doc(db, 'events', id))).data();
+async function acceptedFor(eventId, userId) {
+    await setDoc(doc(db, 'registrations', `${eventId}-${userId}`), { eventId, userId, status: 'accepted' });
+}
+
+test('an auto-archived event loses its channels and its accepted members the role', async () => {
+    const id = await createEvent({
+        startDate: ago(50 * HOUR), endDate: ago(48 * HOUR),
+        assignRoleId: 'role-archive', discordChannelId: 'voice-1', discordTextChannelId: 'text-1'
+    });
+    await acceptedFor(id, 'member-1');
+
+    await archiveEndedEvents({ now: NOW });
+    const event = await eventOf(id);
+    assert.equal(event.status, 'archived');
+    assert.equal(event.discordCleanup, 'done');
+    assert.equal(event.discordChannelId, null);
+    assert.equal(event.discordTextChannelId, null);
+});
+
+test('a pass catches up a pending clean-up and leaves unmarked archived events alone', async () => {
+    const pending = `archive-pending-${++counter}`;
+    await setDoc(doc(db, 'events', pending), { title: 'Offen', status: 'archived', assignRoleId: 'role-archive', discordCleanup: 'pending' });
+    await acceptedFor(pending, 'member-2');
+    const old = `archive-old-${++counter}`;
+    await setDoc(doc(db, 'events', old), { title: 'Alt', status: 'archived', assignRoleId: 'role-archive', discordChannelId: 'voice-old' });
+    await acceptedFor(old, 'member-3');
+
+    await archiveEndedEvents({ now: NOW });
+    assert.equal((await eventOf(pending)).discordCleanup, 'done');
+    assert.equal((await eventOf(old)).discordCleanup, undefined);
+    assert.equal((await eventOf(old)).discordChannelId, 'voice-old');
+});
+
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 const longAgo = () => ({ startDate: new Date(Date.now() - 50 * HOUR).toISOString(), endDate: new Date(Date.now() - 48 * HOUR).toISOString() });
 async function waitForStatus(id, status) {
