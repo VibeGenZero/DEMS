@@ -71,6 +71,8 @@ sources: [scripts/wiki-graph.js, docs/wiki/graph.json, CLAUDE.md]
 | `utils/approvalRequests.js` | discord-integration, utils |
 | `utils/checkin.js` | event-lifecycle, discord-integration, routes-events, utils |
 | `utils/eventCleanup.js` | event-lifecycle, discord-integration, reminders-presence, utils |
+| `utils/adminActions.js` | routes-admin, event-lifecycle, date-polls, discord-integration, utils |
+| `utils/localDateTime.js` | discord-integration, utils |
 | `utils/threadSync.js` | discord-integration, routes-events, utils |
 | `utils/slotService.js`, `utils/capacity.js`, `utils/eventLock.js`, `utils/announcementRefresh.js` | role-slots, utils |
 | `utils/pollService.js`, `utils/pollStore.js` | date-polls, utils |

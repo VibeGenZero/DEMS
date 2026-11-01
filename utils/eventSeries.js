@@ -195,5 +195,5 @@ function slotsForDate(rawSlots, targetSlots) {
 
 module.exports = {
     SHORTEN_SERIES_MESSAGE, SERIES_FIELDS, followingDates, transferTime, nextSeriesStart, planExtension,
-    seriesUpdateFields, slotsForDate, localDay
+    seriesUpdateFields, slotsForDate, localDay, zonedParts, fromZonedParts
 };

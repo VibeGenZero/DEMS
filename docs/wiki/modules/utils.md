@@ -3,7 +3,7 @@ id: utils
 title: utils/ — domain helpers
 type: module
 tags: [utils, registration, form-fields, waitlist, audit-log, profile, debug, change-notice, banner]
-sources: [utils/registrationService.js, utils/registrationStatus.js, utils/approvalRequests.js, utils/checkin.js, utils/threadSync.js, utils/formFields.js, utils/eventUtils.js, utils/eventListing.js, utils/profileEvents.js, utils/eventUrl.js, utils/userProfile.js, utils/avatar.js, utils/botPermissions.js, utils/csv.js, utils/template.js, utils/sessionStore.js, utils/reminders.js, utils/debugLog.js, utils/capacity.js, utils/slotService.js, utils/eventLock.js, utils/announcementRefresh.js, utils/pollService.js, utils/pollStore.js, utils/eventPreview.js, utils/eventArchive.js, utils/eventCleanup.js, utils/eventChangeNotice.js, utils/notificationPrefs.js, utils/memberOverview.js, utils/insights.js, utils/participantMessage.js, utils/bannerStore.js, utils/bulkRegistrations.js, utils/eventSeries.js, utils/eventTemplates.js, utils/botSettings.js]
+sources: [utils/registrationService.js, utils/registrationStatus.js, utils/approvalRequests.js, utils/checkin.js, utils/threadSync.js, utils/formFields.js, utils/eventUtils.js, utils/eventListing.js, utils/profileEvents.js, utils/eventUrl.js, utils/userProfile.js, utils/avatar.js, utils/botPermissions.js, utils/csv.js, utils/template.js, utils/sessionStore.js, utils/reminders.js, utils/debugLog.js, utils/capacity.js, utils/slotService.js, utils/eventLock.js, utils/announcementRefresh.js, utils/pollService.js, utils/pollStore.js, utils/eventPreview.js, utils/eventArchive.js, utils/eventCleanup.js, utils/adminActions.js, utils/localDateTime.js, utils/eventChangeNotice.js, utils/notificationPrefs.js, utils/memberOverview.js, utils/insights.js, utils/participantMessage.js, utils/bannerStore.js, utils/bulkRegistrations.js, utils/eventSeries.js, utils/eventTemplates.js, utils/botSettings.js]
 part_of: [architecture]
 depends_on: [data-layer, bot]
 see_also: [registration-flow, form-fields, role-slots]
@@ -62,6 +62,24 @@ Exports `FORM_FIELD_TYPE` (`text, textarea, dropdown, checkbox, user, role, chan
 | `isDueForArchive(event, now)` | `status === 'active'` and `now` at least 24 h after `eventEndTime`; false without a start |
 | `archiveEndedEvents({ now })` | archives every due event (`status`, `updatedAt`), audit `AUTO_ARCHIVE_EVENT` by `system`, `notifyRegistrationsChanged`, `cleanupEvent`; then `retryPendingCleanups()`; one failing event does not stop the others; returns the count |
 | `startArchiveScheduler({ waitFor })`, `stopArchiveScheduler()` | first run once `waitFor` settles (`server.js` passes `whenBotSettled()`, so the announcement refresh of the catch-up run finds a ready bot), then the interval (`unref`'d); a stop before that cancels the first run. Rules: [event-lifecycle](../concepts/event-lifecycle.md) |
+
+## utils/adminActions.js (B-13)
+
+Shared by `routes/admin.js` and `bot/adminCommands.js`; bot helpers are required inside the functions, so mock mode gets its twins.
+
+| Export | Behaviour |
+|---|---|
+| `buildNewEvent(input, createdBy)` | document of a new event (wizard defaults, slots → places and no guests, reminder merge); `slots` must be normalized |
+| `createEventChannelsAllowed(event)` | event channels unless „Auto Channel-Erstellung“ is off in the bot center (B-02) |
+| `publishDraft(eventId, adminId, { via })` | only a `draft` with a start → `active`, `UPDATE_EVENT_STATUS`, announcement refresh, channels; else `{ ok: false, code: missing\|not_draft\|no_start }` |
+| `announceEvent(eventId, adminId, { pings, via })` | announcement post + record (max 5) + thread (bot center switch) + `ANNOUNCE_EVENT`; `{ ok: false, status, error }` with the German route texts |
+| `createPoll(input, adminId, { via })` / `announcePoll(pollId, adminId, { pings, via })` | open poll (`normalizePollInput`) + `CREATE_POLL`; poll post + record + `ANNOUNCE_POLL` |
+
+`via: 'discord'` appends „ in Discord“ to the audit detail.
+
+## utils/localDateTime.js (B-13)
+
+`parseLocalDateTime(text, tz)` (`D.M.YYYY H:MM`, two-digit year = 20xx, impossible dates and daylight saving gaps → null), `parseEndInput(text, start, tz)` (empty → null, `H:MM` → start day or the next day, unreadable → undefined), `parsePollLines(text, tz)` (`{ options }` or `{ error }` naming the line), `DATE_FORMAT_HINT`. Uses `zonedParts`/`fromZonedParts` of `utils/eventSeries.js`.
 
 ## utils/eventCleanup.js (B-10)
 

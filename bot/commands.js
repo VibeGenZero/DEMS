@@ -1,6 +1,7 @@
 /**
  * Slash commands of the bot: registering them with Discord, the event
  * autocomplete and the answers to /events, /register and /unregister.
+ * The admin commands /event and /poll live in bot/adminCommands.js (B-13).
  */
 const { ActionRowBuilder, EmbedBuilder, MessageFlags, REST, Routes, SlashCommandBuilder } = require('discord.js');
 const { db, collection, doc, getDoc, getDocs, query, where } = require('../firebaseAdmin');
@@ -16,6 +17,9 @@ const {
     resolveInteractionRoles, checkRegistrationConditions, handleEventRegisterButton, replyWithFailure
 } = require('./registration');
 const { handleMyEventsCommand } = require('./myEvents');
+const {
+    handleTemplateAutocomplete, handleEventCreateCommand, handlePollCreateCommand
+} = require('./adminCommands');
 
 // Discord allows at most five buttons per action row
 const BUTTONS_PER_ROW = 5;
@@ -48,7 +52,8 @@ function buildEventCommand(name, germanName, description) {
 /**
  * Definitions of all slash commands as Discord expects them.
  *
- * @returns {Object[]} -> JSON bodies of /events, /register (/anmelden), /unregister (/abmelden) and /my-events (/meine-events).
+ * @returns {Object[]} -> JSON bodies of /events, /register (/anmelden), /unregister (/abmelden), /my-events (/meine-events)
+ *   and the admin commands /event create (/event erstellen) and /poll create (/abstimmung erstellen).
  */
 function buildSlashCommands() {
     return [
@@ -61,7 +66,35 @@ function buildSlashCommands() {
             .setName('my-events')
             .setNameLocalizations({ de: 'meine-events' })
             .setDescription('Zeigt deine kommenden Anmeldungen')
-            .setDescriptionLocalizations({ de: 'Zeigt deine kommenden Anmeldungen' })
+            .setDescriptionLocalizations({ de: 'Zeigt deine kommenden Anmeldungen' }),
+        // Admin commands (B-13): visible to everybody, the bot checks the admin role
+        new SlashCommandBuilder()
+            .setName('event')
+            .setNameLocalizations({ de: 'event' })
+            .setDescription('Events verwalten (nur Admins)')
+            .setDescriptionLocalizations({ de: 'Events verwalten (nur Admins)' })
+            .addSubcommand(sub => sub
+                .setName('create')
+                .setNameLocalizations({ de: 'erstellen' })
+                .setDescription('Neues Event als Entwurf anlegen')
+                .setDescriptionLocalizations({ de: 'Neues Event als Entwurf anlegen' })
+                .addStringOption(opt => opt
+                    .setName('template')
+                    .setNameLocalizations({ de: 'vorlage' })
+                    .setDescription('Vorlage für alle weiteren Einstellungen')
+                    .setDescriptionLocalizations({ de: 'Vorlage für alle weiteren Einstellungen' })
+                    .setRequired(false)
+                    .setAutocomplete(true))),
+        new SlashCommandBuilder()
+            .setName('poll')
+            .setNameLocalizations({ de: 'abstimmung' })
+            .setDescription('Terminabstimmungen verwalten (nur Admins)')
+            .setDescriptionLocalizations({ de: 'Terminabstimmungen verwalten (nur Admins)' })
+            .addSubcommand(sub => sub
+                .setName('create')
+                .setNameLocalizations({ de: 'erstellen' })
+                .setDescription('Neue Terminabstimmung anlegen und posten')
+                .setDescriptionLocalizations({ de: 'Neue Terminabstimmung anlegen und posten' }))
     ].map(command => command.toJSON());
 }
 
@@ -87,6 +120,11 @@ async function registerSlashCommands() {
  * @param {Object} interaction -> Autocomplete interaction.
  */
 async function handleAutocomplete(interaction) {
+    // Templates of /event erstellen (B-13)
+    if (interaction.commandName === 'event') {
+        await handleTemplateAutocomplete(interaction);
+        return;
+    }
     // Show events for /register autocomplete (for choosing which event link to get)
     if (interaction.commandName === 'register') {
         try {
@@ -198,6 +236,12 @@ async function handleRegisterCommand(interaction, eventId) {
  * @param {Object} interaction -> Chat input command interaction.
  */
 async function handleChatCommand(interaction) {
+    // Admin commands (B-13)
+    if ((interaction.commandName === 'event' || interaction.commandName === 'poll') && interaction.options.getSubcommand() === 'create') {
+        if (interaction.commandName === 'event') await handleEventCreateCommand(interaction);
+        else await handlePollCreateCommand(interaction);
+        return;
+    }
     // /events command
     if (interaction.commandName === 'events') {
         try {

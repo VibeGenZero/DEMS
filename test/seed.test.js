@@ -27,7 +27,7 @@ const EXPECTED_COUNTS = {
     botMessages: 1,
     botSettings: 1,
     maintenanceSettings: 1,
-    eventTemplates: 1
+    eventTemplates: 2
 };
 
 async function countDocs(name) {
@@ -48,6 +48,15 @@ test('seedIfEmpty fills an empty database', async () => {
     for (const [name, expected] of Object.entries(EXPECTED_COUNTS)) {
         assert.equal(await countDocs(name), expected, name);
     }
+});
+
+test('the seed has a template with and one without slots for /event erstellen (B-13)', async () => {
+    const templates = (await getDocs(collection(db, 'eventTemplates'))).docs.map(entry => entry.data());
+    const withSlots = templates.filter(template => template.settings.slots.length > 0);
+    const plain = templates.filter(template => template.settings.slots.length === 0);
+    assert.equal(withSlots.length, 1);
+    assert.equal(plain.length, 1);
+    assert.ok(plain[0].settings.maxParticipants > 0, 'the plain template prefills the places');
 });
 
 test('seedIfEmpty does not seed twice', async () => {

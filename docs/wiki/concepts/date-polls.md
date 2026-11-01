@@ -3,7 +3,7 @@ id: date-polls
 title: Date polls — finding a date with "passt" / "wenn nötig"
 type: concept
 tags: [polls, voting, dates, doodle, discord, scheduler, events]
-sources: [utils/pollService.js, utils/pollStore.js, routes/polls.js, routes/admin.js, bot/polls.js, public/js/polls/polls.js, public/js/polls/admin.js]
+sources: [utils/pollService.js, utils/pollStore.js, utils/adminActions.js, bot/adminCommands.js, routes/polls.js, routes/admin.js, bot/polls.js, public/js/polls/polls.js, public/js/polls/admin.js]
 depends_on: [data-model]
 see_also: [routes-polls, discord-integration, event-lifecycle, role-slots]
 ---
@@ -34,6 +34,10 @@ All writes run under `withEventLock('poll:<id>')`: `savePollVote`, `updatePoll`,
 ## Discord
 
 `buildPollMessage(poll, tally, intro)` (B-05: Components V2 container, accent while open, green when decided, grey when closed; 🏆 favorite, up to 5 names per date, status-dependent heading, footer and buttons; the ping line `intro` is stored per posted message and kept by refreshes). `poll_vote:<id>` → `deferReply` → `buildPollVoteReply` with `poll_yes:<id>` / `poll_maybe:<id>` selects; a change → `deferUpdate`, the changed list wins (a date picked as "wenn nötig" leaves "passt"), merged into the stored vote under the lock and saved at once. The poll's `labels` appear in the select placeholders, the "Gespeichert" line, the "nur „…“" line of the posted message and the decision DM; Discord keeps its emojis (✅/🤔), the website uses Bootstrap Icons instead. `refreshPollMessages` edits posted messages; a deleted poll's messages become a grey "🗑️ Abstimmung gelöscht" container without buttons (`markPollMessagesDeleted` → `buildPollDeletedMessage`). Polls never get a discussion thread.
+
+## Created in Discord (B-13)
+
+`/abstimmung erstellen` (admins only) opens a modal with Titel, Termine (one per line, `TT.MM.JJJJ HH:MM`, end optional after „–“, „-“ or „bis“, 2–10 lines; `parsePollLines` in `utils/localDateTime.js`) and Beschreibung. A valid modal runs `createPoll` and `announcePoll` (`utils/adminActions.js`, the same code as `POST /polls` and `…/announce`) and answers with the link to the posted message; without announcement channel the poll exists but is not posted. Refused input offers „Korrigieren“. Details: [discord-integration](discord-integration.md).
 
 ## Gotchas
 
