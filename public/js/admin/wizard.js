@@ -185,7 +185,7 @@ export async function showCreateEventModal() {
     document.getElementById('event-status').value = 'active';
     document.getElementById('event-reminder').value = '';
     document.getElementById('event-assign-role').value = '';
-    document.getElementById('event-auto-create-channels').checked = false;
+    ['event-auto-create-channels', 'event-allow-tentative'].forEach(id => { document.getElementById(id).checked = false; });
     document.getElementById('channel-config-options').style.display = 'none';
     document.getElementById('event-channel-type').value = 'voice';
     document.getElementById('event-voice-name').value = '';
@@ -294,6 +294,7 @@ export async function fillWizard(fields) {
     await renderAnnounceChannelSelect(event.announceChannelId || '');
 
     document.getElementById('event-allow-guests').checked = event.allowGuests !== false;
+    document.getElementById('event-allow-tentative').checked = event.allowTentative === true;
     renderSlotEditor(event.slots || []);
 
     await loadRoles();
@@ -410,6 +411,7 @@ export function collectEventDraft() {
         // Own announcement channel, '' = default (B-11)
         announceChannelId: document.getElementById('event-announce-channel')?.value || '',
         allowGuests: document.getElementById('event-allow-guests').checked,
+        allowTentative: document.getElementById('event-allow-tentative').checked,
         slots: getSlotsFromEditor(),
         fromPoll: state.pendingPollDecision || undefined,
         customBotMessages: {

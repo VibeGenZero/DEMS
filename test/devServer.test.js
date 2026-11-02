@@ -380,10 +380,10 @@ test('list and event page tell the places of an event with the same sentence', a
     const { data } = await (await member.request('/api/events?upcoming=1&limit=100')).json();
     const expected = {
         // Jonas brought a guest, Aylin's invitation is still open: both reserve a place
-        [EVENT_ID.OPEN]: { taken: 6, capacity: 20, guests: 2, pending: 0, waitlist: 0, text: '6 von 20 Plätzen belegt (inkl. 2 Gäste)', waitlistText: '' },
-        [EVENT_ID.FORM]: { taken: 3, capacity: 16, guests: 0, pending: 2, waitlist: 0, text: '3 von 16 Plätzen belegt (2 Anfragen offen)', waitlistText: '' },
-        [EVENT_ID.FULL]: { taken: 5, capacity: 5, guests: 0, pending: 0, waitlist: 3, text: '5 von 5 Plätzen belegt', waitlistText: '3 auf der Warteliste' },
-        [EVENT_ID.BIG_FORM]: { taken: 2, capacity: 0, guests: 1, pending: 1, waitlist: 0, text: '2 Plätze belegt (inkl. 1 Gast, 1 Anfrage offen)', waitlistText: '' }
+        [EVENT_ID.OPEN]: { taken: 6, capacity: 20, guests: 2, pending: 0, waitlist: 0, bench: 0, text: '6 von 20 Plätzen belegt (inkl. 2 Gäste)', waitlistText: '', benchText: '' },
+        [EVENT_ID.FORM]: { taken: 3, capacity: 16, guests: 0, pending: 2, waitlist: 0, bench: 0, text: '3 von 16 Plätzen belegt (2 Anfragen offen)', waitlistText: '', benchText: '' },
+        [EVENT_ID.FULL]: { taken: 5, capacity: 5, guests: 0, pending: 0, waitlist: 3, bench: 0, text: '5 von 5 Plätzen belegt', waitlistText: '3 auf der Warteliste', benchText: '' },
+        [EVENT_ID.BIG_FORM]: { taken: 2, capacity: 0, guests: 1, pending: 1, waitlist: 0, bench: 0, text: '2 Plätze belegt (inkl. 1 Gast, 1 Anfrage offen)', waitlistText: '', benchText: '' }
     };
     for (const [id, places] of Object.entries(expected)) {
         const listed = data.find(event => event.id === id);
@@ -576,6 +576,13 @@ test('the wizard preview builds the Discord announcement of an unsaved event and
     assert.equal(preview.places.text, '0 von 5 Plätzen belegt');
     assert.deepEqual(preview.bot, { name: 'DEMS Bot (Mock)', avatarUrl: 'https://cdn.discordapp.com/embed/avatars/0.png' });
     assert.equal(await countEvents(), before);
+});
+
+test('the preview shows „Vielleicht“ when the wizard allows it (B-17)', async () => {
+    const admin = await loginAs('admin');
+    const preview = await (await admin.send('POST', '/api/admin/events/preview', { title: 'Bank', status: 'active', allowTentative: true })).json();
+    const row = previewContainer(preview).components.find(part => part.type === 1);
+    assert.deepEqual(row.components.map(button => button.label), ['Anmelden', 'Vielleicht', 'Zum Event']);
 });
 
 test('a half-done draft can be previewed; members and requests without a token cannot', async () => {
@@ -2283,6 +2290,74 @@ test('an admin accepts three pending registrations in one request', async () => 
     assert.match(entries[0].details, /3 angenommen/);
 });
 
+test('an admin decides the bench one by one; leaving it counts as registered now (B-17)', async () => {
+    const admin = await loginAs('admin');
+    const { eventId, ids } = await eventWithRegistrations(admin, { maxParticipants: 1, allowTentative: true }, [
+        { key: 'held', status: 'accepted', member: KIRA },
+        { key: 'wait', status: 'waitlisted', member: JONAS },
+        { key: 'up', status: 'tentative', member: AYLIN },
+        { key: 'back', status: 'tentative', member: BEN },
+        { key: 'out', status: 'tentative', member: CHIARA }
+    ]);
+    const before = await registrationOf(ids.up);
+    const outputBefore = server.output().length;
+
+    const accepted = await admin.send('PUT', `/api/admin/registrations/${ids.up}/status`, { status: 'accepted' });
+    assert.equal(accepted.status, 200);
+    const up = await registrationOf(ids.up);
+    assert.equal(up.status, 'accepted');
+    assert.ok(up.createdAt > before.createdAt);
+    assert.match(server.output().slice(outputBefore), /DM an Aylin/);
+
+    assert.equal((await admin.send('PUT', `/api/admin/registrations/${ids.back}/status`, { status: 'waitlisted' })).status, 200);
+    const waiting = await (await admin.request(`/api/admin/events/${eventId}/registrations`)).json();
+    const positionOf = (id) => waiting.data.find(reg => reg.id === id).waitlistPosition;
+    // Behind Jonas, although Ben answered „Vielleicht“ earlier
+    assert.deepEqual(positionOf(ids.wait), { position: 1, total: 2 });
+    assert.deepEqual(positionOf(ids.back), { position: 2, total: 2 });
+
+    assert.equal((await admin.send('PUT', `/api/admin/registrations/${ids.out}/status`, { status: 'rejected' })).status, 200);
+    assert.equal((await registrationOf(ids.out)).status, 'rejected');
+
+    const { data: logs } = await (await admin.request('/api/admin/audit-log?limit=100')).json();
+    assert.ok(logs.some(item => item.action === 'UPDATE_REGISTRATION_STATUS' && item.targetId === ids.up));
+});
+
+test('a bulk action takes the bench along and counts it as registered now (B-17)', async () => {
+    const admin = await loginAs('admin');
+    const { eventId, ids } = await eventWithRegistrations(admin, { maxParticipants: 1, allowTentative: true }, [
+        { key: 'first', status: 'tentative', member: DENNIS },
+        { key: 'second', status: 'tentative', member: ELIF }
+    ]);
+    const before = await registrationOf(ids.second);
+    const body = await (await bulk(admin, eventId, { action: 'accept', ids: [ids.first, ids.second] })).json();
+    assert.deepEqual([body.accepted, body.waitlisted, body.full, body.skipped], [1, 1, 1, 0]);
+    assert.equal((await registrationOf(ids.first)).status, 'accepted');
+    const second = await registrationOf(ids.second);
+    assert.equal(second.status, 'waitlisted');
+    assert.ok(second.createdAt > before.createdAt);
+});
+
+test('admin, bot center and profile stats count the bench (B-17)', async () => {
+    const admin = await loginAs('admin');
+    const statsBefore = (await (await admin.request('/api/admin/stats')).json()).registrations;
+    const raider = personaById('raider');
+    const { eventId } = await eventWithRegistrations(admin, { allowTentative: true }, [
+        { key: 'one', status: 'tentative', member: FELIX },
+        { key: 'own', status: 'tentative', member: { userId: raider.userId, displayName: raider.displayName } }
+    ]);
+    const stats = (await (await admin.request('/api/admin/stats')).json()).registrations;
+    assert.equal(stats.tentative, (statsBefore.tentative || 0) + 2);
+    assert.equal(stats.pending, statsBefore.pending);
+
+    const running = await (await admin.request('/api/admin/bot/running-events')).json();
+    assert.equal(running.find(event => event.id === eventId).registrationStats.tentative, 2);
+
+    const member = await loginAs('raider');
+    const profile = await (await member.request('/api/user/profile')).json();
+    assert.ok(profile.stats.tentative >= 1);
+});
+
 test('a bulk accept stops at the participant limit and reports the rest', async () => {
     const admin = await loginAs('admin');
     const { eventId, ids } = await eventWithRegistrations(admin, { maxParticipants: 3 }, [
@@ -3629,6 +3704,23 @@ test('the announcement channel is stored on create and save, empty by default', 
     assert.equal((await storedEventOf(plain.body.id)).announceChannelId, '');
 });
 
+test('„Vielleicht“ is stored on create and save, off by default (B-17)', async () => {
+    const admin = await loginAs('admin');
+    const { res, body } = await createEventWith(admin, { title: 'B17 Bank', allowTentative: true });
+    assert.equal(res.status, 200, JSON.stringify(body));
+    assert.equal((await storedEventOf(body.id)).allowTentative, true);
+
+    const off = await saveDate(admin, await storedEventOf(body.id), { allowTentative: false });
+    assert.equal(off.status, 200);
+    assert.equal((await storedEventOf(body.id)).allowTentative, false);
+    const on = await saveDate(admin, await storedEventOf(body.id), { allowTentative: true });
+    assert.equal(on.status, 200);
+    assert.equal((await storedEventOf(body.id)).allowTentative, true);
+
+    const plain = await createEventWith(admin, { title: 'B17 Standard' });
+    assert.equal((await storedEventOf(plain.body.id)).allowTentative, false);
+});
+
 test('an invalid announcement channel is refused', async () => {
     const admin = await loginAs('admin');
     const { res, body } = await createEventWith(admin, { title: 'B11 Kaputt', announceChannelId: 'abc' });
@@ -3786,4 +3878,84 @@ test('the profile lists an offered registration with its deadline', async () => 
     const entry = profile.upcoming.find(item => item.event.id === event.id);
     assert.equal(entry.status, 'offered');
     assert.ok(entry.offerExpiresAt);
+});
+
+// ── „Vielleicht“ / Ersatzbank on the website (B-17) ─────────────────────
+
+test('members answer „Vielleicht“ only where the event allows it (B-17)', async () => {
+    const admin = await loginAs('admin');
+    const raider = await loginAs('raider');
+    const closed = await createEventWith(admin, { title: 'B17 Ohne Bank' });
+    const refused = await raider.send('POST', `/api/events/${closed.body.id}/register`, { tentative: true });
+    assert.equal(refused.status, 400);
+    assert.deepEqual(await refused.json(), { error: 'Für dieses Event gibt es kein „Vielleicht“.' });
+
+    const open = await createEventWith(admin, { title: 'B17 Mit Bank', allowTentative: true });
+    const res = await raider.send('POST', `/api/events/${open.body.id}/register`, { tentative: true });
+    const body = await res.json();
+    assert.equal(res.status, 200, JSON.stringify(body));
+    assert.equal(body.status, 'tentative');
+    assert.equal(body.message, 'Du stehst auf der Ersatzbank.');
+    assert.equal((await (await raider.request(`/api/events/${open.body.id}/my-registration`)).json()).status, 'tentative');
+});
+
+test('the event shows the bench count, the participants the names only (B-17)', async () => {
+    const admin = await loginAs('admin');
+    const raider = await loginAs('raider');
+    const member = await loginAs('member');
+    const { body: created } = await createEventWith(admin, { title: 'B17 Zählung', allowTentative: true, maxParticipants: 5 });
+    await member.send('POST', `/api/events/${created.id}/register`, {});
+    await raider.send('POST', `/api/events/${created.id}/register`, { tentative: true, formAnswers: { Notiz: 'geheim' } });
+
+    const event = await (await member.request(`/api/events/${created.id}`)).json();
+    assert.equal(event.places.taken, 1);
+    assert.equal(event.places.bench, 1);
+    assert.equal(event.places.benchText, '1 auf der Ersatzbank');
+    assert.equal(event.allowTentative, true);
+    assert.ok(!('bench' in event), 'no names in the event data');
+
+    const participants = await (await member.request(`/api/events/${created.id}/participants`)).json();
+    assert.equal(participants.total, 1);
+    assert.equal(participants.bench.length, 1);
+    assert.deepEqual(Object.keys(participants.bench[0]).sort(), ['avatar', 'displayName']);
+    assert.equal(participants.bench[0].displayName, 'Lena');
+});
+
+test('on slot events the bench names the wanted role (B-17)', async () => {
+    const admin = await loginAs('admin');
+    const raider = await loginAs('raider');
+    const created = await createSlotEvent(admin, 'B17 Raid', [
+        { name: 'Tank', emoji: '🛡️', capacity: 1 },
+        { name: 'Heiler', emoji: '💚', capacity: 1 }
+    ], { allowTentative: true });
+    const heal = created.slots[1].id;
+    const res = await raider.send('POST', `/api/events/${created.id}/register`, { tentative: true, slotId: heal });
+    assert.equal(res.status, 200, await res.clone().text());
+    const participants = await (await raider.request(`/api/events/${created.id}/participants`)).json();
+    assert.deepEqual(participants.bench.map(entry => [entry.displayName, entry.preferredSlotId]), [['Lena', heal]]);
+    assert.ok(participants.slots.every(slot => slot.taken === 0));
+});
+
+test('„Fest zusagen“ turns the answer into a registration and needs login and CSRF (B-17)', async () => {
+    const admin = await loginAs('admin');
+    const raider = await loginAs('raider');
+    const { body: created } = await createEventWith(admin, { title: 'B17 Zusage', allowTentative: true });
+    await raider.send('POST', `/api/events/${created.id}/register`, { tentative: true });
+    const url = `/api/events/${created.id}/register/confirm`;
+
+    const anonymous = await createClient(server.baseUrl).send('POST', url);
+    assert.equal(anonymous.status, 401);
+    const noToken = await raider.request(url, { method: 'POST' });
+    assert.equal(noToken.status, 403);
+
+    const res = await raider.send('POST', url);
+    const body = await res.json();
+    assert.equal(res.status, 200, JSON.stringify(body));
+    assert.equal(body.status, 'accepted');
+    assert.equal(body.message, 'Erfolgreich angemeldet!');
+    assert.equal((await (await raider.request(`/api/events/${created.id}/my-registration`)).json()).status, 'accepted');
+
+    const again = await raider.send('POST', url);
+    assert.equal(again.status, 400);
+    assert.deepEqual(await again.json(), { error: 'Du stehst nicht auf der Ersatzbank.' });
 });

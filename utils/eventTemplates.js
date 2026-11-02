@@ -12,7 +12,7 @@ const { normalizeReminderHours } = require('./reminders');
  */
 const TEMPLATE_FIELDS = [
     'title', 'description', 'bannerUrl', 'accentColor', 'category', 'location',
-    'maxParticipants', 'accessMode', 'requiredRoles', 'approvalMode', 'allowGuests',
+    'maxParticipants', 'accessMode', 'requiredRoles', 'approvalMode', 'allowGuests', 'allowTentative',
     'slots', 'assignRoleId', 'formFields', 'reminderHours', 'checkinMessage',
     'autoCreateChannels', 'channelConfig', 'customBotMessages', 'announceChannelId'
 ];
@@ -49,6 +49,7 @@ function pickTemplateSettings(input) {
         requiredRoles: Array.isArray(source.requiredRoles) ? source.requiredRoles : [],
         approvalMode: source.approvalMode || 'manual',
         allowGuests: slots.length > 0 ? false : source.allowGuests !== false,
+        allowTentative: source.allowTentative === true,
         slots,
         assignRoleId: text(source.assignRoleId),
         formFields: Array.isArray(source.formFields) ? source.formFields : [],

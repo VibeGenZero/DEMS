@@ -28,6 +28,9 @@ const SELECTABLE_CHANNEL_TYPES = [
 
 // Custom ID prefixes for the event registration components
 const REGISTER_BUTTON_PREFIX = 'event_register';
+// „Vielleicht“ / Ersatzbank (B-17)
+const TENTATIVE_BUTTON_PREFIX = 'event_maybe';
+const TENTATIVE_MODAL_PREFIX = 'event_maybe_modal';
 const REGISTER_MODAL_PREFIX = 'event_register_modal';
 const MODAL_FIELD_PREFIX = 'field';
 const SLOT_BUTTON_PREFIX = 'event_slot';
@@ -65,6 +68,8 @@ const POLL_NAMES_MAX = 5;
 const POLL_DESCRIPTION_MAX_LENGTH = 1000;
 
 module.exports = {
+    TENTATIVE_BUTTON_PREFIX,
+    TENTATIVE_MODAL_PREFIX,
     OFFER_CONFIRM_PREFIX,
     OFFER_DECLINE_PREFIX,
     ADMIN_EVENT_MODAL_PREFIX,

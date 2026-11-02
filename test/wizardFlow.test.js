@@ -73,12 +73,15 @@ test('a valid draft is sent with all its fields', async () => {
     element('event-title').value = 'Raidnacht';
     element('event-status').value = 'draft';
     element('event-reminder').value = '24, 1';
+    element('event-allow-tentative').checked = true;
     app.wizardGoTo(5);
     await app.saveEvent();
     const sent = requests.find(request => request.url === '/api/admin/events');
     assert.equal(sent.method, 'POST');
     const body = JSON.parse(sent.body);
     assert.deepEqual([body.title, body.status, body.reminderHours, body.startDate, body.formFields], ['Raidnacht', 'draft', '24, 1', '', []]);
+    // „Vielleicht“ / Ersatzbank (B-17)
+    assert.equal(body.allowTentative, true);
 });
 
 test('opening the wizard again clears the marks of the last attempt', async () => {

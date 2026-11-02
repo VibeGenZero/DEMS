@@ -8,7 +8,8 @@
 /** Recipient groups -> registration statuses they reach. Rejected never. */
 const MESSAGE_GROUPS = {
     accepted: ['accepted'],
-    all: ['accepted', 'pending', 'waitlisted', 'offered']
+    // „Alle Anmeldungen“ also reaches the bench (B-17)
+    all: ['accepted', 'pending', 'waitlisted', 'offered', 'tentative']
 };
 const MAX_MESSAGE_LENGTH = 1500;
 

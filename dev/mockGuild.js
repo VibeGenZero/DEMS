@@ -85,7 +85,7 @@ const MEMBERS = [
     { userId: '200000000000000013', username: 'aylin', displayName: 'Aylin', roles: [ROLE_ID.MEMBER, ROLE_ID.VIP] },
     { userId: '200000000000000014', username: 'ben', displayName: 'Ben', roles: [ROLE_ID.MEMBER, ROLE_ID.RAID_TEAM] },
     { userId: '200000000000000015', username: 'chiara', displayName: 'Chiara', roles: [ROLE_ID.MEMBER, ROLE_ID.MODERATOR] },
-    { userId: '200000000000000016', username: 'dennis', displayName: 'Dennis', roles: [ROLE_ID.MEMBER] },
+    { userId: '200000000000000016', username: 'dennis', displayName: 'Dennis', roles: [ROLE_ID.MEMBER, ROLE_ID.RAID_TEAM] },
     { userId: '200000000000000017', username: 'elif', displayName: 'Elif', roles: [ROLE_ID.MEMBER] },
     { userId: '200000000000000018', username: 'felix', displayName: 'Felix', roles: [ROLE_ID.MEMBER, ROLE_ID.RAID_TEAM] },
     { userId: '200000000000000019', username: 'greta', displayName: 'Greta', roles: [ROLE_ID.MEMBER] }

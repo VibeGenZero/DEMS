@@ -21,6 +21,7 @@ see_also: [data-model, conventions]
 | Angenommen / bestätigt | status `accepted` | registration |
 | Abgelehnt | status `rejected` | registration |
 | Warteliste | status `waitlisted`, `promoteFromWaitlist` | utils/eventUtils.js |
+| Vielleicht / Ersatzbank, fest zusagen | status `tentative` (no place), `event.allowTentative`, `confirmTentativeRegistration` (B-17) | utils/tentativeRegistration.js |
 | Teilnehmer / Plätze | participants, `maxParticipants` (0 = unbegrenzt) | event |
 | Gast / Gäste, Einladung | `guests`, `pendingGuests`, guest invitation | registration |
 | Einladungen erlauben | `acceptInvitations` | users |

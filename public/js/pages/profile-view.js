@@ -12,7 +12,7 @@ import { formatOfferDeadline } from '../events/offer.js';
 const HEX_COLOR = /^#[0-9a-fA-F]{6}$/;
 const ICON_CLASS = /^bi-[a-z0-9-]+$/;
 // Chip of a history row per registration status; cancelled events and check-ins come first (historyChip)
-const HISTORY_LABELS = { accepted: 'Teilgenommen', rejected: 'Abgelehnt', waitlisted: 'Warteliste', pending: 'Nicht bestätigt' };
+const HISTORY_LABELS = { accepted: 'Teilgenommen', rejected: 'Abgelehnt', waitlisted: 'Warteliste', pending: 'Nicht bestätigt', tentative: 'Vielleicht' };
 const CHECKED_IN = { tone: 'success', icon: 'qr-code-scan' };
 
 /**

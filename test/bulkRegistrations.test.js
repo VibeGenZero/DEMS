@@ -16,10 +16,10 @@ const toById = (plan) => Object.fromEntries(plan.changes.map(change => [change.i
 
 test('the actions and the id limit', () => {
     assert.deepEqual(BULK_ACTIONS, {
-        // offered = a waitlist offer (B-15), decided like a waitlisted registration
-        accept: ['pending', 'waitlisted', 'offered'],
-        waitlist: ['pending', 'accepted', 'offered'],
-        reject: ['pending', 'waitlisted', 'accepted', 'offered']
+        // offered = a waitlist offer (B-15), decided like a waitlisted registration; tentative = the bench (B-17)
+        accept: ['pending', 'waitlisted', 'offered', 'tentative'],
+        waitlist: ['pending', 'accepted', 'offered', 'tentative'],
+        reject: ['pending', 'waitlisted', 'accepted', 'offered', 'tentative']
     });
     assert.equal(MAX_BULK_IDS, 200);
 });
@@ -127,4 +127,29 @@ test('waitlisting and rejecting clear the slot on slot events and the check-in',
     const plain = toById(planBulkAction({ action: 'reject', ids: ['in'], registrations: [reg('in', 'accepted', { checkedIn: true })], event: event() }));
     assert.equal(plain.in.slotId, undefined);
     assert.equal(plain.in.clearCheckin, true);
+});
+
+test('the bench is accepted, waitlisted or rejected like the others (B-17)', () => {
+    const registrations = [reg('a', 'accepted'), reg('t1', 'tentative'), reg('t2', 'tentative')];
+    const accept = planBulkAction({ action: 'accept', ids: ['t1', 't2'], registrations, event: event({ maxParticipants: 3 }) });
+    assert.deepEqual(accept.changes.map(change => [change.id, change.from, change.to]), [['t1', 'tentative', 'accepted'], ['t2', 'tentative', 'accepted']]);
+    const waitlist = planBulkAction({ action: 'waitlist', ids: ['t1'], registrations, event: event() });
+    assert.deepEqual(waitlist.changes.map(change => [change.id, change.to]), [['t1', 'waitlisted']]);
+    const reject = planBulkAction({ action: 'reject', ids: ['t2'], registrations, event: event() });
+    assert.deepEqual(reject.changes.map(change => [change.id, change.to]), [['t2', 'rejected']]);
+});
+
+test('an unselected bench holds no places during a bulk accept (B-17)', () => {
+    const registrations = [
+        ...Array.from({ length: 8 }, (_, index) => reg(`a${index}`, 'accepted')),
+        reg('t1', 'tentative'), reg('t2', 'tentative'), reg('t3', 'tentative'),
+        reg('p1', 'pending'), reg('p2', 'pending')
+    ];
+    const plan = planBulkAction({ action: 'accept', ids: ['p1', 'p2'], registrations, event: event({ maxParticipants: 10 }) });
+    assert.deepEqual(plan.changes.map(change => [change.id, change.to]), [['p1', 'accepted'], ['p2', 'accepted']]);
+    assert.deepEqual(plan.full, []);
+
+    const slotRegs = [reg('tank', 'accepted', { slotId: 'tank' }), reg('bench', 'tentative', { slotId: null, preferredSlotId: 'heal' }), reg('p', 'pending', { preferredSlotId: 'heal' })];
+    const slotPlan = planBulkAction({ action: 'accept', ids: ['bench', 'p'], registrations: slotRegs, event: event({ slots: SLOTS }) });
+    assert.deepEqual(slotPlan.changes.map(change => [change.id, change.to, change.slotId]), [['bench', 'accepted', 'heal'], ['p', 'accepted', 'heal']]);
 });

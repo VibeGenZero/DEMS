@@ -35,7 +35,7 @@ function bannerOf(value) {
  * Event as the preview builders need it.
  *
  * @param {Object} [body] -> Draft of collectEventDraft() (public/js/admin/wizard.js), may be incomplete.
- * @returns {Object} -> `{ title, description, startDate, endDate, registrationDeadline, unregisterDeadline, bannerUrl, category, status, accessMode, allowGuests, formFields, accentColor, slots, maxParticipants }`; broken slots are left out (the wizard reports them).
+ * @returns {Object} -> `{ title, description, startDate, endDate, registrationDeadline, unregisterDeadline, bannerUrl, category, status, accessMode, allowGuests, allowTentative, formFields, accentColor, slots, maxParticipants }`; broken slots are left out (the wizard reports them).
  */
 function buildPreviewEvent(body = {}) {
     const slotResult = normalizeSlots(body.slots);
@@ -52,6 +52,8 @@ function buildPreviewEvent(body = {}) {
         status: STATUSES.includes(body.status) ? body.status : 'active',
         accessMode: body.accessMode === 'role-required' ? 'role-required' : 'open',
         allowGuests: slots.length > 0 ? false : body.allowGuests !== false,
+        // „Vielleicht“ button in the preview (B-17)
+        allowTentative: body.allowTentative === true,
         formFields: Array.isArray(body.formFields)
             ? body.formFields.filter(field => field && typeof field === 'object' && typeof field.label === 'string' && field.label.trim())
             : [],

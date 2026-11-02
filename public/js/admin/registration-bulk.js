@@ -11,9 +11,9 @@ import { showRegistrations } from './registrations.js';
 
 /** Statuses each action applies to; same map as BULK_ACTIONS in utils/bulkRegistrations.js. */
 export const BULK_ACTIONS = {
-    accept: ['pending', 'waitlisted', 'offered'],
-    waitlist: ['pending', 'accepted', 'offered'],
-    reject: ['pending', 'waitlisted', 'accepted', 'offered']
+    accept: ['pending', 'waitlisted', 'offered', 'tentative'],
+    waitlist: ['pending', 'accepted', 'offered', 'tentative'],
+    reject: ['pending', 'waitlisted', 'accepted', 'offered', 'tentative']
 };
 
 /** Rows of the open dialog that can be ticked, and the ticked ones (id -> status). */

@@ -9,7 +9,7 @@
 // Without an end date an event counts as two hours long
 const DEFAULT_DURATION_MS = 2 * 60 * 60 * 1000;
 // Own registrations that put the member on the event's list
-const OWN_STATUSES = ['accepted', 'pending', 'waitlisted', 'offered'];
+const OWN_STATUSES = ['accepted', 'pending', 'waitlisted', 'offered', 'tentative'];
 // Registrations whose guests count as taking part
 const HOST_STATUSES = ['accepted', 'pending'];
 // German answers once a deadline has passed (W-03), shared by the service and the bot
@@ -105,7 +105,7 @@ function pickSeriesRepresentative(seriesEvents, now = new Date()) {
  *
  * @param {Array<Object>} registrations -> Registrations of the event (`userId`, `status`, `guests`).
  * @param {string} userId -> Discord user ID of the member.
- * @returns {string|null} -> Own `accepted`/`pending`/`waitlisted`, else `guest` in an accepted or pending registration, else null.
+ * @returns {string|null} -> Own `accepted`/`pending`/`waitlisted`/`offered`/`tentative`, else `guest` in an accepted or pending registration, else null.
  */
 function myRegistrationStatus(registrations, userId) {
     if (!userId) return null;

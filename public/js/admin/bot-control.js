@@ -161,6 +161,7 @@ export async function loadBotRunningEvents() {
                             <span class="re-stat re-stat-accepted" title="Angenommen"><i class="bi bi-check-circle"></i> ${stats.accepted}</span>
                             <span class="re-stat re-stat-pending" title="Ausstehend"><i class="bi bi-hourglass-split"></i> ${stats.pending}</span>
                             <span class="re-stat re-stat-waitlisted" title="Warteliste"><i class="bi bi-list-nested"></i> ${stats.waitlisted}</span>
+                            <span class="re-stat re-stat-tentative" title="Ersatzbank"><i class="bi bi-question-circle"></i> ${stats.tentative || 0}</span>
                         </div>
                         <div class="mt-2">
                             <a href="#event/${event.id}" class="btn btn-sm btn-outline-light w-100">

@@ -60,6 +60,8 @@ test('a new event gets the defaults of the wizard', () => {
     assert.equal(event.accessMode, 'open');
     assert.equal(event.approvalMode, 'manual');
     assert.equal(event.allowGuests, true);
+    // „Vielleicht“ is off until an admin switches it on (B-17)
+    assert.equal(event.allowTentative, false);
     assert.equal(event.maxParticipants, 0);
     assert.equal(event.createdBy, ADMIN);
     assert.deepEqual(event.slots, []);
@@ -75,6 +77,11 @@ test('slots give the places and switch guests off', () => {
     assert.equal(event.maxParticipants, 8);
     assert.equal(event.allowGuests, false);
     assert.equal(event.status, 'draft');
+});
+
+test('„Vielleicht“ is only on for a real true (B-17)', () => {
+    assert.equal(buildNewEvent({ title: 'Raid', startDate: future(2), allowTentative: true }, ADMIN).allowTentative, true);
+    assert.equal(buildNewEvent({ title: 'Raid', startDate: future(2), allowTentative: 'ja' }, ADMIN).allowTentative, false);
 });
 
 // ── publishDraft ────────────────────────────────────────────────────────

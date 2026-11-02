@@ -99,6 +99,8 @@ test('the slot is the one taken, the wish of an open registration, else null', (
     assert.deepEqual(slotOf({ slotId: 'dps' }), { name: 'Schaden', emoji: '', wish: false });
     assert.deepEqual(slotOf({ status: 'waitlisted', slotId: null, preferredSlotId: 'tank' }), { name: 'Tank', emoji: '🛡️', wish: true });
     assert.deepEqual(slotOf({ status: 'pending', preferredSlotId: 'dps' }), { name: 'Schaden', emoji: '', wish: true });
+    // „Vielleicht“ names the wanted role, too (B-17)
+    assert.deepEqual(slotOf({ status: 'tentative', slotId: null, preferredSlotId: 'tank' }), { name: 'Tank', emoji: '🛡️', wish: true });
     // Rejected: the wish no longer matters. A slot that was removed from the event is gone.
     assert.equal(slotOf({ status: 'rejected', slotId: null, preferredSlotId: 'tank' }), null);
     assert.equal(slotOf({ slotId: 'healer' }), null);
@@ -158,4 +160,11 @@ test('only upcoming entries carry their waitlist place (W-05)', () => {
     const { upcoming, history } = buildProfileEvents(waiting, events, NOW, positions);
     assert.deepEqual(upcoming[0].waitlistPosition, { position: 2, total: 3 });
     assert.equal(history[0].waitlistPosition, null);
+});
+
+test('a tentative registration is listed among the upcoming events with its status (B-17)', () => {
+    const { upcoming, history } = build({ raid: event('Raid') }, [registration('raid', { status: 'tentative' })]);
+    assert.deepEqual(titles(upcoming), ['Raid']);
+    assert.equal(upcoming[0].status, 'tentative');
+    assert.deepEqual(history, []);
 });

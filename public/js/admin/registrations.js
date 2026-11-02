@@ -47,7 +47,7 @@ export async function showRegistrations(eventId, eventTitle) {
             return;
         }
 
-        const statusTexts = { pending: '⏳ Ausstehend', accepted: '✅ Angenommen', rejected: '❌ Abgelehnt', waitlisted: '📋 Warteliste', offered: 'Angeboten' };
+        const statusTexts = { pending: '⏳ Ausstehend', accepted: '✅ Angenommen', rejected: '❌ Abgelehnt', waitlisted: '📋 Warteliste', offered: 'Angeboten', tentative: 'Vielleicht' };
 
         const sourceBadges = {
             admin: '<span class="badge bg-info-subtle text-info-emphasis"><i class="bi bi-person-gear me-1"></i>Admin</span>',
@@ -88,12 +88,15 @@ export async function showRegistrations(eventId, eventTitle) {
                 `<small><strong>${escapeHtml(k)}:</strong> ${escapeHtml(String(v))}</small>`
             ).join('<br>') || '<small class="text-muted">—</small>'}
         </td>
-        <td><small>${new Date(reg.createdAt).toLocaleDateString('de-DE')}</small></td>
+        <td><small>${new Date(reg.createdAt).toLocaleDateString('de-DE')}</small>${reg.tentativeAt && reg.status !== 'tentative' ? `<br><small class="text-muted">Vielleicht seit ${escapeHtml(new Date(reg.tentativeAt).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' }))}</small>` : ''}</td>
         <td>
-          ${['pending', 'waitlisted', 'offered'].includes(reg.status) ? `
+          ${['pending', 'waitlisted', 'offered', 'tentative'].includes(reg.status) ? `
             <button class="btn btn-sm btn-outline-success me-1" data-click="updateRegStatus" data-reg-id="${escapeHtml(reg.id)}" data-status="accepted" data-event-id="${escapeHtml(eventId)}" data-event-title="${escapeHtml(eventTitle)}">
               <i class="bi bi-check"></i>
             </button>
+            ${reg.status === 'tentative' ? `<button class="btn btn-sm btn-outline-secondary me-1" data-click="updateRegStatus" data-reg-id="${escapeHtml(reg.id)}" data-status="waitlisted" data-event-id="${escapeHtml(eventId)}" data-event-title="${escapeHtml(eventTitle)}" title="Auf die Warteliste">
+              <i class="bi bi-list-ol"></i>
+            </button>` : ''}
             <button class="btn btn-sm btn-outline-danger" data-click="updateRegStatus" data-reg-id="${escapeHtml(reg.id)}" data-status="rejected" data-event-id="${escapeHtml(eventId)}" data-event-title="${escapeHtml(eventTitle)}">
               <i class="bi bi-x"></i>
             </button>
@@ -119,7 +122,8 @@ export async function updateRegStatus(regId, status, eventId, eventTitle) {
         });
         if (res.ok) {
             const result = await res.json();
-            showToast(status === 'accepted' ? 'Angenommen!' : 'Abgelehnt.', status === 'accepted' ? 'success' : 'warning');
+            const toasts = { accepted: ['Angenommen!', 'success'], waitlisted: ['Auf die Warteliste gesetzt.', 'info'], rejected: ['Abgelehnt.', 'warning'] };
+            showToast(...(toasts[status] || toasts.rejected));
             if (result.warning) showToast(result.warning, 'warning');
             showRegistrations(eventId, eventTitle);
             // The table behind the dialog shows the open requests and places of this event

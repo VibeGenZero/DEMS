@@ -43,7 +43,8 @@ test('the own status comes from the own registration, else from being a guest', 
         { userId: 'u-pending', status: 'pending', guests: ['u-pending-guest'] },
         { userId: 'u-wait', status: 'waitlisted', guests: ['u-wait-guest'] },
         { userId: 'u-rejected', status: 'rejected', guests: ['u-rejected-guest'] },
-        { userId: 'u-cancelled', status: 'cancelled' }
+        { userId: 'u-cancelled', status: 'cancelled' },
+        { userId: 'u-maybe', status: 'tentative', guests: ['u-maybe-guest'] }
     ];
     assert.equal(myRegistrationStatus(registrations, 'u-accepted'), 'accepted');
     assert.equal(myRegistrationStatus(registrations, 'u-pending'), 'pending');
@@ -54,6 +55,9 @@ test('the own status comes from the own registration, else from being a guest', 
     assert.equal(myRegistrationStatus(registrations, 'u-rejected-guest'), null, 'guest of a rejected registration');
     assert.equal(myRegistrationStatus(registrations, 'u-rejected'), null);
     assert.equal(myRegistrationStatus(registrations, 'u-cancelled'), null);
+    // „Vielleicht“ is the member's own answer (B-17); it never makes anybody a guest
+    assert.equal(myRegistrationStatus(registrations, 'u-maybe'), 'tentative');
+    assert.equal(myRegistrationStatus(registrations, 'u-maybe-guest'), null);
     assert.equal(myRegistrationStatus(registrations, 'u-stranger'), null);
     assert.equal(myRegistrationStatus(registrations, undefined), null);
     assert.equal(myRegistrationStatus([], 'u-accepted'), null);

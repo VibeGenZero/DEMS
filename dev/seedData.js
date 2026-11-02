@@ -195,6 +195,8 @@ function buildEvents(clock) {
             announceChannelId: CHANNEL_ID.EVENTS,
             maxParticipants: 6,
             allowGuests: false,
+            // „Vielleicht“ / Ersatzbank (B-17): Dennis waits on the bench for the healer role
+            allowTentative: true,
             slots: [
                 { id: RAID_SLOT_ID.TANK, name: 'Tank', emoji: '🛡️', capacity: 1 },
                 { id: RAID_SLOT_ID.HEAL, name: 'Heiler', emoji: '💚', capacity: 2 },
@@ -422,6 +424,11 @@ function buildRegistrations(clock) {
         }),
         entry('role-felix', EVENT_ID.ROLE, felix, {
             status: 'waitlisted', slotId: null, preferredSlotId: RAID_SLOT_ID.TANK, altSlotIds: [], createdAt: clock.offset(-2 * DAY)
+        }),
+        // „Vielleicht“ (B-17): on the bench for the healer role, no place taken
+        entry('role-dennis', EVENT_ID.ROLE, dennis, {
+            status: 'tentative', source: 'discord', slotId: null, preferredSlotId: RAID_SLOT_ID.HEAL, altSlotIds: [],
+            createdAt: clock.offset(-36 * HOUR), tentativeAt: clock.offset(-36 * HOUR)
         }),
 
         // Workshop -> web-only form; Neo (newbie persona) is Chiara's guest and must not see her answers

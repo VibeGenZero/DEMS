@@ -263,3 +263,139 @@ test('members cannot unregister after the unregister deadline (W-03)', async () 
     });
     assert.equal((await unregisterUserFromEvent({ eventId: ended, userId: user('Frei').id })).ok, true);
 });
+
+// --- „Vielleicht“ / Ersatzbank (B-17) ---
+
+const { flushAnnouncementRefreshes } = require('../utils/announcementRefresh');
+const maybe = (eventId, name, fields = {}) => register(eventId, name, { tentative: true, ...fields });
+const failureOf = (result) => ({ ok: result.ok, code: result.code, httpStatus: result.httpStatus, error: result.error });
+
+/** Console lines written while fn runs (the mock bot logs there). */
+async function captureLog(fn) {
+    const lines = [];
+    const original = console.log;
+    console.log = (...args) => { lines.push(args.map(String).join(' ')); };
+    try {
+        await fn();
+        await flushAnnouncementRefreshes();
+        await new Promise(resolve => setTimeout(resolve, 50));
+    } finally {
+        console.log = original;
+    }
+    return lines.join('\n');
+}
+
+test('„Vielleicht“ needs the event switch and allows no guests (B-17)', async () => {
+    const closedId = await createEvent();
+    assert.deepEqual(failureOf(await maybe(closedId, 'Mia')), {
+        ok: false, code: 'tentative_not_allowed', httpStatus: 400, error: 'Für dieses Event gibt es kein „Vielleicht“.'
+    });
+    assert.equal(await registrationOf(closedId, 'Mia'), undefined);
+
+    const openId = await createEvent({ allowTentative: true });
+    assert.deepEqual(failureOf(await maybe(openId, 'Mia', { guests: [{ id: 'svc-guest' }] })), {
+        ok: false, code: 'guests_not_allowed', httpStatus: 400, error: 'Gäste sind für dieses Event nicht zugelassen.'
+    });
+    assert.equal(await registrationOf(openId, 'Mia'), undefined);
+});
+
+test('„Vielleicht“ runs the checks of a registration (B-17)', async () => {
+    const MINUTE = 60 * 1000;
+    const inTwoDays = new Date(Date.now() + 2 * 24 * 60 * MINUTE).toISOString();
+    const codeOf = async (fields, answer = {}) => (await maybe(await createEvent({ allowTentative: true, ...fields }), 'Pia', answer)).code;
+
+    assert.equal(await codeOf({ status: 'draft' }), 'event_inactive');
+    assert.equal(await codeOf({ startDate: new Date(Date.now() - 180 * MINUTE).toISOString(), endDate: new Date(Date.now() - MINUTE).toISOString() }), 'event_ended');
+    assert.equal(await codeOf({ startDate: inTwoDays, registrationDeadline: new Date(Date.now() - MINUTE).toISOString() }), 'registration_closed');
+    assert.equal(await codeOf({ accessMode: 'role-required', requiredRoles: ['raid-role'] }), 'missing_role');
+    assert.equal(await codeOf({ formFields: [{ label: 'Klasse', type: 'text', required: true }] }), 'missing_fields');
+    assert.equal(await codeOf({ slots: SLOTS }, { slotId: 'nope' }), 'invalid_slot');
+
+    const twiceId = await createEvent({ allowTentative: true });
+    await register(twiceId, 'Pia');
+    assert.equal((await maybe(twiceId, 'Pia')).code, 'already_registered');
+});
+
+test('a tentative answer takes no place, even on a full event (B-17)', async () => {
+    const eventId = await createEvent({ allowTentative: true, maxParticipants: 1, formFields: [{ label: 'Klasse', type: 'text', required: true }] });
+    await register(eventId, 'Ana', { formAnswers: { Klasse: 'Magier' } });
+
+    const ben = await maybe(eventId, 'Ben', { formAnswers: { Klasse: 'Krieger' } });
+    assert.equal(ben.ok, true);
+    assert.equal(ben.status, 'tentative');
+    assert.equal(ben.message, 'Du stehst auf der Ersatzbank.');
+    const stored = await registrationOf(eventId, 'Ben');
+    assert.equal(stored.status, 'tentative');
+    assert.deepEqual(stored.formAnswers, { Klasse: 'Krieger' });
+    assert.equal(stored.tentativeAt, stored.createdAt);
+
+    // The bench is no queue: the next binding registration still goes to the waitlist
+    assert.equal((await register(eventId, 'Cem', { formAnswers: { Klasse: 'Druide' } })).status, 'waitlisted');
+});
+
+test('on slot events a tentative answer keeps the wanted role but holds no slot (B-17)', async () => {
+    const eventId = await createEvent({ allowTentative: true, slots: SLOTS, maxParticipants: 4 });
+    const result = await maybe(eventId, 'Heidi', { slotId: 'heal', altSlotIds: ['dps', 'nope'] });
+    assert.equal(result.status, 'tentative');
+    assert.equal(result.slotId, null);
+    const stored = await registrationOf(eventId, 'Heidi');
+    assert.equal(stored.slotId, null);
+    assert.equal(stored.preferredSlotId, 'heal');
+    assert.deepEqual(stored.altSlotIds, ['dps']);
+    // The healer slot is still free for a binding registration
+    assert.equal((await register(eventId, 'Ivo', { slotId: 'heal' })).slotId, 'heal');
+});
+
+test('a tentative answer sends no DM, gives no role or channels and asks for no approval (B-17)', async () => {
+    for (const approvalMode of ['instant', 'manual']) {
+        const eventId = await createEvent({
+            title: `Bank ${approvalMode}`, allowTentative: true, approvalMode, assignRoleId: 'role-bench', discordChannelId: 'voice-bench',
+            announcements: [{ channelId: 'chan-bench', messageId: 'msg-bench' }]
+        });
+        const requests = [];
+        const original = bot.sendApprovalRequest;
+        bot.sendApprovalRequest = async (registrationId) => { requests.push(registrationId); return null; };
+        let log;
+        try {
+            log = await captureLog(() => maybe(eventId, `Jule-${approvalMode}`));
+        } finally {
+            bot.sendApprovalRequest = original;
+        }
+        assert.doesNotMatch(log, /DM an/, approvalMode);
+        assert.doesNotMatch(log, /Rolle .* vergeben/, approvalMode);
+        assert.doesNotMatch(log, /zu den Channels/, approvalMode);
+        assert.deepEqual(requests, [], approvalMode);
+        assert.match(log, new RegExp(`Ankündigung von "Bank ${approvalMode}" aktualisiert`), approvalMode);
+    }
+});
+
+test('the bench can withdraw after the unregister deadline, a binding registration cannot (B-17)', async () => {
+    const MINUTE = 60 * 1000;
+    const eventId = await createEvent({
+        allowTentative: true,
+        startDate: new Date(Date.now() + 2 * 24 * 60 * MINUTE).toISOString(),
+        unregisterDeadline: new Date(Date.now() - MINUTE).toISOString()
+    });
+    await maybe(eventId, 'Vage');
+    await register(eventId, 'Sicher');
+
+    let result;
+    const log = await captureLog(async () => { result = await unregisterUserFromEvent({ eventId, userId: user('Vage').id }); });
+    assert.equal(result.ok, true);
+    assert.equal(await registrationOf(eventId, 'Vage'), undefined);
+    assert.doesNotMatch(log, /DM an/);
+    assert.equal((await unregisterUserFromEvent({ eventId, userId: user('Sicher').id })).code, 'unregister_closed');
+});
+
+test('switching the role on the bench changes the wanted role, never takes a place (B-17)', async () => {
+    const eventId = await createEvent({ allowTentative: true, slots: SLOTS, maxParticipants: 4 });
+    await maybe(eventId, 'Wanda', { slotId: 'tank' });
+    const result = await switchOwnSlot({ eventId, userId: user('Wanda').id, slotId: 'heal' });
+    assert.equal(result.ok, true);
+    assert.equal(result.status, 'tentative');
+    assert.equal(result.message, 'Deine Wunschrolle ist jetzt 💚 Heiler.');
+    const stored = await registrationOf(eventId, 'Wanda');
+    assert.deepEqual([stored.status, stored.slotId, stored.preferredSlotId], ['tentative', null, 'heal']);
+    // The healer place is still free for a binding registration
+    assert.equal((await register(eventId, 'Xaver', { slotId: 'heal' })).slotId, 'heal');
+});

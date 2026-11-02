@@ -72,6 +72,8 @@ sources: [scripts/wiki-graph.js, docs/wiki/graph.json, CLAUDE.md]
 | `utils/checkin.js` | event-lifecycle, discord-integration, routes-events, utils |
 | `utils/eventCleanup.js` | event-lifecycle, discord-integration, reminders-presence, utils |
 | `utils/waitlistOffers.js` | registration-flow, discord-integration, reminders-presence, routes-events, utils |
+| `utils/tentativeRegistration.js` | registration-flow, routes-events, utils |
+| `bot/tentative.js` | bot, discord-integration, registration-flow |
 | `utils/adminActions.js` | routes-admin, event-lifecycle, date-polls, discord-integration, utils |
 | `utils/localDateTime.js` | discord-integration, utils |
 | `utils/threadSync.js` | discord-integration, routes-events, utils |

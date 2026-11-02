@@ -10,6 +10,9 @@
 // An offered place (B-15) is held for the member until they confirm or the offer runs out
 const OCCUPYING_STATUSES = ['pending', 'accepted', 'offered'];
 
+/** Non-binding „Vielleicht“ answer (B-17): on the bench, takes no place and never moves up. */
+const TENTATIVE_STATUS = 'tentative';
+
 /**
  * Number of places a single registration needs.
  *
@@ -41,7 +44,7 @@ function countOccupiedPlaces(registrations) {
  *
  * @param {Array<Object>} registrations -> All registrations of the event.
  * @param {number} maxParticipants -> Capacity of the event, 0 = unlimited.
- * @returns {Object} -> `{ taken, capacity, guests, pending, waitlist }`: taken places as the registration counts them (guests and open invitations included), how many of them are guests, how many requests wait for approval and how many registrations are on the waitlist.
+ * @returns {Object} -> `{ taken, capacity, guests, pending, waitlist, bench }`: taken places as the registration counts them (guests and open invitations included), how many of them are guests, how many requests wait for approval, how many registrations are on the waitlist and how many on the bench (B-17).
  */
 function summarizePlaces(registrations, maxParticipants) {
     const occupying = registrations.filter(registration => OCCUPYING_STATUSES.includes(registration.status));
@@ -50,7 +53,8 @@ function summarizePlaces(registrations, maxParticipants) {
         capacity: maxParticipants > 0 ? maxParticipants : 0,
         guests: occupying.reduce((sum, registration) => sum + placesOf(registration) - 1, 0),
         pending: occupying.filter(registration => registration.status === 'pending').length,
-        waitlist: registrations.filter(registration => registration.status === 'waitlisted').length
+        waitlist: registrations.filter(registration => registration.status === 'waitlisted').length,
+        bench: registrations.filter(registration => registration.status === TENTATIVE_STATUS).length
     };
 }
 
@@ -84,15 +88,30 @@ function formatWaitlist(waitlist) {
 }
 
 /**
+ * Note about the bench (B-17) that stands beside the places sentence.
+ *
+ * @param {number} bench -> Tentative registrations of the event.
+ * @returns {string} -> "2 auf der Ersatzbank", empty when the bench is empty.
+ */
+function formatBench(bench) {
+    return bench > 0 ? `${bench} auf der Ersatzbank` : '';
+}
+
+/**
  * Places of an event as every view shows them: the numbers plus the sentence.
  *
  * @param {Array<Object>} registrations -> All registrations of the event.
  * @param {number} maxParticipants -> Capacity of the event, 0 = unlimited.
- * @returns {Object} -> `{ taken, capacity, guests, pending, waitlist, text, waitlistText }`.
+ * @returns {Object} -> `{ taken, capacity, guests, pending, waitlist, bench, text, waitlistText, benchText }`.
  */
 function describePlaces(registrations, maxParticipants) {
     const places = summarizePlaces(registrations, maxParticipants);
-    return { ...places, text: formatPlaces(places), waitlistText: formatWaitlist(places.waitlist) };
+    return {
+        ...places,
+        text: formatPlaces(places),
+        waitlistText: formatWaitlist(places.waitlist),
+        benchText: formatBench(places.bench)
+    };
 }
 
 /**
@@ -153,11 +172,13 @@ function pickCapacityPromotions(maxParticipants, registrations) {
 
 module.exports = {
     OCCUPYING_STATUSES,
+    TENTATIVE_STATUS,
     placesOf,
     countOccupiedPlaces,
     summarizePlaces,
     formatPlaces,
     formatWaitlist,
+    formatBench,
     describePlaces,
     byCreatedAt,
     waitlistPositions,

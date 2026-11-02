@@ -9,7 +9,7 @@ const {
     MY_LEAVE_PREFIX, MY_LEAVE_CANCEL_PREFIX, MY_SWITCH_PREFIX,
     APPROVAL_ACCEPT_PREFIX, APPROVAL_REJECT_PREFIX, APPROVAL_WAITLIST_PREFIX, CHECKIN_BUTTON_PREFIX,
     ADMIN_EVENT_MODAL_PREFIX, ADMIN_POLL_MODAL_PREFIX, ADMIN_EVENT_PUBLISH_PREFIX, ADMIN_EVENT_ACTIVATE_PREFIX,
-    ADMIN_RETRY_PREFIX, OFFER_CONFIRM_PREFIX, OFFER_DECLINE_PREFIX
+    ADMIN_RETRY_PREFIX, OFFER_CONFIRM_PREFIX, OFFER_DECLINE_PREFIX, TENTATIVE_BUTTON_PREFIX, TENTATIVE_MODAL_PREFIX
 } = require('./constants');
 const {
     handleEventRegisterButton, handleEventRegisterModal, replyWithFailure, handleEventSlotButton,
@@ -22,6 +22,7 @@ const { handleApprovalButton } = require('./approvals');
 const { handleCheckinButton } = require('./checkin');
 const { handleAdminEventModal, handleAdminPollModal, handleDraftButton, handleRetryButton } = require('./adminCommands');
 const { handleOfferButton } = require('./waitlistOffers');
+const { handleTentativeButton, handleTentativeModal } = require('./tentative');
 const { state } = require('./client');
 
 /**
@@ -48,6 +49,16 @@ async function handleInteraction(interaction) {
             } catch (err) {
                 console.error('Admin command modal error:', err);
                 await replyWithFailure(interaction, '❌ Fehler beim Speichern.');
+            }
+            return;
+        }
+        // „Vielleicht“ modal (B-17)
+        if (modalAction === TENTATIVE_MODAL_PREFIX && modalEventId) {
+            try {
+                await handleTentativeModal(interaction, modalEventId);
+            } catch (err) {
+                console.error('Tentative modal error:', err);
+                await replyWithFailure(interaction);
             }
             return;
         }
@@ -139,6 +150,17 @@ async function handleInteraction(interaction) {
             } catch (err) {
                 console.error('Check-in button error:', err);
                 await replyWithFailure(interaction, '❌ Fehler beim Check-in.');
+            }
+            return;
+        }
+
+        // „Vielleicht“ of an announcement (B-17)
+        if (buttonAction === TENTATIVE_BUTTON_PREFIX && buttonEventId) {
+            try {
+                await handleTentativeButton(interaction, buttonEventId);
+            } catch (err) {
+                console.error('Tentative button error:', err);
+                await replyWithFailure(interaction);
             }
             return;
         }

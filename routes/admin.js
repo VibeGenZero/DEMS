@@ -120,6 +120,7 @@ router.get('/stats', async (req, res) => {
         let acceptedRegs = 0;
         let rejectedRegs = 0;
         let waitlistedRegs = 0;
+        let tentativeRegs = 0;
 
         regsSnap.forEach(d => {
             const r = d.data();
@@ -130,11 +131,12 @@ router.get('/stats', async (req, res) => {
             else if (status === 'accepted') acceptedRegs += count;
             else if (status === 'rejected') rejectedRegs += count;
             else if (status === 'waitlisted') waitlistedRegs += count;
+            else if (status === 'tentative') tentativeRegs += count;
         });
 
         res.json({
             events: { total: totalEvents, active: activeEvents, draft: draftEvents, archived: archivedEvents },
-            registrations: { total: totalRegs, pending: pendingRegs, accepted: acceptedRegs, rejected: rejectedRegs, waitlisted: waitlistedRegs }
+            registrations: { total: totalRegs, pending: pendingRegs, accepted: acceptedRegs, rejected: rejectedRegs, waitlisted: waitlistedRegs, tentative: tentativeRegs }
         });
     } catch (err) {
         console.error('Stats error:', err);
@@ -365,7 +367,7 @@ function buildEventUpdates(body, slots, oldEvent) {
         title, description, maxParticipants, accessMode, requiredRoles,
         approvalMode, assignRoleId, formFields,
         startDate, endDate, bannerUrl, category, status, reminderHours, checkinMessage,
-        customBotMessages, autoCreateChannels, channelConfig, allowGuests,
+        customBotMessages, autoCreateChannels, channelConfig, allowGuests, allowTentative,
         accentColor, location, registrationDeadline, unregisterDeadline, announceChannelId
     } = body;
     // A date of a series keeps its rhythm; "Wiederholen bis" changes only by an extension (W-11)
@@ -397,6 +399,8 @@ function buildEventUpdates(body, slots, oldEvent) {
         // Own announcement channel, '' = default (B-11)
         announceChannelId: announceChannelId || '',
         allowGuests: slots.length > 0 ? false : allowGuests !== false,
+        // „Vielleicht“ / Ersatzbank (B-17); turning it off keeps the bench
+        allowTentative: allowTentative === true,
         slots,
         sourcePollId: oldEvent.sourcePollId || '',
         accentColor: accentColor || '',
@@ -1243,6 +1247,8 @@ router.post('/events/:id/registrations/bulk', async (req, res) => {
                     if (change.slotId !== undefined) update.slotId = change.slotId;
                     // A decision ends a waitlist offer (B-15)
                     if (change.from === 'offered') update.offer = null;
+                    // Leaving the bench counts as registered now, for the waitlist order (B-17)
+                    if (change.from === 'tentative') update.createdAt = new Date().toISOString();
                     if (change.clearCheckin) Object.assign(update, { checkedIn: false, checkedInAt: null });
                     batch.update(doc(db, 'registrations', change.id), update);
                 }

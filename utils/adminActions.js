@@ -62,6 +62,8 @@ function buildNewEvent(input, createdBy) {
         // Own announcement channel, '' = bot center / .env default (B-11)
         announceChannelId: input.announceChannelId || '',
         allowGuests: slots.length > 0 ? false : input.allowGuests !== false,
+        // „Vielleicht“ / Ersatzbank (B-17), off unless switched on
+        allowTentative: input.allowTentative === true,
         slots,
         sourcePollId: input.sourcePollId || '',
         accentColor: input.accentColor || '',

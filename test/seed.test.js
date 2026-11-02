@@ -19,7 +19,7 @@ const { db, collection, doc, getDoc, getDocs, setDoc } = require('../firebaseAdm
 const EXPECTED_COUNTS = {
     events: 14,
     users: 12,
-    registrations: 39,
+    registrations: 40,
     comments: 8,
     auditLogs: 10,
     polls: 2,
@@ -169,6 +169,11 @@ test('the raid event has a line-up with a fallback role and a waitlist', async (
     const registrations = await registrationsOf(EVENT_ID.ROLE);
     assert.ok(registrations.some(r => r.status === 'accepted' && r.slotId !== r.preferredSlotId));
     assert.ok(registrations.some(r => r.status === 'waitlisted' && r.slotId === null && r.preferredSlotId === 'tank'));
+    // „Vielleicht“ / Ersatzbank (B-17)
+    assert.equal(raid.allowTentative, true);
+    const bench = registrations.filter(r => r.status === 'tentative');
+    assert.equal(bench.length, 1);
+    assert.deepEqual([bench[0].slotId, bench[0].preferredSlotId, bench[0].tentativeAt], [null, 'heal', bench[0].createdAt]);
 });
 
 test('the raid event is announced with a ping line and has a discussion thread (B-05, B-14)', async () => {

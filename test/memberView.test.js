@@ -137,7 +137,7 @@ test('check-in, no-show, Discord and admin sources and slots get their chips', (
 });
 
 test('each registration status has its own label', () => {
-    const labels = { accepted: 'Angenommen', pending: 'Ausstehend', waitlisted: 'Warteliste', rejected: 'Abgelehnt' };
+    const labels = { accepted: 'Angenommen', pending: 'Ausstehend', waitlisted: 'Warteliste', rejected: 'Abgelehnt', tentative: 'Vielleicht' };
     for (const [status, label] of Object.entries(labels)) {
         assert.match(app.renderMemberHistoryRow(entry({ status }), NOW), new RegExp(label), status);
     }

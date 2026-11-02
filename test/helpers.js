@@ -451,7 +451,7 @@ async function loadFrontendApp(routes, { storage = {}, confirm = true, reducedMo
         localStorage: createStorage(storage),
         sessionStorage: createStorage({}),
         // isValidBannerUrl() parses with URL, as the browser does
-        URL, URLSearchParams,
+        URL, URLSearchParams, AbortController,
         setTimeout: noop, clearTimeout: noop, setInterval: () => 0, clearInterval: noop,
         matchMedia,
         getComputedStyle: () => ({ getPropertyValue: () => '' }),

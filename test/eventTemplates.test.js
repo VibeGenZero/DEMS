@@ -89,6 +89,7 @@ test('missing template settings get the defaults of a new event', () => {
     assert.equal(settings.accessMode, 'open');
     assert.equal(settings.approvalMode, 'manual');
     assert.equal(settings.allowGuests, true);
+    assert.equal(settings.allowTentative, false);
     assert.equal(settings.autoCreateChannels, false);
     assert.deepEqual(settings.formFields, []);
     assert.deepEqual(settings.slots, []);
@@ -109,6 +110,12 @@ test('template slots set the capacity and turn guests off like an event', () => 
     assert.ok(settings.slots.every(slot => slot.id));
     assert.equal(settings.maxParticipants, 5);
     assert.equal(settings.allowGuests, false);
+});
+
+test('templates keep „Vielleicht“ (B-17)', () => {
+    assert.equal(TEMPLATE_FIELDS.includes('allowTentative'), true);
+    assert.equal(pickTemplateSettings({ allowTentative: true }).settings.allowTentative, true);
+    assert.equal(pickTemplateSettings({ allowTentative: 'yes' }).settings.allowTentative, false);
 });
 
 test('invalid template slots are refused with the slot sentence', () => {

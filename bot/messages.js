@@ -12,7 +12,7 @@ const { formatPlaces } = require('../utils/capacity');
 const { fitsIntoDiscordModal } = require('../utils/formFields');
 const { hasSlots, formatSlotLabel, buildRoster } = require('../utils/slotService');
 const { client, state } = require('./client');
-const { TIMEZONE, REGISTER_BUTTON_PREFIX, SLOT_BUTTON_PREFIX, ROSTER_NAMES_MAX } = require('./constants');
+const { TIMEZONE, REGISTER_BUTTON_PREFIX, TENTATIVE_BUTTON_PREFIX, SLOT_BUTTON_PREFIX, ROSTER_NAMES_MAX } = require('./constants');
 const { toAccentColor, fitText, MESSAGE_TEXT_MAX } = require('./layout');
 
 /**
@@ -144,7 +144,7 @@ function formatDiscordDate(value) {
  *
  * @param {Object} event -> Event data.
  * @param {Object} [roster] -> Line-up with live numbers.
- * @returns {string} -> Date, places, access, then waitlist, category and deadlines when set.
+ * @returns {string} -> Date, places, access, then waitlist, bench, category and deadlines when set.
  */
 function buildEventFacts(event, roster) {
     const lines = [
@@ -153,6 +153,8 @@ function buildEventFacts(event, roster) {
         `🔓 **Zugang:** ${event.accessMode === 'open' ? 'Offen für alle' : 'Rollen-Requirement'}`
     ];
     if (roster && roster.waitlistCount > 0) lines.push(`⏳ **Warteliste:** ${roster.waitlistCount}`);
+    // „Vielleicht“ answers take no place (B-17)
+    if (roster && roster.benchCount > 0) lines.push(`🤔 **Ersatzbank:** ${roster.benchCount}`);
     if (event.category) lines.push(`🏷️ **Kategorie:** ${escapeMarkdown(String(event.category))}`);
     // Optional deadlines, in the format of the date (W-03)
     for (const [label, value] of [['⏰ **Anmeldung bis:**', event.registrationDeadline], ['⏰ **Abmeldung bis:**', event.unregisterDeadline]]) {
@@ -241,13 +243,13 @@ function canRegisterViaDiscord(event) {
  * Buttons of the last row of an announcement.
  *
  * "Anmelden" for an event without slots while it can be joined from Discord
- * (slot events carry their buttons beside the line-up), then always the link
- * to the event page.
+ * (slot events carry their buttons beside the line-up), "Vielleicht" while it
+ * can be joined and allows it (B-17), then always the link to the event page.
  *
  * @param {Object} event -> The event document data.
  * @param {string} eventId -> The event document ID.
  * @param {boolean} joinable -> Result of canRegisterViaDiscord(event).
- * @returns {ButtonBuilder[]} -> One or two buttons.
+ * @returns {ButtonBuilder[]} -> One to three buttons.
  */
 function buildAnnouncementButtons(event, eventId, joinable) {
     const buttons = [];
@@ -258,6 +260,15 @@ function buildAnnouncementButtons(event, eventId, joinable) {
                 .setLabel('Anmelden')
                 .setStyle(ButtonStyle.Success)
                 .setEmoji('✅')
+        );
+    }
+    if (joinable && event.allowTentative === true) {
+        buttons.push(
+            new ButtonBuilder()
+                .setCustomId(`${TENTATIVE_BUTTON_PREFIX}:${eventId}`)
+                .setLabel('Vielleicht')
+                .setStyle(ButtonStyle.Secondary)
+                .setEmoji('🤔')
         );
     }
     buttons.push(

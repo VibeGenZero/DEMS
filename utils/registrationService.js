@@ -11,10 +11,10 @@ const { withEventLock } = require('./eventLock');
 const { notifyRegistrationsChanged } = require('./announcementRefresh');
 const { closePendingRequests } = require('./approvalRequests');
 const { wantsDm } = require('./notificationPrefs');
-const { OCCUPYING_STATUSES, countOccupiedPlaces } = require('./capacity');
+const { OCCUPYING_STATUSES, TENTATIVE_STATUS, countOccupiedPlaces } = require('./capacity');
 const { isEventOver, isRegistrationClosed, isUnregisterClosed, REGISTRATION_CLOSED_MESSAGE, UNREGISTER_CLOSED_MESSAGE } = require('./eventListing');
 const {
-    getSlots, findSlot, formatSlotLabel, sanitizeAltSlotIds, countSlotOccupancy, hasFreePlace, pickSlot
+    getSlots, findSlot, formatSlotLabel, sanitizeAltSlotIds, countSlotOccupancy, hasFreePlace, decideStatus
 } = require('./slotService');
 const {
     loadEventRegistrations, promoteFromWaitlist, promoteFromWaitlistLocked, announcePromotions
@@ -31,7 +31,9 @@ const REGISTRATION_SOURCE = {
 const REGISTRATION_STATUS = {
     PENDING: 'pending',
     ACCEPTED: 'accepted',
-    WAITLISTED: 'waitlisted'
+    WAITLISTED: 'waitlisted',
+    // „Vielleicht“ (B-17): on the bench, takes no place
+    TENTATIVE: TENTATIVE_STATUS
 };
 
 /** Machine readable failure codes returned by the functions of this module. */
@@ -50,6 +52,8 @@ const REGISTRATION_ERROR = {
     NOT_REGISTERED: 'not_registered',
     NOT_MOVABLE: 'not_movable',
     NOT_ALLOWED: 'admin_add_not_allowed',
+    TENTATIVE_NOT_ALLOWED: 'tentative_not_allowed',
+    NOT_TENTATIVE: 'not_tentative',
     FAILED: 'registration_failed'
 };
 
@@ -69,6 +73,8 @@ const ERROR_HTTP_STATUS = {
     [REGISTRATION_ERROR.NOT_REGISTERED]: 404,
     [REGISTRATION_ERROR.NOT_MOVABLE]: 400,
     [REGISTRATION_ERROR.NOT_ALLOWED]: 400,
+    [REGISTRATION_ERROR.TENTATIVE_NOT_ALLOWED]: 400,
+    [REGISTRATION_ERROR.NOT_TENTATIVE]: 400,
     [REGISTRATION_ERROR.FAILED]: 500
 };
 
@@ -76,8 +82,12 @@ const ERROR_HTTP_STATUS = {
 const STATUS_MESSAGES = {
     [REGISTRATION_STATUS.ACCEPTED]: 'Erfolgreich angemeldet!',
     [REGISTRATION_STATUS.PENDING]: 'Anfrage eingegangen.',
-    [REGISTRATION_STATUS.WAITLISTED]: 'Auf die Warteliste gesetzt.'
+    [REGISTRATION_STATUS.WAITLISTED]: 'Auf die Warteliste gesetzt.',
+    [REGISTRATION_STATUS.TENTATIVE]: 'Du stehst auf der Ersatzbank.'
 };
+
+/** Refusal when an event takes no „Vielleicht“ answers (B-17). */
+const TENTATIVE_NOT_ALLOWED_MESSAGE = 'Für dieses Event gibt es kein „Vielleicht“.';
 
 /**
  * Resolve the template variables used in the bot messages.
@@ -258,7 +268,7 @@ function buildStatusMessage(status, slot, fullPreferredSlot) {
  * @param {Object} params -> Same input as registerUserForEvent().
  * @returns {Promise<Object>} -> `{ ok: true, event, registrationId, registration }` or a failure.
  */
-async function createRegistration({ eventId, user, formAnswers, guests, source, slotId, altSlotIds }) {
+async function createRegistration({ eventId, user, formAnswers, guests, source, slotId, altSlotIds, tentative = false }) {
     const eventSnap = await getDoc(doc(db, 'events', eventId));
     if (!eventSnap.exists()) {
         return buildFailure(REGISTRATION_ERROR.NOT_FOUND, 'Event nicht gefunden');
@@ -268,6 +278,9 @@ async function createRegistration({ eventId, user, formAnswers, guests, source, 
 
     if (event.status && event.status !== 'active') {
         return buildFailure(REGISTRATION_ERROR.INACTIVE, 'Dieses Event akzeptiert keine Anmeldungen.');
+    }
+    if (tentative && event.allowTentative !== true) {
+        return buildFailure(REGISTRATION_ERROR.TENTATIVE_NOT_ALLOWED, TENTATIVE_NOT_ALLOWED_MESSAGE);
     }
     // The end closes registration; the scheduler archives the event a day later (W-01)
     if (isEventOver(event)) {
@@ -292,7 +305,8 @@ async function createRegistration({ eventId, user, formAnswers, guests, source, 
 
     const slots = getSlots(event);
     const rawGuests = Array.isArray(guests) ? guests : [];
-    if ((event.allowGuests === false || slots.length > 0) && rawGuests.length > 0) {
+    // The bench brings nobody along (B-17)
+    if ((event.allowGuests === false || slots.length > 0 || tentative) && rawGuests.length > 0) {
         return buildFailure(REGISTRATION_ERROR.GUESTS_NOT_ALLOWED, 'Gäste sind für dieses Event nicht zugelassen.');
     }
 
@@ -308,27 +322,23 @@ async function createRegistration({ eventId, user, formAnswers, guests, source, 
     // Guests reserve a place each until they accept or decline the invitation
     const incomingGuests = rawGuests.filter(guest => guest && typeof guest.id === 'string' && guest.id.trim());
 
-    let isWaitlisted = false;
-    let slotFields = {};
+    let wish = { guestCount: incomingGuests.length };
     if (slots.length > 0) {
         const preferredSlot = findSlot(slots, slotId);
         if (!preferredSlot) {
             return buildFailure(REGISTRATION_ERROR.INVALID_SLOT, 'Bitte wähle einen gültigen Slot.');
         }
-        const cleanAltSlotIds = sanitizeAltSlotIds(slots, preferredSlot.id, altSlotIds);
-        const assignedSlotId = pickSlot(slots, countSlotOccupancy(slots, registrations), preferredSlot.id, cleanAltSlotIds);
-        slotFields = { slotId: assignedSlotId, preferredSlotId: preferredSlot.id, altSlotIds: cleanAltSlotIds };
-        isWaitlisted = !assignedSlotId;
-    } else if (event.maxParticipants > 0) {
-        isWaitlisted = countOccupiedPlaces(registrations) + 1 + incomingGuests.length > event.maxParticipants;
+        wish = { preferredSlotId: preferredSlot.id, altSlotIds: sanitizeAltSlotIds(slots, preferredSlot.id, altSlotIds) };
     }
 
-    let status;
-    if (isWaitlisted) {
-        status = REGISTRATION_STATUS.WAITLISTED;
-    } else {
-        status = event.approvalMode === 'instant' ? REGISTRATION_STATUS.ACCEPTED : REGISTRATION_STATUS.PENDING;
-    }
+    // „Vielleicht“ takes no place: no slot, no waitlist, whatever is free (B-17)
+    const decision = tentative
+        ? { status: REGISTRATION_STATUS.TENTATIVE, slotId: null }
+        : decideStatus(event, registrations, wish);
+    const status = decision.status;
+    const slotFields = slots.length > 0
+        ? { slotId: decision.slotId, preferredSlotId: wish.preferredSlotId, altSlotIds: wish.altSlotIds }
+        : {};
 
     const pendingGuests = incomingGuests.map(guest => ({
         userId: guest.id,
@@ -337,6 +347,7 @@ async function createRegistration({ eventId, user, formAnswers, guests, source, 
         status: REGISTRATION_STATUS.PENDING
     }));
 
+    const createdAt = new Date().toISOString();
     const registration = {
         eventId,
         userId: user.id,
@@ -346,8 +357,10 @@ async function createRegistration({ eventId, user, formAnswers, guests, source, 
         guests: [],
         pendingGuests,
         source,
-        createdAt: new Date().toISOString(),
-        ...slotFields
+        createdAt,
+        ...slotFields,
+        // Time of the „Vielleicht“ answer; createdAt moves when the member leaves the bench (B-17)
+        ...(tentative ? { tentativeAt: createdAt } : {})
     };
 
     const registrationRef = await addDoc(collection(db, 'registrations'), registration);
@@ -371,6 +384,7 @@ async function createRegistration({ eventId, user, formAnswers, guests, source, 
  * @param {string} [params.source] -> Where the registration came from ("web" or "discord").
  * @param {string|null} [params.slotId] -> Wanted main role of a slot event.
  * @param {string[]} [params.altSlotIds] -> Fallback roles of a slot event.
+ * @param {boolean} [params.tentative] -> „Vielleicht“ (B-17): same checks, stored as `tentative`, no place, no DM, role or approval request.
  * @returns {Promise<Object>} -> `{ ok: true, id, status, message, event, slotId, isAlt }` on success,
  *   `{ ok: false, code, httpStatus, error }` when a condition is not met.
  * @example
@@ -382,14 +396,28 @@ async function createRegistration({ eventId, user, formAnswers, guests, source, 
  *     source: 'discord'
  * });
  */
-async function registerUserForEvent({ eventId, user, formAnswers = {}, guests = [], source = REGISTRATION_SOURCE.WEB, slotId = null, altSlotIds = [] }) {
-    debugLog('registrationService.register', { eventId, userId: user?.id, source, slotId });
+async function registerUserForEvent({ eventId, user, formAnswers = {}, guests = [], source = REGISTRATION_SOURCE.WEB, slotId = null, altSlotIds = [], tentative = false }) {
+    debugLog('registrationService.register', { eventId, userId: user?.id, source, slotId, tentative });
 
     const outcome = await withEventLock(eventId, () =>
-        createRegistration({ eventId, user, formAnswers, guests, source, slotId, altSlotIds }));
+        createRegistration({ eventId, user, formAnswers, guests, source, slotId, altSlotIds, tentative: tentative === true }));
     if (!outcome.ok) return outcome;
 
     const { event, registrationId, registration } = outcome;
+
+    // The bench gets nothing in Discord; only the counts in the announcement change (B-17)
+    if (registration.status === REGISTRATION_STATUS.TENTATIVE) {
+        notifyRegistrationsChanged(eventId);
+        return {
+            ok: true,
+            id: registrationId,
+            status: registration.status,
+            message: STATUS_MESSAGES[REGISTRATION_STATUS.TENTATIVE],
+            event,
+            slotId: null,
+            isAlt: false
+        };
+    }
 
     // Guest invitations are fire and forget -> a failing DM must not block the registration
     const eventData = { id: eventId, title: event.title, startDate: event.startDate };
@@ -470,6 +498,12 @@ async function switchOwnSlot({ eventId, userId, slotId }) {
         if (!registration || registration.status === 'rejected') {
             return buildFailure(REGISTRATION_ERROR.NOT_REGISTERED, 'Du bist für dieses Event nicht angemeldet.');
         }
+        // The bench only names its wanted role; it takes no slot (B-17)
+        if (registration.status === REGISTRATION_STATUS.TENTATIVE) {
+            const wish = { preferredSlotId: target.id, altSlotIds: (registration.altSlotIds || []).filter(id => id !== target.id) };
+            await updateDoc(doc(db, 'registrations', registration.id), wish);
+            return { ok: true, event, registration: { ...registration, ...wish }, changed: true, wasWaitlisted: false, promotions: [], wishOnly: true };
+        }
         if (registration.slotId === target.id) {
             return { ok: true, event, registration, changed: false, wasWaitlisted: false, promotions: [] };
         }
@@ -494,6 +528,11 @@ async function switchOwnSlot({ eventId, userId, slotId }) {
     if (!outcome.ok) return outcome;
 
     const { event, registration } = outcome;
+    if (outcome.wishOnly) {
+        const wished = findSlot(getSlots(event), registration.preferredSlotId);
+        notifyRegistrationsChanged(eventId);
+        return { ok: true, status: registration.status, slotId: null, message: `Deine Wunschrolle ist jetzt ${formatSlotLabel(wished)}.` };
+    }
     const slot = findSlot(getSlots(event), registration.slotId);
     if (outcome.changed) {
         if (outcome.wasWaitlisted) {
@@ -596,9 +635,10 @@ async function unregisterUserFromEvent({ eventId, userId }) {
         if (!registration) {
             return buildFailure(REGISTRATION_ERROR.NOT_REGISTERED, 'Du bist für dieses Event nicht angemeldet.');
         }
-        // After the unregister deadline only admins change the list (W-03)
+        // After the unregister deadline only admins change the list (W-03); the bench may always leave (B-17)
         const lockedEventSnap = await getDoc(doc(db, 'events', eventId));
-        if (lockedEventSnap.exists() && isUnregisterClosed(lockedEventSnap.data())) {
+        const binding = registration.status !== REGISTRATION_STATUS.TENTATIVE;
+        if (binding && lockedEventSnap.exists() && isUnregisterClosed(lockedEventSnap.data())) {
             return buildFailure(REGISTRATION_ERROR.UNREGISTER_CLOSED, UNREGISTER_CLOSED_MESSAGE);
         }
         await deleteDoc(doc(db, 'registrations', registration.id));
@@ -769,6 +809,11 @@ module.exports = {
     unregisterUserFromEvent,
     buildTemplateVars,
     notifyStatusChange,
+    notifyRegistration,
+    postApprovalRequest,
+    buildStatusMessage,
+    buildFailure,
+    TENTATIVE_NOT_ALLOWED_MESSAGE,
     REGISTRATION_SOURCE,
     REGISTRATION_STATUS,
     REGISTRATION_ERROR

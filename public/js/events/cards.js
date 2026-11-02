@@ -21,6 +21,8 @@ export const STATUS_CHIPS = {
     waitlisted: { label: 'Warteliste', className: 'chip-info', icon: 'list-ol' },
     // A freed place waiting for the member's confirmation (B-15)
     offered: { label: 'Platz angeboten', className: 'chip-warning', icon: 'hourglass-split' },
+    // „Vielleicht“: on the bench, no place (B-17)
+    tentative: { label: 'Vielleicht', className: '', icon: 'question-circle' },
     guest: { label: 'Als Gast', className: 'chip-accent', icon: 'person-plus' }
 };
 
@@ -186,7 +188,7 @@ export function renderCapacity(event) {
 /**
  * Chip for the member's own status.
  *
- * @param {string|null} myStatus -> `accepted`, `pending`, `waitlisted`, `guest` or anything else.
+ * @param {string|null} myStatus -> `accepted`, `pending`, `waitlisted`, `offered`, `tentative`, `guest` or anything else.
  * @param {string} [labelOverride] -> Text instead of the status label, e.g. "Warteliste · Platz 2 von 3" (W-05); escaped here.
  * @returns {string} -> HTML of a chip, empty for every other value.
  */

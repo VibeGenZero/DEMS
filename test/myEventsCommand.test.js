@@ -136,6 +136,18 @@ test('the status line names pending, waitlist place and rejection', () => {
     assert.deepEqual(buttonsOf(rejectedRow).map(button => button.label), ['Zum Event']);
 });
 
+test('the bench reads „Vielleicht (Ersatzbank)“ and may leave after the unregister deadline (B-17)', () => {
+    const closed = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+    const message = buildMyEventsMessage([
+        makeEntry('msg-t', { unregisterDeadline: closed }, { status: 'tentative' }),
+        makeEntry('msg-a', { unregisterDeadline: closed }, {})
+    ]);
+    const [, bench, benchRow, , acceptedRow] = containerParts(message);
+    assert.match(bench.content, /🤔 Vielleicht \(Ersatzbank\)/);
+    assert.deepEqual(buttonsOf(benchRow).map(button => button.label), ['Abmelden', 'Zum Event']);
+    assert.deepEqual(buttonsOf(acceptedRow).map(button => button.label), ['Zum Event']);
+});
+
 test('slot events show the slot or the wish and offer "Slot wechseln" while open', () => {
     const message = buildMyEventsMessage([
         makeEntry('msg-slot', { slots: SLOTS }, { slotId: 'heal', preferredSlotId: 'heal' }),

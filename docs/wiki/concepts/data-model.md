@@ -37,6 +37,7 @@ erDiagram
 | `assignRoleId` | role id or `''` | role given on acceptance, removed on unregister |
 | `formFields` | `[{ label, type, required, options[], description }]` | see [form-fields](form-fields.md) |
 | `allowGuests` | bool (default true) | |
+| `allowTentative` | bool (default false) | „Vielleicht“ / Ersatzbank allowed (B-17); turning it off keeps existing tentative registrations |
 | `category` | string | UI only, not validated |
 | `bannerUrl` | string | empty, an external http(s) URL or the path `/uploads/banners/<uuid>.<ext>` of an uploaded banner (W-12; file in `UPLOAD_DIR`, see [utils](../modules/utils.md)); checked by `validateEvent`. Series and duplicates copy the value, so several events can share one file |
 | `accentColor` | string | hex colour only (`validateEvent`) |
@@ -60,7 +61,7 @@ erDiagram
 
 ## registrations (auto id) — written by `utils/registrationService.js`
 
-`{ eventId, userId, userName, status: pending|accepted|waitlisted|offered|rejected (offered = waitlist offer, B-15), offer?: { offeredAt, expiresAt } (only while offered, null after a decision), formAnswers: { [fieldLabel]: string|boolean }, guests: userId[], pendingGuests: [{ userId, displayName, avatar, status: pending|accepted }], source: web|discord|admin (admin = entered by an admin, W-06), createdAt, checkedIn?, checkedInAt? (code, admin or Discord check-in; only `accepted` registrations carry one, cleared to `false`/`null`), slotId?, preferredSlotId?, altSlotIds? }`
+`{ eventId, userId, userName, status: pending|accepted|waitlisted|offered|tentative|rejected (offered = waitlist offer, B-15; tentative = „Vielleicht“, on the bench without a place, B-17), offer?: { offeredAt, expiresAt } (only while offered, null after a decision), tentativeAt? (time of the „Vielleicht“ answer; kept when the registration leaves the bench, which resets `createdAt`), formAnswers: { [fieldLabel]: string|boolean }, guests: userId[], pendingGuests: [{ userId, displayName, avatar, status: pending|accepted }], source: web|discord|admin (admin = entered by an admin, W-06), createdAt, checkedIn?, checkedInAt? (code, admin or Discord check-in; only `accepted` registrations carry one, cleared to `false`/`null`), slotId?, preferredSlotId?, altSlotIds? }`
 
 `checkinInvitedAt?` (B-07, ISO string) = when the Discord check-in invitation was sent (written before the DM; at most one per registration, kept when a new code is generated); never contains the code.
 
@@ -96,7 +97,7 @@ Read in full by the admin member overview (W-15, `GET /api/admin/members`, `util
 
 ## eventTemplates (auto id) — written by `routes/admin.js` (`/api/admin/event-templates`, W-10)
 
-`{ name (unique ignoring case, ≤ 80), settings, createdAt, createdBy, updatedAt, updatedBy }` — shared by all admins, at most 50. `settings` holds only `TEMPLATE_FIELDS` of `utils/eventTemplates.js` with event shapes (see the events table): `title`, `description`, `bannerUrl`, `accentColor`, `category`, `location`, `maxParticipants`, `accessMode`, `requiredRoles`, `approvalMode`, `allowGuests`, `slots`, `assignRoleId`, `formFields`, `reminderHours` (`[{ hours }]`, no `sent`), `checkinMessage`, `autoCreateChannels`, `channelConfig`, `customBotMessages`. Never dates, deadlines, status, series fields, Discord ids, announcements or the check-in code. Applying a template in the wizard copies the settings once; events keep no link to it. An uploaded banner in `settings.bannerUrl` counts as used for the banner clean-up. Not wiped by the admin system reset.
+`{ name (unique ignoring case, ≤ 80), settings, createdAt, createdBy, updatedAt, updatedBy }` — shared by all admins, at most 50. `settings` holds only `TEMPLATE_FIELDS` of `utils/eventTemplates.js` with event shapes (see the events table): `title`, `description`, `bannerUrl`, `accentColor`, `category`, `location`, `maxParticipants`, `accessMode`, `requiredRoles`, `approvalMode`, `allowGuests`, `allowTentative`, `slots`, `assignRoleId`, `formFields`, `reminderHours` (`[{ hours }]`, no `sent`), `checkinMessage`, `autoCreateChannels`, `channelConfig`, `customBotMessages`. Never dates, deadlines, status, series fields, Discord ids, announcements or the check-in code. Applying a template in the wizard copies the settings once; events keep no link to it. An uploaded banner in `settings.bannerUrl` counts as used for the banner clean-up. Not wiped by the admin system reset.
 
 ## Singletons
 

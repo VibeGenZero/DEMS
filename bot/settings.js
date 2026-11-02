@@ -271,14 +271,15 @@ async function getRunningEvents() {
                 where('eventId', '==', docSnap.id)
             );
             const regSnap = await getDocs(regQ);
-            let accepted = 0, pending = 0, waitlisted = 0;
+            let accepted = 0, pending = 0, waitlisted = 0, tentative = 0;
             regSnap.forEach(r => {
                 const s = r.data().status;
                 if (s === 'accepted') accepted++;
                 else if (s === 'pending') pending++;
                 else if (s === 'waitlisted') waitlisted++;
+                else if (s === 'tentative') tentative++;
             });
-            event.registrationStats = { accepted, pending, waitlisted, total: regSnap.size };
+            event.registrationStats = { accepted, pending, waitlisted, tentative, total: regSnap.size };
             events.push(event);
         }
         events.sort((a, b) => (a.startDate || '').localeCompare(b.startDate || ''));

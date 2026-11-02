@@ -307,6 +307,10 @@
                 <button type="submit" form="waitlist-form" class="btn btn-secondary w-100 is-hidden" id="waitlist-btn">
                   <i class="bi bi-list-nested me-2"></i>Auf Warteliste setzen
                 </button>
+                <!-- „Vielleicht“ / Ersatzbank (events/bench.js, B-17) -->
+                <button type="button" class="btn btn-outline-secondary w-100 is-hidden" data-click="answerTentative" id="tentative-btn">
+                  <i class="bi bi-question-circle me-2"></i>Vielleicht
+                </button>
                 <button type="button" class="btn w-100 is-hidden" id="sidebar-status-btn" disabled></button>
               </div>
 
@@ -353,6 +357,29 @@
               </div>
             </div>
 
+            <!-- On the bench: „Vielleicht“ (events/bench.js, B-17) -->
+            <div class="is-hidden" id="detail-tentative">
+              <div class="glass-card p-4 mb-4">
+                <div class="d-flex align-items-center gap-3 flex-wrap">
+                  <i class="bi bi-question-circle-fill text-secondary icon-xl"></i>
+                  <div class="flex-grow-1">
+                    <h5 class="mb-1">Du stehst auf der Ersatzbank</h5>
+                    <p class="text-secondary mb-0">Status: <span class="fw-bold">Vielleicht (Ersatzbank)</span></p>
+                    <p class="text-secondary small mb-0 mt-2">Du belegst keinen Platz. Sag fest zu, sobald du sicher bist.</p>
+                    <p class="text-secondary small mb-0 mt-2 is-hidden" id="tentative-confirm-closed"><i class="bi bi-alarm me-1"></i>Die Anmeldung ist geschlossen. Ein Admin kann dich noch von der Ersatzbank holen.</p>
+                  </div>
+                  <div class="d-flex gap-2">
+                    <button class="btn btn-accent" data-click="confirmTentative" id="tentative-confirm-btn">
+                      <i class="bi bi-check-lg me-1"></i>Fest zusagen
+                    </button>
+                    <button class="btn btn-outline-danger" data-click="unregisterFromEvent">
+                      <i class="bi bi-x-circle me-1"></i>Abmelden
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             <!-- No access -->
             <div class="is-hidden" id="detail-no-access">
               <div class="glass-card p-4 mb-4">
@@ -393,6 +420,7 @@
               </h6>
               <div id="detail-participants-avatars" class="participants-avatar-stack"></div>
               <div class="is-hidden" id="detail-roster"></div>
+              <div class="is-hidden mt-3" id="detail-bench"></div>
             </div>
 
             <!-- Series dates (rendered by JS) -->
@@ -1374,6 +1402,14 @@
                   </div>
                   <small class="text-muted is-hidden" id="event-guests-slot-hint">Bei Slot-Events nicht verfügbar</small>
                 </div>
+              </div>
+              <div class="mb-3">
+                <label class="form-label">Ersatzbank</label>
+                <div class="form-check form-switch">
+                  <input class="form-check-input" type="checkbox" id="event-allow-tentative">
+                  <label class="form-check-label" for="event-allow-tentative">„Vielleicht“ erlauben</label>
+                </div>
+                <small class="text-muted">Mitglieder können unverbindlich zusagen. Die Ersatzbank belegt keine Plätze und rückt nicht automatisch nach.</small>
               </div>
               <div class="mb-3 is-hidden" id="role-requirement-area">
                 <label class="form-label">Erforderliche Rollen</label>

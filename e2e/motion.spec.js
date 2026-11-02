@@ -281,7 +281,7 @@ test('bars and numbers end at their values', async ({ page }, testInfo) => {
     await navigate(page, 'admin');
     await expect(page.locator('#admin-stats .stat-value').first()).toBeVisible();
     const stats = await (await statsAnswer).json();
-    await expect.poll(() => page.locator('#admin-stats .stat-value').allTextContents()).toEqual([stats.events.total, stats.events.active, stats.registrations.total, stats.registrations.pending, stats.registrations.accepted, stats.registrations.waitlisted].map(String));
+    await expect.poll(() => page.locator('#admin-stats .stat-value').allTextContents()).toEqual([stats.events.total, stats.events.active, stats.registrations.total, stats.registrations.pending, stats.registrations.accepted, stats.registrations.waitlisted, stats.registrations.tentative].map(String));
     expect(errors).toEqual([]);
 });
 

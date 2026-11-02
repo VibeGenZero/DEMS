@@ -72,6 +72,8 @@ function formatStatus(entry) {
         return entry.offerExpiresAt ? `⏳ Platz angeboten – bestätigen bis ${formatDeadline(entry.offerExpiresAt)}` : '⏳ Platz angeboten';
     }
     if (entry.status === 'pending') return '📋 Anfrage ausstehend';
+    // „Vielleicht“ takes no place (B-17)
+    if (entry.status === 'tentative') return '🤔 Vielleicht (Ersatzbank)';
     if (entry.status === 'rejected') return '❌ Abgelehnt';
     if (entry.status === 'waitlisted') {
         const place = entry.waitlistPosition;
@@ -119,7 +121,8 @@ function formatEntry({ entry, event }) {
 function buildEntryButtons({ registration, event }) {
     const eventId = registration.eventId;
     const buttons = [];
-    if (registration.status !== 'rejected' && !isUnregisterClosed(event)) {
+    // The bench may always leave (B-17)
+    if (registration.status !== 'rejected' && (registration.status === 'tentative' || !isUnregisterClosed(event))) {
         buttons.push(new ButtonBuilder()
             .setCustomId(`${MY_LEAVE_PREFIX}:${eventId}`)
             .setLabel('Abmelden')
