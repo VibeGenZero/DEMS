@@ -253,6 +253,9 @@ export async function loadBotSettings() {
         document.getElementById('bot-event-start-notifications').checked = settings.eventStartNotifications !== false;
         document.getElementById('bot-auto-channel-creation').checked = settings.autoChannelCreation !== false;
         document.getElementById('bot-announcement-threads').checked = settings.announcementThreads !== false;
+        // Waitlist offers (B-15)
+        document.getElementById('bot-waitlist-confirmation').checked = settings.waitlistConfirmation !== false;
+        document.getElementById('bot-waitlist-confirm-hours').value = String(settings.waitlistConfirmHours || 12);
         document.getElementById('bot-welcome-message').value = settings.welcomeMessage || '';
     } catch {
         showToast('Bot-Einstellungen konnten nicht geladen werden.', 'danger');
@@ -271,6 +274,8 @@ export async function saveBotSettingsForm() {
         eventStartNotifications: document.getElementById('bot-event-start-notifications').checked,
         autoChannelCreation: document.getElementById('bot-auto-channel-creation').checked,
         announcementThreads: document.getElementById('bot-announcement-threads').checked,
+        waitlistConfirmation: document.getElementById('bot-waitlist-confirmation').checked,
+        waitlistConfirmHours: Number(document.getElementById('bot-waitlist-confirm-hours').value),
         welcomeMessage: document.getElementById('bot-welcome-message').value,
         announceChannel: document.getElementById('bot-announce-channel').value,
         approvalChannel: document.getElementById('bot-approval-channel').value,

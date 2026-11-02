@@ -37,9 +37,18 @@ test('normalizeBotSettings gives every setting its default', () => {
         autoStatusCalendarEvents: false,
         announceChannel: '',
         approvalChannel: '',
-        welcomeMessage: ''
+        welcomeMessage: '',
+        waitlistConfirmation: true,
+        waitlistConfirmHours: 12
     });
     assert.deepEqual(settings.normalizeBotSettings(null), settings.normalizeBotSettings({}));
+});
+
+test('the confirmation period is kept between 1 and 72 hours, else 12 (B-15)', () => {
+    const hoursOf = (value) => settings.normalizeBotSettings({ waitlistConfirmHours: value }).waitlistConfirmHours;
+    assert.deepEqual([hoursOf(1), hoursOf(24), hoursOf(72)], [1, 24, 72]);
+    assert.deepEqual([hoursOf(0), hoursOf(73), hoursOf(2.5), hoursOf('6'), hoursOf(null)], [12, 12, 12, 12, 12]);
+    assert.equal(settings.normalizeBotSettings({ waitlistConfirmation: false }).waitlistConfirmation, false);
 });
 
 test('stored values win, booleans are coerced like the settings route does', () => {

@@ -127,3 +127,21 @@ test('equal registration times are ordered by id, and nobody waiting gives no po
     assert.deepEqual([positions.get('a'), positions.get('b')], [{ position: 1, total: 2 }, { position: 2, total: 2 }]);
     assert.equal(waitlistPositions([registration('x', 'accepted', same)]).size, 0);
 });
+
+test('an offered registration holds its place and leaves the waitlist (B-15)', () => {
+    const registrations = [
+        registration('a', 'accepted', '2026-10-01T08:00:00.000Z'),
+        registration('o', 'offered', '2026-10-01T09:00:00.000Z', { guests: ['g'] }),
+        registration('w1', 'waitlisted', '2026-10-01T10:00:00.000Z'),
+        registration('w2', 'waitlisted', '2026-10-01T11:00:00.000Z')
+    ];
+    assert.equal(countOccupiedPlaces(registrations), 3);
+    assert.deepEqual(summarizePlaces(registrations, 3), { taken: 3, capacity: 3, guests: 1, pending: 0, waitlist: 2 });
+    // Full: nobody else moves up while the offer is open
+    assert.deepEqual(pickCapacityPromotions(3, registrations), []);
+    assert.deepEqual(pickCapacityPromotions(4, registrations), ['w1']);
+    assert.deepEqual(Object.fromEntries(waitlistPositions(registrations)), {
+        w1: { position: 1, total: 2 },
+        w2: { position: 2, total: 2 }
+    });
+});

@@ -60,7 +60,7 @@ erDiagram
 
 ## registrations (auto id) — written by `utils/registrationService.js`
 
-`{ eventId, userId, userName, status: pending|accepted|waitlisted|rejected, formAnswers: { [fieldLabel]: string|boolean }, guests: userId[], pendingGuests: [{ userId, displayName, avatar, status: pending|accepted }], source: web|discord|admin (admin = entered by an admin, W-06), createdAt, checkedIn?, checkedInAt? (code, admin or Discord check-in; only `accepted` registrations carry one, cleared to `false`/`null`), slotId?, preferredSlotId?, altSlotIds? }`
+`{ eventId, userId, userName, status: pending|accepted|waitlisted|offered|rejected (offered = waitlist offer, B-15), offer?: { offeredAt, expiresAt } (only while offered, null after a decision), formAnswers: { [fieldLabel]: string|boolean }, guests: userId[], pendingGuests: [{ userId, displayName, avatar, status: pending|accepted }], source: web|discord|admin (admin = entered by an admin, W-06), createdAt, checkedIn?, checkedInAt? (code, admin or Discord check-in; only `accepted` registrations carry one, cleared to `false`/`null`), slotId?, preferredSlotId?, altSlotIds? }`
 
 `checkinInvitedAt?` (B-07, ISO string) = when the Discord check-in invitation was sent (written before the DM; at most one per registration, kept when a new code is generated); never contains the code.
 
@@ -103,7 +103,7 @@ Read in full by the admin member overview (W-15, `GET /api/admin/members`, `util
 | Document | Fields |
 |---|---|
 | `botMessages/templates` | `registration`, `accepted`, `rejected` (template strings, ≤2000) |
-| `botSettings/config` | `statusType`, `activityType`, `activityText`, `dmNotifications`, `reminderEnabled`, `eventStartNotifications`, `autoChannelCreation`, `announcementThreads` (B-14), `autoUpdatePresence`, `autoStatusCalendarEvents`, `announceChannel`, `welcomeMessage`, `updatedAt` |
+| `botSettings/config` | `statusType`, `activityType`, `activityText`, `dmNotifications`, `reminderEnabled`, `eventStartNotifications`, `autoChannelCreation`, `announcementThreads` (B-14), `autoUpdatePresence`, `autoStatusCalendarEvents`, `announceChannel`, `welcomeMessage`, `waitlistConfirmation` (B-15, default true), `waitlistConfirmHours` (B-15, whole hours 1–72, default 12), `updatedAt` |
 | `maintenanceSettings/config` | `warningEnabled`, `warningText`, `loginDisabled`, `registrationDisabled`, `plannedMaintenance`, `plannedMaintenanceStart/End/Text`, `panicMode`, `panicActivatedAt`, `panicActivatedBy`, `updatedAt`, `updatedBy` |
 | `devMeta/seed` (mock only) | `seededAt` |
 

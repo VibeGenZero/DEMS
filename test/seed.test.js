@@ -19,7 +19,7 @@ const { db, collection, doc, getDoc, getDocs, setDoc } = require('../firebaseAdm
 const EXPECTED_COUNTS = {
     events: 14,
     users: 12,
-    registrations: 38,
+    registrations: 39,
     comments: 8,
     auditLogs: 10,
     polls: 2,
@@ -70,6 +70,14 @@ test('the raid announces in its own channel (B-11)', async () => {
     const { CHANNEL_ID } = require('../dev/mockGuild');
     assert.equal((await getEvent(EVENT_ID.ROLE)).announceChannelId, CHANNEL_ID.EVENTS);
     assert.notEqual(CHANNEL_ID.EVENTS, CHANNEL_ID.ANNOUNCEMENTS);
+});
+
+test('Elif has an open waitlist offer for the second training date (B-15)', async () => {
+    const registration = (await registrationsOf(SERIES_EVENT_IDS[1])).find(entry => entry.userName === 'Elif');
+    assert.equal(registration.status, 'offered');
+    const expires = new Date(registration.offer.expiresAt);
+    assert.ok(expires > new Date(), 'deadline ahead');
+    assert.ok(expires < new Date((await getEvent(SERIES_EVENT_IDS[1])).startDate), 'before the start');
 });
 
 test('seedIfEmpty does not seed twice', async () => {

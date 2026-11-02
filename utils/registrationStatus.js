@@ -46,6 +46,8 @@ async function changeRegistrationStatus({ registrationId, status, actor, expectS
             }
         }
         const update = { status };
+        // An admin decision ends a waitlist offer (B-15)
+        if (reg.status === 'offered') update.offer = null;
         let overbookedWarning = null;
         // Waitlisted and rejected registrations give up their place -> a later acceptance picks a slot again
         if (slots.length > 0 && (status === 'waitlisted' || status === 'rejected')) {

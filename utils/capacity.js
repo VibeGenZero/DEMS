@@ -7,7 +7,8 @@
  */
 
 /** Registration statuses that occupy a place. */
-const OCCUPYING_STATUSES = ['pending', 'accepted'];
+// An offered place (B-15) is held for the member until they confirm or the offer runs out
+const OCCUPYING_STATUSES = ['pending', 'accepted', 'offered'];
 
 /**
  * Number of places a single registration needs.

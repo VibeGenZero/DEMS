@@ -462,11 +462,12 @@ test('confirming from the reminder lets the waitlist move up', async () => {
     assert.equal((await getDoc(doc(db, 'registrations', 'rb-full-me'))).exists(), false);
     const start = Date.now();
     let moved;
+    // Two hours before the start the place is offered until one hour before it (B-15)
     do {
         moved = (await getDoc(doc(db, 'registrations', 'rb-full-wait'))).data().status;
-        if (moved !== 'accepted') await new Promise(resolve => setTimeout(resolve, 20));
-    } while (moved !== 'accepted' && Date.now() - start < 3000);
-    assert.equal(moved, 'accepted');
+        if (moved !== 'offered') await new Promise(resolve => setTimeout(resolve, 20));
+    } while (moved !== 'offered' && Date.now() - start < 3000);
+    assert.equal(moved, 'offered');
 });
 
 test('confirming an old reminder after the unregister deadline is refused', async () => {

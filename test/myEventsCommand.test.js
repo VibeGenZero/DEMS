@@ -285,3 +285,12 @@ test('a switch button of that answer moves the member through the existing flow'
     assert.match(interaction.calls[1][1].content, /^✅/);
     assert.equal((await getDoc(doc(db, 'registrations', 'switch-move-me'))).data().slotId, 'heal');
 });
+
+test('an offered registration shows the deadline to confirm (B-15)', () => {
+    const { formatStatusWithSlot } = require('../bot/myEvents');
+    const { toProfileEntry } = require('../utils/profileEvents');
+    const event = { title: 'Koop', startDate: '2026-11-10T19:00:00.000Z', slots: [] };
+    const entry = toProfileEntry({ eventId: 'e1', status: 'offered', offer: { expiresAt: '2026-11-06T19:00:00.000Z' } }, event);
+    assert.equal(entry.offerExpiresAt, '2026-11-06T19:00:00.000Z');
+    assert.equal(formatStatusWithSlot(entry), '⏳ Platz angeboten – bestätigen bis Fr., 06.11., 20:00');
+});

@@ -3,7 +3,7 @@ id: registration-flow
 title: Registration flow — rules, statuses, waitlist, guests
 type: concept
 tags: [registration, waitlist, guests, approval, capacity, discord, web]
-sources: [utils/registrationService.js, utils/eventUtils.js, routes/events.js, routes/admin.js, bot.js, bot/registration.js, bot/commands.js]
+sources: [utils/registrationService.js, utils/eventUtils.js, routes/events.js, routes/admin.js, bot.js, bot/registration.js, bot/commands.js, utils/waitlistOffers.js, bot/waitlistOffers.js]
 depends_on: [data-model, form-fields, maintenance-mode]
 see_also: [discord-integration, routes-events, event-lifecycle, role-slots]
 ---
@@ -28,6 +28,17 @@ Steps 1–10 up to the write run under `withEventLock(eventId)` (one registratio
 
 Maintenance: `registrationDisabled`/`panicMode` block registrations before step 1 (web: `checkRegistrationAllowed` → 503; Discord: `checkRegistrationConditions`).
 
+## Waitlist offers (B-15)
+
+With the bot center switch „Nachrücken bestätigen“ on (`waitlistConfirmation`, default on) a freed place is **offered** instead of filled: `promoteFromWaitlistLocked` writes `status: 'offered'`, `offer: { offeredAt, expiresAt }` and the held slot. `offerDeadline` (`utils/waitlistOffers.js`): now + `waitlistConfirmHours` (bot center, 1–72, default 12), never later than 1 h before the start; no start, less than 1 h to go or switch off → the old instant move-up.
+
+- `offered` is in `OCCUPYING_STATUSES` (`utils/capacity.js`): it holds its places (guests too) and slot, and is no longer on the waitlist (positions of the others move up). Unregistering an offered member frees the place like any other.
+- The member gets the offer DM (`sendWaitlistOffer`, `bot/waitlistOffers.js`) with „Platz annehmen“ (`offer_confirm:<registrationId>`), „Doch nicht“ (`offer_decline:<registrationId>`) and „Zum Event“ — always, also with „Warteliste“ DMs off (W-16) or „DM-Benachrichtigungen“ off, because they have to act. The event page shows `#detail-offer` with the same two answers (`POST /api/events/:id/offer/confirm|decline`).
+- `confirmOffer` (under the event lock; own, still offered, deadline ahead, event active and not over) → `accepted` / `pending` by `approvalMode`, `offer: null`, then `completePromotion` (`utils/eventUtils.js`, the same effects as an instant move-up without its DM: welcome, role, channels; pending → approval request). Refusals: `missing`, `not_yours`, `not_offered`, `expired`.
+- `declineOffer` deletes the registration and runs `promoteFromWaitlist` (the next entry gets an offer). `expireOffers` (offer scheduler, after `whenBotSettled`, every 5 min) deletes expired offers, DMs „⌛ Dein Platz bei **…** ist verfallen – du bist nicht mehr angemeldet.“ (`sendAutomaticDM`) and hands the place on; offers of events that are no longer active or over go quietly.
+- Admins decide an offered registration like a waitlisted one (single ✓/✗, bulk accept/waitlist/reject); every decision clears `offer`.
+- Shown as „⏳ Platz angeboten – bestätigen bis …“ (`/meine-events`, `/event info`), „Platz angeboten · bis …“ (profile, event cards), „Angeboten · bis …“ (admin dialog).
+
 ## Waitlist position (W-05)
 
 A waitlisted registration's place is its rank among the event's waitlisted registrations by `createdAt`, oldest first (ties by id) — `waitlistPositions` in `utils/capacity.js`, the same order the promotion walks. Slot events use the same single list, although a later registration whose wanted role frees up can move up first; the event page says so. Members see only their own place: "Platz 2 von 3 auf der Warteliste" on the event page, "Warteliste · Platz 2 von 3" in the profile's upcoming list; admins see "Warteliste · Platz 2" in the registrations dialog. Discord texts carry no place.
@@ -44,8 +55,14 @@ stateDiagram-v2
   pending --> waitlisted: admin
   accepted --> waitlisted: admin bulk (W-08)
   accepted --> rejected: admin bulk (W-08)
-  waitlisted --> accepted: promoteFromWaitlist (instant)
-  waitlisted --> pending: promoteFromWaitlist (manual)
+  waitlisted --> offered: promoteFromWaitlist (B-15 switch on, start > 1 h away)
+  waitlisted --> accepted: promoteFromWaitlist (instant, offers off)
+  waitlisted --> pending: promoteFromWaitlist (manual, offers off)
+  offered --> accepted: confirmOffer (instant)
+  offered --> pending: confirmOffer (manual)
+  offered --> [*]: declineOffer / expireOffers (promotes waitlist)
+  offered --> accepted: admin
+  offered --> rejected: admin
   accepted --> [*]: unregister (role/channel removed, promotes waitlist)
   pending --> [*]: unregister (promotes waitlist)
 ```

@@ -330,6 +330,19 @@ async function removeRole(userId, roleId) {
     return true;
 }
 
+async function sendWaitlistOffer(registrationId) {
+    const regSnap = await getDoc(doc(db, 'registrations', registrationId));
+    if (!regSnap.exists()) return false;
+    const registration = regSnap.data();
+    const eventSnap = await getDoc(doc(db, 'events', registration.eventId));
+    if (!eventSnap.exists() || !registration.offer) return false;
+    const until = new Date(registration.offer.expiresAt).toLocaleString('de-DE', { timeZone: process.env.TIMEZONE || 'Europe/Berlin' });
+    mockLog(`Platz angeboten: ${describeUser(registration.userId)} für "${eventSnap.data().title}" bis ${until}`,
+        { buttons: [`offer_confirm:${registrationId}`, `offer_decline:${registrationId}`, 'Zum Event'] });
+    dmsSent++;
+    return true;
+}
+
 async function removeRoleFromMembers(roleId, userIds) {
     const members = userIds.length === 1 ? '1 Mitglied' : `${userIds.length} Mitgliedern`;
     mockLog(`Rolle ${describeRole(roleId)} von ${members} entfernt`, userIds.map(describeUser));
@@ -435,6 +448,7 @@ module.exports = {
     assignRole,
     removeRole,
     removeRoleFromMembers,
+    sendWaitlistOffer,
     createEventChannels,
     addParticipantToEventChannels,
     removeParticipantFromEventChannels,

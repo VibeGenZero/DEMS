@@ -462,6 +462,10 @@ function buildRegistrations(clock) {
         entry('series1-lena', SERIES_EVENT_IDS[0], lena),
         entry('series1-ben', SERIES_EVENT_IDS[0], ben),
         entry('series2-lena', SERIES_EVENT_IDS[1], lena),
+        // A freed place waits for Elif's confirmation until six hours from now (B-15)
+        entry('series2-elif', SERIES_EVENT_IDS[1], elif, {
+            status: 'offered', offer: { offeredAt: clock.offset(-2 * HOUR), expiresAt: clock.offset(6 * HOUR) }, createdAt: clock.offset(-3 * DAY)
+        }),
 
         // Profile page: a persona with a slot, one with a rejection, two with a cancelled event
         entry('role-mori', EVENT_ID.ROLE, mori, {

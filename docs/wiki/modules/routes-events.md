@@ -3,7 +3,7 @@ id: routes-events
 title: routes/events.js — event endpoints for logged-in members
 type: module
 tags: [api, events, registration, checkin, comments, series, participants]
-sources: [routes/events.js, utils/checkin.js, utils/threadSync.js, utils/registrationService.js, utils/eventUtils.js, utils/eventListing.js]
+sources: [routes/events.js, utils/checkin.js, utils/threadSync.js, utils/registrationService.js, utils/eventUtils.js, utils/eventListing.js, utils/waitlistOffers.js]
 part_of: [architecture]
 depends_on: [middleware, utils, data-layer, bot]
 see_also: [registration-flow, event-lifecycle, api-index]
@@ -22,6 +22,7 @@ see_also: [registration-flow, event-lifecycle, api-index]
 | GET | `/:id` | user | event via `toPublicEvent` (no `checkinCode`), plus `checkinEnabled`, `currentParticipants`, `places` (as in the list), `waitlistCount` (= `places.waitlist`), `createdByName`, `slotSummary` (slot events) |
 | POST | `/:id/register` | user + `checkRegistrationAllowed` | body `{ formAnswers, guests, slotId, altSlotIds }` → `registerUserForEvent` → `{ id, status, message, slotId, isAlt }` or `{ error }` with mapped HTTP status |
 | PUT | `/:id/register/slot` | user + `checkRegistrationAllowed` | body `{ slotId }` → `switchOwnSlot` (free slots only, 409 when full; 400 after the end or the registration deadline) → `{ status, slotId, message }` |
+| POST | `/:id/offer/confirm`, `/:id/offer/decline` | user + `checkRegistrationAllowed` | own registration (`findUserRegistration`) → `confirmOffer` / `declineOffer` (B-15); `{ success: true, status }` / `{ success: true }`; 404 „Keine Anmeldung gefunden.“, 409 „Das Angebot ist nicht mehr gültig.“ (expired, not offered) |
 | DELETE | `/:id/register` | user | `unregisterUserFromEvent`: 400 "Abmelden ist nicht mehr möglich. Wende dich an einen Admin." once the `unregisterDeadline` has passed (W-03); otherwise deletes the own registration, removes role/channel access if it was accepted, promotes the waitlist, refreshes announcements |
 | GET | `/:id/my-registration` | user | own registration (a waitlisted one also `waitlistPosition: { position, total }`, W-05; only the own place, never other members' times), or only `{ registered: true, asGuest: true, id, status }` of the inviting registration when the user is an accepted guest (never its `formAnswers` or guest list), or `{ registered: false }` |
 | GET | `/:id/participants` | user | first 20 accepted participants `{ displayName, avatar }` + `total`; slot events also get `slots` (line-up with members) and `waitlist` |
