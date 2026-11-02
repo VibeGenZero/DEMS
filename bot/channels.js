@@ -38,6 +38,19 @@ async function createEventChannels(event) {
             {
                 id: guild.id, // @everyone role
                 deny: [PermissionsBitField.Flags.ViewChannel],
+            },
+            // The @everyone deny hits the bot too: without its own overwrite it could
+            // neither post the welcome embed, nor add participants, nor delete the channel
+            // ("Missing Access" 50001). Only rights of the invite (utils/botPermissions.js).
+            {
+                id: client.user.id,
+                allow: [
+                    PermissionsBitField.Flags.ViewChannel,
+                    PermissionsBitField.Flags.SendMessages,
+                    PermissionsBitField.Flags.Connect,
+                    PermissionsBitField.Flags.ReadMessageHistory,
+                    PermissionsBitField.Flags.EmbedLinks
+                ]
             }
         ];
 
@@ -160,7 +173,32 @@ async function removeParticipantFromEventChannels(event, userId) {
 }
 
 /**
- * Delete event channels
+ * Delete one event channel. A channel the bot cannot reach ("Missing Access"
+ * 50001, e.g. created before the bot kept access to its own channels) never
+ * becomes deletable for it -> logged for manual deletion and treated as done,
+ * so the clean-up (B-10) does not retry it forever. Other errors are thrown.
+ *
+ * @param {Object} guild -> The fetched guild.
+ * @param {string|null} channelId -> Stored channel id.
+ * @returns {Promise<void>}
+ */
+async function deleteChannel(guild, channelId) {
+    if (!channelId) return;
+    const channel = await guild.channels.fetch(channelId).catch(() => null);
+    if (!channel) return;
+    try {
+        await channel.delete();
+    } catch (err) {
+        if (err?.code !== 50001) throw err;
+        console.warn(`⚠️ Kein Zugriff auf Event-Channel ${channelId} – bitte in Discord von Hand löschen (Missing Access).`);
+    }
+}
+
+/**
+ * Delete the event channels and forget their ids.
+ *
+ * @param {string} eventId -> Event document id.
+ * @returns {Promise<boolean>} -> False while offline, without channels or on an error (ids kept for a later try).
  */
 async function deleteEventChannels(eventId) {
     if (!state.isReady) return false;
@@ -174,15 +212,8 @@ async function deleteEventChannels(eventId) {
         const guildId = process.env.DISCORD_GUILD_ID;
         const guild = await client.guilds.fetch(guildId);
 
-        if (event.discordChannelId) {
-            const channel = await guild.channels.fetch(event.discordChannelId).catch(() => null);
-            if (channel) await channel.delete();
-        }
-
-        if (event.discordTextChannelId) {
-            const textChannel = await guild.channels.fetch(event.discordTextChannelId).catch(() => null);
-            if (textChannel) await textChannel.delete();
-        }
+        await deleteChannel(guild, event.discordChannelId);
+        await deleteChannel(guild, event.discordTextChannelId);
 
         console.log(`🗑️ Event channels deleted for eventId: ${eventId}`);
 
