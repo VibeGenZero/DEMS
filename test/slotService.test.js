@@ -89,6 +89,14 @@ test('slot occupancy counts pending and accepted registrations only', () => {
     assert.deepEqual(occupancy, { tank: 1, heal: 1, dps: 0 });
 });
 
+test('an offered registration holds its slot (B-15)', () => {
+    const occupancy = countSlotOccupancy(SLOTS, [
+        { status: 'offered', slotId: 'tank' },
+        { status: 'accepted', slotId: 'heal' }
+    ]);
+    assert.deepEqual(occupancy, { tank: 1, heal: 1, dps: 0 });
+});
+
 test('alternatives are cleaned and sorted in slot order', () => {
     assert.deepEqual(sanitizeAltSlotIds(SLOTS, 'tank', ['dps', 'tank', 'unknown', 'heal', 'dps']), ['heal', 'dps']);
     assert.deepEqual(sanitizeAltSlotIds(SLOTS, 'tank', 'heal'), []);
@@ -232,4 +240,12 @@ test('accepting without a known main role prefers a free slot over a false overb
         slotReg('w', 'waitlisted', null, '2', { preferredSlotId: 'gone', altSlotIds: [] })
     ];
     assert.deepEqual(resolveAcceptanceSlot(SLOTS, registrations, registrations[1]), { slotId: 'heal', overbooked: false });
+});
+
+test('a slot held by an offer is not given to the next waitlist entry (B-15)', () => {
+    const registrations = [
+        slotReg('o', 'offered', 'tank', '2026-10-01T08:00:00.000Z'),
+        slotReg('wTank', 'waitlisted', null, '2026-10-01T09:00:00.000Z', { preferredSlotId: 'tank' })
+    ];
+    assert.deepEqual(pickWaitlistPromotions(SLOTS, registrations), []);
 });

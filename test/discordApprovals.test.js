@@ -220,6 +220,8 @@ test('moving up into a manual event posts a request too', async () => {
     await seedRegistration('post-promote-b', 'post-promote', 'post-b', { status: 'waitlisted' });
 
     await captureLog(() => withApprovalChannel(CHANNEL_ID.EVENTS, async () => {
+        // Instant move-up: with offers on the request follows the confirmation (B-15, test/waitlistOffers.test.js)
+        rememberBotSettings(normalizeBotSettings({ approvalChannel: CHANNEL_ID.EVENTS, waitlistConfirmation: false }));
         await changeRegistrationStatus({ registrationId: 'post-promote-a', status: 'rejected', actor: ADMIN });
     }));
 
@@ -289,7 +291,8 @@ test('"Ablehnen" rejects and lets the waitlist move up, "Warteliste" waitlists',
 
     assert.equal((await click('approval_reject', 'btn-reject-reg')).answer, '❌ Abgelehnt.');
     assert.equal(await statusOf('btn-reject-reg'), 'rejected');
-    assert.equal(await statusOf('btn-reject-wait'), 'pending');
+    // The freed place is offered for confirmation (B-15)
+    assert.equal(await statusOf('btn-reject-wait'), 'offered');
 
     assert.equal((await click('approval_waitlist', 'btn-wait-reg')).answer, '🕒 Auf die Warteliste gesetzt.');
     assert.equal(await statusOf('btn-wait-reg'), 'waitlisted');

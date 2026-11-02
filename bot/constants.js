@@ -51,6 +51,9 @@ const ADMIN_POLL_MODAL_PREFIX = 'admin_poll_modal';
 const ADMIN_EVENT_PUBLISH_PREFIX = 'admin_event_publish';
 const ADMIN_EVENT_ACTIVATE_PREFIX = 'admin_event_activate';
 const ADMIN_RETRY_PREFIX = 'admin_retry';
+// „Platz annehmen“ / „Doch nicht“ in the waitlist offer DM (B-15)
+const OFFER_CONFIRM_PREFIX = 'offer_confirm';
+const OFFER_DECLINE_PREFIX = 'offer_decline';
 
 // Names listed per slot in the announcement
 const ROSTER_NAMES_MAX = 5;
@@ -62,6 +65,8 @@ const POLL_NAMES_MAX = 5;
 const POLL_DESCRIPTION_MAX_LENGTH = 1000;
 
 module.exports = {
+    OFFER_CONFIRM_PREFIX,
+    OFFER_DECLINE_PREFIX,
     ADMIN_EVENT_MODAL_PREFIX,
     ADMIN_POLL_MODAL_PREFIX,
     ADMIN_EVENT_PUBLISH_PREFIX,

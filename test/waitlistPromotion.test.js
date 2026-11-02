@@ -115,5 +115,6 @@ test('places still move up after the registration deadline (W-03)', async () => 
     const waiting = await addRegistration(id, 'waitlisted', '2026-10-01T10:00:00.000Z');
     const promotions = await promoteFromWaitlist(id, event);
     assert.equal(promotions.length, 1);
-    assert.equal((await registration(waiting)).status, 'accepted');
+    // Two days before the start the place is offered for confirmation (B-15)
+    assert.equal((await registration(waiting)).status, 'offered');
 });

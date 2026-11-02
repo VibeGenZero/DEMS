@@ -8,6 +8,7 @@ import { registerActions } from '../core/actions.js';
 import { escapeHtml, showToast, showElement, toggleElement } from '../core/ui.js';
 import { avatar } from '../core/components.js';
 import { formatSlotLabel } from '../events/slots.js';
+import { formatOfferDeadline } from '../events/offer.js';
 import { renderBulkCheckboxCell, resetBulkSelection } from './registration-bulk.js';
 
 /** Event the dialog shows; the member entry posts to it. */
@@ -46,7 +47,7 @@ export async function showRegistrations(eventId, eventTitle) {
             return;
         }
 
-        const statusTexts = { pending: '⏳ Ausstehend', accepted: '✅ Angenommen', rejected: '❌ Abgelehnt', waitlisted: '📋 Warteliste' };
+        const statusTexts = { pending: '⏳ Ausstehend', accepted: '✅ Angenommen', rejected: '❌ Abgelehnt', waitlisted: '📋 Warteliste', offered: 'Angeboten' };
 
         const sourceBadges = {
             admin: '<span class="badge bg-info-subtle text-info-emphasis"><i class="bi bi-person-gear me-1"></i>Admin</span>',
@@ -73,7 +74,7 @@ export async function showRegistrations(eventId, eventTitle) {
         </td>
         <td>
           <span class="badge-pill status-${reg.status}">
-            ${statusTexts[reg.status] || reg.status}${reg.status === 'waitlisted' && reg.waitlistPosition ? ` · Platz ${escapeHtml(String(reg.waitlistPosition.position))}` : ''}
+            ${statusTexts[reg.status] || reg.status}${reg.status === 'waitlisted' && reg.waitlistPosition ? ` · Platz ${escapeHtml(String(reg.waitlistPosition.position))}` : ''}${reg.status === 'offered' && reg.offer?.expiresAt ? ` · bis ${escapeHtml(formatOfferDeadline(reg.offer.expiresAt))}` : ''}
           </span>
         </td>
         <td>
@@ -89,7 +90,7 @@ export async function showRegistrations(eventId, eventTitle) {
         </td>
         <td><small>${new Date(reg.createdAt).toLocaleDateString('de-DE')}</small></td>
         <td>
-          ${reg.status === 'pending' || reg.status === 'waitlisted' ? `
+          ${['pending', 'waitlisted', 'offered'].includes(reg.status) ? `
             <button class="btn btn-sm btn-outline-success me-1" data-click="updateRegStatus" data-reg-id="${escapeHtml(reg.id)}" data-status="accepted" data-event-id="${escapeHtml(eventId)}" data-event-title="${escapeHtml(eventTitle)}">
               <i class="bi bi-check"></i>
             </button>

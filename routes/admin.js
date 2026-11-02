@@ -33,7 +33,7 @@ const { debugLog } = require('../utils/debugLog');
 const { buildEventUrl } = require('../utils/eventUrl');
 const { MAX_BANNER_BYTES, detectImageType, saveBanner, releaseBanners } = require('../utils/bannerStore');
 const { sharedSessionStore } = require('../utils/sessionStore');
-const { loadBotSettings, announceChannelId } = require('../utils/botSettings');
+const { loadBotSettings, announceChannelId, isValidConfirmHours } = require('../utils/botSettings');
 const { BULK_ACTIONS, MAX_BULK_IDS, planBulkAction } = require('../utils/bulkRegistrations');
 const { followingDates, transferTime, planExtension, seriesUpdateFields, slotsForDate } = require('../utils/eventSeries');
 const { cleanupEvent, restoreEventRole } = require('../utils/eventCleanup');
@@ -1241,6 +1241,8 @@ router.post('/events/:id/registrations/bulk', async (req, res) => {
                 for (const change of result.changes) {
                     const update = { status: change.to };
                     if (change.slotId !== undefined) update.slotId = change.slotId;
+                    // A decision ends a waitlist offer (B-15)
+                    if (change.from === 'offered') update.offer = null;
                     if (change.clearCheckin) Object.assign(update, { checkedIn: false, checkedInAt: null });
                     batch.update(doc(db, 'registrations', change.id), update);
                 }
@@ -1920,8 +1922,14 @@ router.put('/bot/settings', async (req, res) => {
             statusType, activityType, activityText,
             dmNotifications, reminderEnabled, eventStartNotifications,
             autoChannelCreation, announcementThreads, autoUpdatePresence, autoStatusCalendarEvents,
-            announceChannel, approvalChannel, welcomeMessage
+            announceChannel, approvalChannel, welcomeMessage, waitlistConfirmation, waitlistConfirmHours
         } = req.body;
+
+        // Confirmation period of waitlist offers in whole hours (B-15); left out = default
+        const hasHours = waitlistConfirmHours !== undefined && waitlistConfirmHours !== null && waitlistConfirmHours !== '';
+        if (hasHours && !isValidConfirmHours(Number(waitlistConfirmHours))) {
+            return res.status(400).json({ error: 'Die Bestätigungsfrist muss zwischen 1 und 72 Stunden liegen.' });
+        }
 
         const settings = {
             statusType: statusType || 'online',
@@ -1937,6 +1945,8 @@ router.put('/bot/settings', async (req, res) => {
             announceChannel: announceChannel || '',
             approvalChannel: approvalChannel || '',
             welcomeMessage: welcomeMessage || '',
+            waitlistConfirmation: waitlistConfirmation !== false,
+            waitlistConfirmHours: hasHours ? Number(waitlistConfirmHours) : 12,
         };
 
         // Only text channels of the server; while the list cannot be read, only the stored value or none (B-02)

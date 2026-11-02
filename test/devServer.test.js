@@ -237,7 +237,7 @@ test('a profile entry carries only what the page shows', async () => {
     const entries = [...profile.upcoming, ...profile.history];
     assert.equal(entries.length, profile.stats.total);
     for (const entry of entries) {
-        assert.deepEqual(Object.keys(entry).sort(), ['checkedIn', 'createdAt', 'event', 'id', 'slot', 'status', 'waitlistPosition']);
+        assert.deepEqual(Object.keys(entry).sort(), ['checkedIn', 'createdAt', 'event', 'id', 'offerExpiresAt', 'slot', 'status', 'waitlistPosition']);
         assert.deepEqual(Object.keys(entry.event).sort(), ['category', 'checkinEnabled', 'endDate', 'id', 'location', 'startDate', 'status', 'title']);
     }
     assert.equal(profile.upcoming.find(entry => entry.event.id === EVENT_ID.OPEN).event.location, 'Lobby');
@@ -860,7 +860,8 @@ test('a full main role falls back to the alternative, then to the waitlist', asy
 
     assert.equal((await member.send('DELETE', `/api/events/${event.id}/register`)).status, 200);
     const promoted = await (await newbie.request(`/api/events/${event.id}/my-registration`)).json();
-    assert.deepEqual([promoted.status, promoted.slotId], ['accepted', heal.id]);
+    // The freed place is offered and holds its slot until confirmed (B-15)
+    assert.deepEqual([promoted.status, promoted.slotId], ['offered', heal.id]);
 });
 
 test('registering for a slot event needs a valid slot', async () => {
@@ -1228,7 +1229,8 @@ test('deleting an account lets the waitlist move up', async () => {
 
     assert.equal((await newbie.send('DELETE', '/api/user/account')).status, 200);
     const promoted = await (await member.request(`/api/events/${event.id}/my-registration`)).json();
-    assert.deepEqual([promoted.status, promoted.slotId], ['accepted', slotId]);
+    // Offered for confirmation (B-15)
+    assert.deepEqual([promoted.status, promoted.slotId], ['offered', slotId]);
 });
 
 // ── Registration and unregister deadlines (W-03) ────────────────────────
@@ -1805,6 +1807,8 @@ test('waitlist DMs off: no DM for the waitlist, but the move-up DM still comes (
     const admin = await loginAs('admin');
     const member = await loginAs('member');
     await saveSettings(member, { notifications: { waitlist: false } });
+    // The instant move-up of this test needs the waitlist offers off (B-15)
+    const botBefore = await changeBotSettings(admin, { waitlistConfirmation: false });
     try {
         const event = await createEventAs(admin, { title: 'Ein Platz', maxParticipants: 1 });
         const taken = await (await addMember(admin, event.id, { userId: MEMBER_ID.DENNIS })).json();
@@ -1820,6 +1824,7 @@ test('waitlist DMs off: no DM for the waitlist, but the move-up DM still comes (
         assert.equal(dmCount('Tom'), before + 1);
         assert.match(server.output().split(`DM an Tom (${MEMBER_PERSONA_ID})`).at(-1), /Ein Platz wurde frei/);
     } finally {
+        await admin.send('PUT', '/api/admin/bot/settings', botBefore);
         await saveSettings(member, { notifications: ALL_DMS });
     }
 });
@@ -2925,7 +2930,8 @@ test('DM notifications off: an admin accepts without a DM, the event role is sti
 test('DM notifications off: moving up from the waitlist sends no DM', async () => {
     const admin = await loginAs('admin');
     const member = await loginAs('member');
-    await withBotSettings(admin, { dmNotifications: false }, async () => {
+    // Instant move-up: with offers (B-15) the offer DM is sent anyway, see the offer tests
+    await withBotSettings(admin, { dmNotifications: false, waitlistConfirmation: false }, async () => {
         const event = await createEventAs(admin, { title: 'Stiller Platz', maxParticipants: 1 });
         const taken = await (await addMember(admin, event.id, { userId: MEMBER_ID.DENNIS })).json();
         const before = dmCount('Tom');
@@ -3666,4 +3672,118 @@ test('the bot settings answer the effective default announcement channel (B-11)'
     // Bot center choice, else the .env default of mock mode (the mock guild's announcement channel)
     const { CHANNEL_ID } = require('../dev/mockGuild');
     assert.equal(settings.defaultAnnounceChannel, settings.announceChannel || CHANNEL_ID.ANNOUNCEMENTS);
+});
+
+// ── Waitlist offers: bot center settings (B-15) ─────────────────────────
+
+test('the bot center stores the confirmation switch and period and refuses periods outside 1–72', async () => {
+    const admin = await loginAs('admin');
+    const before = await (await admin.request('/api/admin/bot/settings')).json();
+    assert.equal(before.waitlistConfirmation, true);
+    assert.equal(before.waitlistConfirmHours, 12);
+    try {
+        for (const hours of [0, 73, 'viele']) {
+            const res = await admin.send('PUT', '/api/admin/bot/settings', { ...before, waitlistConfirmHours: hours });
+            assert.equal(res.status, 400, String(hours));
+            assert.deepEqual(await res.json(), { error: 'Die Bestätigungsfrist muss zwischen 1 und 72 Stunden liegen.' });
+        }
+        const ok = await admin.send('PUT', '/api/admin/bot/settings', { ...before, waitlistConfirmation: false, waitlistConfirmHours: 24 });
+        assert.equal(ok.status, 200);
+        const after = await (await admin.request('/api/admin/bot/settings')).json();
+        assert.deepEqual([after.waitlistConfirmation, after.waitlistConfirmHours], [false, 24]);
+    } finally {
+        await admin.send('PUT', '/api/admin/bot/settings', before);
+    }
+});
+
+// ── Waitlist offers on the website (B-15) ───────────────────────────────
+
+let offerCounter = 0;
+/**
+ * A full event (Dennis accepted) with Tom (persona member) and optionally Neo
+ * (newbie) on the waitlist; rejecting Dennis offers the place to Tom.
+ */
+async function eventWithOffer(admin, { withNext = false } = {}) {
+    const event = await createEventAs(admin, { title: `B15 Angebot ${++offerCounter}`, maxParticipants: 1 });
+    const taken = await (await addMember(admin, event.id, { userId: MEMBER_ID.DENNIS })).json();
+    const member = await loginAs('member');
+    assert.equal((await (await member.send('POST', `/api/events/${event.id}/register`, {})).json()).status, 'waitlisted');
+    let newbie = null;
+    if (withNext) {
+        newbie = await loginAs('newbie');
+        assert.equal((await (await newbie.send('POST', `/api/events/${event.id}/register`, {})).json()).status, 'waitlisted');
+    }
+    assert.equal((await admin.send('PUT', `/api/admin/registrations/${taken.id}/status`, { status: 'rejected' })).status, 200);
+    const mine = await (await member.request(`/api/events/${event.id}/my-registration`)).json();
+    return { event, member, newbie, mine };
+}
+
+test('a freed place is offered: my-registration shows it, confirming accepts', async () => {
+    const admin = await loginAs('admin');
+    const { event, member, mine } = await eventWithOffer(admin);
+    assert.equal(mine.status, 'offered');
+    assert.ok(new Date(mine.offer.expiresAt) > new Date());
+    await server.waitForOutput(`Platz angeboten: Tom (${MEMBER_PERSONA_ID}) für "${event.title}"`);
+
+    const res = await member.send('POST', `/api/events/${event.id}/offer/confirm`);
+    assert.equal(res.status, 200);
+    assert.deepEqual(await res.json(), { success: true, status: 'accepted' });
+    const after = await (await member.request(`/api/events/${event.id}/my-registration`)).json();
+    assert.equal(after.status, 'accepted');
+    assert.equal(after.offer, null);
+});
+
+test('declining removes the registration and offers the place to the next', async () => {
+    const admin = await loginAs('admin');
+    const { event, member, newbie } = await eventWithOffer(admin, { withNext: true });
+    const res = await member.send('POST', `/api/events/${event.id}/offer/decline`);
+    assert.deepEqual([res.status, await res.json()], [200, { success: true }]);
+    assert.equal((await (await member.request(`/api/events/${event.id}/my-registration`)).json()).registered, false);
+    assert.equal((await (await newbie.request(`/api/events/${event.id}/my-registration`)).json()).status, 'offered');
+});
+
+test('an expired, missing or not offered place is refused, and the routes need the CSRF token', async () => {
+    const admin = await loginAs('admin');
+    const { event, member, mine } = await eventWithOffer(admin);
+
+    const noToken = await member.request(`/api/events/${event.id}/offer/confirm`, { method: 'POST' });
+    assert.equal(noToken.status, 403);
+
+    await serverStore().updateDoc(serverStore().doc(serverStore().db, 'registrations', mine.id), {
+        offer: { offeredAt: new Date().toISOString(), expiresAt: new Date(Date.now() - 60_000).toISOString() }
+    });
+    const late = await member.send('POST', `/api/events/${event.id}/offer/confirm`);
+    assert.deepEqual([late.status, await late.json()], [409, { error: 'Das Angebot ist nicht mehr gültig.' }]);
+
+    const raider = await loginAs('raider');
+    const none = await raider.send('POST', `/api/events/${event.id}/offer/confirm`);
+    assert.deepEqual([none.status, await none.json()], [404, { error: 'Keine Anmeldung gefunden.' }]);
+
+    const plain = await createEventAs(admin, { title: 'B15 Ohne Angebot' });
+    await member.send('POST', `/api/events/${plain.id}/register`, {});
+    const notOffered = await member.send('POST', `/api/events/${plain.id}/offer/decline`);
+    assert.equal(notOffered.status, 409);
+});
+
+test('admins decide offered registrations directly, which ends the offer', async () => {
+    const admin = await loginAs('admin');
+    const single = await eventWithOffer(admin);
+    assert.equal((await admin.send('PUT', `/api/admin/registrations/${single.mine.id}/status`, { status: 'accepted' })).status, 200);
+    const accepted = (await serverStore().getDoc(serverStore().doc(serverStore().db, 'registrations', single.mine.id))).data();
+    assert.deepEqual([accepted.status, accepted.offer], ['accepted', null]);
+
+    const bulk = await eventWithOffer(admin);
+    const res = await admin.send('POST', `/api/admin/events/${bulk.event.id}/registrations/bulk`, { action: 'reject', ids: [bulk.mine.id] });
+    assert.equal(res.status, 200, await res.clone().text());
+    const rejected = (await serverStore().getDoc(serverStore().doc(serverStore().db, 'registrations', bulk.mine.id))).data();
+    assert.deepEqual([rejected.status, rejected.offer], ['rejected', null]);
+});
+
+test('the profile lists an offered registration with its deadline', async () => {
+    const admin = await loginAs('admin');
+    const { event, member } = await eventWithOffer(admin);
+    const profile = await (await member.request('/api/user/profile')).json();
+    const entry = profile.upcoming.find(item => item.event.id === event.id);
+    assert.equal(entry.status, 'offered');
+    assert.ok(entry.offerExpiresAt);
 });

@@ -9,7 +9,7 @@ const {
     MY_LEAVE_PREFIX, MY_LEAVE_CANCEL_PREFIX, MY_SWITCH_PREFIX,
     APPROVAL_ACCEPT_PREFIX, APPROVAL_REJECT_PREFIX, APPROVAL_WAITLIST_PREFIX, CHECKIN_BUTTON_PREFIX,
     ADMIN_EVENT_MODAL_PREFIX, ADMIN_POLL_MODAL_PREFIX, ADMIN_EVENT_PUBLISH_PREFIX, ADMIN_EVENT_ACTIVATE_PREFIX,
-    ADMIN_RETRY_PREFIX
+    ADMIN_RETRY_PREFIX, OFFER_CONFIRM_PREFIX, OFFER_DECLINE_PREFIX
 } = require('./constants');
 const {
     handleEventRegisterButton, handleEventRegisterModal, replyWithFailure, handleEventSlotButton,
@@ -21,6 +21,7 @@ const { handleMyLeaveButton, handleMyLeaveCancelButton, handleMySwitchButton } =
 const { handleApprovalButton } = require('./approvals');
 const { handleCheckinButton } = require('./checkin');
 const { handleAdminEventModal, handleAdminPollModal, handleDraftButton, handleRetryButton } = require('./adminCommands');
+const { handleOfferButton } = require('./waitlistOffers');
 const { state } = require('./client');
 
 /**
@@ -138,6 +139,18 @@ async function handleInteraction(interaction) {
             } catch (err) {
                 console.error('Check-in button error:', err);
                 await replyWithFailure(interaction, '❌ Fehler beim Check-in.');
+            }
+            return;
+        }
+
+        // „Platz annehmen“ / „Doch nicht“ in the waitlist offer DM (B-15)
+        if ([OFFER_CONFIRM_PREFIX, OFFER_DECLINE_PREFIX].includes(buttonAction) && buttonEventId) {
+            try {
+                // The second segment carries the registration ID here
+                await handleOfferButton(interaction, buttonAction === OFFER_CONFIRM_PREFIX, buttonEventId);
+            } catch (err) {
+                console.error('Waitlist offer button error:', err);
+                await replyWithFailure(interaction, '❌ Fehler bei der Antwort.');
             }
             return;
         }

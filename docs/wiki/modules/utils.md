@@ -3,7 +3,7 @@ id: utils
 title: utils/ — domain helpers
 type: module
 tags: [utils, registration, form-fields, waitlist, audit-log, profile, debug, change-notice, banner]
-sources: [utils/registrationService.js, utils/registrationStatus.js, utils/approvalRequests.js, utils/checkin.js, utils/threadSync.js, utils/formFields.js, utils/eventUtils.js, utils/eventListing.js, utils/profileEvents.js, utils/eventUrl.js, utils/userProfile.js, utils/avatar.js, utils/botPermissions.js, utils/csv.js, utils/template.js, utils/sessionStore.js, utils/reminders.js, utils/debugLog.js, utils/capacity.js, utils/slotService.js, utils/eventLock.js, utils/announcementRefresh.js, utils/pollService.js, utils/pollStore.js, utils/eventPreview.js, utils/eventArchive.js, utils/eventCleanup.js, utils/adminActions.js, utils/localDateTime.js, utils/eventChangeNotice.js, utils/notificationPrefs.js, utils/memberOverview.js, utils/insights.js, utils/participantMessage.js, utils/bannerStore.js, utils/bulkRegistrations.js, utils/eventSeries.js, utils/eventTemplates.js, utils/botSettings.js]
+sources: [utils/registrationService.js, utils/registrationStatus.js, utils/approvalRequests.js, utils/checkin.js, utils/threadSync.js, utils/formFields.js, utils/eventUtils.js, utils/eventListing.js, utils/profileEvents.js, utils/eventUrl.js, utils/userProfile.js, utils/avatar.js, utils/botPermissions.js, utils/csv.js, utils/template.js, utils/sessionStore.js, utils/reminders.js, utils/debugLog.js, utils/capacity.js, utils/slotService.js, utils/eventLock.js, utils/announcementRefresh.js, utils/pollService.js, utils/pollStore.js, utils/eventPreview.js, utils/eventArchive.js, utils/eventCleanup.js, utils/adminActions.js, utils/localDateTime.js, utils/eventChangeNotice.js, utils/notificationPrefs.js, utils/memberOverview.js, utils/insights.js, utils/participantMessage.js, utils/bannerStore.js, utils/bulkRegistrations.js, utils/eventSeries.js, utils/eventTemplates.js, utils/botSettings.js, utils/waitlistOffers.js]
 part_of: [architecture]
 depends_on: [data-layer, bot]
 see_also: [registration-flow, form-fields, role-slots]
@@ -80,6 +80,18 @@ Shared by `routes/admin.js` and `bot/adminCommands.js`; bot helpers are required
 ## utils/localDateTime.js (B-13)
 
 `parseLocalDateTime(text, tz)` (`D.M.YYYY H:MM`, two-digit year = 20xx, impossible dates and daylight saving gaps → null), `parseEndInput(text, start, tz)` (empty → null, `H:MM` → start day or the next day, unreadable → undefined), `parsePollLines(text, tz)` (`{ options }` or `{ error }` naming the line), `DATE_FORMAT_HINT`. Uses `zonedParts`/`fromZonedParts` of `utils/eventSeries.js`.
+
+## utils/waitlistOffers.js (B-15)
+
+| Export | Behaviour |
+|---|---|
+| `offerDeadline(event, settings, now)` | now + `waitlistConfirmHours`, capped 1 h before the start; null with the switch off, without start or under 1 h |
+| `confirmOffer({ registrationId, userId, now })` | under the event lock: own, offered, deadline ahead, event active → `accepted`/`pending`, `offer: null`; then `completePromotion` (`utils/eventUtils.js`) without its DM; refusals `missing`/`not_yours`/`not_offered`/`expired` |
+| `declineOffer({ registrationId, userId })` | deletes the registration, `promoteFromWaitlist` → next offer |
+| `expireOffers({ now })` | expired offers deleted, „verfallen“ DM, place handed on; quietly for inactive/over events; returns the count |
+| `startOfferScheduler({ waitFor })`, `stopOfferScheduler()` | like the archive scheduler, every 5 min |
+
+`utils/eventUtils.js`: `promoteFromWaitlistLocked(eventId, event, { now })` writes offers when `offerDeadline` gives one; `announcePromotions` sends `sendWaitlistOffer` for them; `completePromotion(event, promotion, { announce })` holds the effects of a finished move-up. `utils/botSettings.js`: `waitlistConfirmation`, `waitlistConfirmHours`, `isValidConfirmHours`.
 
 ## utils/eventCleanup.js (B-10)
 

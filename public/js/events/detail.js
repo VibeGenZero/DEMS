@@ -14,6 +14,7 @@ import { eventHasSlots, renderOwnSlot, renderRoster, renderSlotPicker } from './
 import { eventEnd, isRegistrationClosed, isUnregisterClosed } from './cards.js';
 import { startCountdown } from './countdown.js';
 import { revealDetail } from './detail-motion.js';
+import { renderOfferCard } from './offer.js';
 
 export const GRADIENT_PRESETS = [
     'linear-gradient(135deg, #6d28d9 0%, #8b5cf6 100%)',
@@ -256,7 +257,7 @@ export async function loadDetailParticipants(eventId) {
 // Clears what the previously opened event left on the page; the early returns
 // below (no access, not logged in) never reach the code that refills it
 export function resetEventDetailAreas() {
-    ['detail-register-area', 'detail-registered', 'detail-no-access', 'detail-waitlist', 'detail-ended', 'detail-registration-closed',
+    ['detail-register-area', 'detail-registered', 'detail-offer', 'detail-no-access', 'detail-waitlist', 'detail-ended', 'detail-registration-closed',
         'detail-participants-section', 'comments-section', 'checkin-section'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.style.display = 'none';
@@ -389,10 +390,20 @@ export async function showEventDetail(eventId, { celebrate, fromTaken } = {}) {
         const regData = await regRes.json();
         if (state.detailEventId !== eventId) return;
 
+        // A waitlist offer replaces the registered area with its two answers (B-15)
+        if (regData.registered && !regData.asGuest && renderOfferCard(regData)) {
+            registeredArea.style.display = 'none';
+            renderSidebarAction('registered');
+            revealDetail(celebrate, { fromTaken });
+            loadDetailParticipants(eventId);
+            loadComments(eventId);
+            return;
+        }
+
         if (regData.registered) {
             registeredArea.style.display = 'block';
             const statusEl = document.getElementById('detail-reg-status');
-            const statusTexts = { pending: 'Ausstehend', accepted: 'Angenommen', rejected: 'Abgelehnt', waitlisted: 'Warteliste' };
+            const statusTexts = { pending: 'Ausstehend', accepted: 'Angenommen', rejected: 'Abgelehnt', waitlisted: 'Warteliste', offered: 'Platz angeboten' };
             const statusColors = { pending: 'warning', accepted: 'success', rejected: 'danger', waitlisted: 'info' };
             const place = regData.status === 'waitlisted' && regData.waitlistPosition;
             statusEl.textContent = regData.asGuest

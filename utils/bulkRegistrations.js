@@ -7,10 +7,11 @@ const { placesOf, countOccupiedPlaces, byCreatedAt } = require('./capacity');
 const { getSlots, countSlotOccupancy, pickSlot } = require('./slotService');
 
 /** Statuses each action applies to; the frontend copy lives in public/js/admin/registration-bulk.js. */
+// An offered registration (B-15) is decided like a waitlisted one
 const BULK_ACTIONS = {
-    accept: ['pending', 'waitlisted'],
-    waitlist: ['pending', 'accepted'],
-    reject: ['pending', 'waitlisted', 'accepted']
+    accept: ['pending', 'waitlisted', 'offered'],
+    waitlist: ['pending', 'accepted', 'offered'],
+    reject: ['pending', 'waitlisted', 'accepted', 'offered']
 };
 const TARGET_STATUS = { accept: 'accepted', waitlist: 'waitlisted', reject: 'rejected' };
 const MAX_BULK_IDS = 200;
