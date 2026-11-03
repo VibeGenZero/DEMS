@@ -30,7 +30,7 @@ const frontend = loadFrontendApp({});
 test('the version number picks the effect', async () => {
     const { app } = await frontend;
     const kinds = {
-        '3.0.0': 'confetti', '4.0.0': 'confetti', 'v3.0.0': 'confetti', '3.0.0-beta.1': 'confetti', '3.0.0-beta.3': 'confetti',
+        '3.0.0': 'confetti', '4.0.0': 'confetti', 'v3.0.0': 'confetti', '3.0.0-beta.1': 'confetti', '3.0.0-beta.3': 'confetti', '3.0.0-rc.1': 'confetti',
         '3.1.0': 'powerup', '2.6.0': 'powerup', ' 3.2.0 ': 'powerup', '3.1.0-rc.2': 'powerup',
         '3.0.1': 'bugs', '3.1.4': 'bugs', '10.20.30': 'bugs'
     };

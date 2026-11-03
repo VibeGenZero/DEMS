@@ -70,7 +70,7 @@ Pre-releases are the beta series towards 3.0 (`3.0.0-beta.1`, `3.0.0-beta.2`, â€
 
 Published image: the private Docker Hub repository `moritakahashi/dems`. `latest` is the live release; a pre-release image gets its version tag and the moving tag `beta`, never `latest`; every image also carries its commit sha.
 
-Ordering note: `test/updatesData.test.js` compares the numeric major.minor.patch prefix only, which orders one pre-release above the older history. Once a second pre-release of the same version enters the history (e.g. `3.0.0-beta.3` and `3.0.0-beta.4`), that test needs a suffix ordering rule.
+Ordering note: `test/updatesData.test.js` orders the history like SemVer: a release is newer than its pre-releases, and pre-release parts compare one by one (numbers as numbers, words alphabetically), so `3.0.0-rc.1` > `3.0.0-beta.3` and `3.0.0-beta.10` > `3.0.0-beta.9`. The history keeps every published pre-release.
 
 ## Troubleshooting
 
