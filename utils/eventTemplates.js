@@ -12,9 +12,9 @@ const { normalizeReminderHours } = require('./reminders');
  */
 const TEMPLATE_FIELDS = [
     'title', 'description', 'bannerUrl', 'accentColor', 'category', 'location',
-    'maxParticipants', 'accessMode', 'requiredRoles', 'approvalMode', 'allowGuests',
+    'maxParticipants', 'accessMode', 'requiredRoles', 'approvalMode', 'allowGuests', 'allowTentative',
     'slots', 'assignRoleId', 'formFields', 'reminderHours', 'checkinMessage',
-    'autoCreateChannels', 'channelConfig', 'customBotMessages'
+    'autoCreateChannels', 'channelConfig', 'customBotMessages', 'announceChannelId'
 ];
 
 const TEMPLATE_NAME_MAX = 80;
@@ -49,6 +49,7 @@ function pickTemplateSettings(input) {
         requiredRoles: Array.isArray(source.requiredRoles) ? source.requiredRoles : [],
         approvalMode: source.approvalMode || 'manual',
         allowGuests: slots.length > 0 ? false : source.allowGuests !== false,
+        allowTentative: source.allowTentative === true,
         slots,
         assignRoleId: text(source.assignRoleId),
         formFields: Array.isArray(source.formFields) ? source.formFields : [],
@@ -57,7 +58,9 @@ function pickTemplateSettings(input) {
         checkinMessage: text(source.checkinMessage),
         autoCreateChannels: !!source.autoCreateChannels,
         channelConfig: isObject(source.channelConfig) ? source.channelConfig : {},
-        customBotMessages: isObject(source.customBotMessages) ? source.customBotMessages : {}
+        customBotMessages: isObject(source.customBotMessages) ? source.customBotMessages : {},
+        // Own announcement channel, '' = default (B-11)
+        announceChannelId: text(source.announceChannelId)
     };
     return { settings };
 }

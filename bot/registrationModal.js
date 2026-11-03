@@ -308,18 +308,27 @@ function buildRegisteredSlotReply(event, eventId, registration, clickedSlot, reg
     }
 
     const current = findSlot(slots, registration.slotId);
-    const status = registration.status === 'waitlisted' || !current
-        ? `⏳ Du stehst für **${event.title}** auf der Warteliste.`
-        : `Du bist für **${event.title}** als **${formatSlotLabel(current)}** eingeplant${registration.status === 'pending' ? ' (Anfrage ausstehend)' : ''}.`;
-    // Deadlines take the switch and the leave button away (W-03)
-    const canLeave = !isUnregisterClosed(event);
+    const onBench = registration.status === 'tentative';
+    const wished = findSlot(slots, registration.preferredSlotId);
+    let status;
+    if (onBench) {
+        // „Vielleicht“ holds no slot (B-17)
+        status = `🤔 Du stehst für **${event.title}** auf der Ersatzbank${wished ? ` (Wunschrolle ${formatSlotLabel(wished)})` : ''}.`;
+    } else {
+        status = registration.status === 'waitlisted' || !current
+            ? `⏳ Du stehst für **${event.title}** auf der Warteliste.`
+            : `Du bist für **${event.title}** als **${formatSlotLabel(current)}** eingeplant${registration.status === 'pending' ? ' (Anfrage ausstehend)' : ''}.`;
+    }
+    // Deadlines take the switch and the leave button away (W-03); the bench may always leave
+    const canLeave = onBench || !isUnregisterClosed(event);
     const content = canLeave ? status : `${status}
 ${UNREGISTER_CLOSED_MESSAGE}`;
 
     const row = new ActionRowBuilder();
-    const canSwitch = clickedSlot.id !== registration.slotId
+    // The bench changes only its wish, so a full role is no obstacle there
+    const canSwitch = clickedSlot.id !== (onBench ? registration.preferredSlotId : registration.slotId)
         && !isRegistrationClosed(event)
-        && hasFreePlace(clickedSlot, countSlotOccupancy(slots, registrations));
+        && (onBench || hasFreePlace(clickedSlot, countSlotOccupancy(slots, registrations)));
     if (canSwitch) {
         const switchButton = new ButtonBuilder()
             .setCustomId(`${SLOT_SWITCH_PREFIX}:${eventId}:${clickedSlot.id}`)
@@ -464,6 +473,7 @@ function parseModalAnswers(interaction, event) {
 }
 
 module.exports = {
+    addFormFieldLabels,
     buildRegistrationModal,
     buildSlotModal,
     readAltSlotIds,

@@ -4,14 +4,17 @@ const router = express.Router();
 const { db, collection, doc, getDoc, getDocs, addDoc, deleteDoc, updateDoc, query, where, orderBy } = require('../firebaseAdmin');
 const { requireAuth } = require('../middleware/auth');
 const { checkRegistrationAllowed } = require('../middleware/maintenance');
-const { getGuildRoles, getPublicGuildChannels } = require('../bot');
-const { loadEventRoster, loadEventRegistrations, toPublicEvent, isEventVisibleTo } = require('../utils/eventUtils');
+const { getGuildRoles, getPublicGuildChannels, mirrorCommentToThread, deleteMirroredMessage } = require('../bot');
+const { loadEventRoster, loadEventRegistrations, toPublicEvent, isEventVisibleTo, findUserRegistration } = require('../utils/eventUtils');
+const { confirmOffer, declineOffer } = require('../utils/waitlistOffers');
+const { confirmTentativeRegistration } = require('../utils/tentativeRegistration');
 const { isEventOver, pickSeriesRepresentative, myRegistrationStatus } = require('../utils/eventListing');
 const { registerUserForEvent, switchOwnSlot, unregisterUserFromEvent, REGISTRATION_SOURCE } = require('../utils/registrationService');
 const { hasSlots, withSlotSummary } = require('../utils/slotService');
-const { describePlaces, waitlistPositions } = require('../utils/capacity');
+const { describePlaces, waitlistPositions, byCreatedAt, TENTATIVE_STATUS } = require('../utils/capacity');
 const { debugLog } = require('../utils/debugLog');
 const { avatarUrlOf, repairAvatarUrl } = require('../utils/avatar');
+const { checkInMember } = require('../utils/checkin');
 
 /**
  * Event with its places: the numbers and the one sentence every view shows
@@ -315,7 +318,9 @@ router.post('/:id/register', requireAuth, checkRegistrationAllowed, async (req, 
             guests: Array.isArray(req.body.guests) ? req.body.guests : [],
             source: REGISTRATION_SOURCE.WEB,
             slotId: typeof req.body.slotId === 'string' ? req.body.slotId : null,
-            altSlotIds: Array.isArray(req.body.altSlotIds) ? req.body.altSlotIds : []
+            altSlotIds: Array.isArray(req.body.altSlotIds) ? req.body.altSlotIds : [],
+            // „Vielleicht“ (B-17): the bench, no place
+            tentative: req.body.tentative === true
         });
 
         if (!result.ok) {
@@ -354,6 +359,51 @@ router.put('/:id/register/slot', requireAuth, checkRegistrationAllowed, async (r
 /**
  * DELETE /api/events/:id/register — Unregister from an event
  */
+/**
+ * POST /api/events/:id/register/confirm — „Fest zusagen“ (B-17): the own
+ * „Vielleicht“ becomes a registration with the status a new one gets now.
+ */
+router.post('/:id/register/confirm', requireAuth, checkRegistrationAllowed, async (req, res) => {
+    try {
+        const result = await confirmTentativeRegistration({ eventId: req.params.id, userId: req.session.user.id });
+        if (!result.ok) {
+            return res.status(result.httpStatus).json({ error: result.error });
+        }
+        debugLog('events.confirmTentative', { eventId: req.params.id, userId: req.session.user.id, status: result.status });
+        res.json({ id: result.id, status: result.status, message: result.message, slotId: result.slotId });
+    } catch (err) {
+        console.error('Confirm tentative error:', err);
+        res.status(500).json({ error: 'Fehler bei der Zusage' });
+    }
+});
+
+/**
+ * POST /api/events/:id/offer/confirm and /offer/decline — answer the own
+ * waitlist offer (B-15): confirm moves up like an instant move-up, decline
+ * removes the registration and offers the place to the next entry.
+ */
+for (const answer of ['confirm', 'decline']) {
+    router.post(`/:id/offer/${answer}`, requireAuth, checkRegistrationAllowed, async (req, res) => {
+        try {
+            const userId = req.session.user.id;
+            const own = await findUserRegistration(req.params.id, userId);
+            if (!own) return res.status(404).json({ error: 'Keine Anmeldung gefunden.' });
+            const result = answer === 'confirm'
+                ? await confirmOffer({ registrationId: own.id, userId })
+                : await declineOffer({ registrationId: own.id, userId });
+            if (!result.ok) {
+                return result.code === 'missing'
+                    ? res.status(404).json({ error: 'Keine Anmeldung gefunden.' })
+                    : res.status(409).json({ error: 'Das Angebot ist nicht mehr gültig.' });
+            }
+            res.json(answer === 'confirm' ? { success: true, status: result.status } : { success: true });
+        } catch (err) {
+            console.error('Waitlist offer answer error:', err);
+            res.status(500).json({ error: 'Fehler bei der Antwort auf das Angebot.' });
+        }
+    });
+}
+
 router.delete('/:id/register', requireAuth, async (req, res) => {
     try {
         const result = await unregisterUserFromEvent({ eventId: req.params.id, userId: req.session.user.id });
@@ -454,7 +504,7 @@ router.get('/:id/participants', requireAuth, async (req, res) => {
             } catch { /* skip missing users */ }
         }
 
-        const payload = { participants, total };
+        const payload = { participants, total, bench: await loadBench(req.params.id, event) };
         if (event && hasSlots(event)) {
             const roster = await loadEventRoster(req.params.id, event, { withProfiles: true });
             payload.slots = roster.slots;
@@ -466,6 +516,36 @@ router.get('/:id/participants', requireAuth, async (req, res) => {
         res.status(500).json({ error: 'Fehler beim Laden der Teilnehmer' });
     }
 });
+
+/**
+ * Members on the bench of an event (B-17), oldest „Vielleicht“ first: name and
+ * avatar, on slot events the wanted role. No ids, times or form answers.
+ *
+ * @param {string} eventId -> The event document ID.
+ * @param {Object|null} event -> Event data.
+ * @returns {Promise<Array<{ displayName: string, avatar: string, preferredSlotId?: string|null }>>} -> The bench.
+ */
+async function loadBench(eventId, event) {
+    const withSlots = !!event && hasSlots(event);
+    const answeredAt = (registration) => ({ createdAt: registration.tentativeAt || registration.createdAt });
+    const tentative = (await loadEventRegistrations(eventId))
+        .filter(registration => registration.status === TENTATIVE_STATUS)
+        .sort((a, b) => byCreatedAt(answeredAt(a), answeredAt(b)));
+    const bench = [];
+    for (const registration of tentative) {
+        let profile = {};
+        try {
+            const userSnap = await getDoc(doc(db, 'users', registration.userId));
+            if (userSnap.exists()) profile = userSnap.data();
+        } catch { /* fall back to the stored name */ }
+        bench.push({
+            displayName: profile.displayName || profile.username || registration.userName || 'Unbekannt',
+            avatar: profile.avatar || '',
+            ...(withSlots ? { preferredSlotId: registration.preferredSlotId || null } : {})
+        });
+    }
+    return bench;
+}
 
 /**
  * POST /api/events/:id/checkin — User check-in with code
@@ -499,27 +579,14 @@ router.post('/:id/checkin', requireAuth, checkinLimiter, async (req, res) => {
             return res.status(400).json({ error: 'Ungültiger Check-in Code.' });
         }
 
-        // Find user's accepted registration
-        const regQ = query(
-            collection(db, 'registrations'),
-            where('eventId', '==', req.params.id),
-            where('userId', '==', req.session.user.id),
-            where('status', '==', 'accepted')
-        );
-        const regs = await getDocs(regQ);
-        if (regs.empty) {
+        // Shared with the Discord button (B-07); the code check-in has no time window
+        const result = await checkInMember({ eventId: req.params.id, userId: req.session.user.id });
+        if (!result.ok) {
             return res.status(400).json({ error: 'Keine akzeptierte Anmeldung gefunden.' });
         }
-
-        const regDoc = regs.docs[0];
-        if (regDoc.data().checkedIn) {
+        if (result.alreadyCheckedIn) {
             return res.json({ success: true, alreadyCheckedIn: true, checkinMessage: event.checkinMessage || '' });
         }
-
-        await updateDoc(doc(db, 'registrations', regDoc.id), {
-            checkedIn: true,
-            checkedInAt: new Date().toISOString()
-        });
 
         res.json({ success: true, checkinMessage: event.checkinMessage || '' });
     } catch (err) {
@@ -577,10 +644,13 @@ router.post('/:id/comments', requireAuth, async (req, res) => {
             text: text.trim(),
             isAdmin: !!user.isAdmin,
             replyTo: replyTo || null,
-            createdAt: new Date().toISOString()
+            createdAt: new Date().toISOString(),
+            source: 'web'
         };
 
         const ref = await addDoc(collection(db, 'comments'), comment);
+        // Into the event's Discord discussion thread (B-16, only with DISCORD_THREAD_SYNC=true)
+        mirrorCommentToThread(ref.id).catch(err => console.error('Comment mirror error:', err.message));
         res.json({ id: ref.id, ...comment });
     } catch (err) {
         console.error('Error posting comment:', err);
@@ -607,6 +677,12 @@ router.delete('/:id/comments/:commentId', requireAuth, async (req, res) => {
         }
 
         await deleteDoc(doc(db, 'comments', req.params.commentId));
+        // Its copy in the Discord discussion thread goes too (B-16)
+        if (comment.discordMessageId) {
+            getDoc(doc(db, 'events', comment.eventId))
+                .then(eventSnap => deleteMirroredMessage(comment, eventSnap.exists() ? eventSnap.data() : null))
+                .catch(err => console.error('Comment mirror delete error:', err.message));
+        }
         res.json({ success: true });
     } catch (err) {
         console.error('Error deleting comment:', err);

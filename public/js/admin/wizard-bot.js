@@ -6,6 +6,7 @@
  */
 import { state } from '../core/state.js';
 import { toggleElement } from '../core/ui.js';
+import { renderAnnounceChannelSelect } from './wizard-announce.js';
 
 /**
  * The switches the wizard needs; anything unknown counts as on (the server default).
@@ -43,5 +44,9 @@ export async function loadWizardBotSettings() {
     }
     state.botSettings = wizardSwitchesOf(raw);
     applyChannelLock();
+    // The default option names the bot center channel (B-11); the selection stays
+    const defaultChannel = raw?.defaultAnnounceChannel ?? raw?.announceChannel;
+    state.announceDefaultChannel = typeof defaultChannel === 'string' ? defaultChannel : '';
+    await renderAnnounceChannelSelect(document.getElementById('event-announce-channel')?.value || '');
     return state.botSettings;
 }

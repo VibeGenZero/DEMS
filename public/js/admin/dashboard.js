@@ -79,6 +79,11 @@ export async function loadAdminStats() {
         <div class="stat-value">${stats.registrations.waitlisted}</div>
         <div class="stat-label">Warteliste</div>
       </div>
+      <div class="stat-card">
+        <div class="stat-icon"><i class="bi bi-question-circle"></i></div>
+        <div class="stat-value">${stats.registrations.tentative || 0}</div>
+        <div class="stat-label">Ersatzbank</div>
+      </div>
     `;
 
         animateFromTo('.stat-card', { y: 20, opacity: 0 }, { y: 0, opacity: 1, duration: 0.3, stagger: 0.05, ease: 'power3.out' });

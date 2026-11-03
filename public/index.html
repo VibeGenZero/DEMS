@@ -307,6 +307,10 @@
                 <button type="submit" form="waitlist-form" class="btn btn-secondary w-100 is-hidden" id="waitlist-btn">
                   <i class="bi bi-list-nested me-2"></i>Auf Warteliste setzen
                 </button>
+                <!-- „Vielleicht“ / Ersatzbank (events/bench.js, B-17) -->
+                <button type="button" class="btn btn-outline-secondary w-100 is-hidden" data-click="answerTentative" id="tentative-btn">
+                  <i class="bi bi-question-circle me-2"></i>Vielleicht
+                </button>
                 <button type="button" class="btn w-100 is-hidden" id="sidebar-status-btn" disabled></button>
               </div>
 
@@ -328,6 +332,50 @@
                   <button class="btn btn-outline-danger" data-click="unregisterFromEvent" id="unregister-btn">
                     <i class="bi bi-x-circle me-1"></i>Abmelden
                   </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Waitlist offer (events/offer.js, B-15) -->
+            <div class="is-hidden" id="detail-offer">
+              <div class="glass-card p-4 mb-4">
+                <div class="d-flex align-items-center gap-3 flex-wrap">
+                  <i class="bi bi-hourglass-split text-warning icon-xl"></i>
+                  <div class="flex-grow-1">
+                    <h5 class="mb-1">Ein Platz ist frei!</h5>
+                    <p class="text-secondary mb-0" id="detail-offer-text"></p>
+                  </div>
+                  <div class="d-flex gap-2">
+                    <button class="btn btn-accent" data-click="confirmOffer" id="offer-confirm-btn">
+                      <i class="bi bi-check-lg me-1"></i>Platz annehmen
+                    </button>
+                    <button class="btn btn-outline-secondary" data-click="declineOffer" id="offer-decline-btn">
+                      <i class="bi bi-x-lg me-1"></i>Doch nicht
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- On the bench: „Vielleicht“ (events/bench.js, B-17) -->
+            <div class="is-hidden" id="detail-tentative">
+              <div class="glass-card p-4 mb-4">
+                <div class="d-flex align-items-center gap-3 flex-wrap">
+                  <i class="bi bi-question-circle-fill text-secondary icon-xl"></i>
+                  <div class="flex-grow-1">
+                    <h5 class="mb-1">Du stehst auf der Ersatzbank</h5>
+                    <p class="text-secondary mb-0">Status: <span class="fw-bold">Vielleicht (Ersatzbank)</span></p>
+                    <p class="text-secondary small mb-0 mt-2">Du belegst keinen Platz. Sag fest zu, sobald du sicher bist.</p>
+                    <p class="text-secondary small mb-0 mt-2 is-hidden" id="tentative-confirm-closed"><i class="bi bi-alarm me-1"></i>Die Anmeldung ist geschlossen. Ein Admin kann dich noch von der Ersatzbank holen.</p>
+                  </div>
+                  <div class="d-flex gap-2">
+                    <button class="btn btn-accent" data-click="confirmTentative" id="tentative-confirm-btn">
+                      <i class="bi bi-check-lg me-1"></i>Fest zusagen
+                    </button>
+                    <button class="btn btn-outline-danger" data-click="unregisterFromEvent">
+                      <i class="bi bi-x-circle me-1"></i>Abmelden
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -372,6 +420,7 @@
               </h6>
               <div id="detail-participants-avatars" class="participants-avatar-stack"></div>
               <div class="is-hidden" id="detail-roster"></div>
+              <div class="is-hidden mt-3" id="detail-bench"></div>
             </div>
 
             <!-- Series dates (rendered by JS) -->
@@ -1015,6 +1064,19 @@
                     </label>
                     <small class="d-block text-muted">Öffnet beim Ankündigen eines Events einen Thread für Fragen und Absprachen. Aus = keine neuen Threads; vorhandene bleiben verlinkt.</small>
                   </div>
+                  <!-- Waitlist offers (admin/bot-control.js, B-15) -->
+                  <div class="form-check form-switch mb-2">
+                    <input class="form-check-input" type="checkbox" id="bot-waitlist-confirmation" checked>
+                    <label class="form-check-label" for="bot-waitlist-confirmation">
+                      <i class="bi bi-hourglass-split me-1"></i>Nachrücken bestätigen
+                    </label>
+                    <small class="d-block text-muted">Ein frei gewordener Platz wird angeboten und muss bestätigt werden, sonst rückt der Nächste nach. Aus = sofort nachrücken.</small>
+                  </div>
+                  <div class="mb-3 ms-4">
+                    <label class="form-label small text-muted" for="bot-waitlist-confirm-hours">Bestätigungsfrist (Stunden)</label>
+                    <input type="number" class="form-control form-control-sm" id="bot-waitlist-confirm-hours" min="1" max="72" step="1" value="12">
+                    <small class="d-block text-muted">1–72 Stunden, höchstens bis 1 Stunde vor Beginn.</small>
+                  </div>
                 </div>
               </div>
             </div>
@@ -1033,6 +1095,15 @@
                 <option value="">Standard aus .env</option>
               </select>
               <small class="text-muted">Textkanal für Event- und Abstimmungs-Ankündigungen. „Standard aus .env“ nutzt DISCORD_ANNOUNCE_CHANNEL_ID.</small>
+            </div>
+
+            <!-- Approval channel (admin/bot-control.js, B-06) -->
+            <div class="mb-3">
+              <label class="form-label" for="bot-approval-channel"><i class="bi bi-person-check me-2"></i>Freigabe-Kanal</label>
+              <select class="form-select" id="bot-approval-channel">
+                <option value="">Keiner – Freigaben nur auf der Website</option>
+              </select>
+              <small class="text-muted">Neue Anfragen erscheinen dort mit Buttons zum Annehmen, Ablehnen und für die Warteliste. Nur Mitglieder mit der Admin-Rolle können entscheiden.</small>
             </div>
 
             <div class="d-flex justify-content-end gap-2 mt-4">
@@ -1332,6 +1403,14 @@
                   <small class="text-muted is-hidden" id="event-guests-slot-hint">Bei Slot-Events nicht verfügbar</small>
                 </div>
               </div>
+              <div class="mb-3">
+                <label class="form-label">Ersatzbank</label>
+                <div class="form-check form-switch">
+                  <input class="form-check-input" type="checkbox" id="event-allow-tentative">
+                  <label class="form-check-label" for="event-allow-tentative">„Vielleicht“ erlauben</label>
+                </div>
+                <small class="text-muted">Mitglieder können unverbindlich zusagen. Die Ersatzbank belegt keine Plätze und rückt nicht automatisch nach.</small>
+              </div>
               <div class="mb-3 is-hidden" id="role-requirement-area">
                 <label class="form-label">Erforderliche Rollen</label>
                 <div id="role-checkboxes" class="d-flex flex-wrap gap-2">
@@ -1398,6 +1477,14 @@
                     </div>
                   </div>
                 </div>
+              </div>
+              <!-- Announcement channel of the event (admin/wizard-announce.js, B-11) -->
+              <div class="mb-3 glass-card is-tinted p-3">
+                <label class="form-label" for="event-announce-channel"><i class="bi bi-megaphone me-1"></i>Ankündigungskanal</label>
+                <select class="form-select form-select-sm" id="event-announce-channel">
+                  <option value="">Standard aus der Bot-Zentrale</option>
+                </select>
+                <small class="text-muted d-block mt-1">Wohin „Ankündigen“ dieses Event postet.</small>
               </div>
               <!-- Custom Bot Messages -->
               <div class="mb-3 glass-card is-tinted p-3">
@@ -1809,6 +1896,8 @@
         </div>
         <div class="modal-body">
           <input type="hidden" id="announce-event-id" value="">
+          <!-- Target channel (admin/event-actions.js, B-11) -->
+          <div class="text-muted small mb-3" id="announce-target">Wird geladen...</div>
 
           <div class="mb-3">
             <label class="form-label">🎛️ Buttons unter der Ankündigung</label>

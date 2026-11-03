@@ -1,6 +1,6 @@
 const { db, collection, doc, getDoc, getDocs, addDoc, updateDoc, query, where } = require('../firebaseAdmin');
 const { assignRole, addParticipantToEventChannels } = require('../bot');
-const { sendAutomaticDM, sendWelcomeOnce } = require('./botSettings');
+const { sendAutomaticDM, sendWelcomeOnce, loadBotSettings } = require('./botSettings');
 const { pickCapacityPromotions } = require('./capacity');
 const {
     getSlots, hasSlots, findSlot, formatSlotLabel, pickWaitlistPromotions, buildRoster, normalizeSlots, validateSlotChange
@@ -34,15 +34,19 @@ async function promoteFromWaitlist(eventId, event) {
  * Write the waitlist promotions of an event. The caller holds the event lock.
  *
  * Slot events fill free slots with the oldest matching entries; normal
- * events move up everyone whose places (including guests) still fit.
+ * events move up everyone whose places (including guests) still fit. With
+ * „Nachrücken bestätigen“ on (B-15) the place is offered instead: status
+ * `offered` with a deadline, confirmed later through utils/waitlistOffers.js.
  * Nobody moves up once the event is over: a place in it is worth nothing
  * then, and the DM, role and channel access would only confuse (W-01).
  *
  * @param {string} eventId -> The event document ID.
  * @param {Object} event -> The event document data.
- * @returns {Promise<Array<Object>>} -> `[{ registrationId, userId, status, slotId }]`.
+ * @param {Object} [options]
+ * @param {Date} [options.now] -> Reference time of the offer deadline.
+ * @returns {Promise<Array<Object>>} -> `[{ registrationId, userId, status, slotId, expiresAt? }]`.
  */
-async function promoteFromWaitlistLocked(eventId, event) {
+async function promoteFromWaitlistLocked(eventId, event, { now = new Date() } = {}) {
     if (isEventOver(event)) return [];
     const registrations = await loadEventRegistrations(eventId);
     const picked = hasSlots(event)
@@ -50,12 +54,19 @@ async function promoteFromWaitlistLocked(eventId, event) {
         : pickCapacityPromotions(event.maxParticipants || 0, registrations)
             .map(registrationId => ({ registrationId, slotId: null }));
 
-    const status = event.approvalMode === 'instant' ? 'accepted' : 'pending';
+    if (picked.length === 0) return [];
+
+    // Offer the place instead of moving up at once (B-15)
+    const { offerDeadline } = require('./waitlistOffers');
+    const deadline = offerDeadline(event, await loadBotSettings(), now);
+    const status = deadline ? 'offered' : (event.approvalMode === 'instant' ? 'accepted' : 'pending');
+    const offer = deadline ? { offeredAt: now.toISOString(), expiresAt: deadline.toISOString() } : null;
     const promotions = [];
     for (const { registrationId, slotId } of picked) {
-        await updateDoc(doc(db, 'registrations', registrationId), slotId ? { status, slotId } : { status });
+        const updates = { status, ...(offer ? { offer } : {}), ...(slotId ? { slotId } : {}) };
+        await updateDoc(doc(db, 'registrations', registrationId), updates);
         const promoted = registrations.find(entry => entry.id === registrationId);
-        promotions.push({ registrationId, userId: promoted.userId, status, slotId });
+        promotions.push({ registrationId, userId: promoted.userId, status, slotId, ...(offer ? { expiresAt: offer.expiresAt } : {}) });
     }
     return promotions;
 }
@@ -70,27 +81,14 @@ async function promoteFromWaitlistLocked(eventId, event) {
  */
 async function announcePromotions(eventId, event, promotions) {
     if (promotions.length === 0) return;
-    const slots = getSlots(event);
 
     for (const promotion of promotions) {
-        const slot = findSlot(slots, promotion.slotId);
-        const slotLine = slot ? `\n🎯 Dein Slot: **${formatSlotLabel(slot)}**` : '';
         try {
-            if (promotion.status === 'accepted') {
-                await sendAutomaticDM(promotion.userId,
-                    `🎉 Ein Platz wurde frei! Du wurdest von der Warteliste für **${event.title}** in die Teilnehmerliste aufgenommen!${slotLine}`
-                );
-                await sendWelcomeOnce({ id: promotion.userId, displayName: promotion.userName }, promotion.registrationId || null);
-                if (event.assignRoleId) {
-                    await assignRole(promotion.userId, event.assignRoleId, process.env.DISCORD_GUILD_ID);
-                }
-                if (event.discordChannelId || event.discordTextChannelId) {
-                    await addParticipantToEventChannels(event, promotion.userId);
-                }
+            if (promotion.status === 'offered') {
+                // Always announced, also with waitlist DMs off: the member must confirm (B-15)
+                await require('../bot').sendWaitlistOffer(promotion.registrationId);
             } else {
-                await sendAutomaticDM(promotion.userId,
-                    `📋 Ein Platz wurde frei bei **${event.title}**! Deine Anfrage wird jetzt geprüft.${slotLine}`
-                );
+                await completePromotion(event, promotion);
             }
         } catch (err) {
             console.error('Promotion notification failed:', err.message);
@@ -99,6 +97,44 @@ async function announcePromotions(eventId, event, promotions) {
     }
 
     notifyRegistrationsChanged(eventId);
+}
+
+/**
+ * Effects of a finished move-up: accepted → DM, welcome, role, channel access;
+ * pending → DM and the approval request (B-06). A confirmed offer (B-15) runs
+ * it without the DM, the button answer already tells the member.
+ *
+ * @param {Object} event -> The event document data.
+ * @param {Object} promotion -> `{ registrationId, userId, userName?, status, slotId }`.
+ * @param {Object} [options]
+ * @param {boolean} [options.announce] -> Send the "Ein Platz wurde frei" DM.
+ * @returns {Promise<void>}
+ */
+async function completePromotion(event, promotion, { announce = true } = {}) {
+    const slot = findSlot(getSlots(event), promotion.slotId);
+    const slotLine = slot ? `\n🎯 Dein Slot: **${formatSlotLabel(slot)}**` : '';
+    if (promotion.status === 'accepted') {
+        if (announce) {
+            await sendAutomaticDM(promotion.userId,
+                `🎉 Ein Platz wurde frei! Du wurdest von der Warteliste für **${event.title}** in die Teilnehmerliste aufgenommen!${slotLine}`
+            );
+        }
+        await sendWelcomeOnce({ id: promotion.userId, displayName: promotion.userName }, promotion.registrationId || null);
+        if (event.assignRoleId) {
+            await assignRole(promotion.userId, event.assignRoleId, process.env.DISCORD_GUILD_ID);
+        }
+        if (event.discordChannelId || event.discordTextChannelId) {
+            await addParticipantToEventChannels(event, promotion.userId);
+        }
+        return;
+    }
+    if (announce) {
+        await sendAutomaticDM(promotion.userId,
+            `📋 Ein Platz wurde frei bei **${event.title}**! Deine Anfrage wird jetzt geprüft.${slotLine}`
+        );
+    }
+    // Manual events: the request goes to the approval channel (B-06)
+    if (promotion.registrationId) await require('../bot').sendApprovalRequest(promotion.registrationId);
 }
 
 // Event fields only admins may see; members would otherwise check in without being there
@@ -223,6 +259,7 @@ module.exports = {
     promoteFromWaitlist,
     promoteFromWaitlistLocked,
     announcePromotions,
+    completePromotion,
     addAuditLog,
     toPublicEvent,
     isEventVisibleTo,

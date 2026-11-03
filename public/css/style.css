@@ -2957,6 +2957,7 @@ a.info-version-badge:focus-visible {
 .re-stat-accepted { color: var(--success); }
 .re-stat-pending { color: var(--warning); }
 .re-stat-waitlisted { color: var(--accent-text); }
+.re-stat-tentative { color: var(--text-secondary); }
 
 /* Bot Settings Groups */
 .bot-settings-group {
@@ -3621,6 +3622,8 @@ a.info-version-badge:focus-visible {
 
 /* The one action button (detail.js renderSidebarAction) */
 .detail-action {
+  display: flex;
+  gap: var(--space-8);
   margin-top: var(--space-8);
 }
 

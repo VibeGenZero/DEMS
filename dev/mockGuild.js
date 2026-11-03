@@ -18,7 +18,9 @@ const ROLE_ID = {
     MEMBER: '110000000000000003',
     RAID_TEAM: '110000000000000004',
     VIP: '110000000000000005',
-    BOT: '110000000000000006'
+    BOT: '110000000000000006',
+    // Handed out to accepted participants of some seed events, taken back after them (B-10)
+    EVENT: '110000000000000007'
 };
 
 // Highest position first, like getGuildRoles() returns them
@@ -28,6 +30,7 @@ const ROLES = [
     { id: ROLE_ID.MODERATOR, name: 'Moderator', color: 0xf59e0b, managed: false },
     { id: ROLE_ID.RAID_TEAM, name: 'Raid-Team', color: 0x22c55e, managed: false },
     { id: ROLE_ID.VIP, name: 'VIP', color: 0xa855f7, managed: false },
+    { id: ROLE_ID.EVENT, name: 'Event-Teilnehmer', color: 0x14b8a6, managed: false },
     { id: ROLE_ID.MEMBER, name: 'Mitglied', color: 0x3b82f6, managed: false }
 ];
 
@@ -82,7 +85,7 @@ const MEMBERS = [
     { userId: '200000000000000013', username: 'aylin', displayName: 'Aylin', roles: [ROLE_ID.MEMBER, ROLE_ID.VIP] },
     { userId: '200000000000000014', username: 'ben', displayName: 'Ben', roles: [ROLE_ID.MEMBER, ROLE_ID.RAID_TEAM] },
     { userId: '200000000000000015', username: 'chiara', displayName: 'Chiara', roles: [ROLE_ID.MEMBER, ROLE_ID.MODERATOR] },
-    { userId: '200000000000000016', username: 'dennis', displayName: 'Dennis', roles: [ROLE_ID.MEMBER] },
+    { userId: '200000000000000016', username: 'dennis', displayName: 'Dennis', roles: [ROLE_ID.MEMBER, ROLE_ID.RAID_TEAM] },
     { userId: '200000000000000017', username: 'elif', displayName: 'Elif', roles: [ROLE_ID.MEMBER] },
     { userId: '200000000000000018', username: 'felix', displayName: 'Felix', roles: [ROLE_ID.MEMBER, ROLE_ID.RAID_TEAM] },
     { userId: '200000000000000019', username: 'greta', displayName: 'Greta', roles: [ROLE_ID.MEMBER] }

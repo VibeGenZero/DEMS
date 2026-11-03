@@ -79,7 +79,8 @@ export function renderComment(comment, eventId, isLoggedIn) {
             ${avatar({ url: comment.userAvatar, name: comment.userName, size: 'sm' })}
             <span class="comment-username">${escapeHtml(comment.userName)}</span>
             ${comment.isAdmin ? '<span class="comment-admin-badge">ADMIN</span>' : ''}
-            <span class="comment-date">${dateStr}</span>
+            ${comment.source === 'discord' ? '<span class="chip chip-sm chip-info"><i class="bi bi-discord me-1"></i>Discord</span>' : ''}
+            <span class="comment-date">${dateStr}${comment.editedAt ? ' (bearbeitet)' : ''}</span>
         </div>
         <div class="comment-text">${escapeHtml(comment.text).replace(/\n/g, '<br>')}</div>
         <div class="comment-actions">

@@ -3,7 +3,7 @@ id: routes-events
 title: routes/events.js — event endpoints for logged-in members
 type: module
 tags: [api, events, registration, checkin, comments, series, participants]
-sources: [routes/events.js, utils/registrationService.js, utils/eventUtils.js, utils/eventListing.js]
+sources: [routes/events.js, utils/checkin.js, utils/threadSync.js, utils/registrationService.js, utils/eventUtils.js, utils/eventListing.js, utils/waitlistOffers.js, utils/tentativeRegistration.js]
 part_of: [architecture]
 depends_on: [middleware, utils, data-layer, bot]
 see_also: [registration-flow, event-lifecycle, api-index]
@@ -20,15 +20,17 @@ see_also: [registration-flow, event-lifecycle, api-index]
 | GET | `/series/:seriesId` | user | all events of a series visible to the user (no `draft`/`archived` for non-admins) with `currentParticipants`, `places` (+ `slotSummary`), sorted by start |
 | GET | `/form-options` | user | `{ roles (non-managed), channels (public only) }` for form pickers; cached 60 s in memory |
 | GET | `/:id` | user | event via `toPublicEvent` (no `checkinCode`), plus `checkinEnabled`, `currentParticipants`, `places` (as in the list), `waitlistCount` (= `places.waitlist`), `createdByName`, `slotSummary` (slot events) |
-| POST | `/:id/register` | user + `checkRegistrationAllowed` | body `{ formAnswers, guests, slotId, altSlotIds }` → `registerUserForEvent` → `{ id, status, message, slotId, isAlt }` or `{ error }` with mapped HTTP status |
+| POST | `/:id/register` | user + `checkRegistrationAllowed` | body `{ formAnswers, guests, slotId, altSlotIds, tentative }` (`tentative: true` = „Vielleicht“, B-17) → `registerUserForEvent` → `{ id, status, message, slotId, isAlt }` or `{ error }` with mapped HTTP status |
 | PUT | `/:id/register/slot` | user + `checkRegistrationAllowed` | body `{ slotId }` → `switchOwnSlot` (free slots only, 409 when full; 400 after the end or the registration deadline) → `{ status, slotId, message }` |
+| POST | `/:id/register/confirm` | user + `checkRegistrationAllowed` | „Fest zusagen“ (B-17): `confirmTentativeRegistration` (`utils/tentativeRegistration.js`) → `{ id, status, message, slotId }`; 400 „Du stehst nicht auf der Ersatzbank.“ (`not_tentative`), `event_ended` / `registration_closed` / `event_inactive` with their messages |
+| POST | `/:id/offer/confirm`, `/:id/offer/decline` | user + `checkRegistrationAllowed` | own registration (`findUserRegistration`) → `confirmOffer` / `declineOffer` (B-15); `{ success: true, status }` / `{ success: true }`; 404 „Keine Anmeldung gefunden.“, 409 „Das Angebot ist nicht mehr gültig.“ (expired, not offered) |
 | DELETE | `/:id/register` | user | `unregisterUserFromEvent`: 400 "Abmelden ist nicht mehr möglich. Wende dich an einen Admin." once the `unregisterDeadline` has passed (W-03); otherwise deletes the own registration, removes role/channel access if it was accepted, promotes the waitlist, refreshes announcements |
 | GET | `/:id/my-registration` | user | own registration (a waitlisted one also `waitlistPosition: { position, total }`, W-05; only the own place, never other members' times), or only `{ registered: true, asGuest: true, id, status }` of the inviting registration when the user is an accepted guest (never its `formAnswers` or guest list), or `{ registered: false }` |
-| GET | `/:id/participants` | user | first 20 accepted participants `{ displayName, avatar }` + `total`; slot events also get `slots` (line-up with members) and `waitlist` |
-| POST | `/:id/checkin` | user + `checkinLimiter` (10 failed attempts / 15 min per member, also in mock mode → 429 "Zu viele Check-in-Versuche …") | body `{ code }`; requires `checkinEnabled` + matching `checkinCode` + own accepted registration; sets `checkedIn`, `checkedInAt` |
-| GET | `/:id/comments` | user | comments of the event, sorted by `createdAt` ascending |
-| POST | `/:id/comments` | user | body `{ text (≤1000), replyTo }` |
-| DELETE | `/:id/comments/:commentId` | user (owner or admin) | deletes one comment |
+| GET | `/:id/participants` | user | first 20 accepted participants `{ displayName, avatar }` + `total`; `bench` = tentative registrations (B-17), oldest „Vielleicht“ first, `{ displayName, avatar }` plus `preferredSlotId` on slot events (`loadBench`, no ids, times or answers); slot events also get `slots` (line-up with members) and `waitlist` |
+| POST | `/:id/checkin` | user + `checkinLimiter` (10 failed attempts / 15 min per member, also in mock mode → 429 "Zu viele Check-in-Versuche …") | body `{ code }`; requires `checkinEnabled` + matching `checkinCode` + own accepted registration; sets `checkedIn`, `checkedInAt` through `checkInMember` (`utils/checkin.js`, shared with the Discord button of B-07; no time window here); a repeat answers `alreadyCheckedIn: true` |
+| GET | `/:id/comments` | user | comments of the event, sorted by `createdAt` ascending, incl. `source`, `discordMessageId`, `editedAt` (B-16) |
+| POST | `/:id/comments` | user | body `{ text (≤1000), replyTo }`; stores `source: 'web'` and mirrors the comment into the event's Discord thread (`mirrorCommentToThread`, fire and forget, B-16) |
+| DELETE | `/:id/comments/:commentId` | user (owner or admin) | deletes one comment and, when it has a `discordMessageId`, its Discord message (`deleteMirroredMessage`, fire and forget, B-16) |
 
 ## Where in code
 

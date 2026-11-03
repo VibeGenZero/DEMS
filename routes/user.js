@@ -116,6 +116,8 @@ router.get('/profile', requireAuth, async (req, res) => {
             pending: 0,
             rejected: 0,
             waitlisted: 0,
+            // „Vielleicht“ answers (B-17)
+            tentative: 0,
             checkedIn: 0
         };
 
@@ -124,6 +126,7 @@ router.get('/profile', requireAuth, async (req, res) => {
             else if (r.status === 'pending') stats.pending++;
             else if (r.status === 'rejected') stats.rejected++;
             else if (r.status === 'waitlisted') stats.waitlisted++;
+            else if (r.status === 'tentative') stats.tentative++;
             if (r.checkedIn) stats.checkedIn++;
         });
 

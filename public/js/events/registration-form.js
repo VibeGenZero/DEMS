@@ -9,7 +9,17 @@ import { fadeOutRegistration, pressButton, sidebarTaken } from './detail-motion.
 import { eventHasSlots } from './slots.js';
 
 
-export async function submitRegistration(eventId, event, btnId, formContainerId) {
+/**
+ * Send the registration form of the event page.
+ *
+ * @param {string} eventId -> Event id.
+ * @param {Object} event -> Event of the page.
+ * @param {string} btnId -> Button that shows the progress.
+ * @param {string} formContainerId -> Container of the form fields.
+ * @param {Object} [options] -> `{ tentative }`: „Vielleicht“ (B-17), no guests.
+ * @returns {Promise<void>}
+ */
+export async function submitRegistration(eventId, event, btnId, formContainerId, { tentative = false } = {}) {
     const btn = document.getElementById(btnId);
     if (!btn) return;
 
@@ -52,7 +62,7 @@ export async function submitRegistration(eventId, event, btnId, formContainerId)
     const formAnswers = collectFormAnswers(formFields, formContainerId);
 
     let guests = [];
-    if (formContainerId === 'dynamic-form-fields' && !eventHasSlots(event)) {
+    if (!tentative && formContainerId === 'dynamic-form-fields' && !eventHasSlots(event)) {
         guests = state.selectedGuests.map(g => ({ id: g.id, displayName: g.displayName, avatar: g.avatar }));
     }
 
@@ -71,7 +81,8 @@ export async function submitRegistration(eventId, event, btnId, formContainerId)
                 formAnswers,
                 guests,
                 slotId: usesSlots ? state.selectedSlotId : undefined,
-                altSlotIds: usesSlots ? state.selectedAltSlotIds : undefined
+                altSlotIds: usesSlots ? state.selectedAltSlotIds : undefined,
+                ...(tentative ? { tentative: true } : {})
             }),
             signal: controller.signal
         });
@@ -97,11 +108,13 @@ export async function submitRegistration(eventId, event, btnId, formContainerId)
         }
     } finally {
         // Always re-enable button and restore text if we didn't navigate away
-        if (document.body.contains(btn)) {
+        if (btn.isConnected !== false) {
             btn.disabled = false;
             // Restore original icon if it was lost, or just set safer default
             if (btnId === 'waitlist-btn') {
                 btn.innerHTML = '<i class="bi bi-list-nested me-2"></i>Auf Warteliste setzen';
+            } else if (tentative) {
+                btn.innerHTML = '<i class="bi bi-question-circle me-2"></i>Vielleicht';
             } else {
                 btn.innerHTML = '<i class="bi bi-check-circle me-2"></i>Teilnehmen';
             }
@@ -109,7 +122,13 @@ export async function submitRegistration(eventId, event, btnId, formContainerId)
     }
 }
 
-export async function unregisterFromEvent() {
+/**
+ * Unregister from the event of the page, also from the bench (B-17).
+ *
+ * @param {HTMLElement} [btn] -> Clicked button; defaults to the one of the registered area.
+ * @returns {Promise<void>}
+ */
+export async function unregisterFromEvent(btn = document.getElementById('unregister-btn')) {
     const hash = window.location.hash.replace('#', '');
     const parts = hash.split('/');
     const eventId = parts[1]; // Get event ID from URL hash
@@ -123,7 +142,6 @@ export async function unregisterFromEvent() {
         return;
     }
 
-    const btn = document.getElementById('unregister-btn');
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Wird abgemeldet...';
 
@@ -391,4 +409,4 @@ export function collectFormAnswers(fields, containerId = 'dynamic-form-fields') 
     return answers;
 }
 
-registerActions({ unregisterFromEvent: () => unregisterFromEvent() });
+registerActions({ unregisterFromEvent: (element) => unregisterFromEvent(element || undefined) });

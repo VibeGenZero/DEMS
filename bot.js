@@ -17,18 +17,24 @@ const {
 const { buildPollMessage, buildPollVoteReply, refreshPollMessages, markPollMessagesDeleted } = require('./bot/polls');
 const { buildSlotModal, buildRegisteredSlotReply } = require('./bot/registrationModal');
 const {
-    assignRole, removeRole, getUserRoles, fetchMemberRoleIds, searchGuildMembers, fetchGuildMember,
+    assignRole, removeRole, removeRoleFromMembers, getUserRoles, fetchMemberRoleIds, searchGuildMembers, fetchGuildMember,
     isGuildMember, getGuildName, getGuildIconUrl, getGuildRoles, getGuildChannels, getPublicGuildChannels
 } = require('./bot/guild');
 const {
-    getGuildScheduledEvents, createScheduledEvent, createEventChannels, addParticipantToEventChannels,
-    removeParticipantFromEventChannels, deleteEventChannels
+    createEventChannels, addParticipantToEventChannels, removeParticipantFromEventChannels, deleteEventChannels
 } = require('./bot/channels');
+const {
+    getGuildScheduledEvents, createScheduledEvent, updateScheduledEvent, removeScheduledEvent, setScheduledEventStatus
+} = require('./bot/scheduledEvents');
 const { checkReminders, startReminderScheduler } = require('./bot/scheduler');
 const { getBotStatus, getBotSettings, saveBotSettings, getRunningEvents } = require('./bot/settings');
 const { sendGuestInvitation } = require('./bot/guests');
 const { buildAnnouncementIntro } = require('./bot/layout');
 const { ensureAnnouncementThread } = require('./bot/threads');
+const { sendApprovalRequest, closeApprovalRequest } = require('./bot/approvals');
+const { sendCheckinInvitations } = require('./bot/checkin');
+const { mirrorCommentToThread, deleteMirroredMessage } = require('./bot/threadSync');
+const { sendWaitlistOffer } = require('./bot/waitlistOffers');
 
 // Ready, error and interaction listeners, attached once when the bot is loaded
 wireClient();
@@ -77,7 +83,17 @@ module.exports = {
     sendGuestInvitation,
     canRegisterViaDiscord,
     buildAnnouncementIntro,
-    ensureAnnouncementThread
+    ensureAnnouncementThread,
+    sendApprovalRequest,
+    closeApprovalRequest,
+    sendCheckinInvitations,
+    mirrorCommentToThread,
+    deleteMirroredMessage,
+    updateScheduledEvent,
+    removeScheduledEvent,
+    setScheduledEventStatus,
+    removeRoleFromMembers,
+    sendWaitlistOffer
 };
 
 // Dev mock mode: every call that would reach Discord goes to the simulated

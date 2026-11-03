@@ -67,6 +67,16 @@ sources: [scripts/wiki-graph.js, docs/wiki/graph.json, CLAUDE.md]
 | `routes/polls.js` | routes-polls, date-polls |
 | `middleware/*.js` | middleware, maintenance-mode, auth-session |
 | `utils/registrationService.js` | registration-flow, role-slots, utils |
+| `utils/registrationStatus.js` | registration-flow, routes-admin, utils |
+| `utils/approvalRequests.js` | discord-integration, utils |
+| `utils/checkin.js` | event-lifecycle, discord-integration, routes-events, utils |
+| `utils/eventCleanup.js` | event-lifecycle, discord-integration, reminders-presence, utils |
+| `utils/waitlistOffers.js` | registration-flow, discord-integration, reminders-presence, routes-events, utils |
+| `utils/tentativeRegistration.js` | registration-flow, routes-events, utils |
+| `bot/tentative.js` | bot, discord-integration, registration-flow |
+| `utils/adminActions.js` | routes-admin, event-lifecycle, date-polls, discord-integration, utils |
+| `utils/localDateTime.js` | discord-integration, utils |
+| `utils/threadSync.js` | discord-integration, routes-events, utils |
 | `utils/slotService.js`, `utils/capacity.js`, `utils/eventLock.js`, `utils/announcementRefresh.js` | role-slots, utils |
 | `utils/pollService.js`, `utils/pollStore.js` | date-polls, utils |
 | `utils/formFields.js` | form-fields, utils |

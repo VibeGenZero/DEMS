@@ -140,3 +140,37 @@ test('the thread switch says what it does', () => {
     assert.match(html, /<i class="bi bi-chat-dots me-1"><\/i>Diskussions-Thread zu Ankündigungen/);
     assert.ok(html.includes('Öffnet beim Ankündigen eines Events einen Thread für Fragen und Absprachen.'));
 });
+
+// ── Approval channel (B-06) ─────────────────────────────────────────────
+
+const APPROVAL_CHANNELS = [
+    { id: 'c-text', name: 'freigaben', type: 'text' },
+    { id: 'c-voice', name: 'Lobby', type: 'voice' }
+];
+
+test('the approval channel list offers "Keiner" and the text channels', async () => {
+    const { app } = await loadFrontendApp({});
+    const html = app.approvalChannelOptions(APPROVAL_CHANNELS, '');
+    assert.ok(html.startsWith('<option value="">Keiner – Freigaben nur auf der Website</option>'));
+    assert.ok(html.includes('<option value="c-text">#freigaben</option>'));
+    assert.ok(!html.includes('Lobby'));
+    assert.ok(app.approvalChannelOptions([], 'c-old').includes('Gespeicherter Kanal (c-old)'));
+});
+
+test('the bot center loads and saves the approval channel', async () => {
+    const settings = { approvalChannel: 'c-text', announceChannel: '' };
+    const frontend = await loadFrontendApp({
+        '/api/admin/bot/settings': settings,
+        '/api/admin/channels': APPROVAL_CHANNELS
+    });
+    frontend.state.csrfToken = 'test-token';
+    await frontend.app.loadBotSettings();
+    const select = frontend.element('bot-approval-channel');
+    assert.ok(select.innerHTML.includes('#freigaben'));
+    assert.equal(select.value, 'c-text');
+
+    select.value = '';
+    await frontend.app.saveBotSettingsForm();
+    const put = frontend.requests.find(request => request.method === 'PUT');
+    assert.equal(JSON.parse(put.body).approvalChannel, '');
+});

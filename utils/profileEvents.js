@@ -10,14 +10,14 @@ const { getSlots, findSlot } = require('./slotService');
 // Event statuses that end the waiting, whatever the date says
 const CLOSED_STATUSES = ['cancelled', 'archived'];
 // Registrations without a slot that still name the one they hope for
-const WISH_STATUSES = ['pending', 'waitlisted'];
+const WISH_STATUSES = ['pending', 'waitlisted', 'tentative'];
 
 /**
  * Slot shown next to a registration.
  *
  * @param {Object} registration -> Registration data.
  * @param {Object} event -> Event data.
- * @returns {{ name: string, emoji: string, wish: boolean }|null} -> The slot taken; for a pending or waitlisted registration without one its main role with `wish: true`; null without slots or when the slot no longer exists.
+ * @returns {{ name: string, emoji: string, wish: boolean }|null} -> The slot taken; for a pending, waitlisted or tentative registration without one its main role with `wish: true`; null without slots or when the slot no longer exists.
  */
 function profileSlot(registration, event) {
     const slots = getSlots(event);
@@ -45,6 +45,8 @@ function toProfileEntry(registration, event, waitlistPosition = null) {
         createdAt: registration.createdAt || '',
         slot: event ? profileSlot(registration, event) : null,
         waitlistPosition,
+        // Deadline of a waitlist offer (B-15), '' otherwise
+        offerExpiresAt: registration.status === 'offered' ? (registration.offer?.expiresAt || '') : '',
         event: event ? {
             id: registration.eventId,
             title: event.title || '',

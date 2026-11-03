@@ -43,6 +43,7 @@ see_also: [request-lifecycle, add-api-endpoint]
 | GET | `/api/events/:id` | U (draft/archived → 404 unless A; same for every `/:id` route) |
 | POST / DELETE | `/api/events/:id/register` | U (POST also maintenance gate) |
 | PUT | `/api/events/:id/register/slot` | U (+ maintenance gate) |
+| POST | `/api/events/:id/register/confirm` | U (+ maintenance gate) |
 | GET | `/api/events/:id/my-registration` | U |
 | GET | `/api/events/:id/participants` | U |
 | POST | `/api/events/:id/checkin` | U |

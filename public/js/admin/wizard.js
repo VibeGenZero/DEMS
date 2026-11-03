@@ -16,6 +16,7 @@ import { cancelWizardPreview, renderWizardPreview } from './wizard-preview.js';
 import { updateBannerPreview } from './wizard-banner.js';
 import { renderTemplateChooser, startTemplateChoice } from './wizard-templates.js';
 import { loadWizardBotSettings } from './wizard-bot.js';
+import { renderAnnounceChannelSelect } from './wizard-announce.js';
 import { navigateTo } from '../core/router.js';
 import { registerActions } from '../core/actions.js';
 import { applyStyleData, escapeHtml, hexColor, showElement, showToast, toggleElement } from '../core/ui.js';
@@ -184,11 +185,13 @@ export async function showCreateEventModal() {
     document.getElementById('event-status').value = 'active';
     document.getElementById('event-reminder').value = '';
     document.getElementById('event-assign-role').value = '';
-    document.getElementById('event-auto-create-channels').checked = false;
+    ['event-auto-create-channels', 'event-allow-tentative'].forEach(id => { document.getElementById(id).checked = false; });
     document.getElementById('channel-config-options').style.display = 'none';
     document.getElementById('event-channel-type').value = 'voice';
     document.getElementById('event-voice-name').value = '';
     document.getElementById('event-text-name').value = '';
+    // Default channel; loadWizardBotSettings fills the options (B-11)
+    document.getElementById('event-announce-channel').value = '';
     document.getElementById('event-allow-guests').checked = true;
     renderSlotEditor([]);
     document.getElementById('form-fields-builder').innerHTML = '';
@@ -288,8 +291,10 @@ export async function fillWizard(fields) {
     document.getElementById('event-channel-type').value = cConfig.type || 'voice';
     document.getElementById('event-voice-name').value = cConfig.voiceName || '';
     document.getElementById('event-text-name').value = cConfig.textName || '';
+    await renderAnnounceChannelSelect(event.announceChannelId || '');
 
     document.getElementById('event-allow-guests').checked = event.allowGuests !== false;
+    document.getElementById('event-allow-tentative').checked = event.allowTentative === true;
     renderSlotEditor(event.slots || []);
 
     await loadRoles();
@@ -403,7 +408,10 @@ export function collectEventDraft() {
             voiceName: document.getElementById('event-voice-name').value.trim(),
             textName: document.getElementById('event-text-name').value.trim()
         },
+        // Own announcement channel, '' = default (B-11)
+        announceChannelId: document.getElementById('event-announce-channel')?.value || '',
         allowGuests: document.getElementById('event-allow-guests').checked,
+        allowTentative: document.getElementById('event-allow-tentative').checked,
         slots: getSlotsFromEditor(),
         fromPoll: state.pendingPollDecision || undefined,
         customBotMessages: {

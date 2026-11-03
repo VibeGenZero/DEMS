@@ -14,13 +14,14 @@ see_also: [data-model, conventions]
 |---|---|---|
 | Event, Veranstaltung | `events` document | [data-model](../concepts/data-model.md) |
 | Anmeldung / Registrierung | registration (`registrations`) | [registration-flow](../concepts/registration-flow.md) |
-| Abmeldung | unregister (`DELETE /api/events/:id/register`, `/unregister`) | routes/events.js, bot/commands.js |
+| Abmeldung | unregister (`DELETE /api/events/:id/register`, `/unregister` = `/abmelden`) | routes/events.js, bot/commands.js |
 | Anmeldeschluss, „Anmeldung bis“, „Anmeldung geschlossen“ | `registrationDeadline`, `isRegistrationClosed`, code `registration_closed` | [registration-flow](../concepts/registration-flow.md) |
 | Abmeldeschluss, „Abmeldung bis“ | `unregisterDeadline`, `isUnregisterClosed`, code `unregister_closed` | [registration-flow](../concepts/registration-flow.md) |
 | Anfrage (wartet auf Bestätigung) | status `pending` | registration |
 | Angenommen / bestätigt | status `accepted` | registration |
 | Abgelehnt | status `rejected` | registration |
 | Warteliste | status `waitlisted`, `promoteFromWaitlist` | utils/eventUtils.js |
+| Vielleicht / Ersatzbank, fest zusagen | status `tentative` (no place), `event.allowTentative`, `confirmTentativeRegistration` (B-17) | utils/tentativeRegistration.js |
 | Teilnehmer / Plätze | participants, `maxParticipants` (0 = unbegrenzt) | event |
 | Gast / Gäste, Einladung | `guests`, `pendingGuests`, guest invitation | registration |
 | Einladungen erlauben | `acceptInvitations` | users |

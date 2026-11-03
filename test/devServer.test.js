@@ -237,7 +237,7 @@ test('a profile entry carries only what the page shows', async () => {
     const entries = [...profile.upcoming, ...profile.history];
     assert.equal(entries.length, profile.stats.total);
     for (const entry of entries) {
-        assert.deepEqual(Object.keys(entry).sort(), ['checkedIn', 'createdAt', 'event', 'id', 'slot', 'status', 'waitlistPosition']);
+        assert.deepEqual(Object.keys(entry).sort(), ['checkedIn', 'createdAt', 'event', 'id', 'offerExpiresAt', 'slot', 'status', 'waitlistPosition']);
         assert.deepEqual(Object.keys(entry.event).sort(), ['category', 'checkinEnabled', 'endDate', 'id', 'location', 'startDate', 'status', 'title']);
     }
     assert.equal(profile.upcoming.find(entry => entry.event.id === EVENT_ID.OPEN).event.location, 'Lobby');
@@ -294,6 +294,25 @@ test('the member persona can check in to the running event', async () => {
     const right = await member.send('POST', `/api/events/${EVENT_ID.RUNNING}/checkin`, { code: CHECKIN_CODE });
     assert.equal(right.status, 200);
     assert.equal((await right.json()).success, true);
+});
+
+test('the code check-in keeps its answers (B-07 shares its rules with Discord)', async () => {
+    const newbie = await loginAs('newbie');
+    const wrong = await newbie.send('POST', `/api/events/${EVENT_ID.RUNNING}/checkin`, { code: '000000' });
+    assert.deepEqual([wrong.status, (await wrong.json()).error], [400, 'Ungültiger Check-in Code.']);
+
+    const unregistered = await newbie.send('POST', `/api/events/${EVENT_ID.RUNNING}/checkin`, { code: CHECKIN_CODE });
+    assert.deepEqual([unregistered.status, (await unregistered.json()).error], [400, 'Keine akzeptierte Anmeldung gefunden.']);
+
+    const noCheckin = await newbie.send('POST', `/api/events/${EVENT_ID.FULL}/checkin`, { code: CHECKIN_CODE });
+    assert.equal(noCheckin.status, 400);
+
+    // Lena is checked in by the seed data: a repeat says so and keeps the message
+    const raider = await loginAs('raider');
+    const again = await raider.send('POST', `/api/events/${EVENT_ID.RUNNING}/checkin`, { code: CHECKIN_CODE });
+    const body = await again.json();
+    assert.equal(again.status, 200);
+    assert.deepEqual([body.success, body.alreadyCheckedIn, body.checkinMessage], [true, true, 'Schön, dass du da bist! Viel Spaß beim Marathon.']);
 });
 
 test('no event answer outside the admin area contains a check-in code', async () => {
@@ -361,10 +380,10 @@ test('list and event page tell the places of an event with the same sentence', a
     const { data } = await (await member.request('/api/events?upcoming=1&limit=100')).json();
     const expected = {
         // Jonas brought a guest, Aylin's invitation is still open: both reserve a place
-        [EVENT_ID.OPEN]: { taken: 6, capacity: 20, guests: 2, pending: 0, waitlist: 0, text: '6 von 20 Plätzen belegt (inkl. 2 Gäste)', waitlistText: '' },
-        [EVENT_ID.FORM]: { taken: 3, capacity: 16, guests: 0, pending: 2, waitlist: 0, text: '3 von 16 Plätzen belegt (2 Anfragen offen)', waitlistText: '' },
-        [EVENT_ID.FULL]: { taken: 5, capacity: 5, guests: 0, pending: 0, waitlist: 3, text: '5 von 5 Plätzen belegt', waitlistText: '3 auf der Warteliste' },
-        [EVENT_ID.BIG_FORM]: { taken: 2, capacity: 0, guests: 1, pending: 1, waitlist: 0, text: '2 Plätze belegt (inkl. 1 Gast, 1 Anfrage offen)', waitlistText: '' }
+        [EVENT_ID.OPEN]: { taken: 6, capacity: 20, guests: 2, pending: 0, waitlist: 0, bench: 0, text: '6 von 20 Plätzen belegt (inkl. 2 Gäste)', waitlistText: '', benchText: '' },
+        [EVENT_ID.FORM]: { taken: 3, capacity: 16, guests: 0, pending: 2, waitlist: 0, bench: 0, text: '3 von 16 Plätzen belegt (2 Anfragen offen)', waitlistText: '', benchText: '' },
+        [EVENT_ID.FULL]: { taken: 5, capacity: 5, guests: 0, pending: 0, waitlist: 3, bench: 0, text: '5 von 5 Plätzen belegt', waitlistText: '3 auf der Warteliste', benchText: '' },
+        [EVENT_ID.BIG_FORM]: { taken: 2, capacity: 0, guests: 1, pending: 1, waitlist: 0, bench: 0, text: '2 Plätze belegt (inkl. 1 Gast, 1 Anfrage offen)', waitlistText: '', benchText: '' }
     };
     for (const [id, places] of Object.entries(expected)) {
         const listed = data.find(event => event.id === id);
@@ -557,6 +576,13 @@ test('the wizard preview builds the Discord announcement of an unsaved event and
     assert.equal(preview.places.text, '0 von 5 Plätzen belegt');
     assert.deepEqual(preview.bot, { name: 'DEMS Bot (Mock)', avatarUrl: 'https://cdn.discordapp.com/embed/avatars/0.png' });
     assert.equal(await countEvents(), before);
+});
+
+test('the preview shows „Vielleicht“ when the wizard allows it (B-17)', async () => {
+    const admin = await loginAs('admin');
+    const preview = await (await admin.send('POST', '/api/admin/events/preview', { title: 'Bank', status: 'active', allowTentative: true })).json();
+    const row = previewContainer(preview).components.find(part => part.type === 1);
+    assert.deepEqual(row.components.map(button => button.label), ['Anmelden', 'Vielleicht', 'Zum Event']);
 });
 
 test('a half-done draft can be previewed; members and requests without a token cannot', async () => {
@@ -841,7 +867,8 @@ test('a full main role falls back to the alternative, then to the waitlist', asy
 
     assert.equal((await member.send('DELETE', `/api/events/${event.id}/register`)).status, 200);
     const promoted = await (await newbie.request(`/api/events/${event.id}/my-registration`)).json();
-    assert.deepEqual([promoted.status, promoted.slotId], ['accepted', heal.id]);
+    // The freed place is offered and holds its slot until confirmed (B-15)
+    assert.deepEqual([promoted.status, promoted.slotId], ['offered', heal.id]);
 });
 
 test('registering for a slot event needs a valid slot', async () => {
@@ -1209,7 +1236,8 @@ test('deleting an account lets the waitlist move up', async () => {
 
     assert.equal((await newbie.send('DELETE', '/api/user/account')).status, 200);
     const promoted = await (await member.request(`/api/events/${event.id}/my-registration`)).json();
-    assert.deepEqual([promoted.status, promoted.slotId], ['accepted', slotId]);
+    // Offered for confirmation (B-15)
+    assert.deepEqual([promoted.status, promoted.slotId], ['offered', slotId]);
 });
 
 // ── Registration and unregister deadlines (W-03) ────────────────────────
@@ -1786,6 +1814,8 @@ test('waitlist DMs off: no DM for the waitlist, but the move-up DM still comes (
     const admin = await loginAs('admin');
     const member = await loginAs('member');
     await saveSettings(member, { notifications: { waitlist: false } });
+    // The instant move-up of this test needs the waitlist offers off (B-15)
+    const botBefore = await changeBotSettings(admin, { waitlistConfirmation: false });
     try {
         const event = await createEventAs(admin, { title: 'Ein Platz', maxParticipants: 1 });
         const taken = await (await addMember(admin, event.id, { userId: MEMBER_ID.DENNIS })).json();
@@ -1801,6 +1831,7 @@ test('waitlist DMs off: no DM for the waitlist, but the move-up DM still comes (
         assert.equal(dmCount('Tom'), before + 1);
         assert.match(server.output().split(`DM an Tom (${MEMBER_PERSONA_ID})`).at(-1), /Ein Platz wurde frei/);
     } finally {
+        await admin.send('PUT', '/api/admin/bot/settings', botBefore);
         await saveSettings(member, { notifications: ALL_DMS });
     }
 });
@@ -2257,6 +2288,74 @@ test('an admin accepts three pending registrations in one request', async () => 
     const entries = logs.filter(item => item.action === 'BULK_UPDATE_REGISTRATIONS' && item.targetId === eventId);
     assert.equal(entries.length, 1);
     assert.match(entries[0].details, /3 angenommen/);
+});
+
+test('an admin decides the bench one by one; leaving it counts as registered now (B-17)', async () => {
+    const admin = await loginAs('admin');
+    const { eventId, ids } = await eventWithRegistrations(admin, { maxParticipants: 1, allowTentative: true }, [
+        { key: 'held', status: 'accepted', member: KIRA },
+        { key: 'wait', status: 'waitlisted', member: JONAS },
+        { key: 'up', status: 'tentative', member: AYLIN },
+        { key: 'back', status: 'tentative', member: BEN },
+        { key: 'out', status: 'tentative', member: CHIARA }
+    ]);
+    const before = await registrationOf(ids.up);
+    const outputBefore = server.output().length;
+
+    const accepted = await admin.send('PUT', `/api/admin/registrations/${ids.up}/status`, { status: 'accepted' });
+    assert.equal(accepted.status, 200);
+    const up = await registrationOf(ids.up);
+    assert.equal(up.status, 'accepted');
+    assert.ok(up.createdAt > before.createdAt);
+    assert.match(server.output().slice(outputBefore), /DM an Aylin/);
+
+    assert.equal((await admin.send('PUT', `/api/admin/registrations/${ids.back}/status`, { status: 'waitlisted' })).status, 200);
+    const waiting = await (await admin.request(`/api/admin/events/${eventId}/registrations`)).json();
+    const positionOf = (id) => waiting.data.find(reg => reg.id === id).waitlistPosition;
+    // Behind Jonas, although Ben answered „Vielleicht“ earlier
+    assert.deepEqual(positionOf(ids.wait), { position: 1, total: 2 });
+    assert.deepEqual(positionOf(ids.back), { position: 2, total: 2 });
+
+    assert.equal((await admin.send('PUT', `/api/admin/registrations/${ids.out}/status`, { status: 'rejected' })).status, 200);
+    assert.equal((await registrationOf(ids.out)).status, 'rejected');
+
+    const { data: logs } = await (await admin.request('/api/admin/audit-log?limit=100')).json();
+    assert.ok(logs.some(item => item.action === 'UPDATE_REGISTRATION_STATUS' && item.targetId === ids.up));
+});
+
+test('a bulk action takes the bench along and counts it as registered now (B-17)', async () => {
+    const admin = await loginAs('admin');
+    const { eventId, ids } = await eventWithRegistrations(admin, { maxParticipants: 1, allowTentative: true }, [
+        { key: 'first', status: 'tentative', member: DENNIS },
+        { key: 'second', status: 'tentative', member: ELIF }
+    ]);
+    const before = await registrationOf(ids.second);
+    const body = await (await bulk(admin, eventId, { action: 'accept', ids: [ids.first, ids.second] })).json();
+    assert.deepEqual([body.accepted, body.waitlisted, body.full, body.skipped], [1, 1, 1, 0]);
+    assert.equal((await registrationOf(ids.first)).status, 'accepted');
+    const second = await registrationOf(ids.second);
+    assert.equal(second.status, 'waitlisted');
+    assert.ok(second.createdAt > before.createdAt);
+});
+
+test('admin, bot center and profile stats count the bench (B-17)', async () => {
+    const admin = await loginAs('admin');
+    const statsBefore = (await (await admin.request('/api/admin/stats')).json()).registrations;
+    const raider = personaById('raider');
+    const { eventId } = await eventWithRegistrations(admin, { allowTentative: true }, [
+        { key: 'one', status: 'tentative', member: FELIX },
+        { key: 'own', status: 'tentative', member: { userId: raider.userId, displayName: raider.displayName } }
+    ]);
+    const stats = (await (await admin.request('/api/admin/stats')).json()).registrations;
+    assert.equal(stats.tentative, (statsBefore.tentative || 0) + 2);
+    assert.equal(stats.pending, statsBefore.pending);
+
+    const running = await (await admin.request('/api/admin/bot/running-events')).json();
+    assert.equal(running.find(event => event.id === eventId).registrationStats.tentative, 2);
+
+    const member = await loginAs('raider');
+    const profile = await (await member.request('/api/user/profile')).json();
+    assert.ok(profile.stats.tentative >= 1);
 });
 
 test('a bulk accept stops at the participant limit and reports the rest', async () => {
@@ -2906,7 +3005,8 @@ test('DM notifications off: an admin accepts without a DM, the event role is sti
 test('DM notifications off: moving up from the waitlist sends no DM', async () => {
     const admin = await loginAs('admin');
     const member = await loginAs('member');
-    await withBotSettings(admin, { dmNotifications: false }, async () => {
+    // Instant move-up: with offers (B-15) the offer DM is sent anyway, see the offer tests
+    await withBotSettings(admin, { dmNotifications: false, waitlistConfirmation: false }, async () => {
         const event = await createEventAs(admin, { title: 'Stiller Platz', maxParticipants: 1 });
         const taken = await (await addMember(admin, event.id, { userId: MEMBER_ID.DENNIS })).json();
         const before = dmCount('Tom');
@@ -3051,6 +3151,123 @@ test('an announcement channel that is not a text channel of the server is refuse
     assert.equal(after.welcomeMessage, before.welcomeMessage, 'nothing saved');
 });
 
+// ── Approval channel (B-06) ─────────────────────────────────────────────
+
+test('the bot center stores the approval channel, empty by default', async () => {
+    const admin = await loginAs('admin');
+    const current = await (await admin.request('/api/admin/bot/settings')).json();
+    assert.equal(current.approvalChannel, '');
+    await withBotSettings(admin, { approvalChannel: CHANNEL_ID.EVENTS }, async () => {
+        const saved = await (await admin.request('/api/admin/bot/settings')).json();
+        assert.equal(saved.approvalChannel, CHANNEL_ID.EVENTS);
+        // Saving again with the same channel does not need the channel list
+        const again = await admin.send('PUT', '/api/admin/bot/settings', { ...saved, welcomeMessage: saved.welcomeMessage });
+        assert.equal(again.status, 200, await again.clone().text());
+    });
+    assert.equal((await (await admin.request('/api/admin/bot/settings')).json()).approvalChannel, '');
+});
+
+test('an approval channel that is not a text channel of the server is refused', async () => {
+    const admin = await loginAs('admin');
+    const before = await (await admin.request('/api/admin/bot/settings')).json();
+    for (const approvalChannel of ['999999999999999999', CHANNEL_ID.LOBBY]) {
+        const res = await admin.send('PUT', '/api/admin/bot/settings', { ...before, approvalChannel, welcomeMessage: 'geändert' });
+        assert.equal(res.status, 400, approvalChannel);
+        assert.deepEqual(await res.json(), { error: 'Freigabe-Kanal nicht gefunden.' });
+    }
+    const after = await (await admin.request('/api/admin/bot/settings')).json();
+    assert.equal(after.welcomeMessage, before.welcomeMessage, 'nothing saved');
+});
+
+/** Manual event with requests of `personas`, posted to the approval channel; returns event and registration ids. */
+async function createRequests(admin, title, personas, fields = {}) {
+    const event = await createEventAs(admin, { title, approvalMode: 'manual', ...fields });
+    const ids = [];
+    for (const personaId of personas) {
+        const client = await loginAs(personaId);
+        const res = await client.send('POST', `/api/events/${event.id}/register`, {});
+        const body = await res.json();
+        assert.equal(body.status, 'pending', JSON.stringify(body));
+        ids.push(body.id);
+        await server.waitForOutput(`Freigabe-Anfrage in #events für`);
+    }
+    return { event, ids };
+}
+
+const closedLine = (title, line) => `geschlossen ("${title}"): ${line}`;
+
+test('a request is posted and closed when an admin decides on the website', async () => {
+    const admin = await loginAs('admin');
+    await withBotSettings(admin, { approvalChannel: CHANNEL_ID.EVENTS }, async () => {
+        const { ids } = await createRequests(admin, 'Freigabe-Web', ['member']);
+        const res = await admin.send('PUT', `/api/admin/registrations/${ids[0]}/status`, { status: 'accepted' });
+        assert.equal(res.status, 200, await res.clone().text());
+        await server.waitForOutput(closedLine('Freigabe-Web', '✅ Angenommen von Mori (Admin)'));
+    });
+});
+
+test('a bulk action closes every request it decides', async () => {
+    const admin = await loginAs('admin');
+    await withBotSettings(admin, { approvalChannel: CHANNEL_ID.EVENTS }, async () => {
+        const { event, ids } = await createRequests(admin, 'Freigabe-Sammel', ['member', 'raider']);
+        const before = server.output().split(closedLine('Freigabe-Sammel', '❌ Abgelehnt von Mori (Admin)')).length;
+        const res = await admin.send('POST', `/api/admin/events/${event.id}/registrations/bulk`, { action: 'reject', ids });
+        assert.equal(res.status, 200, await res.clone().text());
+        await server.waitForOutput(closedLine('Freigabe-Sammel', '❌ Abgelehnt von Mori (Admin)'));
+        const deadline = Date.now() + 3000;
+        while (server.output().split(closedLine('Freigabe-Sammel', '❌ Abgelehnt von Mori (Admin)')).length - before < 2 && Date.now() < deadline) {
+            await new Promise(resolve => setTimeout(resolve, 20));
+        }
+        assert.equal(server.output().split(closedLine('Freigabe-Sammel', '❌ Abgelehnt von Mori (Admin)')).length - before, 2);
+    });
+});
+
+test('a member who withdraws a request closes its message', async () => {
+    const admin = await loginAs('admin');
+    await withBotSettings(admin, { approvalChannel: CHANNEL_ID.EVENTS }, async () => {
+        const { event } = await createRequests(admin, 'Freigabe-Rückzug', ['member']);
+        const member = await loginAs('member');
+        assert.equal((await member.send('DELETE', `/api/events/${event.id}/register`)).status, 200);
+        await server.waitForOutput(closedLine('Freigabe-Rückzug', '↩️ Vom Mitglied zurückgezogen'));
+    });
+});
+
+test('cancelling or deleting events closes their open requests', async () => {
+    const admin = await loginAs('admin');
+    await withBotSettings(admin, { approvalChannel: CHANNEL_ID.EVENTS }, async () => {
+        const cancelled = await createRequests(admin, 'Freigabe-Absage', ['member']);
+        assert.equal((await admin.send('PUT', `/api/admin/events/${cancelled.event.id}/cancel`)).status, 200);
+        await server.waitForOutput(closedLine('Freigabe-Absage', '🚫 Event abgesagt'));
+
+        const deleted = await createRequests(admin, 'Freigabe-Löschen', ['member']);
+        assert.equal((await admin.send('DELETE', `/api/admin/events/${deleted.event.id}`)).status, 200);
+        await server.waitForOutput(closedLine('Freigabe-Löschen', '🗑️ Event gelöscht'));
+
+        const res = await admin.send('POST', '/api/admin/events', {
+            title: 'Freigabe-Serie', status: 'active', accessMode: 'open', approvalMode: 'manual',
+            recurring: true, recurringInterval: 'weekly', startDate: futureDate(5), recurringUntil: futureDate(13).slice(0, 10)
+        });
+        const { events } = await res.json();
+        const member = await loginAs('member');
+        assert.equal((await (await member.send('POST', `/api/events/${events[0].id}/register`, {})).json()).status, 'pending');
+        await server.waitForOutput('Freigabe-Anfrage in #events für');
+        assert.equal((await admin.send('DELETE', `/api/admin/events/series/${events[0].seriesId}`)).status, 200);
+        await server.waitForOutput(closedLine('Freigabe-Serie', '🗑️ Event gelöscht'));
+    });
+});
+
+test('without an approval channel nothing is posted or closed', async () => {
+    const admin = await loginAs('admin');
+    const event = await createEventAs(admin, { title: 'Ohne-Freigabekanal', approvalMode: 'manual' });
+    const member = await loginAs('member');
+    const body = await (await member.send('POST', `/api/events/${event.id}/register`, {})).json();
+    assert.equal(body.status, 'pending');
+    assert.equal((await admin.send('PUT', `/api/admin/registrations/${body.id}/status`, { status: 'accepted' })).status, 200);
+    await new Promise(resolve => setTimeout(resolve, 200));
+    // Neither a posted request nor a closing names the event
+    assert.ok(!server.output().includes('("Ohne-Freigabekanal")'));
+});
+
 // ── V2 announcements and discussion threads (B-05, B-14) ───────────────
 
 const { GUILD } = require('../dev/mockGuild');
@@ -3134,4 +3351,611 @@ test('posting a poll stores its ping line and opens no thread', async () => {
     assert.equal(poll.announcements.at(-1).intro, 'Abstimmen!');
     assert.ok(!poll.discordThread);
     assert.doesNotMatch(server.output(), /Diskussions-Thread "[^"]*Termin/);
+});
+
+// ── Check-in per Discord (B-07) ─────────────────────────────────────────
+
+test('generating the code during an event invites the open participants at once', async () => {
+    const { db, doc, getDoc, setDoc } = serverStore();
+    const invitedAt = async (id) => (await getDoc(doc(db, 'registrations', id))).data().checkinInvitedAt;
+    await setDoc(doc(db, 'registrations', 'b07-late'), {
+        eventId: EVENT_ID.RUNNING, userId: '200000000000000099', userName: 'Spät', status: 'accepted', createdAt: new Date().toISOString()
+    });
+    const admin = await loginAs('admin');
+    try {
+        assert.equal((await admin.send('POST', `/api/admin/events/${EVENT_ID.RUNNING}/generate-checkin`)).status, 200);
+        const start = Date.now();
+        while (!(await invitedAt('b07-late')) && Date.now() - start < 3000) await new Promise(resolve => setTimeout(resolve, 20));
+        const first = await invitedAt('b07-late');
+        assert.ok(first, 'invited right away');
+        assert.equal(await invitedAt('dev-reg-running-lena'), undefined, 'checked in -> no invitation');
+
+        // A new code does not invite again
+        assert.equal((await admin.send('POST', `/api/admin/events/${EVENT_ID.RUNNING}/generate-checkin`)).status, 200);
+        await new Promise(resolve => setTimeout(resolve, 200));
+        assert.equal(await invitedAt('b07-late'), first);
+
+        // Before the start nothing is sent
+        assert.equal((await admin.send('POST', `/api/admin/events/${EVENT_ID.FULL}/generate-checkin`)).status, 200);
+        await new Promise(resolve => setTimeout(resolve, 200));
+        assert.equal(await invitedAt('dev-reg-full-lena'), undefined);
+    } finally {
+        await patchEvent(EVENT_ID.RUNNING, { checkinCode: CHECKIN_CODE });
+    }
+});
+
+// ── Comments ↔ discussion thread (B-16) ────────────────────────────────
+
+/** Wait until a stored comment has a field, or give up. */
+async function waitForCommentField(commentId, field, timeoutMs = 3000) {
+    const { db, doc, getDoc } = serverStore();
+    const start = Date.now();
+    while (Date.now() - start < timeoutMs) {
+        const snap = await getDoc(doc(db, 'comments', commentId));
+        if (snap.exists() && snap.data()[field]) return snap.data()[field];
+        await new Promise(resolve => setTimeout(resolve, 20));
+    }
+    return undefined;
+}
+
+test('a comment on an event with thread is mirrored, one without thread is not', async () => {
+    const admin = await loginAs('admin');
+    const res = await admin.send('POST', `/api/events/${EVENT_ID.ROLE}/comments`, { text: 'Treffpunkt 19:45 im Voice.' });
+    assert.equal(res.status, 200);
+    const body = await res.json();
+    assert.deepEqual([body.text, body.source, body.replyTo], ['Treffpunkt 19:45 im Voice.', 'web', null]);
+    assert.match(await waitForCommentField(body.id, 'discordMessageId'), /^\d+$/);
+
+    // Earlier tests announce the open event (and open a thread) -> take it away again
+    await patchEvent(EVENT_ID.OPEN, { discordThread: null });
+    const plain = await (await admin.send('POST', `/api/events/${EVENT_ID.OPEN}/comments`, { text: 'Ohne Thread' })).json();
+    assert.equal(await waitForCommentField(plain.id, 'discordMessageId', 300), undefined);
+});
+
+test('deleting a mirrored comment on the website removes its thread copy', async () => {
+    const admin = await loginAs('admin');
+    const created = await (await admin.send('POST', `/api/events/${EVENT_ID.ROLE}/comments`, { text: 'Wird gelöscht' })).json();
+    const messageId = await waitForCommentField(created.id, 'discordMessageId');
+    assert.ok(messageId);
+
+    const res = await admin.send('DELETE', `/api/events/${EVENT_ID.ROLE}/comments/${created.id}`);
+    assert.deepEqual([res.status, await res.json()], [200, { success: true }]);
+    await server.waitForOutput(messageId + ' im Thread');
+});
+
+// ── Discord server events in step (B-09) ───────────────────────────────
+
+/** An event of the admin, synced to Discord by writing its scheduled event id. */
+async function createSyncedEvent(admin, title, fields = {}, { sync = true } = {}) {
+    const res = await admin.send('POST', '/api/admin/events', {
+        title, description: 'Server-Event-Test', status: 'active', accessMode: 'open', approvalMode: 'instant',
+        maxParticipants: 10, startDate: futureDate(5), endDate: futureDate(5, 20), ...fields
+    });
+    const body = await res.json();
+    assert.equal(res.status, 200, JSON.stringify(body));
+    if (sync) await patchEvent(body.id, { discordScheduledEventId: `se-${body.id}`, discordScheduledEventStatus: 'scheduled' });
+    return body.id;
+}
+
+/** Stored event, read straight from the server's database. */
+async function storedEventOf(id) {
+    const { db, doc, getDoc } = serverStore();
+    const snap = await getDoc(doc(db, 'events', id));
+    return snap.exists() ? { id, ...snap.data() } : null;
+}
+
+/** Wait until a stored event field has a value (fire-and-forget writes). */
+async function waitForEventField(id, field, expected, timeoutMs = 3000) {
+    const start = Date.now();
+    let value;
+    do {
+        value = (await storedEventOf(id))?.[field];
+        if (value === expected) return value;
+        await new Promise(resolve => setTimeout(resolve, 20));
+    } while (Date.now() - start < timeoutMs);
+    return value;
+}
+
+test('saving a synced event updates its Discord server event, an unsynced one does not', async () => {
+    const admin = await loginAs('admin');
+    const id = await createSyncedEvent(admin, 'B09 Speichern');
+    assert.equal((await saveDate(admin, await storedEventOf(id), { title: 'B09 Gespeichert' })).status, 200);
+    await server.waitForOutput('Server-Event "B09 Gespeichert" aktualisiert');
+
+    const plain = await createSyncedEvent(admin, 'B09 Ohne Sync', {}, { sync: false });
+    assert.equal((await saveDate(admin, await storedEventOf(plain), { title: 'B09 Ohne Sync 2' })).status, 200);
+    await new Promise(resolve => setTimeout(resolve, 200));
+    assert.doesNotMatch(server.output(), /Server-Event "B09 Ohne Sync 2"/);
+});
+
+test('a series save with the following dates updates every synced date', async () => {
+    const admin = await loginAs('admin');
+    const dates = await createSeries(admin, { title: 'B09 Serie' });
+    for (const date of dates.slice(1, 3)) await patchEvent(date.id, { discordScheduledEventId: `se-${date.id}` });
+    const res = await saveDate(admin, dates[1], { title: 'B09 Serie neu', applyTo: 'following' });
+    assert.equal(res.status, 200);
+    await server.waitForOutput('Server-Event "B09 Serie neu" aktualisiert');
+    const start = Date.now();
+    while ((server.output().match(/Server-Event "B09 Serie neu" aktualisiert/g) || []).length < 2 && Date.now() - start < 3000) {
+        await new Promise(resolve => setTimeout(resolve, 20));
+    }
+    assert.equal((server.output().match(/Server-Event "B09 Serie neu" aktualisiert/g) || []).length, 2);
+});
+
+test('cancelling or drafting a synced event removes its Discord server event', async () => {
+    const admin = await loginAs('admin');
+    const cancelled = await createSyncedEvent(admin, 'B09 Absage');
+    assert.equal((await admin.send('PUT', `/api/admin/events/${cancelled}/cancel`)).status, 200);
+    await server.waitForOutput('Server-Event "B09 Absage" entfernt');
+    assert.equal(await waitForEventField(cancelled, 'discordScheduledEventId', null), null);
+
+    const drafted = await createSyncedEvent(admin, 'B09 Entwurf');
+    assert.equal((await admin.send('PUT', `/api/admin/events/${drafted}/status`, { status: 'draft' })).status, 200);
+    await server.waitForOutput('Server-Event "B09 Entwurf" entfernt');
+    assert.equal(await waitForEventField(drafted, 'discordScheduledEventId', null), null);
+    assert.equal((await storedEventOf(drafted)).discordScheduledEventStatus, null);
+});
+
+test('deleting a synced event or its series removes the Discord server events', async () => {
+    const admin = await loginAs('admin');
+    const single = await createSyncedEvent(admin, 'B09 Loeschen');
+    assert.equal((await admin.send('DELETE', `/api/admin/events/${single}`)).status, 200);
+    await server.waitForOutput('Server-Event "B09 Loeschen" entfernt');
+
+    const dates = await createSeries(admin, { title: 'B09 Serie weg' });
+    for (const date of dates.slice(0, 2)) await patchEvent(date.id, { discordScheduledEventId: `se-${date.id}` });
+    assert.equal((await admin.send('DELETE', `/api/admin/events/series/${dates[0].seriesId}`)).status, 200);
+    await server.waitForOutput('Server-Event "B09 Serie weg" entfernt');
+    assert.equal((server.output().match(/Server-Event "B09 Serie weg" entfernt/g) || []).length, 2);
+});
+
+test('„Starten“ and „Beenden“ set the Discord status at once', async () => {
+    const admin = await loginAs('admin');
+    const id = await createSyncedEvent(admin, 'B09 Status');
+    assert.equal((await admin.send('POST', `/api/admin/events/${id}/start`)).status, 200);
+    await server.waitForOutput('Server-Event "B09 Status" läuft');
+    assert.equal(await waitForEventField(id, 'discordScheduledEventStatus', 'active'), 'active');
+
+    assert.equal((await admin.send('POST', `/api/admin/events/${id}/end`)).status, 200);
+    await server.waitForOutput('Server-Event "B09 Status" beendet');
+    assert.equal(await waitForEventField(id, 'discordScheduledEventStatus', 'completed'), 'completed');
+});
+
+test('syncing stores the Discord server event as scheduled', async () => {
+    const admin = await loginAs('admin');
+    const id = await createSyncedEvent(admin, 'B09 Sync', {}, { sync: false });
+    const res = await admin.send('POST', `/api/admin/events/${id}/sync-discord`);
+    assert.equal(res.status, 200);
+    const stored = await storedEventOf(id);
+    assert.match(stored.discordScheduledEventId, /^\d+$/);
+    assert.equal(stored.discordScheduledEventStatus, 'scheduled');
+});
+
+test('a Discord server event deleted in Discord is forgotten on the next save', async () => {
+    const admin = await loginAs('admin');
+    const id = await createSyncedEvent(admin, 'B09 Weg');
+    // The mock treats ids starting with "gone" as deleted in Discord
+    await patchEvent(id, { discordScheduledEventId: `gone-${id}` });
+    assert.equal((await saveDate(admin, await storedEventOf(id), { title: 'B09 Weg 2' })).status, 200);
+    assert.equal(await waitForEventField(id, 'discordScheduledEventId', null), null);
+    assert.equal((await storedEventOf(id)).discordScheduledEventStatus, null);
+});
+
+test('copies are never linked to the Discord server event of the original', async () => {
+    const admin = await loginAs('admin');
+    const id = await createSyncedEvent(admin, 'B09 Original');
+    const copy = await (await admin.send('POST', `/api/admin/events/${id}/duplicate`)).json();
+    const storedCopy = await storedEventOf(copy.id);
+    assert.equal(storedCopy.discordScheduledEventId, null);
+    assert.equal(storedCopy.discordScheduledEventStatus, null);
+
+    const dates = await createSeries(admin, { title: 'B09 Serie Kopie' });
+    await patchEvent(dates[3].id, { discordScheduledEventId: `se-${dates[3].id}`, discordScheduledEventStatus: 'scheduled' });
+    const res = await saveDate(admin, dates[1], { recurringUntil: localDay(futureDate(38), SERIES_TZ) });
+    assert.equal(res.status, 200);
+    const created = (await seriesDatesOf(dates[0].seriesId)).slice(4);
+    assert.equal(created.length, 2);
+    for (const event of created) {
+        assert.equal(event.discordScheduledEventId, null);
+        assert.equal(event.discordScheduledEventStatus, null);
+    }
+});
+
+// ── Clean-up after the event (B-10) ─────────────────────────────────────
+
+let cleanupCounter = 0;
+/**
+ * An active event with channels, an accepted and a pending member. Each event
+ * gets its own role id (the mock logs unknown roles by id), so the log lines of
+ * the tests differ and no other test event shares the role.
+ */
+async function createCleanupEvent(admin, fields = {}) {
+    const n = ++cleanupCounter;
+    const roleId = `b10-role-${n}`;
+    const { eventId } = await eventWithRegistrations(admin, { title: `B10 Event ${n}`, assignRoleId: roleId, ...fields }, [
+        { key: 'kira', status: 'accepted', member: KIRA },
+        { key: 'jonas', status: 'pending', member: JONAS }
+    ]);
+    await patchEvent(eventId, { discordChannelId: `b10-voice-${n}`, discordTextChannelId: `b10-text-${n}` });
+    return { id: eventId, roleId };
+}
+
+async function cleanupAudit(admin, eventId) {
+    const { data: logs } = await (await admin.request('/api/admin/audit-log?limit=500')).json();
+    return logs.filter(entry => entry.action === 'DISCORD_CLEANUP' && entry.targetId === eventId);
+}
+
+async function assertCleanedUp(admin, { id, roleId }) {
+    await server.waitForOutput(`Rolle ${roleId} von 1 Mitglied entfernt`);
+    assert.equal(await waitForEventField(id, 'discordCleanup', 'done'), 'done');
+    const event = await storedEventOf(id);
+    assert.equal(event.discordChannelId, null);
+    assert.equal(event.discordTextChannelId, null);
+    const [entry] = await cleanupAudit(admin, id);
+    assert.ok(entry, 'DISCORD_CLEANUP entry');
+    assert.match(entry.details, /from 1 member/);
+}
+
+test('ending an event by hand takes the role and deletes the channels', async () => {
+    const admin = await loginAs('admin');
+    const event = await createCleanupEvent(admin);
+    assert.equal((await admin.send('POST', `/api/admin/events/${event.id}/end`)).status, 200);
+    await assertCleanedUp(admin, event);
+});
+
+test('archiving or cancelling through the status, and absagen, clean up', async () => {
+    const admin = await loginAs('admin');
+    const archived = await createCleanupEvent(admin);
+    assert.equal((await admin.send('PUT', `/api/admin/events/${archived.id}/status`, { status: 'archived' })).status, 200);
+    await assertCleanedUp(admin, archived);
+
+    const cancelledByStatus = await createCleanupEvent(admin);
+    assert.equal((await admin.send('PUT', `/api/admin/events/${cancelledByStatus.id}/status`, { status: 'cancelled' })).status, 200);
+    await assertCleanedUp(admin, cancelledByStatus);
+
+    const cancelled = await createCleanupEvent(admin);
+    assert.equal((await admin.send('PUT', `/api/admin/events/${cancelled.id}/cancel`)).status, 200);
+    await assertCleanedUp(admin, cancelled);
+});
+
+test('channels go on archive also without "Auto Channel-Erstellung"', async () => {
+    const admin = await loginAs('admin');
+    const event = await createCleanupEvent(admin, { autoCreateChannels: false });
+    assert.equal((await admin.send('PUT', `/api/admin/events/${event.id}/status`, { status: 'archived' })).status, 200);
+    await assertCleanedUp(admin, event);
+});
+
+test('back to draft keeps the role', async () => {
+    const admin = await loginAs('admin');
+    const event = await createCleanupEvent(admin);
+    assert.equal((await admin.send('PUT', `/api/admin/events/${event.id}/status`, { status: 'draft' })).status, 200);
+    await new Promise(resolve => setTimeout(resolve, 300));
+    assert.equal((await storedEventOf(event.id)).discordCleanup, undefined);
+    assert.deepEqual(await cleanupAudit(admin, event.id), []);
+    assert.doesNotMatch(server.output(), new RegExp(`Rolle ${event.roleId} von`));
+});
+
+test('saving an event as archived cleans it up', async () => {
+    const admin = await loginAs('admin');
+    const event = await createCleanupEvent(admin);
+    const res = await saveDate(admin, await storedEventOf(event.id), { status: 'archived' });
+    assert.equal(res.status, 200, await res.clone().text());
+    await assertCleanedUp(admin, event);
+});
+
+test('reactivating a cleaned-up event hands the role back', async () => {
+    const admin = await loginAs('admin');
+    const event = await createCleanupEvent(admin);
+    assert.equal((await admin.send('PUT', `/api/admin/events/${event.id}/status`, { status: 'archived' })).status, 200);
+    await assertCleanedUp(admin, event);
+
+    assert.equal((await admin.send('PUT', `/api/admin/events/${event.id}/status`, { status: 'active' })).status, 200);
+    await server.waitForOutput(`Rolle ${event.roleId} an Kira (${KIRA.userId}) vergeben`);
+    assert.equal(await waitForEventField(event.id, 'discordCleanup', null), null);
+});
+
+test('deleting an event or a series takes the role before the registrations go', async () => {
+    const admin = await loginAs('admin');
+    const event = await createCleanupEvent(admin);
+    assert.equal((await admin.send('DELETE', `/api/admin/events/${event.id}`)).status, 200);
+    await server.waitForOutput(`Rolle ${event.roleId} von 1 Mitglied entfernt`);
+    assert.equal(await storedEventOf(event.id), null);
+
+    const dates = await createSeries(admin, { title: 'B10 Serie', assignRoleId: 'b10-role-series' });
+    const { db, doc, setDoc } = serverStore();
+    await setDoc(doc(db, 'registrations', `b10-series-${dates[0].id}`), {
+        eventId: dates[0].id, userId: KIRA.userId, userName: KIRA.displayName, status: 'accepted', source: 'web', formAnswers: {}
+    });
+    assert.equal((await admin.send('DELETE', `/api/admin/events/series/${dates[0].seriesId}`)).status, 200);
+    await server.waitForOutput('Rolle b10-role-series von 1 Mitglied entfernt');
+});
+
+test('a copy does not carry the clean-up marker', async () => {
+    const admin = await loginAs('admin');
+    const { id } = await createCleanupEvent(admin);
+    await patchEvent(id, { discordCleanup: 'done' });
+    const copy = await (await admin.send('POST', `/api/admin/events/${id}/duplicate`)).json();
+    assert.equal((await storedEventOf(copy.id)).discordCleanup, null);
+});
+
+// ── Announcement channel per event (B-11) ───────────────────────────────
+
+const OWN_CHANNEL = '199000000000000011';
+
+async function createEventWith(admin, fields) {
+    const res = await admin.send('POST', '/api/admin/events', {
+        title: 'B11 Event', description: 'Kanal', status: 'active', accessMode: 'open', approvalMode: 'instant',
+        maxParticipants: 5, startDate: futureDate(6), endDate: futureDate(6, 20), ...fields
+    });
+    return { res, body: await res.json() };
+}
+
+test('the announcement channel is stored on create and save, empty by default', async () => {
+    const admin = await loginAs('admin');
+    const { res, body } = await createEventWith(admin, { title: 'B11 Eigener Kanal', announceChannelId: OWN_CHANNEL });
+    assert.equal(res.status, 200, JSON.stringify(body));
+    assert.equal((await storedEventOf(body.id)).announceChannelId, OWN_CHANNEL);
+
+    const saved = await saveDate(admin, await storedEventOf(body.id), { announceChannelId: '' });
+    assert.equal(saved.status, 200);
+    assert.equal((await storedEventOf(body.id)).announceChannelId, '');
+
+    const plain = await createEventWith(admin, { title: 'B11 Standard' });
+    assert.equal((await storedEventOf(plain.body.id)).announceChannelId, '');
+});
+
+test('„Vielleicht“ is stored on create and save, off by default (B-17)', async () => {
+    const admin = await loginAs('admin');
+    const { res, body } = await createEventWith(admin, { title: 'B17 Bank', allowTentative: true });
+    assert.equal(res.status, 200, JSON.stringify(body));
+    assert.equal((await storedEventOf(body.id)).allowTentative, true);
+
+    const off = await saveDate(admin, await storedEventOf(body.id), { allowTentative: false });
+    assert.equal(off.status, 200);
+    assert.equal((await storedEventOf(body.id)).allowTentative, false);
+    const on = await saveDate(admin, await storedEventOf(body.id), { allowTentative: true });
+    assert.equal(on.status, 200);
+    assert.equal((await storedEventOf(body.id)).allowTentative, true);
+
+    const plain = await createEventWith(admin, { title: 'B17 Standard' });
+    assert.equal((await storedEventOf(plain.body.id)).allowTentative, false);
+});
+
+test('an invalid announcement channel is refused', async () => {
+    const admin = await loginAs('admin');
+    const { res, body } = await createEventWith(admin, { title: 'B11 Kaputt', announceChannelId: 'abc' });
+    assert.equal(res.status, 400);
+    assert.match(body.error, /Ankündigungskanal ist ungültig\./);
+
+    const ok = await createEventWith(admin, { title: 'B11 Später kaputt' });
+    const put = await saveDate(admin, await storedEventOf(ok.body.id), { announceChannelId: '12' });
+    assert.equal(put.status, 400);
+});
+
+test('„Ankündigen“ posts to the event channel; a duplicate keeps it', async () => {
+    const admin = await loginAs('admin');
+    const { body } = await createEventWith(admin, { title: 'B11 Ankündigen', announceChannelId: OWN_CHANNEL });
+    const res = await admin.send('POST', `/api/admin/events/${body.id}/announce`, { text: '', roleIds: [], pingEveryone: false });
+    assert.equal(res.status, 200);
+    await server.waitForOutput(`Nachricht in ${OWN_CHANNEL}`);
+    assert.equal((await storedEventOf(body.id)).announcements[0].channelId, OWN_CHANNEL);
+
+    const copy = await (await admin.send('POST', `/api/admin/events/${body.id}/duplicate`)).json();
+    assert.equal((await storedEventOf(copy.id)).announceChannelId, OWN_CHANNEL);
+});
+
+test('following dates and new dates of a series take the channel', async () => {
+    const admin = await loginAs('admin');
+    const dates = await createSeries(admin, { title: 'B11 Serie' });
+    const res = await saveDate(admin, dates[1], {
+        announceChannelId: OWN_CHANNEL, applyTo: 'following', recurringUntil: localDay(futureDate(38), SERIES_TZ)
+    });
+    assert.equal(res.status, 200, await res.clone().text());
+    const stored = await seriesDatesOf(dates[0].seriesId);
+    assert.equal(stored[0].announceChannelId, '', 'the earlier date stays');
+    for (const date of stored.slice(1)) assert.equal(date.announceChannelId, OWN_CHANNEL, date.id);
+    assert.ok(stored.length > 4, 'the series was extended');
+});
+
+test('the bot settings answer the effective default announcement channel (B-11)', async () => {
+    const admin = await loginAs('admin');
+    const settings = await (await admin.request('/api/admin/bot/settings')).json();
+    assert.equal(typeof settings.defaultAnnounceChannel, 'string');
+    // Bot center choice, else the .env default of mock mode (the mock guild's announcement channel)
+    const { CHANNEL_ID } = require('../dev/mockGuild');
+    assert.equal(settings.defaultAnnounceChannel, settings.announceChannel || CHANNEL_ID.ANNOUNCEMENTS);
+});
+
+// ── Waitlist offers: bot center settings (B-15) ─────────────────────────
+
+test('the bot center stores the confirmation switch and period and refuses periods outside 1–72', async () => {
+    const admin = await loginAs('admin');
+    const before = await (await admin.request('/api/admin/bot/settings')).json();
+    assert.equal(before.waitlistConfirmation, true);
+    assert.equal(before.waitlistConfirmHours, 12);
+    try {
+        for (const hours of [0, 73, 'viele']) {
+            const res = await admin.send('PUT', '/api/admin/bot/settings', { ...before, waitlistConfirmHours: hours });
+            assert.equal(res.status, 400, String(hours));
+            assert.deepEqual(await res.json(), { error: 'Die Bestätigungsfrist muss zwischen 1 und 72 Stunden liegen.' });
+        }
+        const ok = await admin.send('PUT', '/api/admin/bot/settings', { ...before, waitlistConfirmation: false, waitlistConfirmHours: 24 });
+        assert.equal(ok.status, 200);
+        const after = await (await admin.request('/api/admin/bot/settings')).json();
+        assert.deepEqual([after.waitlistConfirmation, after.waitlistConfirmHours], [false, 24]);
+    } finally {
+        await admin.send('PUT', '/api/admin/bot/settings', before);
+    }
+});
+
+// ── Waitlist offers on the website (B-15) ───────────────────────────────
+
+let offerCounter = 0;
+/**
+ * A full event (Dennis accepted) with Tom (persona member) and optionally Neo
+ * (newbie) on the waitlist; rejecting Dennis offers the place to Tom.
+ */
+async function eventWithOffer(admin, { withNext = false } = {}) {
+    const event = await createEventAs(admin, { title: `B15 Angebot ${++offerCounter}`, maxParticipants: 1 });
+    const taken = await (await addMember(admin, event.id, { userId: MEMBER_ID.DENNIS })).json();
+    const member = await loginAs('member');
+    assert.equal((await (await member.send('POST', `/api/events/${event.id}/register`, {})).json()).status, 'waitlisted');
+    let newbie = null;
+    if (withNext) {
+        newbie = await loginAs('newbie');
+        assert.equal((await (await newbie.send('POST', `/api/events/${event.id}/register`, {})).json()).status, 'waitlisted');
+    }
+    assert.equal((await admin.send('PUT', `/api/admin/registrations/${taken.id}/status`, { status: 'rejected' })).status, 200);
+    const mine = await (await member.request(`/api/events/${event.id}/my-registration`)).json();
+    return { event, member, newbie, mine };
+}
+
+test('a freed place is offered: my-registration shows it, confirming accepts', async () => {
+    const admin = await loginAs('admin');
+    const { event, member, mine } = await eventWithOffer(admin);
+    assert.equal(mine.status, 'offered');
+    assert.ok(new Date(mine.offer.expiresAt) > new Date());
+    await server.waitForOutput(`Platz angeboten: Tom (${MEMBER_PERSONA_ID}) für "${event.title}"`);
+
+    const res = await member.send('POST', `/api/events/${event.id}/offer/confirm`);
+    assert.equal(res.status, 200);
+    assert.deepEqual(await res.json(), { success: true, status: 'accepted' });
+    const after = await (await member.request(`/api/events/${event.id}/my-registration`)).json();
+    assert.equal(after.status, 'accepted');
+    assert.equal(after.offer, null);
+});
+
+test('declining removes the registration and offers the place to the next', async () => {
+    const admin = await loginAs('admin');
+    const { event, member, newbie } = await eventWithOffer(admin, { withNext: true });
+    const res = await member.send('POST', `/api/events/${event.id}/offer/decline`);
+    assert.deepEqual([res.status, await res.json()], [200, { success: true }]);
+    assert.equal((await (await member.request(`/api/events/${event.id}/my-registration`)).json()).registered, false);
+    assert.equal((await (await newbie.request(`/api/events/${event.id}/my-registration`)).json()).status, 'offered');
+});
+
+test('an expired, missing or not offered place is refused, and the routes need the CSRF token', async () => {
+    const admin = await loginAs('admin');
+    const { event, member, mine } = await eventWithOffer(admin);
+
+    const noToken = await member.request(`/api/events/${event.id}/offer/confirm`, { method: 'POST' });
+    assert.equal(noToken.status, 403);
+
+    await serverStore().updateDoc(serverStore().doc(serverStore().db, 'registrations', mine.id), {
+        offer: { offeredAt: new Date().toISOString(), expiresAt: new Date(Date.now() - 60_000).toISOString() }
+    });
+    const late = await member.send('POST', `/api/events/${event.id}/offer/confirm`);
+    assert.deepEqual([late.status, await late.json()], [409, { error: 'Das Angebot ist nicht mehr gültig.' }]);
+
+    const raider = await loginAs('raider');
+    const none = await raider.send('POST', `/api/events/${event.id}/offer/confirm`);
+    assert.deepEqual([none.status, await none.json()], [404, { error: 'Keine Anmeldung gefunden.' }]);
+
+    const plain = await createEventAs(admin, { title: 'B15 Ohne Angebot' });
+    await member.send('POST', `/api/events/${plain.id}/register`, {});
+    const notOffered = await member.send('POST', `/api/events/${plain.id}/offer/decline`);
+    assert.equal(notOffered.status, 409);
+});
+
+test('admins decide offered registrations directly, which ends the offer', async () => {
+    const admin = await loginAs('admin');
+    const single = await eventWithOffer(admin);
+    assert.equal((await admin.send('PUT', `/api/admin/registrations/${single.mine.id}/status`, { status: 'accepted' })).status, 200);
+    const accepted = (await serverStore().getDoc(serverStore().doc(serverStore().db, 'registrations', single.mine.id))).data();
+    assert.deepEqual([accepted.status, accepted.offer], ['accepted', null]);
+
+    const bulk = await eventWithOffer(admin);
+    const res = await admin.send('POST', `/api/admin/events/${bulk.event.id}/registrations/bulk`, { action: 'reject', ids: [bulk.mine.id] });
+    assert.equal(res.status, 200, await res.clone().text());
+    const rejected = (await serverStore().getDoc(serverStore().doc(serverStore().db, 'registrations', bulk.mine.id))).data();
+    assert.deepEqual([rejected.status, rejected.offer], ['rejected', null]);
+});
+
+test('the profile lists an offered registration with its deadline', async () => {
+    const admin = await loginAs('admin');
+    const { event, member } = await eventWithOffer(admin);
+    const profile = await (await member.request('/api/user/profile')).json();
+    const entry = profile.upcoming.find(item => item.event.id === event.id);
+    assert.equal(entry.status, 'offered');
+    assert.ok(entry.offerExpiresAt);
+});
+
+// ── „Vielleicht“ / Ersatzbank on the website (B-17) ─────────────────────
+
+test('members answer „Vielleicht“ only where the event allows it (B-17)', async () => {
+    const admin = await loginAs('admin');
+    const raider = await loginAs('raider');
+    const closed = await createEventWith(admin, { title: 'B17 Ohne Bank' });
+    const refused = await raider.send('POST', `/api/events/${closed.body.id}/register`, { tentative: true });
+    assert.equal(refused.status, 400);
+    assert.deepEqual(await refused.json(), { error: 'Für dieses Event gibt es kein „Vielleicht“.' });
+
+    const open = await createEventWith(admin, { title: 'B17 Mit Bank', allowTentative: true });
+    const res = await raider.send('POST', `/api/events/${open.body.id}/register`, { tentative: true });
+    const body = await res.json();
+    assert.equal(res.status, 200, JSON.stringify(body));
+    assert.equal(body.status, 'tentative');
+    assert.equal(body.message, 'Du stehst auf der Ersatzbank.');
+    assert.equal((await (await raider.request(`/api/events/${open.body.id}/my-registration`)).json()).status, 'tentative');
+});
+
+test('the event shows the bench count, the participants the names only (B-17)', async () => {
+    const admin = await loginAs('admin');
+    const raider = await loginAs('raider');
+    const member = await loginAs('member');
+    const { body: created } = await createEventWith(admin, { title: 'B17 Zählung', allowTentative: true, maxParticipants: 5 });
+    await member.send('POST', `/api/events/${created.id}/register`, {});
+    await raider.send('POST', `/api/events/${created.id}/register`, { tentative: true, formAnswers: { Notiz: 'geheim' } });
+
+    const event = await (await member.request(`/api/events/${created.id}`)).json();
+    assert.equal(event.places.taken, 1);
+    assert.equal(event.places.bench, 1);
+    assert.equal(event.places.benchText, '1 auf der Ersatzbank');
+    assert.equal(event.allowTentative, true);
+    assert.ok(!('bench' in event), 'no names in the event data');
+
+    const participants = await (await member.request(`/api/events/${created.id}/participants`)).json();
+    assert.equal(participants.total, 1);
+    assert.equal(participants.bench.length, 1);
+    assert.deepEqual(Object.keys(participants.bench[0]).sort(), ['avatar', 'displayName']);
+    assert.equal(participants.bench[0].displayName, 'Lena');
+});
+
+test('on slot events the bench names the wanted role (B-17)', async () => {
+    const admin = await loginAs('admin');
+    const raider = await loginAs('raider');
+    const created = await createSlotEvent(admin, 'B17 Raid', [
+        { name: 'Tank', emoji: '🛡️', capacity: 1 },
+        { name: 'Heiler', emoji: '💚', capacity: 1 }
+    ], { allowTentative: true });
+    const heal = created.slots[1].id;
+    const res = await raider.send('POST', `/api/events/${created.id}/register`, { tentative: true, slotId: heal });
+    assert.equal(res.status, 200, await res.clone().text());
+    const participants = await (await raider.request(`/api/events/${created.id}/participants`)).json();
+    assert.deepEqual(participants.bench.map(entry => [entry.displayName, entry.preferredSlotId]), [['Lena', heal]]);
+    assert.ok(participants.slots.every(slot => slot.taken === 0));
+});
+
+test('„Fest zusagen“ turns the answer into a registration and needs login and CSRF (B-17)', async () => {
+    const admin = await loginAs('admin');
+    const raider = await loginAs('raider');
+    const { body: created } = await createEventWith(admin, { title: 'B17 Zusage', allowTentative: true });
+    await raider.send('POST', `/api/events/${created.id}/register`, { tentative: true });
+    const url = `/api/events/${created.id}/register/confirm`;
+
+    const anonymous = await createClient(server.baseUrl).send('POST', url);
+    assert.equal(anonymous.status, 401);
+    const noToken = await raider.request(url, { method: 'POST' });
+    assert.equal(noToken.status, 403);
+
+    const res = await raider.send('POST', url);
+    const body = await res.json();
+    assert.equal(res.status, 200, JSON.stringify(body));
+    assert.equal(body.status, 'accepted');
+    assert.equal(body.message, 'Erfolgreich angemeldet!');
+    assert.equal((await (await raider.request(`/api/events/${created.id}/my-registration`)).json()).status, 'accepted');
+
+    const again = await raider.send('POST', url);
+    assert.equal(again.status, 400);
+    assert.deepEqual(await again.json(), { error: 'Du stehst nicht auf der Ersatzbank.' });
 });

@@ -2,15 +2,20 @@
  * Reminder scheduler of the bot: reminder and start DMs, closing announcements
  * at the registration deadline, every 5 minutes.
  */
+const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { db, collection, doc, getDocs, updateDoc, query, where } = require('../firebaseAdmin');
 const { loadBotSettings } = require('../utils/botSettings');
 const { debugLog } = require('../utils/debugLog');
 const { buildEventUrl } = require('../utils/eventUrl');
 const { normalizeReminderHours, findDueReminders } = require('../utils/reminders');
 const { filterByPreference } = require('../utils/notificationPrefs');
-const { isEventOver, isRegistrationClosed } = require('../utils/eventListing');
+const { isEventOver, isRegistrationClosed, isUnregisterClosed } = require('../utils/eventListing');
+const { isCheckinRunning } = require('../utils/checkin');
 const { sendDM } = require('./messages');
-const { TIMEZONE } = require('./constants');
+const { inviteToCheckin } = require('./checkin');
+const { setScheduledEventStatus } = require('./scheduledEvents');
+const { state } = require('./client');
+const { TIMEZONE, MY_LEAVE_PREFIX } = require('./constants');
 
 /**
  * Reminder scheduler — every 5 min: DM accepted participants when a reminder
@@ -21,20 +26,86 @@ const { TIMEZONE } = require('./constants');
 let reminderInterval = null;
 
 /**
- * DM every accepted participant of an event who wants reminders (W-16).
+ * Discord server event status of a synced event (B-09): running from the start, completed
+ * once the event is over. The status is stored after a successful call, so a failed or
+ * offline call is tried again in the next pass; 'gone' forgets the link.
  *
  * @param {string} eventId -> Event document id.
- * @param {string} message -> DM text.
- * @param {Function} send -> DM function (userId, message).
- * @returns {Promise<number>} -> Number of recipients messaged.
+ * @param {Object} event -> Event data.
+ * @param {Date} now -> Pass time.
+ * @param {Function} scheduledStatus -> (event, target) => 'active' | 'completed' | 'gone' | false.
+ * @returns {Promise<void>}
  */
-async function messageAcceptedParticipants(eventId, message, send) {
+async function syncScheduledEventStatus(eventId, event, now, scheduledStatus) {
+    if (!event.discordScheduledEventId) return;
+    const current = event.discordScheduledEventStatus;
+    let target = null;
+    if (isEventOver(event, now)) target = 'completed';
+    else if (now >= new Date(event.startDate)) target = 'active';
+    if (!target || current === 'completed' || current === target) return;
+
+    const result = await scheduledStatus({ id: eventId, ...event }, target);
+    if (result === 'gone') {
+        await updateDoc(doc(db, 'events', eventId), { discordScheduledEventId: null, discordScheduledEventStatus: null });
+    } else if (result === 'active' || result === 'completed') {
+        await updateDoc(doc(db, 'events', eventId), { discordScheduledEventStatus: result });
+    }
+}
+
+/**
+ * Reminder DM with its actions (B-08): „Zum Event“ and „Ich kann doch nicht“.
+ * The second one is the my_leave button of /my-events, so a click asks first and
+ * unregisters through handleSlotLeaveButton (waitlist moves up). It is left out
+ * once the unregister deadline has passed. The same payload goes to every recipient.
+ *
+ * @param {Object} event -> Event data (`title`, `startDate`, optional `unregisterDeadline`).
+ * @param {string} eventId -> Event document id.
+ * @param {Date} [now] -> Send time, for the deadline.
+ * @returns {{ content: string, components: ActionRowBuilder[] }} -> Classic message payload.
+ */
+function buildReminderMessage(event, eventId, now = new Date()) {
+    const timeStr = new Date(event.startDate).toLocaleString('de-DE', { timeZone: TIMEZONE });
+    const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setLabel('Zum Event').setStyle(ButtonStyle.Link).setURL(buildEventUrl(eventId))
+    );
+    if (!isUnregisterClosed(event, now)) {
+        row.addComponents(new ButtonBuilder()
+            .setCustomId(`${MY_LEAVE_PREFIX}:${eventId}`)
+            .setLabel('Ich kann doch nicht')
+            .setStyle(ButtonStyle.Danger));
+    }
+    return {
+        content: `⏰ **Erinnerung!** Das Event **${event.title}** startet am ${timeStr}. Sei bereit!`,
+        components: [row]
+    };
+}
+
+/**
+ * Accepted participants of an event who want reminders (W-16).
+ *
+ * @param {string} eventId -> Event document id.
+ * @returns {Promise<string[]>} -> Unique user ids.
+ */
+async function acceptedReminderRecipients(eventId) {
     const regs = await getDocs(query(
         collection(db, 'registrations'),
         where('eventId', '==', eventId),
         where('status', '==', 'accepted')
     ));
     const { userIds } = await filterByPreference(regs.docs.map(regDoc => regDoc.data().userId), 'reminders');
+    return userIds;
+}
+
+/**
+ * DM every accepted participant of an event who wants reminders (W-16).
+ *
+ * @param {string} eventId -> Event document id.
+ * @param {string|Object} message -> DM text or payload with buttons (buildReminderMessage).
+ * @param {Function} send -> DM function (userId, message).
+ * @returns {Promise<number>} -> Number of recipients messaged.
+ */
+async function messageAcceptedParticipants(eventId, message, send) {
+    const userIds = await acceptedReminderRecipients(eventId);
     for (const userId of userIds) {
         await send(userId, message);
     }
@@ -49,9 +120,11 @@ async function messageAcceptedParticipants(eventId, message, send) {
  * @param {Function} [options.send] -> DM function (userId, message), default sendDM.
  * @param {Function} [options.refresh] -> Announcement refresh (eventId), default notifyRegistrationsChanged.
  * @param {Object} [options.settings] -> Bot center settings, default loadBotSettings() (B-02).
+ * @param {Function} [options.canInvite] -> Whether check-in invitations can go out now (B-07), default: the bot is ready.
+ * @param {Function} [options.scheduledStatus] -> Sets the Discord server event status (B-09), default setScheduledEventStatus.
  * @returns {Promise<void>}
  */
-async function checkReminders({ now = new Date(), send = sendDM, refresh = (eventId) => require('../utils/announcementRefresh').notifyRegistrationsChanged(eventId), settings = null } = {}) {
+async function checkReminders({ now = new Date(), send = sendDM, refresh = (eventId) => require('../utils/announcementRefresh').notifyRegistrationsChanged(eventId), settings = null, canInvite = () => state.isReady, scheduledStatus = setScheduledEventStatus } = {}) {
     try {
         // Switches of the bot center (B-02): a due reminder or start DM is marked
         // either way, so nothing is sent late after a switch is turned on again
@@ -88,21 +161,34 @@ async function checkReminders({ now = new Date(), send = sendDM, refresh = (even
                 await updateDoc(doc(db, 'events', eventId), { reminderHours });
 
                 console.log(`⏰ Sending reminder for event: ${event.title}`);
-                const timeStr = startTime.toLocaleString('de-DE', { timeZone: TIMEZONE });
-                const recipientCount = await messageAcceptedParticipants(eventId,
-                    `⏰ **Erinnerung!** Das Event **${event.title}** startet am ${timeStr}. Sei bereit!`, send);
+                const recipientCount = await messageAcceptedParticipants(eventId, buildReminderMessage(event, eventId, now), send);
                 debugLog('bot.sendReminder', { eventId, recipientCount });
             }
 
             // Event-start notification during the first 5 minutes
             const fiveMinutes = 5 * 60 * 1000;
+            let startRecipients = [];
             if (now >= startTime && now < new Date(startTime.getTime() + fiveMinutes) && !event.eventStartNotificationSent) {
                 await updateDoc(doc(db, 'events', eventId), { eventStartNotificationSent: true });
 
                 console.log(`🎯 Event started: ${event.title}`);
-                if (eventStartNotifications) await messageAcceptedParticipants(eventId,
-                    `🎯 **${event.title}** hat gerade begonnen! Viel Spaß!\n\n🔗 Event ansehen: ${buildEventUrl(eventId)}`, send);
+                if (eventStartNotifications) startRecipients = await acceptedReminderRecipients(eventId);
             }
+
+            // Check-in invitations (B-07): independent of the start switch and the reminder choice;
+            // a member who gets the start DM as well gets one message with the start text and the button.
+            // While the bot cannot send, nothing is marked, so the invitations follow once it is back.
+            let invited = new Set();
+            if (isCheckinRunning(event, now) && canInvite()) {
+                invited = await inviteToCheckin(eventId, event, { now, send, startRecipients: new Set(startRecipients) });
+            }
+
+            const startMessage = `🎯 **${event.title}** hat gerade begonnen! Viel Spaß!\n\n🔗 Event ansehen: ${buildEventUrl(eventId)}`;
+            for (const userId of startRecipients) {
+                if (!invited.has(userId)) await send(userId, startMessage);
+            }
+
+            await syncScheduledEventStatus(eventId, event, now, scheduledStatus);
         }
     } catch (err) {
         console.error('Reminder check error:', err.message);
@@ -135,6 +221,7 @@ function isReminderSchedulerRunning() {
 }
 
 module.exports = {
+    buildReminderMessage,
     checkReminders,
     startReminderScheduler,
     stopReminderScheduler,

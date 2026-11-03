@@ -255,6 +255,61 @@ async function markPollMessagesDeleted(poll) {
     return true;
 }
 
+async function sendApprovalRequest(registrationId) {
+    const { loadApprovalRequest, storeApprovalMessage } = require('../utils/approvalRequests');
+    const request = await loadApprovalRequest(registrationId);
+    if (!request) return null;
+    mockLog(`Freigabe-Anfrage in ${describeChannel(request.channelId)} für ${describeUser(request.registration.userId)} ("${request.event.title}")`, {
+        formAnswers: request.registration.formAnswers || {}
+    });
+    return storeApprovalMessage(registrationId, { channelId: request.channelId, messageId: fakeSnowflake() });
+}
+
+async function closeApprovalRequest(registration, outcome, event = null) {
+    const { formatOutcome, eventForClosing, storedApprovalMessage } = require('../utils/approvalRequests');
+    const stored = storedApprovalMessage(registration);
+    if (!stored) return false;
+    const eventData = await eventForClosing(registration, event);
+    mockLog(`Freigabe-Anfrage ${stored.messageId} geschlossen ("${eventData.title || registration.eventId}"): ${formatOutcome(outcome)}`);
+    return true;
+}
+
+async function sendCheckinInvitations(eventId) {
+    const { isCheckinRunning, listCheckinInvitees, markInvited } = require('../utils/checkin');
+    const { withEventLock } = require('../utils/eventLock');
+    const eventSnap = await getDoc(doc(db, 'events', eventId));
+    if (!eventSnap.exists() || !isCheckinRunning(eventSnap.data())) return 0;
+    const event = eventSnap.data();
+    return withEventLock(`checkin:${eventId}`, async () => {
+        const invitees = await listCheckinInvitees(eventId);
+        for (const { id, userId } of invitees) {
+            await markInvited(id);
+            mockLog(`Check-in-Einladung an ${describeUser(userId)} ("${event.title}") mit Button „Einchecken“`);
+        }
+        return invitees.length;
+    });
+}
+
+async function mirrorCommentToThread(commentId) {
+    const { isThreadSyncEnabled, loadCommentWithEvent, storeDiscordMessageId, webhookName } = require('../utils/threadSync');
+    if (!isThreadSyncEnabled()) return null;
+    const loaded = await loadCommentWithEvent(commentId);
+    if (!loaded) return null;
+    const { comment, event } = loaded;
+    if (!event.discordThread?.threadId || comment.source === 'discord' || comment.discordMessageId) return null;
+    const messageId = fakeSnowflake();
+    mockLog(`Kommentar in Thread "${event.title}" als „${webhookName(comment.userName)}“: ${comment.text}`);
+    await storeDiscordMessageId(commentId, messageId);
+    return messageId;
+}
+
+async function deleteMirroredMessage(comment, event) {
+    const { isThreadSyncEnabled } = require('../utils/threadSync');
+    if (!isThreadSyncEnabled() || !comment?.discordMessageId || !event?.discordThread?.threadId) return false;
+    mockLog(`Kommentar-Kopie ${comment.discordMessageId} im Thread "${event.title || ''}" gelöscht`);
+    return true;
+}
+
 async function sendGuestInvitation(guestUserId, registrant, event, registrationId) {
     dmsSent++;
     mockLog(`Gäste-Einladung an ${describeUser(guestUserId)}`, {
@@ -273,6 +328,25 @@ async function assignRole(userId, roleId) {
 async function removeRole(userId, roleId) {
     mockLog(`Rolle ${describeRole(roleId)} von ${describeUser(userId)} entfernt`);
     return true;
+}
+
+async function sendWaitlistOffer(registrationId) {
+    const regSnap = await getDoc(doc(db, 'registrations', registrationId));
+    if (!regSnap.exists()) return false;
+    const registration = regSnap.data();
+    const eventSnap = await getDoc(doc(db, 'events', registration.eventId));
+    if (!eventSnap.exists() || !registration.offer) return false;
+    const until = new Date(registration.offer.expiresAt).toLocaleString('de-DE', { timeZone: process.env.TIMEZONE || 'Europe/Berlin' });
+    mockLog(`Platz angeboten: ${describeUser(registration.userId)} für "${eventSnap.data().title}" bis ${until}`,
+        { buttons: [`offer_confirm:${registrationId}`, `offer_decline:${registrationId}`, 'Zum Event'] });
+    dmsSent++;
+    return true;
+}
+
+async function removeRoleFromMembers(roleId, userIds) {
+    const members = userIds.length === 1 ? '1 Mitglied' : `${userIds.length} Mitgliedern`;
+    mockLog(`Rolle ${describeRole(roleId)} von ${members} entfernt`, userIds.map(describeUser));
+    return { removed: userIds.length, failed: 0 };
 }
 
 // ── Channels & scheduled events ─────────────────────────────────────────
@@ -321,6 +395,29 @@ async function createScheduledEvent(event) {
     return id;
 }
 
+// A Discord server event id starting with "gone" counts as deleted in Discord (B-09, for tests)
+const isGoneScheduledEvent = (event) => String(event?.discordScheduledEventId || '').startsWith('gone');
+
+async function updateScheduledEvent(event, { bannerChanged = false } = {}) {
+    if (!event?.discordScheduledEventId) return false;
+    if (isGoneScheduledEvent(event)) return 'gone';
+    mockLog(`Server-Event "${event.title}" aktualisiert${bannerChanged ? ' (neues Bild)' : ''}`, { startDate: event.startDate, endDate: event.endDate });
+    return 'updated';
+}
+
+async function removeScheduledEvent(event) {
+    if (!event?.discordScheduledEventId) return false;
+    if (!isGoneScheduledEvent(event)) mockLog(`Server-Event "${event.title}" entfernt`);
+    return true;
+}
+
+async function setScheduledEventStatus(event, target) {
+    if (!event?.discordScheduledEventId) return false;
+    if (isGoneScheduledEvent(event)) return 'gone';
+    mockLog(`Server-Event "${event.title}" ${target === 'completed' ? 'beendet' : 'läuft'}`);
+    return target;
+}
+
 module.exports = {
     startBot,
     whenBotSettled,
@@ -343,11 +440,21 @@ module.exports = {
     refreshPollMessages,
     markPollMessagesDeleted,
     sendGuestInvitation,
+    sendApprovalRequest,
+    closeApprovalRequest,
+    sendCheckinInvitations,
+    mirrorCommentToThread,
+    deleteMirroredMessage,
     assignRole,
     removeRole,
+    removeRoleFromMembers,
+    sendWaitlistOffer,
     createEventChannels,
     addParticipantToEventChannels,
     removeParticipantFromEventChannels,
     deleteEventChannels,
-    createScheduledEvent
+    createScheduledEvent,
+    updateScheduledEvent,
+    removeScheduledEvent,
+    setScheduledEventStatus
 };

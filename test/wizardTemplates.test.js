@@ -15,6 +15,7 @@ const RAID_SETTINGS = {
     requiredRoles: ['r-raid'],
     approvalMode: 'instant',
     allowGuests: false,
+    allowTentative: true,
     slots: [{ id: 's1', name: 'Tank', emoji: '', capacity: 1 }, { id: 's2', name: 'Heiler', emoji: '', capacity: 5 }],
     assignRoleId: 'r-assign',
     formFields: [{ label: 'Charaktername', type: 'text', required: true, options: [], description: '' }],
@@ -53,6 +54,7 @@ test('fillWizard puts every template setting into the wizard', async () => {
     assert.equal(element('event-voice-name').value, 'Raid-Voice');
     assert.equal(element('event-text-name').value, 'raid-chat');
     assert.equal(element('event-allow-guests').checked, false);
+    assert.equal(element('event-allow-tentative').checked, true);
     assert.equal(element('event-use-slots').checked, true);
     assert.equal(element('event-assign-role').value, 'r-assign');
     assert.equal(element('event-custom-msg-toggle').checked, true);
@@ -66,6 +68,11 @@ test('fillWizard sets the place limit of a template without slots', async () => 
     assert.equal(element('event-max').value, 12);
     assert.equal(element('event-use-slots').checked, false);
     assert.equal(element('event-allow-guests').checked, true);
+    // A template without „Vielleicht“ switches it off again (B-17)
+    const { allowTentative, ...withoutBench } = RAID_SETTINGS;
+    assert.equal(allowTentative, true);
+    await app.fillWizard(withoutBench);
+    assert.equal(element('event-allow-tentative').checked, false);
 });
 
 test('fillWizard leaves dates, deadlines, status and series alone', async () => {

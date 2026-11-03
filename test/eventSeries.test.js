@@ -114,7 +114,7 @@ test('planExtension of a later end that does not reach the next date creates not
 test('seriesUpdateFields copies the shared settings and nothing that belongs to one date', () => {
     const updates = {
         title: 'Raid', description: 'Neu', bannerUrl: '/uploads/banners/a.png', accentColor: '#112233',
-        location: { text: 'Lobby' }, category: 'Raid', maxParticipants: 12, slots: [], allowGuests: true,
+        location: { text: 'Lobby' }, category: 'Raid', maxParticipants: 12, slots: [], allowGuests: true, allowTentative: true,
         accessMode: 'open', requiredRoles: ['r1'], approvalMode: 'instant', assignRoleId: 'r2', formFields: [],
         reminderHours: [{ hours: 24, sent: false }], checkinMessage: 'Hi', customBotMessages: {},
         autoCreateChannels: true, channelConfig: { type: 'voice' },
@@ -124,7 +124,7 @@ test('seriesUpdateFields copies the shared settings and nothing that belongs to 
         registrationClosedRefreshed: true, eventStartNotificationSent: true
     };
     assert.deepEqual(Object.keys(seriesUpdateFields(updates)).sort(), [
-        'accentColor', 'accessMode', 'allowGuests', 'approvalMode', 'assignRoleId', 'autoCreateChannels', 'bannerUrl',
+        'accentColor', 'accessMode', 'allowGuests', 'allowTentative', 'approvalMode', 'assignRoleId', 'autoCreateChannels', 'bannerUrl',
         'category', 'channelConfig', 'checkinMessage', 'customBotMessages', 'description', 'formFields', 'location',
         'maxParticipants', 'reminderHours', 'requiredRoles', 'slots', 'title'
     ]);

@@ -70,7 +70,7 @@ test('a due reminder goes out once and is stored as sent before the DMs', async 
         });
         assert.equal(first.length, 1);
         assert.equal(first[0].userId, PARTICIPANT);
-        assert.match(first[0].message, /Erinnerung/);
+        assert.match(textOf(first[0].message), /Erinnerung/);
         assert.deepEqual((await storedEvent('due')).reminderHours, [{ hours: 24, sent: true }, { hours: 1, sent: false }]);
 
         assert.deepEqual(await runPass(), []);
@@ -234,7 +234,7 @@ test('reminders off leave the start DM alone, start notifications off leave remi
     try {
         const sent = await runPassWith({ eventStartNotifications: false });
         assert.equal(sent.length, 1);
-        assert.match(sent[0].message, /Erinnerung/);
+        assert.match(textOf(sent[0].message), /Erinnerung/);
     } finally {
         await removeEvent('mixed-2');
     }
@@ -264,4 +264,293 @@ test('the reminder switch no longer stops the scheduler (it also closes announce
     assert.ok(body.length > 100, 'applyBotSettings found');
     assert.equal(/clearInterval\(reminderInterval\)|startReminderScheduler\(|stopReminderScheduler\(/.test(body), false,
         'applyBotSettings must not start or stop the reminder scheduler; reminderEnabled is checked inside checkReminders (B-02)');
+});
+
+// ── Check-in invitations (B-07) ─────────────────────────────────────────
+
+const CHECKIN = { checkinEnabled: true, checkinCode: '123456', reminderHours: [] };
+const textOf = (message) => (typeof message === 'string' ? message : message.content);
+const hasCheckinButton = (message) => typeof message !== 'string'
+    && message.components.some(row => row.toJSON().components.some(button => button.custom_id && button.custom_id.startsWith('event_checkin:')));
+const registrationOf = async (id) => (await getDoc(doc(db, 'registrations', id))).data();
+
+/** One pass where the bot can send, with bot center changes; returns the DMs. */
+async function runCheckinPass(changes = {}, { canInvite = () => true, onSend = async () => {}, now = NOW } = {}) {
+    const sent = [];
+    await bot.checkReminders({
+        now,
+        settings: normalizeBotSettings(changes),
+        send: async (userId, message) => { await onSend(userId, message); sent.push({ userId, message }); },
+        refresh: () => {},
+        canInvite
+    });
+    return sent;
+}
+
+test('an event with check-in starts: one DM with start text and button, marked before it', async () => {
+    await storeEvent('ci-start', { startDate: inHours(-0.02), endDate: inHours(2), ...CHECKIN });
+    try {
+        const sent = await runCheckinPass({}, {
+            onSend: async () => assert.ok((await registrationOf('reg-ci-start')).checkinInvitedAt, 'marked before the DM')
+        });
+        assert.equal(sent.length, 1);
+        assert.equal(sent[0].userId, PARTICIPANT);
+        assert.ok(hasCheckinButton(sent[0].message));
+        assert.match(textOf(sent[0].message), /hat gerade begonnen/);
+
+        assert.deepEqual(await runCheckinPass(), [], 'no second invitation');
+    } finally {
+        await removeEvent('ci-start');
+    }
+});
+
+test('start notifications off or reminders off: the invitation still goes out', async () => {
+    await storeEvent('ci-switch', { startDate: inHours(-0.02), endDate: inHours(2), ...CHECKIN });
+    try {
+        const sent = await runCheckinPass({ eventStartNotifications: false });
+        assert.equal(sent.length, 1);
+        assert.ok(hasCheckinButton(sent[0].message));
+        assert.match(textOf(sent[0].message), /läuft – checke jetzt ein/);
+    } finally {
+        await removeEvent('ci-switch');
+    }
+
+    await storeEvent('ci-optout', { startDate: inHours(-0.02), endDate: inHours(2), ...CHECKIN });
+    await storeOptedOut('ci-optout');
+    try {
+        const sent = await runCheckinPass();
+        assert.equal(sent.length, 2, 'one DM per member');
+        const byUser = Object.fromEntries(sent.map(dm => [dm.userId, dm.message]));
+        assert.match(textOf(byUser[PARTICIPANT]), /hat gerade begonnen/);
+        assert.match(textOf(byUser[OPTED_OUT]), /läuft – checke jetzt ein/);
+        assert.ok(hasCheckinButton(byUser[PARTICIPANT]) && hasCheckinButton(byUser[OPTED_OUT]));
+    } finally {
+        await removeEvent('ci-optout');
+        await deleteDoc(doc(db, 'registrations', 'reg-ci-optout-off'));
+    }
+});
+
+test('an event without check-in keeps the plain start DM', async () => {
+    await storeEvent('ci-none', { startDate: inHours(-0.02), endDate: inHours(2), reminderHours: [] });
+    try {
+        const sent = await runCheckinPass();
+        assert.equal(sent.length, 1);
+        assert.equal(typeof sent[0].message, 'string');
+        assert.equal((await registrationOf('reg-ci-none')).checkinInvitedAt, undefined);
+    } finally {
+        await removeEvent('ci-none');
+    }
+});
+
+test('while the event runs, late accepts are invited; checked-in and invited members are not', async () => {
+    await storeEvent('ci-late', { startDate: inHours(-1), endDate: inHours(1), eventStartNotificationSent: true, ...CHECKIN });
+    await setDoc(doc(db, 'registrations', 'reg-ci-late-checked'), { eventId: 'ci-late', userId: 'u-checked', status: 'accepted', checkedIn: true });
+    await setDoc(doc(db, 'registrations', 'reg-ci-late-invited'), { eventId: 'ci-late', userId: 'u-invited', status: 'accepted', checkinInvitedAt: inHours(-1) });
+    await setDoc(doc(db, 'registrations', 'reg-ci-late-pending'), { eventId: 'ci-late', userId: 'u-pending', status: 'pending' });
+    try {
+        const sent = await runCheckinPass();
+        assert.deepEqual(sent.map(dm => dm.userId), [PARTICIPANT]);
+        assert.match(textOf(sent[0].message), /läuft – checke jetzt ein/, 'no start text after the start window');
+
+        // The pending member is accepted later -> invited in the next pass
+        await setDoc(doc(db, 'registrations', 'reg-ci-late-pending'), { eventId: 'ci-late', userId: 'u-pending', status: 'accepted' });
+        assert.deepEqual((await runCheckinPass()).map(dm => dm.userId), ['u-pending']);
+    } finally {
+        await removeEvent('ci-late');
+        for (const id of ['checked', 'invited', 'pending']) await deleteDoc(doc(db, 'registrations', `reg-ci-late-${id}`));
+    }
+});
+
+test('no invitation before the start or after the end', async () => {
+    await storeEvent('ci-future', { startDate: inHours(1), endDate: inHours(3), ...CHECKIN });
+    try {
+        assert.deepEqual(await runCheckinPass(), []);
+    } finally {
+        await removeEvent('ci-future');
+    }
+    await storeEvent('ci-over', { startDate: inHours(-4), endDate: inHours(-1), eventStartNotificationSent: true, ...CHECKIN });
+    try {
+        assert.deepEqual(await runCheckinPass(), []);
+        assert.equal((await registrationOf('reg-ci-over')).checkinInvitedAt, undefined);
+    } finally {
+        await removeEvent('ci-over');
+    }
+});
+
+test('bot offline: nothing is marked, the invitation follows once the bot is back', async () => {
+    await storeEvent('ci-offline', { startDate: inHours(-0.02), endDate: inHours(2), ...CHECKIN });
+    try {
+        const offline = await runCheckinPass({}, { canInvite: () => false });
+        assert.equal(offline.length, 1, 'plain start DM (it fails on its own while offline)');
+        assert.equal(hasCheckinButton(offline[0].message), false);
+        assert.equal((await registrationOf('reg-ci-offline')).checkinInvitedAt, undefined);
+
+        const later = new Date(NOW.getTime() + 0.5 * HOUR);
+        const online = await runCheckinPass({}, { now: later });
+        assert.equal(online.length, 1);
+        assert.ok(hasCheckinButton(online[0].message));
+    } finally {
+        await removeEvent('ci-offline');
+    }
+});
+
+// ── Reminder buttons (B-08) ─────────────────────────────────────────────
+
+const { buildReminderMessage } = require('../bot/scheduler');
+const { buildEventUrl } = require('../utils/eventUrl');
+
+const buttonsOfPayload = (payload) => payload.components.flatMap(row => row.toJSON().components);
+
+test('the reminder keeps its text and offers „Zum Event“ and „Ich kann doch nicht“', () => {
+    const payload = buildReminderMessage({ title: 'Raid-Nacht', startDate: inHours(2) }, 'rb-ev', NOW);
+
+    assert.match(payload.content, /^⏰ \*\*Erinnerung!\*\* Das Event \*\*Raid-Nacht\*\* startet am .+\. Sei bereit!$/);
+    const buttons = buttonsOfPayload(payload);
+    assert.deepEqual(buttons.map(button => button.label), ['Zum Event', 'Ich kann doch nicht']);
+    assert.equal(buttons[0].url, buildEventUrl('rb-ev'));
+    assert.equal(buttons[1].custom_id, 'my_leave:rb-ev');
+    assert.ok(!buttons.some(button => /Kalender/.test(button.label)), 'no calendar button');
+});
+
+test('after the unregister deadline the reminder only links the event', () => {
+    const closed = buildReminderMessage({ title: 'Raid-Nacht', startDate: inHours(1), unregisterDeadline: inHours(-12) }, 'rb-ev', NOW);
+    assert.deepEqual(buttonsOfPayload(closed).map(button => button.label), ['Zum Event']);
+
+    const open = buildReminderMessage({ title: 'Raid-Nacht', startDate: inHours(30), unregisterDeadline: inHours(12) }, 'rb-ev', NOW);
+    assert.deepEqual(buttonsOfPayload(open).map(button => button.label), ['Zum Event', 'Ich kann doch nicht']);
+});
+
+test('a due reminder goes out with its buttons', async () => {
+    await storeEvent('rb-due', { startDate: inHours(2), reminderHours: [{ hours: 24, sent: false }] });
+    try {
+        const [dm] = await runPass();
+        assert.equal(dm.userId, PARTICIPANT);
+        assert.match(dm.message.content, /Erinnerung/);
+        assert.deepEqual(buttonsOfPayload(dm.message).map(button => button.label), ['Zum Event', 'Ich kann doch nicht']);
+    } finally {
+        await removeEvent('rb-due');
+    }
+});
+
+// "Ich kann doch nicht" is the my_leave button of /my-events; asking, cancelling and confirming
+// without a guild member (as in a DM) are pinned in test/myEventsCommand.test.js
+
+const { createFakeInteraction, dispatchInteraction } = require('./helpers');
+
+/** Click a button in a DM (no member) and wait for the answer after a defer. */
+async function clickInDm(customId, userId) {
+    const interaction = createFakeInteraction({ kind: 'button', customId, userId });
+    await dispatchInteraction(bot.client, interaction);
+    const start = Date.now();
+    while (!interaction.calls.some(([name]) => name === 'editReply') && Date.now() - start < 3000) {
+        await new Promise(resolve => setTimeout(resolve, 10));
+    }
+    return interaction.calls.find(([name]) => name === 'editReply')?.[1].content;
+}
+
+test('confirming from the reminder lets the waitlist move up', async () => {
+    await setDoc(doc(db, 'events', 'rb-full'), {
+        title: 'Raid-Nacht', status: 'active', approvalMode: 'instant', maxParticipants: 1,
+        startDate: new Date(Date.now() + 2 * HOUR).toISOString()
+    });
+    await setDoc(doc(db, 'registrations', 'rb-full-me'), { eventId: 'rb-full', userId: 'rb-me', status: 'accepted', createdAt: inHours(-48) });
+    await setDoc(doc(db, 'registrations', 'rb-full-wait'), { eventId: 'rb-full', userId: 'rb-wait', status: 'waitlisted', createdAt: inHours(-24) });
+
+    const answer = await clickInDm('slot_leave:rb-full', 'rb-me');
+
+    assert.equal(answer, '✅ Du wurdest von **Raid-Nacht** abgemeldet.');
+    assert.equal((await getDoc(doc(db, 'registrations', 'rb-full-me'))).exists(), false);
+    const start = Date.now();
+    let moved;
+    // Two hours before the start the place is offered until one hour before it (B-15)
+    do {
+        moved = (await getDoc(doc(db, 'registrations', 'rb-full-wait'))).data().status;
+        if (moved !== 'offered') await new Promise(resolve => setTimeout(resolve, 20));
+    } while (moved !== 'offered' && Date.now() - start < 3000);
+    assert.equal(moved, 'offered');
+});
+
+test('confirming an old reminder after the unregister deadline is refused', async () => {
+    await setDoc(doc(db, 'events', 'rb-closed'), {
+        title: 'Raid-Nacht', status: 'active', startDate: new Date(Date.now() + 2 * HOUR).toISOString(),
+        unregisterDeadline: new Date(Date.now() - HOUR).toISOString()
+    });
+    await setDoc(doc(db, 'registrations', 'rb-closed-me'), { eventId: 'rb-closed', userId: 'rb-me', status: 'accepted' });
+
+    const answer = await clickInDm('slot_leave:rb-closed', 'rb-me');
+
+    assert.equal(answer, '❌ Abmelden ist nicht mehr möglich. Wende dich an einen Admin.');
+    assert.equal((await getDoc(doc(db, 'registrations', 'rb-closed-me'))).exists(), true);
+});
+
+// ── Discord server event status (B-09) ─────────────────────────────────
+
+/** One pass with a recording status function; returns its calls as [eventId, target]. */
+async function runStatusPass(answer = (event, target) => target, now = NOW) {
+    const calls = [];
+    await bot.checkReminders({
+        now,
+        settings: normalizeBotSettings({}),
+        send: async () => {},
+        refresh: () => {},
+        canInvite: () => false,
+        scheduledStatus: async (event, target) => { calls.push([event.id, target]); return answer(event, target); }
+    });
+    return calls;
+}
+
+const SYNCED = { discordScheduledEventId: 'se-1', discordScheduledEventStatus: 'scheduled', reminderHours: [], eventStartNotificationSent: true };
+
+test('a synced event that started is set running and stored as active', async () => {
+    await storeEvent('se-start', { ...SYNCED, startDate: inHours(-0.5), endDate: inHours(2) });
+    try {
+        assert.deepEqual(await runStatusPass(), [['se-start', 'active']]);
+        assert.equal((await storedEvent('se-start')).discordScheduledEventStatus, 'active');
+        assert.deepEqual(await runStatusPass(), [], 'no call once it is active');
+    } finally {
+        await removeEvent('se-start');
+    }
+});
+
+test('a synced event that is over is completed, also without an end date', async () => {
+    await storeEvent('se-over', { ...SYNCED, discordScheduledEventStatus: 'active', startDate: inHours(-4), endDate: inHours(-1) });
+    await storeEvent('se-noend', { ...SYNCED, startDate: inHours(-3) });
+    try {
+        const calls = await runStatusPass();
+        assert.deepEqual(calls.sort(), [['se-noend', 'completed'], ['se-over', 'completed']]);
+        assert.equal((await storedEvent('se-over')).discordScheduledEventStatus, 'completed');
+        assert.equal((await storedEvent('se-noend')).discordScheduledEventStatus, 'completed');
+        assert.deepEqual(await runStatusPass(), []);
+    } finally {
+        await removeEvent('se-over');
+        await removeEvent('se-noend');
+    }
+});
+
+test('offline stores nothing and the next pass tries again; gone forgets the link', async () => {
+    await storeEvent('se-offline', { ...SYNCED, startDate: inHours(-0.5), endDate: inHours(2) });
+    await storeEvent('se-gone', { ...SYNCED, startDate: inHours(-0.5), endDate: inHours(2) });
+    try {
+        const offline = await runStatusPass((event) => (event.id === 'se-gone' ? 'gone' : false));
+        assert.equal(offline.length, 2);
+        assert.equal((await storedEvent('se-offline')).discordScheduledEventStatus, 'scheduled');
+        const gone = await storedEvent('se-gone');
+        assert.deepEqual([gone.discordScheduledEventId, gone.discordScheduledEventStatus], [null, null]);
+
+        assert.deepEqual(await runStatusPass(), [['se-offline', 'active']], 'tried again, the forgotten one not');
+    } finally {
+        await removeEvent('se-offline');
+        await removeEvent('se-gone');
+    }
+});
+
+test('unsynced and not yet started events get no status call', async () => {
+    await storeEvent('se-none', { reminderHours: [], eventStartNotificationSent: true, startDate: inHours(-0.5), endDate: inHours(2) });
+    await storeEvent('se-later', { ...SYNCED, startDate: inHours(5), endDate: inHours(7) });
+    try {
+        assert.deepEqual(await runStatusPass(), []);
+    } finally {
+        await removeEvent('se-none');
+        await removeEvent('se-later');
+    }
 });

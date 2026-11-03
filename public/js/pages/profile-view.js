@@ -7,11 +7,12 @@
 import { avatar } from '../core/components.js';
 import { escapeHtml } from '../core/ui.js';
 import { eventStart, renderDateTile, renderEventWhen, renderStatusChip } from '../events/cards.js';
+import { formatOfferDeadline } from '../events/offer.js';
 
 const HEX_COLOR = /^#[0-9a-fA-F]{6}$/;
 const ICON_CLASS = /^bi-[a-z0-9-]+$/;
 // Chip of a history row per registration status; cancelled events and check-ins come first (historyChip)
-const HISTORY_LABELS = { accepted: 'Teilgenommen', rejected: 'Abgelehnt', waitlisted: 'Warteliste', pending: 'Nicht bestätigt' };
+const HISTORY_LABELS = { accepted: 'Teilgenommen', rejected: 'Abgelehnt', waitlisted: 'Warteliste', pending: 'Nicht bestätigt', tentative: 'Vielleicht' };
 const CHECKED_IN = { tone: 'success', icon: 'qr-code-scan' };
 
 /**
@@ -74,7 +75,11 @@ export function renderUpcomingRow(entry, now, canOpen) {
 
     // Own place on the waitlist (W-05)
     const place = entry.status === 'waitlisted' && entry.waitlistPosition;
-    let status = renderStatusChip(entry.status, place ? `Warteliste · Platz ${place.position} von ${place.total}` : undefined);
+    // An open waitlist offer names its deadline (B-15)
+    const until = entry.status === 'offered' ? formatOfferDeadline(entry.offerExpiresAt) : '';
+    let status = renderStatusChip(entry.status, place
+        ? `Warteliste · Platz ${place.position} von ${place.total}`
+        : (until ? `Platz angeboten · bis ${until}` : undefined));
     if (checkedIn) status = chip('Eingecheckt', CHECKED_IN);
     if (rejected) status = chip('Abgelehnt', { tone: 'danger', icon: 'x-circle' });
 

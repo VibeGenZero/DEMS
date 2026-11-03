@@ -3,7 +3,7 @@ id: utils
 title: utils/ — domain helpers
 type: module
 tags: [utils, registration, form-fields, waitlist, audit-log, profile, debug, change-notice, banner]
-sources: [utils/registrationService.js, utils/formFields.js, utils/eventUtils.js, utils/eventListing.js, utils/profileEvents.js, utils/eventUrl.js, utils/userProfile.js, utils/avatar.js, utils/botPermissions.js, utils/csv.js, utils/template.js, utils/sessionStore.js, utils/reminders.js, utils/debugLog.js, utils/capacity.js, utils/slotService.js, utils/eventLock.js, utils/announcementRefresh.js, utils/pollService.js, utils/pollStore.js, utils/eventPreview.js, utils/eventArchive.js, utils/eventChangeNotice.js, utils/notificationPrefs.js, utils/memberOverview.js, utils/insights.js, utils/participantMessage.js, utils/bannerStore.js, utils/bulkRegistrations.js, utils/eventSeries.js, utils/eventTemplates.js, utils/botSettings.js]
+sources: [utils/registrationService.js, utils/registrationStatus.js, utils/approvalRequests.js, utils/checkin.js, utils/threadSync.js, utils/formFields.js, utils/eventUtils.js, utils/eventListing.js, utils/profileEvents.js, utils/eventUrl.js, utils/userProfile.js, utils/avatar.js, utils/botPermissions.js, utils/csv.js, utils/template.js, utils/sessionStore.js, utils/reminders.js, utils/debugLog.js, utils/capacity.js, utils/slotService.js, utils/eventLock.js, utils/announcementRefresh.js, utils/pollService.js, utils/pollStore.js, utils/eventPreview.js, utils/eventArchive.js, utils/eventCleanup.js, utils/adminActions.js, utils/localDateTime.js, utils/eventChangeNotice.js, utils/notificationPrefs.js, utils/memberOverview.js, utils/insights.js, utils/participantMessage.js, utils/bannerStore.js, utils/bulkRegistrations.js, utils/eventSeries.js, utils/eventTemplates.js, utils/botSettings.js, utils/waitlistOffers.js, utils/tentativeRegistration.js]
 part_of: [architecture]
 depends_on: [data-layer, bot]
 see_also: [registration-flow, form-fields, role-slots]
@@ -60,8 +60,55 @@ Exports `FORM_FIELD_TYPE` (`text, textarea, dropdown, checkbox, user, role, chan
 |---|---|
 | `ARCHIVE_DELAY_MS`, `ARCHIVE_INTERVAL_MS` | 24 h after the end; a run every 5 min |
 | `isDueForArchive(event, now)` | `status === 'active'` and `now` at least 24 h after `eventEndTime`; false without a start |
-| `archiveEndedEvents({ now })` | archives every due event (`status`, `updatedAt`), audit `AUTO_ARCHIVE_EVENT` by `system`, `notifyRegistrationsChanged`; one failing event does not stop the others; returns the count |
+| `archiveEndedEvents({ now })` | archives every due event (`status`, `updatedAt`), audit `AUTO_ARCHIVE_EVENT` by `system`, `notifyRegistrationsChanged`, `cleanupEvent`; then `retryPendingCleanups()`; one failing event does not stop the others; returns the count |
 | `startArchiveScheduler({ waitFor })`, `stopArchiveScheduler()` | first run once `waitFor` settles (`server.js` passes `whenBotSettled()`, so the announcement refresh of the catch-up run finds a ready bot), then the interval (`unref`'d); a stop before that cancels the first run. Rules: [event-lifecycle](../concepts/event-lifecycle.md) |
+
+## utils/adminActions.js (B-13)
+
+Shared by `routes/admin.js` and `bot/adminCommands.js`; bot helpers are required inside the functions, so mock mode gets its twins.
+
+| Export | Behaviour |
+|---|---|
+| `buildNewEvent(input, createdBy)` | document of a new event (wizard defaults, slots → places and no guests, reminder merge); `slots` must be normalized |
+| `createEventChannelsAllowed(event)` | event channels unless „Auto Channel-Erstellung“ is off in the bot center (B-02) |
+| `publishDraft(eventId, adminId, { via })` | only a `draft` with a start → `active`, `UPDATE_EVENT_STATUS`, announcement refresh, channels; else `{ ok: false, code: missing\|not_draft\|no_start }` |
+| `announceEvent(eventId, adminId, { pings, via })` | target: the event's `announceChannelId` (B-11), else `announceTarget`; an own channel that refuses the post → „Der Ankündigungskanal des Events ist nicht erreichbar – …“; announcement post + record (max 5) + thread (bot center switch) + `ANNOUNCE_EVENT`; `{ ok: false, status, error }` with the German route texts |
+| `createPoll(input, adminId, { via })` / `announcePoll(pollId, adminId, { pings, via })` | open poll (`normalizePollInput`) + `CREATE_POLL`; poll post + record + `ANNOUNCE_POLL` |
+
+`via: 'discord'` appends „ in Discord“ to the audit detail.
+
+## utils/localDateTime.js (B-13)
+
+`parseLocalDateTime(text, tz)` (`D.M.YYYY H:MM`, two-digit year = 20xx, impossible dates and daylight saving gaps → null), `parseEndInput(text, start, tz)` (empty → null, `H:MM` → start day or the next day, unreadable → undefined), `parsePollLines(text, tz)` (`{ options }` or `{ error }` naming the line), `DATE_FORMAT_HINT`. Uses `zonedParts`/`fromZonedParts` of `utils/eventSeries.js`.
+
+## utils/waitlistOffers.js (B-15)
+
+| Export | Behaviour |
+|---|---|
+| `offerDeadline(event, settings, now)` | now + `waitlistConfirmHours`, capped 1 h before the start; null with the switch off, without start or under 1 h |
+| `confirmOffer({ registrationId, userId, now })` | under the event lock: own, offered, deadline ahead, event active → `accepted`/`pending`, `offer: null`; then `completePromotion` (`utils/eventUtils.js`) without its DM; refusals `missing`/`not_yours`/`not_offered`/`expired` |
+| `declineOffer({ registrationId, userId })` | deletes the registration, `promoteFromWaitlist` → next offer |
+| `expireOffers({ now })` | expired offers deleted, „verfallen“ DM, place handed on; quietly for inactive/over events; returns the count |
+| `startOfferScheduler({ waitFor })`, `stopOfferScheduler()` | like the archive scheduler, every 5 min |
+
+`utils/eventUtils.js`: `promoteFromWaitlistLocked(eventId, event, { now })` writes offers when `offerDeadline` gives one; `announcePromotions` sends `sendWaitlistOffer` for them; `completePromotion(event, promotion, { announce })` holds the effects of a finished move-up. `utils/botSettings.js`: `waitlistConfirmation`, `waitlistConfirmHours`, `isValidConfirmHours`.
+
+## utils/tentativeRegistration.js (B-17)
+
+| Export | Behaviour |
+|---|---|
+| `confirmTentativeRegistration({ eventId, userId })` | „Fest zusagen“ under the event lock: own registration must be `tentative` (`not_tentative`, „Du stehst nicht auf der Ersatzbank.“), event active, not over, registration deadline ahead (existing codes and messages; the answer stays tentative). Status via `decideStatus` (wanted role, else free fallback; capacity; approval mode), writes `status`, `slotId`, `createdAt: now` (keeps `tentativeAt`); then `notifyRegistration`, `postApprovalRequest` for pending, `notifyRegistrationsChanged` → `{ ok, id, status, slotId, message, event }` |
+| `NOT_TENTATIVE_MESSAGE` | „Du stehst nicht auf der Ersatzbank.“ |
+
+`utils/registrationService.js`: `registerUserForEvent({ …, tentative })` stores a „Vielleicht“ (`tentative_not_allowed` without `event.allowTentative`, no guests, no slot, `tentativeAt`, no DM/role/approval request); `switchOwnSlot` only changes the wanted role of a tentative registration; `unregisterUserFromEvent` skips the unregister deadline for it. Exported for this module: `notifyRegistration`, `postApprovalRequest`, `buildStatusMessage`, `buildFailure`, `TENTATIVE_NOT_ALLOWED_MESSAGE`.
+
+## utils/eventCleanup.js (B-10)
+
+| Export | Behaviour |
+|---|---|
+| `cleanupEvent(eventId, { bot })` | channels (`deleteEventChannels`, when ids are stored) and event role (`removeRoleFromMembers` for accepted members, minus those accepted for another `draft`/`active` event with the same `assignRoleId`); marker `discordCleanup` `pending` → `done`, audit `DISCORD_CLEANUP` by `system`; answers `'done'`, `'pending'` (bot not ready, channels still stored) or `'nothing'`; never throws |
+| `retryPendingCleanups({ bot })` | `cleanupEvent` for every `pending` event that is still `archived`/`cancelled`; returns the number finished |
+| `restoreEventRole(eventId, oldEvent, { bot })` | reactivation: clears the marker; after `done` `assignRole` for every accepted member. Rules: [event-lifecycle](../concepts/event-lifecycle.md) |
 
 ## utils/eventChangeNotice.js (W-04)
 
@@ -140,7 +187,7 @@ Days and clock times count in `TIMEZONE` (`Intl.DateTimeFormat`, no library). `f
 
 ## utils/capacity.js, utils/slotService.js (pure)
 
-`capacity.js`: `OCCUPYING_STATUSES`, `placesOf`, `countOccupiedPlaces`, `byCreatedAt`, `waitlistPositions(registrations)` (W-05: `Map` id → `{ position, total }` over the waitlisted registrations, oldest first, ties by id; slot events use the same single list), `pickCapacityPromotions`; for the display `summarizePlaces(registrations, maxParticipants)` → `{ taken, capacity, guests, pending, waitlist }` (guests include open invitations), `formatPlaces(places)` → the one places sentence for website and Discord ("5 von 20 Plätzen belegt (inkl. 1 Gast, 1 Anfrage offen)", without a limit "5 Plätze belegt") and `formatWaitlist(n)` ("3 auf der Warteliste"). `describePlaces(registrations, maxParticipants)` returns the numbers together with `text` and `waitlistText`; `GET /api/events` and `GET /api/admin/all-events` put exactly this object into `places`. `slotService.js`: `getSlots`, `hasSlots`, `findSlot`, `formatSlotLabel`, `normalizeSlots`, `countSlotOccupancy`, `hasFreePlace`, `sanitizeAltSlotIds`, `pickSlot`, `pickWaitlistPromotions`, `resolveAcceptanceSlot`, `buildSlotSummary`, `withSlotSummary`, `buildRoster`, `validateSlotChange`. Rules: [role-slots](../concepts/role-slots.md).
+`capacity.js`: `OCCUPYING_STATUSES`, `TENTATIVE_STATUS` (`tentative`, outside the occupying statuses: no place, no waitlist position, no promotion, B-17), `placesOf`, `countOccupiedPlaces`, `byCreatedAt`, `waitlistPositions(registrations)` (W-05: `Map` id → `{ position, total }` over the waitlisted registrations, oldest first, ties by id; slot events use the same single list), `pickCapacityPromotions`; for the display `summarizePlaces(registrations, maxParticipants)` → `{ taken, capacity, guests, pending, waitlist, bench }` (guests include open invitations; `bench` = tentative registrations), `formatPlaces(places)` → the one places sentence for website and Discord ("5 von 20 Plätzen belegt (inkl. 1 Gast, 1 Anfrage offen)", without a limit "5 Plätze belegt") and `formatWaitlist(n)` ("3 auf der Warteliste"), `formatBench(n)` ("2 auf der Ersatzbank", B-17). `describePlaces(registrations, maxParticipants)` returns the numbers together with `text`, `waitlistText` and `benchText`; `GET /api/events` and `GET /api/admin/all-events` put exactly this object into `places`. `slotService.js`: `getSlots`, `hasSlots`, `findSlot`, `formatSlotLabel`, `normalizeSlots`, `countSlotOccupancy`, `hasFreePlace`, `sanitizeAltSlotIds`, `pickSlot`, `decideStatus(event, registrations, { preferredSlotId, altSlotIds, guestCount })` (status and slot of a binding registration now, shared by a new registration and „Fest zusagen“, B-17), `pickWaitlistPromotions`, `resolveAcceptanceSlot`, `buildSlotSummary`, `withSlotSummary`, `buildRoster` (with `benchCount`), `validateSlotChange`. Rules: [role-slots](../concepts/role-slots.md).
 
 ## utils/eventLock.js
 
@@ -154,9 +201,25 @@ Days and clock times count in `TIMEZONE` (`Intl.DateTimeFormat`, no library). `f
 
 `pollService.js` (pure): `normalizePollInput`, `normalizeVote`, `isPollOpen`, `effectivePollStatus`, `canVote`, `tallyPoll`, `rankOptions`, `getFavoriteOptionId`, `formatPollOption`. `pollStore.js`: `loadPoll`, `loadPollVotes`, `loadUserVote`, `savePollVote`, `updatePoll`, `closePoll`, `validateDecision`, `decidePoll`, `closeExpiredPolls`, `deletePoll`, `deleteUserPollVotes`, `startPollScheduler`/`stopPollScheduler`; writes run under `withEventLock('poll:<id>')`. Rules: [date-polls](../concepts/date-polls.md).
 
+## utils/registrationStatus.js
+
+`changeRegistrationStatus({ registrationId, status, actor, expectStatus })` — the admin status change (accept, reject, waitlist), shared by `PUT /api/admin/registrations/:id/status` and the Discord approval buttons (B-06). Under `withEventLock`: slot cleared on waitlist/reject, check-in cleared unless accepted, acceptance of a slot-less registration picks a slot (`resolveAcceptanceSlot`, overbooking `warning`). Then `notifyStatusChange` (accepted/rejected), `promoteFromWaitlist` after a rejection, `notifyRegistrationsChanged`, `addAuditLog('UPDATE_REGISTRATION_STATUS', actor.id, …)`. `expectStatus` (Discord: `'pending'`) is checked inside the lock; a different current status returns `{ ok: false, code: 'already_decided', registration }` without changes. Unknown id → `{ ok: false, code: 'not_found' }`.
+
+## utils/checkin.js
+
+Check-in rules shared by `POST /api/events/:id/checkin` and the Discord button (B-07), without discord.js: `isCheckinActive(event)` (active + `checkinEnabled` + `checkinCode`), `isCheckinRunning(event, now)` (active, started, not `isEventOver`), `findAcceptedRegistration(eventId, userId)`, `checkInMember({ eventId, userId, now, requireRunning })` → `{ ok: true, alreadyCheckedIn, checkedInAt, event }` or `{ ok: false, code }` (`not_found`, `not_active`, `disabled`, `not_started`, `over`, `no_registration`; status and time window only with `requireRunning`, so the code route keeps its old rules; a repeat keeps the first time), `listCheckinInvitees(eventId)` (accepted, not checked in, no `checkinInvitedAt`), `markInvited(registrationId, now)`.
+
+## utils/threadSync.js
+
+Data side of the comment ↔ thread sync (B-16), without discord.js: `isThreadSyncEnabled()` (`DISCORD_THREAD_SYNC === 'true'`), `formatDiscordContent({ content, names: { users, roles, channels }, attachments })` (mentions → `@name`/`#name`, unknown → `@unbekannt`, custom emojis → `:name:`, one line per attachment URL, cut to `COMMENT_MAX_LENGTH` 1000 with "…"), `webhookName(name)` („<Name> (Web)“, ≤ 80, without the word "discord", empty → „Mitglied“), `topLevelReplyTarget(comment)`, `findEventByThreadId(threadId)` (memory map threadId → eventId, re-checked on every hit, full scan on miss), `commentByDiscordMessageId`, `storeDiscordMessageId`, `loadCommentWithEvent`, `loadAnsweredComment`. `bot/client.js` reads the switch at load time.
+
+## utils/approvalRequests.js
+
+Data side of the Discord approval requests (B-06), without discord.js (so `dev/mockBot.js` can use it): `loadApprovalRequest(registrationId)` (null without `approvalChannel` or unless the registration is pending), `storeApprovalMessage`, `storedApprovalMessage`, `eventForClosing`, `formatOutcome({ status, actorName })` (result lines "✅ Angenommen von …", "↩️ Vom Mitglied zurückgezogen", "🚫 Event abgesagt", "🗑️ Event gelöscht" …), `closePendingRequests(registrations, outcome, event)` (closes every pending one with a stored message; used by cancel, delete, bulk and unregister), `actorName(user)`.
+
 ## utils/eventUrl.js
 
-`buildEventUrl(eventId)` → `<BASE_URL>/#event/<id>` (fallback `http://localhost:3000`). Every event link that leaves the server is built with it: announcement and its "Zum Event" button, `/events` command, event channel embed, DMs, guest invitation, `{event.url}`. `test/eventUrl.test.js` fails when server code builds `#events/<id>` links again. `buildPollUrl(pollId)` → `<BASE_URL>/#poll/<id>` for poll messages and DMs.
+`buildEventUrl(eventId)` → `<BASE_URL>/#event/<id>` (fallback `http://localhost:3000`). Every event link that leaves the server is built with it: announcement and its "Zum Event" button, `/events` command, event channel embed, DMs, guest invitation, `{event.url}`. `test/eventUrl.test.js` fails when server code builds `#events/<id>` links again. `buildPollUrl(pollId)` → `<BASE_URL>/#poll/<id>` for poll messages and DMs. `buildSiteUrl(page)` → `<BASE_URL>/#<page>` for pages without an ID (`profile`, `events`; used by `/my-events`).
 
 ## utils/avatar.js
 

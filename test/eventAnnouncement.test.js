@@ -187,6 +187,48 @@ test('a form too big for a Discord modal leaves only the link button', () => {
     assert.ok(blocksOf(slots).every(block => block.button === null));
 });
 
+test('an event that allows „Vielleicht“ gets the button between „Anmelden“ and „Zum Event“ (B-17)', () => {
+    const buttons = rowButtons(announce(plainEvent({ allowTentative: true })));
+    assert.deepEqual(buttons.map(button => button.label), ['Anmelden', 'Vielleicht', 'Zum Event']);
+    assert.equal(buttons[1].custom_id, 'event_maybe:evt1');
+    assert.equal(buttons[1].style, BUTTON_STYLE.SECONDARY);
+    assert.equal(buttons[1].emoji.name, '🤔');
+
+    // Slot events keep their role buttons beside the line-up
+    const slot = announce(slotEvent({ allowTentative: true }));
+    assert.deepEqual(rowButtons(slot).map(button => button.label), ['Vielleicht', 'Zum Event']);
+    assert.equal(blocksOf(slot).length, 3);
+});
+
+test('no „Vielleicht“ without the setting, once registration is closed or with a form too big (B-17)', () => {
+    const HOUR = 60 * 60 * 1000;
+    const fields = ['A', 'B', 'C', 'D', 'E', 'F'].map(label => ({ label, type: 'text', required: false }));
+    for (const event of [
+        plainEvent(),
+        plainEvent({ allowTentative: 'ja' }),
+        plainEvent({ allowTentative: true, registrationDeadline: new Date(Date.now() - HOUR).toISOString() }),
+        plainEvent({ allowTentative: true, status: 'archived' }),
+        plainEvent({ allowTentative: true, formFields: fields })
+    ]) {
+        assert.ok(!rowButtons(announce(event)).some(button => button.label === 'Vielleicht'), JSON.stringify(event));
+    }
+});
+
+test('the facts name the bench after the waitlist, not in the places (B-17)', () => {
+    const event = plainEvent({ allowTentative: true, startDate: '2026-12-01T18:00:00.000Z', accessMode: 'open', category: 'Raid' });
+    const registrations = [member(undefined, 'A'), member(undefined, 'W', 'waitlisted'), member(undefined, 'T1', 'tentative'), member(undefined, 'T2', 'tentative')];
+    assert.deepEqual(factsOf(announce(event, buildRoster(event, registrations))), [
+        '🗓️ **Datum:** 1.12.2026, 19:00:00',
+        '👥 **Plätze:** 1 von 10 Plätzen belegt',
+        '🔓 **Zugang:** Offen für alle',
+        '⏳ **Warteliste:** 1',
+        '🤔 **Ersatzbank:** 2',
+        '🏷️ **Kategorie:** Raid'
+    ]);
+    const empty = factsOf(announce(event, buildRoster(event, [member(undefined, 'A')])));
+    assert.ok(!empty.some(line => line.includes('Ersatzbank')));
+});
+
 test('a 5000-character description is cut so the whole message stays within 4000 characters', () => {
     const description = `${'a'.repeat(3998)}🎉${'b'.repeat(1000)}`;
     const payload = announce(slotEvent({ description, category: 'Raid' }), undefined, '<@&1>\n@everyone\nLos!');

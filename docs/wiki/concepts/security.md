@@ -3,7 +3,7 @@ id: security
 title: Security model and open audit findings
 type: concept
 tags: [security, csp, helmet, csrf, xss, rate-limit, audit, https]
-sources: [server.js, docs/security/SECURITY_AUDIT_2026-04-22.md, ISSUE.md, routes/events.js, routes/user.js, utils/eventUtils.js, public/js/core/ui.js, public/js/core/actions.js]
+sources: [server.js, docs/security/SECURITY_AUDIT_2026-04-22.md, ISSUE.md, routes/events.js, routes/user.js, utils/eventUtils.js, bot/threadSync.js, public/js/core/ui.js, public/js/core/actions.js]
 depends_on: [server]
 see_also: [auth-session, known-issues, deployment]
 ---
@@ -21,7 +21,8 @@ see_also: [auth-session, known-issues, deployment]
 | CSRF | double-submit token, see [auth-session](auth-session.md) |
 | AuthZ | `requireAuth`, `requireAdmin`; the whole event API needs a login (no public preview); `draft`/`archived` events answer 404 to non-admins; comment delete = owner or admin |
 | XSS | frontend `escapeHtml()` for interpolated values, values for actions in `data-*` attributes (escaped with `escapeHtml`, read via `dataset`), never in handler code — the CSP blocks inline handlers, `renderMarkdownSafe()` = marked + DOMPurify for descriptions |
-| Secrets | `.env` never in the image (`.dockerignore`); `checkinCode` removed from every event answer outside `/api/admin` (`toPublicEvent` in `utils/eventUtils.js`) |
+| Secrets | `.env` never in the image (`.dockerignore`); `checkinCode` removed from every event answer outside `/api/admin` (`toPublicEvent` in `utils/eventUtils.js`); the token of the comment-sync webhook (B-16) lives only in memory (`bot/threadSync.js`), never in the database or an answer |
+| Mirrored comments (B-16) | web comments go into Discord with `allowedMentions: { parse: [] }` (no `@everyone`, role or user pings) and the suffix „(Web)“; comments from Discord are plain text rendered with `escapeHtml` and marked „Discord“ |
 | Uploads (W-12) | banners only via `POST /api/admin/uploads/banner` (admin + CSRF); type read from the magic bytes (PNG, JPEG, GIF, WebP — never SVG), ≤ 5 MB, random `<uuid>.<ext>` name; served read-only under `/uploads/banners/` only for that name pattern, with the image content type and helmet's `nosniff`, so a polyglot file is never run as HTML |
 | Dev mode | `DEV_MOCK=true` + `NODE_ENV=production` → refuses to start |
 | Container | runs as user `node`; production compose pins `NODE_ENV=production` |

@@ -3,7 +3,7 @@ id: data-model
 title: Data model — collections and document shapes
 type: concept
 tags: [data-model, schema, collections, events, registrations, users, firestore]
-sources: [routes/admin.js, utils/registrationService.js, utils/userProfile.js, utils/sessionStore.js, routes/events.js, utils/eventUtils.js, bot/registration.js, dev/seedData.js, utils/eventTemplates.js, utils/botSettings.js]
+sources: [routes/admin.js, utils/registrationService.js, utils/userProfile.js, utils/sessionStore.js, routes/events.js, utils/eventUtils.js, bot/registration.js, utils/checkin.js, bot/threadSync.js, dev/seedData.js, utils/eventTemplates.js, utils/botSettings.js]
 depends_on: [data-layer]
 see_also: [registration-flow, event-lifecycle, maintenance-mode, glossary]
 ---
@@ -37,6 +37,7 @@ erDiagram
 | `assignRoleId` | role id or `''` | role given on acceptance, removed on unregister |
 | `formFields` | `[{ label, type, required, options[], description }]` | see [form-fields](form-fields.md) |
 | `allowGuests` | bool (default true) | |
+| `allowTentative` | bool (default false) | „Vielleicht“ / Ersatzbank allowed (B-17); turning it off keeps existing tentative registrations |
 | `category` | string | UI only, not validated |
 | `bannerUrl` | string | empty, an external http(s) URL or the path `/uploads/banners/<uuid>.<ext>` of an uploaded banner (W-12; file in `UPLOAD_DIR`, see [utils](../modules/utils.md)); checked by `validateEvent`. Series and duplicates copy the value, so several events can share one file |
 | `accentColor` | string | hex colour only (`validateEvent`) |
@@ -44,8 +45,11 @@ erDiagram
 | `reminderHours` | `[{ hours, sent }]` (legacy: number, normalized by `utils/reminders.js`) | `sent` is the only duplicate protection; kept on save while `startDate` is unchanged — see [reminders-presence](reminders-presence.md) |
 | `customBotMessages` | `{ registration?, accepted?, rejected? }` | per-event DM templates |
 | `checkinMessage` / `checkinEnabled` / `checkinCode` | string / bool / 6-digit string | code never leaves the admin area (`toPublicEvent`); admins read it via `checkin-stats` |
+| `announceChannelId` | string | own announcement channel of the event (B-11), `''` = default (bot center, else `DISCORD_ANNOUNCE_CHANNEL_ID`); `''` or a Discord id (`checkEventFields`); shared by series (`SERIES_FIELDS`) and templates (`TEMPLATE_FIELDS`) |
 | `autoCreateChannels`, `channelConfig` | bool, `{ type: voice\|text\|both, voiceName?, textName? }` | private event channels |
-| `discordChannelId`, `discordTextChannelId`, `discordScheduledEventId` | id or null | set by the bot |
+| `discordChannelId`, `discordTextChannelId`, `discordScheduledEventId` | id or null | set by the bot; duplicates and new series dates start without `discordScheduledEventId` |
+| `discordScheduledEventStatus` | `scheduled` \| `active` \| `completed` \| null | last status the bot set on the Discord server event (B-09); cleared with the id |
+| `discordCleanup` | `pending` | `done` | null | clean-up after archive/cancel (channels, event role, B-10): `pending` while the bot could not run it, `done` afterwards, null after a reactivation; server-only, copies start without it |
 | `recurring`, `recurringInterval`, `recurringUntil`, `seriesId` | bool, `weekly`\|`biweekly`\|other=monthly, `YYYY-MM-DD`, uuid | series instances share `seriesId` |
 | `eventStartNotificationSent` | bool | start DM sent once |
 | `registrationClosedRefreshed` | bool | announcements refreshed once after the registration deadline (W-03); reset when an edit moves the deadline (`keepDeadlineRefreshFlag`) |
@@ -57,7 +61,11 @@ erDiagram
 
 ## registrations (auto id) — written by `utils/registrationService.js`
 
-`{ eventId, userId, userName, status: pending|accepted|waitlisted|rejected, formAnswers: { [fieldLabel]: string|boolean }, guests: userId[], pendingGuests: [{ userId, displayName, avatar, status: pending|accepted }], source: web|discord|admin (admin = entered by an admin, W-06), createdAt, checkedIn?, checkedInAt? (code or admin check-in; only `accepted` registrations carry one, cleared to `false`/`null`), slotId?, preferredSlotId?, altSlotIds? }`
+`{ eventId, userId, userName, status: pending|accepted|waitlisted|offered|tentative|rejected (offered = waitlist offer, B-15; tentative = „Vielleicht“, on the bench without a place, B-17), offer?: { offeredAt, expiresAt } (only while offered, null after a decision), tentativeAt? (time of the „Vielleicht“ answer; kept when the registration leaves the bench, which resets `createdAt`), formAnswers: { [fieldLabel]: string|boolean }, guests: userId[], pendingGuests: [{ userId, displayName, avatar, status: pending|accepted }], source: web|discord|admin (admin = entered by an admin, W-06), createdAt, checkedIn?, checkedInAt? (code, admin or Discord check-in; only `accepted` registrations carry one, cleared to `false`/`null`), slotId?, preferredSlotId?, altSlotIds? }`
+
+`checkinInvitedAt?` (B-07, ISO string) = when the Discord check-in invitation was sent (written before the DM; at most one per registration, kept when a new code is generated); never contains the code.
+
+`approvalMessage?: { channelId, messageId }` (B-06) = where the request of a pending registration was posted in the approval channel; set by `sendApprovalRequest`, read when the request is closed; not secret, never shown to members.
 
 Slot fields exist only on slot events: `slotId` = the slot actually taken (`null` on the waitlist), `preferredSlotId` = main role, `altSlotIds` = fallback roles in slot order.
 
@@ -69,7 +77,7 @@ Read in full by the admin member overview (W-15, `GET /api/admin/members`, `util
 
 ## comments (auto id) — `POST /api/events/:id/comments`
 
-`{ eventId, userId, userName, userAvatar, text (≤1000), isAdmin, replyTo (comment id|null), createdAt }` — `userAvatar` is the session avatar URL at posting time; comments written before F-11 store it wrapped (`cdn.discordapp.com/avatars/<id>/<URL>.png?size=64`), `GET /api/events/:id/comments` unwraps it.
+`{ eventId, userId, userName, userAvatar, text (≤1000), isAdmin, replyTo (comment id|null), createdAt, source?: web|discord (missing = web), discordMessageId?, editedAt? }` — the last three come from the thread sync (B-16): `discordMessageId` = the thread copy of a web comment or the Discord message a comment came from; `editedAt` = last Discord edit — `userAvatar` is the session avatar URL at posting time; comments written before F-11 store it wrapped (`cdn.discordapp.com/avatars/<id>/<URL>.png?size=64`), `GET /api/events/:id/comments` unwraps it.
 
 ## auditLogs (auto id) — `utils/eventUtils.js#addAuditLog`
 
@@ -89,14 +97,14 @@ Read in full by the admin member overview (W-15, `GET /api/admin/members`, `util
 
 ## eventTemplates (auto id) — written by `routes/admin.js` (`/api/admin/event-templates`, W-10)
 
-`{ name (unique ignoring case, ≤ 80), settings, createdAt, createdBy, updatedAt, updatedBy }` — shared by all admins, at most 50. `settings` holds only `TEMPLATE_FIELDS` of `utils/eventTemplates.js` with event shapes (see the events table): `title`, `description`, `bannerUrl`, `accentColor`, `category`, `location`, `maxParticipants`, `accessMode`, `requiredRoles`, `approvalMode`, `allowGuests`, `slots`, `assignRoleId`, `formFields`, `reminderHours` (`[{ hours }]`, no `sent`), `checkinMessage`, `autoCreateChannels`, `channelConfig`, `customBotMessages`. Never dates, deadlines, status, series fields, Discord ids, announcements or the check-in code. Applying a template in the wizard copies the settings once; events keep no link to it. An uploaded banner in `settings.bannerUrl` counts as used for the banner clean-up. Not wiped by the admin system reset.
+`{ name (unique ignoring case, ≤ 80), settings, createdAt, createdBy, updatedAt, updatedBy }` — shared by all admins, at most 50. `settings` holds only `TEMPLATE_FIELDS` of `utils/eventTemplates.js` with event shapes (see the events table): `title`, `description`, `bannerUrl`, `accentColor`, `category`, `location`, `maxParticipants`, `accessMode`, `requiredRoles`, `approvalMode`, `allowGuests`, `allowTentative`, `slots`, `assignRoleId`, `formFields`, `reminderHours` (`[{ hours }]`, no `sent`), `checkinMessage`, `autoCreateChannels`, `channelConfig`, `customBotMessages`. Never dates, deadlines, status, series fields, Discord ids, announcements or the check-in code. Applying a template in the wizard copies the settings once; events keep no link to it. An uploaded banner in `settings.bannerUrl` counts as used for the banner clean-up. Not wiped by the admin system reset.
 
 ## Singletons
 
 | Document | Fields |
 |---|---|
 | `botMessages/templates` | `registration`, `accepted`, `rejected` (template strings, ≤2000) |
-| `botSettings/config` | `statusType`, `activityType`, `activityText`, `dmNotifications`, `reminderEnabled`, `eventStartNotifications`, `autoChannelCreation`, `announcementThreads` (B-14), `autoUpdatePresence`, `autoStatusCalendarEvents`, `announceChannel`, `welcomeMessage`, `updatedAt` |
+| `botSettings/config` | `statusType`, `activityType`, `activityText`, `dmNotifications`, `reminderEnabled`, `eventStartNotifications`, `autoChannelCreation`, `announcementThreads` (B-14), `autoUpdatePresence`, `autoStatusCalendarEvents`, `announceChannel`, `welcomeMessage`, `waitlistConfirmation` (B-15, default true), `waitlistConfirmHours` (B-15, whole hours 1–72, default 12), `updatedAt` |
 | `maintenanceSettings/config` | `warningEnabled`, `warningText`, `loginDisabled`, `registrationDisabled`, `plannedMaintenance`, `plannedMaintenanceStart/End/Text`, `panicMode`, `panicActivatedAt`, `panicActivatedBy`, `updatedAt`, `updatedBy` |
 | `devMeta/seed` (mock only) | `seededAt` |
 

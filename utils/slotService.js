@@ -211,6 +211,37 @@ function pickSlot(slots, occupancy, preferredSlotId, altSlotIds = []) {
 }
 
 /**
+ * Status and slot a binding registration gets right now: on slot events the
+ * main role, else the first free fallback, else the waitlist; on other events
+ * the waitlist when the member and their guests do not fit; otherwise
+ * accepted or pending by the approval mode. Shared by a new registration and
+ * the „Fest zusagen“ of a tentative one (B-17).
+ *
+ * @param {Object} event -> Event data (`slots`, `maxParticipants`, `approvalMode`).
+ * @param {Array<Object>} registrations -> All registrations of the event.
+ * @param {Object} [wish] -> What the member asks for.
+ * @param {string|null} [wish.preferredSlotId] -> Valid main role of a slot event.
+ * @param {string[]} [wish.altSlotIds] -> Clean fallback roles in slot order.
+ * @param {number} [wish.guestCount] -> Places the member brings in addition to their own.
+ * @returns {{ status: 'accepted'|'pending'|'waitlisted', slotId: string|null }} -> The decision.
+ * @example
+ * decideStatus(event, registrations, { preferredSlotId: 'tank', altSlotIds: ['heal'] });
+ */
+function decideStatus(event, registrations, { preferredSlotId = null, altSlotIds = [], guestCount = 0 } = {}) {
+    const slots = getSlots(event);
+    let slotId = null;
+    let isWaitlisted = false;
+    if (slots.length > 0) {
+        slotId = pickSlot(slots, countSlotOccupancy(slots, registrations), preferredSlotId, altSlotIds);
+        isWaitlisted = !slotId;
+    } else if (event.maxParticipants > 0) {
+        isWaitlisted = countOccupiedPlaces(registrations) + 1 + guestCount > event.maxParticipants;
+    }
+    if (isWaitlisted) return { status: 'waitlisted', slotId: null };
+    return { status: event.approvalMode === 'instant' ? 'accepted' : 'pending', slotId };
+}
+
+/**
  * Decide which waitlisted registrations move into free slots.
  *
  * The waitlist is walked oldest first; every entry whose main role or one of
@@ -294,7 +325,7 @@ function withSlotSummary(event, registrations) {
  * @param {Object} event -> The event document data.
  * @param {Array<Object>} registrations -> All registrations of the event.
  * @param {Object} [usersById] -> User profiles keyed by user ID, for names and avatars.
- * @returns {Object} -> `{ taken, capacity, waitlistCount, places, slots, waitlist }`; `places` are the numbers of summarizePlaces() behind the places sentence.
+ * @returns {Object} -> `{ taken, capacity, waitlistCount, places, benchCount, slots, waitlist }`; `places` are the numbers of summarizePlaces() behind the places sentence, `benchCount` the tentative registrations (B-17).
  */
 function buildRoster(event, registrations, usersById = {}) {
     const slots = getSlots(event);
@@ -311,12 +342,14 @@ function buildRoster(event, registrations, usersById = {}) {
     const waitlisted = registrations
         .filter(registration => registration.status === 'waitlisted')
         .sort(byCreatedAt);
+    const places = summarizePlaces(registrations, event.maxParticipants);
 
     return {
         taken: countOccupiedPlaces(registrations),
         capacity: event.maxParticipants > 0 ? event.maxParticipants : 0,
         waitlistCount: waitlisted.length,
-        places: summarizePlaces(registrations, event.maxParticipants),
+        places,
+        benchCount: places.bench,
         slots: slots.map(slot => {
             const members = occupying
                 .filter(registration => registration.slotId === slot.id)
@@ -380,6 +413,7 @@ module.exports = {
     hasFreePlace,
     sanitizeAltSlotIds,
     pickSlot,
+    decideStatus,
     pickWaitlistPromotions,
     resolveAcceptanceSlot,
     buildSlotSummary,

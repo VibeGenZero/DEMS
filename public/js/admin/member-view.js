@@ -146,6 +146,7 @@ const STATUS_LABELS = {
     accepted: { label: 'Angenommen', tone: 'success', icon: 'check-circle-fill' },
     pending: { label: 'Ausstehend', tone: 'warning', icon: 'hourglass-split' },
     waitlisted: { label: 'Warteliste', tone: 'info', icon: 'list-ol' },
+    tentative: { label: 'Vielleicht', tone: '', icon: 'question-circle' },
     rejected: { label: 'Abgelehnt', tone: 'danger', icon: 'x-circle' }
 };
 

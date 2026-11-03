@@ -1,94 +1,11 @@
 /**
- * Event channels and Discord scheduled events of the bot.
+ * Event channels of the bot (scheduled events: bot/scheduledEvents.js).
  */
 const { EmbedBuilder, PermissionsBitField, ChannelType } = require('discord.js');
 const { db, collection, doc, getDoc, getDocs, updateDoc, query, where } = require('../firebaseAdmin');
 const { buildEventUrl } = require('../utils/eventUrl');
-const { bannerForDiscord } = require('../utils/bannerStore');
 const { client, state } = require('./client');
 const { TIMEZONE } = require('./constants');
-
-/**
- * Get all scheduled events from the guild
- */
-async function getGuildScheduledEvents(guildId) {
-    if (!state.isReady) return [];
-    try {
-        const guild = await client.guilds.fetch(guildId);
-        const events = await guild.scheduledEvents.fetch();
-        return events.map(e => ({
-            id: e.id,
-            name: e.name,
-            description: e.description,
-            scheduledStartTimestamp: e.scheduledStartTimestamp,
-            scheduledEndTimestamp: e.scheduledEndTimestamp,
-            image: e.coverImageURL({ size: 1024 }),
-            location: e.entityMetadata?.location || 'Discord',
-            url: e.url
-        }));
-    } catch (err) {
-        console.error('Failed to fetch guild scheduled events:', err.message);
-        return [];
-    }
-}
-
-/**
- * Create a native Discord Scheduled Event
- */
-async function createScheduledEvent(event) {
-    if (!state.isReady) return null;
-    try {
-        const guildId = process.env.DISCORD_GUILD_ID;
-        const guild = await client.guilds.fetch(guildId);
-
-        let entityType = 3; // GuildScheduledEventEntityType.External
-        let channelId = null;
-        let entityMetadata = { location: 'TBD' };
-
-        if (event.discordChannelId) {
-            entityType = 2; // GuildScheduledEventEntityType.Voice
-            channelId = event.discordChannelId;
-            entityMetadata = undefined;
-        }
-
-        const scheduledStartTime = event.startDate ? new Date(event.startDate) : new Date(Date.now() + 60 * 60 * 1000);
-        let scheduledEndTime = event.endDate ? new Date(event.endDate) : new Date(scheduledStartTime.getTime() + 2 * 60 * 60 * 1000);
-
-        // Ensure end time is strictly after start time
-        if (scheduledEndTime <= scheduledStartTime) {
-            scheduledEndTime = new Date(scheduledStartTime.getTime() + 2 * 60 * 60 * 1000);
-        }
-
-        const scheduledEvent = await guild.scheduledEvents.create({
-            name: event.title.substring(0, 100),
-            scheduledStartTime,
-            scheduledEndTime,
-            privacyLevel: 2, // GUILD_ONLY
-            entityType,
-            channel: channelId,
-            entityMetadata,
-            description: (event.description || '').substring(0, 1000),
-            reason: 'DEMS Sync'
-        });
-
-        // Set Image: an uploaded banner (W-12) as the file itself, so it works
-        // without a public BASE_URL; an external one as its URL
-        const banner = bannerForDiscord(event.bannerUrl);
-        if (banner.file || banner.url) {
-            try {
-                await scheduledEvent.setImage(banner.file || banner.url);
-            } catch (e) {
-                console.warn('Could not set banner image for scheduled event:', e.message);
-            }
-        }
-
-        console.log(`✅ Scheduled Event created: ${scheduledEvent.name} (${scheduledEvent.id})`);
-        return scheduledEvent.id;
-    } catch (err) {
-        console.error('Failed to create scheduled event:', err);
-        return null;
-    }
-}
 
 /**
  * Create private voice and/or text channels for an event
@@ -121,6 +38,19 @@ async function createEventChannels(event) {
             {
                 id: guild.id, // @everyone role
                 deny: [PermissionsBitField.Flags.ViewChannel],
+            },
+            // The @everyone deny hits the bot too: without its own overwrite it could
+            // neither post the welcome embed, nor add participants, nor delete the channel
+            // ("Missing Access" 50001). Only rights of the invite (utils/botPermissions.js).
+            {
+                id: client.user.id,
+                allow: [
+                    PermissionsBitField.Flags.ViewChannel,
+                    PermissionsBitField.Flags.SendMessages,
+                    PermissionsBitField.Flags.Connect,
+                    PermissionsBitField.Flags.ReadMessageHistory,
+                    PermissionsBitField.Flags.EmbedLinks
+                ]
             }
         ];
 
@@ -243,7 +173,32 @@ async function removeParticipantFromEventChannels(event, userId) {
 }
 
 /**
- * Delete event channels
+ * Delete one event channel. A channel the bot cannot reach ("Missing Access"
+ * 50001, e.g. created before the bot kept access to its own channels) never
+ * becomes deletable for it -> logged for manual deletion and treated as done,
+ * so the clean-up (B-10) does not retry it forever. Other errors are thrown.
+ *
+ * @param {Object} guild -> The fetched guild.
+ * @param {string|null} channelId -> Stored channel id.
+ * @returns {Promise<void>}
+ */
+async function deleteChannel(guild, channelId) {
+    if (!channelId) return;
+    const channel = await guild.channels.fetch(channelId).catch(() => null);
+    if (!channel) return;
+    try {
+        await channel.delete();
+    } catch (err) {
+        if (err?.code !== 50001) throw err;
+        console.warn(`⚠️ Kein Zugriff auf Event-Channel ${channelId} – bitte in Discord von Hand löschen (Missing Access).`);
+    }
+}
+
+/**
+ * Delete the event channels and forget their ids.
+ *
+ * @param {string} eventId -> Event document id.
+ * @returns {Promise<boolean>} -> False while offline, without channels or on an error (ids kept for a later try).
  */
 async function deleteEventChannels(eventId) {
     if (!state.isReady) return false;
@@ -257,15 +212,8 @@ async function deleteEventChannels(eventId) {
         const guildId = process.env.DISCORD_GUILD_ID;
         const guild = await client.guilds.fetch(guildId);
 
-        if (event.discordChannelId) {
-            const channel = await guild.channels.fetch(event.discordChannelId).catch(() => null);
-            if (channel) await channel.delete();
-        }
-
-        if (event.discordTextChannelId) {
-            const textChannel = await guild.channels.fetch(event.discordTextChannelId).catch(() => null);
-            if (textChannel) await textChannel.delete();
-        }
+        await deleteChannel(guild, event.discordChannelId);
+        await deleteChannel(guild, event.discordTextChannelId);
 
         console.log(`🗑️ Event channels deleted for eventId: ${eventId}`);
 
@@ -283,8 +231,6 @@ async function deleteEventChannels(eventId) {
 }
 
 module.exports = {
-    getGuildScheduledEvents,
-    createScheduledEvent,
     createEventChannels,
     addParticipantToEventChannels,
     removeParticipantFromEventChannels,

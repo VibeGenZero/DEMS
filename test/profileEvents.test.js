@@ -99,6 +99,8 @@ test('the slot is the one taken, the wish of an open registration, else null', (
     assert.deepEqual(slotOf({ slotId: 'dps' }), { name: 'Schaden', emoji: '', wish: false });
     assert.deepEqual(slotOf({ status: 'waitlisted', slotId: null, preferredSlotId: 'tank' }), { name: 'Tank', emoji: '🛡️', wish: true });
     assert.deepEqual(slotOf({ status: 'pending', preferredSlotId: 'dps' }), { name: 'Schaden', emoji: '', wish: true });
+    // „Vielleicht“ names the wanted role, too (B-17)
+    assert.deepEqual(slotOf({ status: 'tentative', slotId: null, preferredSlotId: 'tank' }), { name: 'Tank', emoji: '🛡️', wish: true });
     // Rejected: the wish no longer matters. A slot that was removed from the event is gone.
     assert.equal(slotOf({ status: 'rejected', slotId: null, preferredSlotId: 'tank' }), null);
     assert.equal(slotOf({ slotId: 'healer' }), null);
@@ -115,7 +117,7 @@ test('an entry carries eight event fields and never the check-in code', () => {
     });
     const entry = toProfileEntry(registration('full', { checkedIn: true, formAnswers: { Name: 'Tom' }, guests: ['u2'], userName: 'Tom' }), full);
     assert.deepEqual(entry, {
-        id: 'reg-full', status: 'accepted', checkedIn: true, createdAt: at(-72), slot: null, waitlistPosition: null,
+        id: 'reg-full', status: 'accepted', checkedIn: true, createdAt: at(-72), slot: null, waitlistPosition: null, offerExpiresAt: '',
         event: { id: 'full', title: 'Full', startDate: at(48), endDate: at(50), status: 'active', category: 'Gaming', location: 'Lobby', checkinEnabled: true }
     });
     assert.doesNotMatch(JSON.stringify(entry), /123456|Geheim|formFields|formAnswers|userName/);
@@ -141,10 +143,10 @@ test('missing and broken values do not break the lists', () => {
     // A date nobody can read counts as "no date yet"; the older format with a space is read
     assert.deepEqual(upcoming.map(entry => entry.id), ['reg-legacy', 'reg-bare', 'reg-broken']);
     assert.deepEqual(upcoming[1], {
-        id: 'reg-bare', status: '', checkedIn: false, createdAt: '', slot: null, waitlistPosition: null,
+        id: 'reg-bare', status: '', checkedIn: false, createdAt: '', slot: null, waitlistPosition: null, offerExpiresAt: '',
         event: { id: 'bare', title: '', startDate: '', endDate: '', status: '', category: '', location: '', checkinEnabled: false }
     });
-    assert.deepEqual(history, [{ id: 'reg-none', status: '', checkedIn: false, createdAt: '', slot: null, waitlistPosition: null, event: null }]);
+    assert.deepEqual(history, [{ id: 'reg-none', status: '', checkedIn: false, createdAt: '', slot: null, waitlistPosition: null, offerExpiresAt: '', event: null }]);
     // Only a location object with a text gives a place
     assert.equal(toProfileEntry(registration('e'), event('E', { location: 'Lobby' })).event.location, '');
     assert.equal(toProfileEntry(registration('e'), event('E', { location: { channelId: '1' } })).event.location, '');
@@ -158,4 +160,11 @@ test('only upcoming entries carry their waitlist place (W-05)', () => {
     const { upcoming, history } = buildProfileEvents(waiting, events, NOW, positions);
     assert.deepEqual(upcoming[0].waitlistPosition, { position: 2, total: 3 });
     assert.equal(history[0].waitlistPosition, null);
+});
+
+test('a tentative registration is listed among the upcoming events with its status (B-17)', () => {
+    const { upcoming, history } = build({ raid: event('Raid') }, [registration('raid', { status: 'tentative' })]);
+    assert.deepEqual(titles(upcoming), ['Raid']);
+    assert.equal(upcoming[0].status, 'tentative');
+    assert.deepEqual(history, []);
 });

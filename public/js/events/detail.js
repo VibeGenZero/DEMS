@@ -14,6 +14,8 @@ import { eventHasSlots, renderOwnSlot, renderRoster, renderSlotPicker } from './
 import { eventEnd, isRegistrationClosed, isUnregisterClosed } from './cards.js';
 import { startCountdown } from './countdown.js';
 import { revealDetail } from './detail-motion.js';
+import { renderOfferCard } from './offer.js';
+import { renderBench, renderTentativeAction, renderTentativeCard } from './bench.js';
 
 export const GRADIENT_PRESETS = [
     'linear-gradient(135deg, #6d28d9 0%, #8b5cf6 100%)',
@@ -203,7 +205,7 @@ export function renderSidebarCapacity(event) {
     const sentence = escapeHtml(typeof places.text === 'string' ? places.text : '');
     const free = max - taken;
     const freeText = max === 0 ? 'Unbegrenzt' : (free > 0 ? `${free} ${free === 1 ? 'Platz' : 'Plätze'} frei` : 'Ausgebucht');
-    const sublabel = escapeHtml([freeText, places.waitlistText].filter(Boolean).join(' · '));
+    const sublabel = escapeHtml([freeText, places.waitlistText, places.benchText].filter(Boolean).join(' · '));
     const bar = max > 0
         ? `<div class="capacity${free <= 0 ? ' is-full' : ''}"><progress class="capacity-meter" max="${max}" value="${Math.min(taken, max)}" aria-label="${sentence}"></progress></div>`
         : '';
@@ -225,6 +227,7 @@ export async function loadDetailParticipants(eventId) {
         if (!section || !avatarsEl) return;
 
         section.style.display = 'block';
+        renderBench(data);
         const rosterEl = document.getElementById('detail-roster');
         const titleEl = document.getElementById('detail-participants-title');
         if (Array.isArray(data.slots)) {
@@ -256,7 +259,7 @@ export async function loadDetailParticipants(eventId) {
 // Clears what the previously opened event left on the page; the early returns
 // below (no access, not logged in) never reach the code that refills it
 export function resetEventDetailAreas() {
-    ['detail-register-area', 'detail-registered', 'detail-no-access', 'detail-waitlist', 'detail-ended', 'detail-registration-closed',
+    ['detail-register-area', 'detail-registered', 'detail-offer', 'detail-tentative', 'tentative-btn', 'detail-bench', 'detail-no-access', 'detail-waitlist', 'detail-ended', 'detail-registration-closed',
         'detail-participants-section', 'comments-section', 'checkin-section'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.style.display = 'none';
@@ -389,10 +392,20 @@ export async function showEventDetail(eventId, { celebrate, fromTaken } = {}) {
         const regData = await regRes.json();
         if (state.detailEventId !== eventId) return;
 
+        // A waitlist offer (B-15) or the bench (B-17) replaces the registered area with its answers
+        if (regData.registered && !regData.asGuest && (renderOfferCard(regData) || renderTentativeCard(event, regData))) {
+            registeredArea.style.display = 'none';
+            renderSidebarAction('registered');
+            revealDetail(celebrate, { fromTaken });
+            loadDetailParticipants(eventId);
+            loadComments(eventId);
+            return;
+        }
+
         if (regData.registered) {
             registeredArea.style.display = 'block';
             const statusEl = document.getElementById('detail-reg-status');
-            const statusTexts = { pending: 'Ausstehend', accepted: 'Angenommen', rejected: 'Abgelehnt', waitlisted: 'Warteliste' };
+            const statusTexts = { pending: 'Ausstehend', accepted: 'Angenommen', rejected: 'Abgelehnt', waitlisted: 'Warteliste', offered: 'Platz angeboten' };
             const statusColors = { pending: 'warning', accepted: 'success', rejected: 'danger', waitlisted: 'info' };
             const place = regData.status === 'waitlisted' && regData.waitlistPosition;
             statusEl.textContent = regData.asGuest
@@ -474,6 +487,7 @@ export async function showEventDetail(eventId, { celebrate, fromTaken } = {}) {
                 await submitRegistration(eventId, event, 'waitlist-btn', 'waitlist-form-fields');
             };
             renderSidebarAction('waitlist');
+            renderTentativeAction(event);
         } else {
             // Show registration form
             // Without fields, roles or guests the action button alone registers (D-05)
@@ -500,6 +514,7 @@ export async function showEventDetail(eventId, { celebrate, fromTaken } = {}) {
                 await submitRegistration(eventId, event, 'register-btn', 'dynamic-form-fields');
             };
             renderSidebarAction('register');
+            renderTentativeAction(event);
         }
 
         revealDetail();

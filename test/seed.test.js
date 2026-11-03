@@ -19,15 +19,15 @@ const { db, collection, doc, getDoc, getDocs, setDoc } = require('../firebaseAdm
 const EXPECTED_COUNTS = {
     events: 14,
     users: 12,
-    registrations: 38,
-    comments: 6,
+    registrations: 40,
+    comments: 8,
     auditLogs: 10,
     polls: 2,
     pollVotes: 5,
     botMessages: 1,
     botSettings: 1,
     maintenanceSettings: 1,
-    eventTemplates: 1
+    eventTemplates: 2
 };
 
 async function countDocs(name) {
@@ -48,6 +48,36 @@ test('seedIfEmpty fills an empty database', async () => {
     for (const [name, expected] of Object.entries(EXPECTED_COUNTS)) {
         assert.equal(await countDocs(name), expected, name);
     }
+});
+
+test('the seed has a template with and one without slots for /event erstellen (B-13)', async () => {
+    const templates = (await getDocs(collection(db, 'eventTemplates'))).docs.map(entry => entry.data());
+    const withSlots = templates.filter(template => template.settings.slots.length > 0);
+    const plain = templates.filter(template => template.settings.slots.length === 0);
+    assert.equal(withSlots.length, 1);
+    assert.equal(plain.length, 1);
+    assert.ok(plain[0].settings.maxParticipants > 0, 'the plain template prefills the places');
+});
+
+test('the seed has an open poll with a future deadline for /abstimmungen (B-12)', async () => {
+    const poll = (await getDoc(doc(db, 'polls', POLL_ID.OPEN))).data();
+    assert.equal(poll.status, 'open');
+    assert.ok(new Date(poll.deadline) > new Date(), 'deadline in the future');
+    assert.ok(poll.options.length >= 2);
+});
+
+test('the raid announces in its own channel (B-11)', async () => {
+    const { CHANNEL_ID } = require('../dev/mockGuild');
+    assert.equal((await getEvent(EVENT_ID.ROLE)).announceChannelId, CHANNEL_ID.EVENTS);
+    assert.notEqual(CHANNEL_ID.EVENTS, CHANNEL_ID.ANNOUNCEMENTS);
+});
+
+test('Elif has an open waitlist offer for the second training date (B-15)', async () => {
+    const registration = (await registrationsOf(SERIES_EVENT_IDS[1])).find(entry => entry.userName === 'Elif');
+    assert.equal(registration.status, 'offered');
+    const expires = new Date(registration.offer.expiresAt);
+    assert.ok(expires > new Date(), 'deadline ahead');
+    assert.ok(expires < new Date((await getEvent(SERIES_EVENT_IDS[1])).startDate), 'before the start');
 });
 
 test('seedIfEmpty does not seed twice', async () => {
@@ -139,6 +169,11 @@ test('the raid event has a line-up with a fallback role and a waitlist', async (
     const registrations = await registrationsOf(EVENT_ID.ROLE);
     assert.ok(registrations.some(r => r.status === 'accepted' && r.slotId !== r.preferredSlotId));
     assert.ok(registrations.some(r => r.status === 'waitlisted' && r.slotId === null && r.preferredSlotId === 'tank'));
+    // „Vielleicht“ / Ersatzbank (B-17)
+    assert.equal(raid.allowTentative, true);
+    const bench = registrations.filter(r => r.status === 'tentative');
+    assert.equal(bench.length, 1);
+    assert.deepEqual([bench[0].slotId, bench[0].preferredSlotId, bench[0].tentativeAt], [null, 'heal', bench[0].createdAt]);
 });
 
 test('the raid event is announced with a ping line and has a discussion thread (B-05, B-14)', async () => {
@@ -169,6 +204,28 @@ test('the seed shows the profile a slot, a rejection and a cancelled event', asy
 
     // Lena stays free to pick a raid role herself (browser tour)
     assert.equal(find('raider', EVENT_ID.ROLE), undefined);
+});
+
+test('the seed covers the /meine-events overview of the personas (B-04)', async () => {
+    const { loadUpcomingRegistrations } = require('../bot/myEvents');
+    const { getSlots, countSlotOccupancy, hasFreePlace } = require('../utils/slotService');
+    const userIdOf = (personaId) => PERSONAS.find(persona => persona.id === personaId).userId;
+
+    const admin = await loadUpcomingRegistrations(userIdOf('admin'));
+    const raid = admin.find(item => item.registration.eventId === EVENT_ID.ROLE);
+    assert.equal(raid.registration.slotId, 'dps');
+    // "Slot wechseln" offers Heiler, Tank is full
+    const raidRegistrations = (await getDocs(collection(db, 'registrations'))).docs.map(d => d.data())
+        .filter(registration => registration.eventId === EVENT_ID.ROLE);
+    const slots = getSlots(raid.event);
+    const occupancy = countSlotOccupancy(slots, raidRegistrations);
+    const free = slots.filter(slot => slot.id !== 'dps' && hasFreePlace(slot, occupancy)).map(slot => slot.name);
+    assert.deepEqual(free, ['Heiler']);
+
+    const member = await loadUpcomingRegistrations(userIdOf('member'));
+    const statuses = member.map(item => item.entry.status);
+    for (const status of ['pending', 'waitlisted', 'rejected']) assert.ok(statuses.includes(status), status);
+    assert.ok(member.find(item => item.entry.status === 'waitlisted').entry.waitlistPosition);
 });
 
 test('the newcomer persona has no profile yet', async () => {

@@ -22,5 +22,6 @@ export const state = {
     pendingPollDecision: null,
     botStatusRefreshInterval: null,
     botSettings: null, // Bot center switches the wizard needs (admin/wizard-bot.js, B-02)
+    announceDefaultChannel: '', // Bot center announcement channel, for the wizard's default label (B-11)
     selectedGuests: [] // [{id, displayName, avatar}]
 };

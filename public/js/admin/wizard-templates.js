@@ -12,9 +12,9 @@ import { collectEventDraft, fillWizard } from './wizard.js';
 /** Mirror of TEMPLATE_FIELDS in utils/eventTemplates.js (a test keeps both equal). */
 export const TEMPLATE_FIELDS = [
     'title', 'description', 'bannerUrl', 'accentColor', 'category', 'location',
-    'maxParticipants', 'accessMode', 'requiredRoles', 'approvalMode', 'allowGuests',
+    'maxParticipants', 'accessMode', 'requiredRoles', 'approvalMode', 'allowGuests', 'allowTentative',
     'slots', 'assignRoleId', 'formFields', 'reminderHours', 'checkinMessage',
-    'autoCreateChannels', 'channelConfig', 'customBotMessages'
+    'autoCreateChannels', 'channelConfig', 'customBotMessages', 'announceChannelId'
 ];
 
 const TEMPLATES_URL = '/api/admin/event-templates';

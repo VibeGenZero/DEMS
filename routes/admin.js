@@ -9,7 +9,7 @@ const { requireAuth, requireAdmin, safeEqual } = require('../middleware/auth');
 const { csvCell } = require('../utils/csv');
 const { checkEventFields, validateEvent, validateRegStatus, validateBotMessages } = require('../middleware/validators');
 const { MAX_TEMPLATES, pickTemplateSettings, normalizeTemplateName, nameTaken } = require('../utils/eventTemplates');
-const { sendDM, getGuildRoles, sendChannelMessage, buildEventAnnouncement, buildAnnouncementIntro, ensureAnnouncementThread, getGuildScheduledEvents, createEventChannels, deleteEventChannels, createScheduledEvent, getBotStatus, getBotSettings, saveBotSettings, getRunningEvents, getGuildChannels, buildPollMessage, searchGuildMembers, fetchGuildMember } = require('../bot');
+const { sendDM, getGuildRoles, buildEventAnnouncement, getGuildScheduledEvents, deleteEventChannels, createScheduledEvent, updateScheduledEvent, removeScheduledEvent, setScheduledEventStatus, getBotStatus, getBotSettings, saveBotSettings, getRunningEvents, getGuildChannels, searchGuildMembers, fetchGuildMember, sendCheckinInvitations } = require('../bot');
 const { promoteFromWaitlist, addAuditLog, loadEventRoster, loadEventRegistrations, saveEventWithSlots } = require('../utils/eventUtils');
 const { mergeReminderHours } = require('../utils/reminders');
 const { keepDeadlineRefreshFlag } = require('../utils/eventListing');
@@ -19,47 +19,56 @@ const { trackedEventIds, memberStats, memberBase, buildMemberList, buildMemberHi
 const { DEFAULT_RANGE, isValidRange, buildInsights } = require('../utils/insights');
 const { MESSAGE_GROUPS, messageRecipients, recipientCounts, validateMessageText, sendParticipantMessage } = require('../utils/participantMessage');
 const { describePlaces, formatPlaces, formatWaitlist, waitlistPositions } = require('../utils/capacity');
-const { getSlots, findSlot, formatSlotLabel, normalizeSlots, sumCapacity, resolveAcceptanceSlot, buildRoster, validateSlotChange } = require('../utils/slotService');
+const { getSlots, findSlot, formatSlotLabel, normalizeSlots, sumCapacity, buildRoster, validateSlotChange } = require('../utils/slotService');
 const { buildPreviewEvent } = require('../utils/eventPreview');
-const { normalizePollInput, tallyPoll } = require('../utils/pollService');
 const {
-    loadPoll, loadPollVotes, updatePoll, closePoll, decidePollWithEvent, deletePoll
+    loadPoll, updatePoll, closePoll, decidePollWithEvent, deletePoll
 } = require('../utils/pollStore');
 const { withEventLock } = require('../utils/eventLock');
 const { moveRegistrationToSlot, addRegistrationByAdmin, isOnRegistrationList, notifyStatusChange } = require('../utils/registrationService');
 const { notifyRegistrationsChanged } = require('../utils/announcementRefresh');
+const { changeRegistrationStatus } = require('../utils/registrationStatus');
+const { closePendingRequests, actorName } = require('../utils/approvalRequests');
 const { debugLog } = require('../utils/debugLog');
 const { buildEventUrl } = require('../utils/eventUrl');
 const { MAX_BANNER_BYTES, detectImageType, saveBanner, releaseBanners } = require('../utils/bannerStore');
 const { sharedSessionStore } = require('../utils/sessionStore');
-const { loadBotSettings, announceTarget } = require('../utils/botSettings');
+const { loadBotSettings, announceChannelId, isValidConfirmHours } = require('../utils/botSettings');
 const { BULK_ACTIONS, MAX_BULK_IDS, planBulkAction } = require('../utils/bulkRegistrations');
 const { followingDates, transferTime, planExtension, seriesUpdateFields, slotsForDate } = require('../utils/eventSeries');
+const { cleanupEvent, restoreEventRole } = require('../utils/eventCleanup');
+const {
+    buildNewEvent, createEventChannelsAllowed, announceEvent, createPoll, announcePoll
+} = require('../utils/adminActions');
+
+// Statuses after which an event is over for good -> clean-up in Discord (B-10)
+const OVER_STATUSES = ['archived', 'cancelled'];
+
+/**
+ * Clean-up or role hand-back after a status change (B-10), fire and forget:
+ * archived/cancelled from another status -> channels and event role go;
+ * active again -> the role comes back (see utils/eventCleanup.js).
+ *
+ * @param {string} eventId -> Event document id.
+ * @param {Object} oldEvent -> The event before the change.
+ * @param {string} status -> The status after the change.
+ * @returns {boolean} -> True when a clean-up was started (it deletes the channels itself).
+ */
+function followStatusInDiscord(eventId, oldEvent, status) {
+    if (OVER_STATUSES.includes(status) && !OVER_STATUSES.includes(oldEvent.status)) {
+        cleanupEvent(eventId).catch(console.error);
+        return true;
+    }
+    if (status === 'active') restoreEventRole(eventId, oldEvent).catch(console.error);
+    return false;
+}
 
 // Days and clock times of series dates (W-11)
 const SERIES_TIMEZONE = process.env.TIMEZONE || 'Europe/Berlin';
 
-// Announcements per event that are kept up to date live
-const MAX_TRACKED_ANNOUNCEMENTS = 5;
 
 // All admin routes require auth + admin
 router.use(requireAuth, requireAdmin);
-
-/**
- * Create the private channels of an event unless "Auto Channel-Erstellung" is
- * off in the bot center (B-02). The event keeps its own option either way.
- *
- * @param {Object} event -> Event with `id`.
- * @returns {Promise<Object|null>} -> Channel ids, or null when locked or failed.
- */
-async function createEventChannelsAllowed(event) {
-    const { autoChannelCreation } = await loadBotSettings();
-    if (!autoChannelCreation) {
-        debugLog('admin.channelsLocked', { eventId: event.id });
-        return null;
-    }
-    return createEventChannels(event);
-}
 
 /**
  * GET /api/admin/roles — Get all guild roles
@@ -111,6 +120,7 @@ router.get('/stats', async (req, res) => {
         let acceptedRegs = 0;
         let rejectedRegs = 0;
         let waitlistedRegs = 0;
+        let tentativeRegs = 0;
 
         regsSnap.forEach(d => {
             const r = d.data();
@@ -121,11 +131,12 @@ router.get('/stats', async (req, res) => {
             else if (status === 'accepted') acceptedRegs += count;
             else if (status === 'rejected') rejectedRegs += count;
             else if (status === 'waitlisted') waitlistedRegs += count;
+            else if (status === 'tentative') tentativeRegs += count;
         });
 
         res.json({
             events: { total: totalEvents, active: activeEvents, draft: draftEvents, archived: archivedEvents },
-            registrations: { total: totalRegs, pending: pendingRegs, accepted: acceptedRegs, rejected: rejectedRegs, waitlisted: waitlistedRegs }
+            registrations: { total: totalRegs, pending: pendingRegs, accepted: acceptedRegs, rejected: rejectedRegs, waitlisted: waitlistedRegs, tentative: tentativeRegs }
         });
     } catch (err) {
         console.error('Stats error:', err);
@@ -220,12 +231,8 @@ router.post('/uploads/banner', parseBannerBody, async (req, res) => {
 router.post('/events', validateEvent, async (req, res) => {
     try {
         const {
-            title, description, maxParticipants, accessMode, requiredRoles,
-            approvalMode, assignRoleId, formFields,
-            startDate, endDate, bannerUrl, category, status, reminderHours,
-            recurring, recurringInterval, recurringUntil, checkinMessage,
-            customBotMessages, autoCreateChannels, channelConfig, allowGuests,
-            accentColor, location, registrationDeadline, unregisterDeadline
+            title, startDate, endDate, status, recurring, recurringInterval, recurringUntil,
+            registrationDeadline, unregisterDeadline
         } = req.body;
 
         const slotResult = normalizeSlots(req.body.slots);
@@ -241,41 +248,7 @@ router.post('/events', validateEvent, async (req, res) => {
             return res.status(400).json({ error: 'Ein Event aus einer Abstimmung muss aktiv sein.' });
         }
 
-        const baseEvent = {
-            title,
-            description,
-            maxParticipants: slots.length > 0 ? sumCapacity(slots) : (parseInt(maxParticipants) || 0),
-            accessMode: accessMode || 'open',
-            requiredRoles: requiredRoles || [],
-            approvalMode: approvalMode || 'manual',
-            assignRoleId: assignRoleId || '',
-            formFields: formFields || [],
-            startDate: startDate || '',
-            endDate: endDate || '',
-            registrationDeadline: registrationDeadline || '',
-            unregisterDeadline: unregisterDeadline || '',
-            // Set by the scheduler once the announcement lost its buttons at the deadline (W-03)
-            registrationClosedRefreshed: false,
-            bannerUrl: bannerUrl || '',
-            category: category || '',
-            status: status || 'active',
-            reminderHours: mergeReminderHours(reminderHours, null, startDate || ''),
-            checkinMessage: checkinMessage || '',
-            customBotMessages: customBotMessages || {},
-            autoCreateChannels: !!autoCreateChannels,
-            channelConfig: channelConfig || {},
-            allowGuests: slots.length > 0 ? false : allowGuests !== false,
-            slots,
-            sourcePollId: fromPoll ? String(fromPoll.pollId) : '',
-            accentColor: accentColor || '',
-            location: location || null,
-            eventStartNotificationSent: false,
-            recurring: !!recurring,
-            recurringInterval: recurringInterval || '',
-            recurringUntil: recurringUntil || '',
-            createdAt: new Date().toISOString(),
-            createdBy: req.session.user.id
-        };
+        const baseEvent = buildNewEvent({ ...req.body, slots, sourcePollId: fromPoll ? String(fromPoll.pollId) : '' }, req.session.user.id);
 
         /**
          * Write the event (or every instance of a series).
@@ -394,8 +367,8 @@ function buildEventUpdates(body, slots, oldEvent) {
         title, description, maxParticipants, accessMode, requiredRoles,
         approvalMode, assignRoleId, formFields,
         startDate, endDate, bannerUrl, category, status, reminderHours, checkinMessage,
-        customBotMessages, autoCreateChannels, channelConfig, allowGuests,
-        accentColor, location, registrationDeadline, unregisterDeadline
+        customBotMessages, autoCreateChannels, channelConfig, allowGuests, allowTentative,
+        accentColor, location, registrationDeadline, unregisterDeadline, announceChannelId
     } = body;
     // A date of a series keeps its rhythm; "Wiederholen bis" changes only by an extension (W-11)
     const inSeries = !!oldEvent.seriesId;
@@ -423,7 +396,11 @@ function buildEventUpdates(body, slots, oldEvent) {
         customBotMessages: customBotMessages || {},
         autoCreateChannels: !!autoCreateChannels,
         channelConfig: channelConfig || {},
+        // Own announcement channel, '' = default (B-11)
+        announceChannelId: announceChannelId || '',
         allowGuests: slots.length > 0 ? false : allowGuests !== false,
+        // „Vielleicht“ / Ersatzbank (B-17); turning it off keeps the bench
+        allowTentative: allowTentative === true,
         slots,
         sourcePollId: oldEvent.sourcePollId || '',
         accentColor: accentColor || '',
@@ -470,6 +447,50 @@ function buildFollowingUpdates(edited, slots, oldEvent) {
  * @param {Object} params -> `{ eventId, oldEvent, updates, notify, adminId }`.
  * @returns {Promise<number>} -> Participants notified successfully.
  */
+/**
+ * Store what a Discord server event call reached (B-09): 'gone' forgets the link, so
+ * „Mit Discord synchronisieren“ is offered again; a status is kept to skip repeated calls.
+ *
+ * @param {string} eventId -> Event document id (still existing).
+ * @param {string|boolean} result -> Result of updateScheduledEvent / setScheduledEventStatus, or 'gone'.
+ * @returns {Promise<void>}
+ */
+async function storeScheduledEventResult(eventId, result) {
+    if (result === 'gone') {
+        await updateDoc(doc(db, 'events', eventId), { discordScheduledEventId: null, discordScheduledEventStatus: null });
+    } else if (result === 'active' || result === 'completed') {
+        await updateDoc(doc(db, 'events', eventId), { discordScheduledEventStatus: result });
+    }
+}
+
+/**
+ * Keep the Discord server event of a synced event in step after a change (B-09):
+ * cancelled or draft -> removed, archived -> completed, active -> updated.
+ * Meant to run fire and forget; never throws.
+ *
+ * @param {string} eventId -> Event document id.
+ * @param {Object} event -> The event as it is now (with `discordScheduledEventId`).
+ * @param {Object} [options]
+ * @param {boolean} [options.bannerChanged] -> Upload the banner again.
+ * @returns {Promise<void>}
+ */
+async function syncScheduledEventAfterChange(eventId, event, { bannerChanged = false } = {}) {
+    if (!event?.discordScheduledEventId) return;
+    try {
+        let result;
+        if (event.status === 'cancelled' || event.status === 'draft') {
+            result = (await removeScheduledEvent(event)) ? 'gone' : false;
+        } else if (event.status === 'archived') {
+            result = await setScheduledEventStatus(event, 'completed');
+        } else {
+            result = await updateScheduledEvent(event, { bannerChanged });
+        }
+        await storeScheduledEventResult(eventId, result);
+    } catch (err) {
+        console.error('Discord server event sync error:', err.message);
+    }
+}
+
 async function applySavedEvent({ eventId, oldEvent, updates, notify, adminId }) {
     // Following dates of a series keep their status -> it is not in their updates
     const status = updates.status || oldEvent.status;
@@ -477,11 +498,17 @@ async function applySavedEvent({ eventId, oldEvent, updates, notify, adminId }) 
     const wasActive = oldEvent.status === 'active';
 
     const hasChannels = !!(oldEvent.discordChannelId || oldEvent.discordTextChannelId);
+    const cleaningUp = followStatusInDiscord(eventId, oldEvent, status);
     if (updates.autoCreateChannels && isNowActive && !hasChannels) {
         createEventChannelsAllowed({ id: eventId, ...updates }).catch(console.error);
-    } else if ((oldEvent.autoCreateChannels && wasActive) && (!updates.autoCreateChannels || !isNowActive)) {
+    } else if (!cleaningUp && (oldEvent.autoCreateChannels && wasActive) && (!updates.autoCreateChannels || !isNowActive)) {
         deleteEventChannels(eventId).catch(console.error);
     }
+
+    // The synced Discord server event follows the saved event (B-09)
+    syncScheduledEventAfterChange(eventId, { ...oldEvent, ...updates, status }, {
+        bannerChanged: updates.bannerUrl !== undefined && updates.bannerUrl !== oldEvent.bannerUrl
+    });
 
     // More places or new slots can let waitlisted members move up
     await promoteFromWaitlist(eventId, { ...oldEvent, ...updates });
@@ -545,6 +572,10 @@ async function extendSeries({ seriesId, editedId, starts, newUntil, adminId }) {
             discordThread: null,
             discordChannelId: null,
             discordTextChannelId: null,
+            // A new date is not linked to the Discord server event of the copied one (B-09)
+            discordScheduledEventId: null,
+            discordScheduledEventStatus: null,
+            discordCleanup: null,
             reminderHours: mergeReminderHours(base.reminderHours, null, times.startDate),
             eventStartNotificationSent: false,
             registrationClosedRefreshed: false,
@@ -682,11 +713,13 @@ router.put('/events/:id/status', async (req, res) => {
         await updateDoc(doc(db, 'events', req.params.id), { status, updatedAt: new Date().toISOString() });
         await addAuditLog('UPDATE_EVENT_STATUS', req.session.user.id, `Changed status to ${status}`, req.params.id);
         notifyRegistrationsChanged(req.params.id);
+        syncScheduledEventAfterChange(req.params.id, { ...oldEvent, status });
+        const cleaningUp = followStatusInDiscord(req.params.id, oldEvent, status);
 
         if (oldEvent.autoCreateChannels) {
             if (status === 'active' && oldEvent.status !== 'active') {
                 createEventChannelsAllowed({ id: req.params.id, ...oldEvent, status }).catch(console.error);
-            } else if (status !== 'active' && oldEvent.status === 'active') {
+            } else if (!cleaningUp && status !== 'active' && oldEvent.status === 'active') {
                 deleteEventChannels(req.params.id).catch(console.error);
             }
         }
@@ -711,10 +744,9 @@ router.put('/events/:id/cancel', async (req, res) => {
 
         // 1. Update status
         await updateDoc(doc(db, 'events', eventId), { status: 'cancelled', updatedAt: new Date().toISOString() });
-
-        if (event.autoCreateChannels && event.status === 'active') {
-            deleteEventChannels(eventId).catch(console.error);
-        }
+        syncScheduledEventAfterChange(eventId, { ...event, status: 'cancelled' });
+        // Channels and event role go (B-10); an event over already was cleaned up then
+        if (!OVER_STATUSES.includes(event.status)) cleanupEvent(eventId).catch(console.error);
 
         // 2. Notify participants
         const regQ = query(
@@ -732,6 +764,7 @@ router.put('/events/:id/cancel', async (req, res) => {
             if (sent) notifiedCount++;
         }
 
+        await closePendingRequests(regs.docs.map(regDoc => regDoc.data()), { status: 'cancelled' }, event);
         await addAuditLog('CANCEL_EVENT', req.session.user.id, `Cancelled event "${event.title}" and notified ${notifiedCount} users${optedOutNote(optedOut)}`, eventId);
         notifyRegistrationsChanged(eventId);
 
@@ -766,6 +799,11 @@ router.post('/events/:id/start', async (req, res) => {
         await updateDoc(doc(col, eventId), updates);
         await addAuditLog('START_EVENT', req.session.user.id, `Manually started event "${data.title}"`, eventId);
         notifyRegistrationsChanged(eventId);
+        if (data.discordScheduledEventId) {
+            setScheduledEventStatus({ ...data, ...updates }, 'active')
+                .then(result => storeScheduledEventResult(eventId, result))
+                .catch(err => console.error('Discord server event start error:', err.message));
+        }
 
         if (data.autoCreateChannels && data.status !== 'active') {
             createEventChannelsAllowed({ id: eventId, ...data, ...updates }).catch(console.error);
@@ -798,10 +836,14 @@ router.post('/events/:id/end', async (req, res) => {
         await updateDoc(doc(col, eventId), updates);
         await addAuditLog('END_EVENT', req.session.user.id, `Manually ended event "${data.title}"`, eventId);
         notifyRegistrationsChanged(eventId);
-
-        if (data.autoCreateChannels && data.status === 'active') {
-            deleteEventChannels(eventId).catch(console.error);
+        if (data.discordScheduledEventId) {
+            setScheduledEventStatus({ ...data, ...updates }, 'completed')
+                .then(result => storeScheduledEventResult(eventId, result))
+                .catch(err => console.error('Discord server event end error:', err.message));
         }
+
+        // Channels and event role go (B-10); an event over already was cleaned up then
+        if (!OVER_STATUSES.includes(data.status)) cleanupEvent(eventId).catch(console.error);
 
         res.json({ success: true, updates });
     } catch (err) {
@@ -818,8 +860,12 @@ router.delete('/events/:id', async (req, res) => {
         const eventSnap = await getDoc(doc(db, 'events', req.params.id));
         const event = eventSnap.exists() ? eventSnap.data() : null;
 
-        // deleteEventChannels reads the channel ids from the event -> before the event is gone
-        if (event) await deleteEventChannels(req.params.id);
+        // The clean-up reads the channel ids and the registrations -> before they are gone (B-10)
+        if (event) await cleanupEvent(req.params.id);
+        // The Discord server event goes too (B-09); it only needs the stored id
+        if (event?.discordScheduledEventId) {
+            removeScheduledEvent(event).catch(err => console.error('Discord server event delete error:', err.message));
+        }
 
         await deleteDoc(doc(db, 'events', req.params.id));
         // Also delete all registrations for this event
@@ -830,6 +876,7 @@ router.delete('/events/:id', async (req, res) => {
             deletePromises.push(deleteDoc(doc(db, 'registrations', docSnap.id)));
         });
         await Promise.all(deletePromises);
+        await closePendingRequests(regs.docs.map(docSnap => docSnap.data()), { status: 'deleted' }, event);
         if (event) await releaseBanners([event.bannerUrl]);
 
         await addAuditLog('DELETE_EVENT', req.session.user.id, `Deleted event ${req.params.id}`, req.params.id);
@@ -850,10 +897,12 @@ router.delete('/events/series/:seriesId', async (req, res) => {
         const snapshot = await getDocs(collection(db, 'events'));
         const eventIds = [];
         const banners = [];
+        const eventsById = new Map();
         snapshot.forEach(docSnap => {
             if (docSnap.data().seriesId === seriesId) {
                 eventIds.push(docSnap.id);
                 banners.push(docSnap.data().bannerUrl);
+                eventsById.set(docSnap.id, docSnap.data());
             }
         });
 
@@ -863,8 +912,12 @@ router.delete('/events/series/:seriesId', async (req, res) => {
 
         // Delete all events and their registrations
         for (const eventId of eventIds) {
-            // Channels first: deleteEventChannels reads their ids from the event
-            await deleteEventChannels(eventId);
+            // Clean-up first: it reads the channel ids and the registrations (B-10)
+            await cleanupEvent(eventId);
+            const seriesEvent = eventsById.get(eventId);
+            if (seriesEvent.discordScheduledEventId) {
+                removeScheduledEvent(seriesEvent).catch(err => console.error('Discord server event delete error:', err.message));
+            }
             await deleteDoc(doc(db, 'events', eventId));
 
             const regQ = query(collection(db, 'registrations'), where('eventId', '==', eventId));
@@ -874,6 +927,7 @@ router.delete('/events/series/:seriesId', async (req, res) => {
                 deletePromises.push(deleteDoc(doc(db, 'registrations', regDoc.id)));
             });
             await Promise.all(deletePromises);
+            await closePendingRequests(regs.docs.map(regDoc => regDoc.data()), { status: 'deleted' }, eventsById.get(eventId));
         }
         await releaseBanners(banners);
 
@@ -1025,6 +1079,9 @@ router.post('/events/:id/duplicate', async (req, res) => {
             checkinCode: '',  // Reset check-in code
             announcements: [],  // Each copy is announced on its own
             discordThread: null,  // and opens its own discussion thread (B-14)
+            discordScheduledEventId: null,  // and is synced to Discord on its own (B-09)
+            discordScheduledEventStatus: null,
+            discordCleanup: null,  // and is cleaned up on its own (B-10)
             reminderHours: mergeReminderHours(original.reminderHours, null, original.startDate),  // nothing sent for the copy yet
             eventStartNotificationSent: false,
         };
@@ -1051,6 +1108,8 @@ router.post('/events/:id/generate-checkin', async (req, res) => {
             checkinEnabled: true
         });
         await addAuditLog('GENERATE_CHECKIN', req.session.user.id, `Generated check-in code for event`, req.params.id);
+        // Event already running -> check-in invitations by DM right away (B-07); before the start the scheduler sends them
+        sendCheckinInvitations(req.params.id).catch(err => console.error('Check-in invitations error:', err.message));
         res.json({ code });
     } catch (err) {
         console.error('Generate checkin error:', err);
@@ -1186,6 +1245,10 @@ router.post('/events/:id/registrations/bulk', async (req, res) => {
                 for (const change of result.changes) {
                     const update = { status: change.to };
                     if (change.slotId !== undefined) update.slotId = change.slotId;
+                    // A decision ends a waitlist offer (B-15)
+                    if (change.from === 'offered') update.offer = null;
+                    // Leaving the bench counts as registered now, for the waitlist order (B-17)
+                    if (change.from === 'tentative') update.createdAt = new Date().toISOString();
                     if (change.clearCheckin) Object.assign(update, { checkedIn: false, checkedInAt: null });
                     batch.update(doc(db, 'registrations', change.id), update);
                 }
@@ -1200,6 +1263,10 @@ router.post('/events/:id/registrations/bulk', async (req, res) => {
                 registration: registrationsById.get(change.id), eventId, event, status: change.to,
                 slotId: change.slotId === undefined ? registrationsById.get(change.id).slotId : change.slotId
             });
+        }
+        // Requests in the approval channel show the decision (B-06)
+        for (const change of plan.changes) {
+            await closePendingRequests([registrationsById.get(change.id)], { status: change.to, actorName: actorName(req.session.user) }, event);
         }
         const counts = { accepted: 0, waitlisted: 0, rejected: 0 };
         plan.changes.forEach(change => { counts[change.to] += 1; });
@@ -1332,55 +1399,16 @@ router.get('/events/:id/registrations/export', async (req, res) => {
  */
 router.put('/registrations/:id/status', validateRegStatus, async (req, res) => {
     try {
-        const { status } = req.body;
-        const regSnap = await getDoc(doc(db, 'registrations', req.params.id));
-        if (!regSnap.exists()) {
-            return res.status(404).json({ error: 'Anmeldung nicht gefunden' });
-        }
-
-        const reg = { id: req.params.id, ...regSnap.data() };
-        const eventSnap = await getDoc(doc(db, 'events', reg.eventId));
-        const event = eventSnap.exists() ? eventSnap.data() : {};
-        const slots = getSlots(event);
-
-        // Status and slot change under the event lock -> no race with new registrations
-        const { slotId, warning } = await withEventLock(reg.eventId, async () => {
-            const update = { status };
-            let overbookedWarning = null;
-            // Waitlisted and rejected registrations give up their place -> a later acceptance picks a slot again
-            if (slots.length > 0 && (status === 'waitlisted' || status === 'rejected')) {
-                update.slotId = null;
-            }
-            // Only accepted registrations carry a check-in (badges count every checkedIn)
-            if (status !== 'accepted' && reg.checkedIn) {
-                update.checkedIn = false;
-                update.checkedInAt = null;
-            }
-            if (slots.length > 0 && status === 'accepted' && !findSlot(slots, reg.slotId)) {
-                const registrations = await loadEventRegistrations(reg.eventId);
-                const choice = resolveAcceptanceSlot(slots, registrations, reg);
-                update.slotId = choice.slotId;
-                if (choice.overbooked) {
-                    overbookedWarning = `Slot „${findSlot(slots, choice.slotId).name}“ ist jetzt überbucht.`;
-                }
-            }
-            await updateDoc(doc(db, 'registrations', req.params.id), update);
-            return { slotId: 'slotId' in update ? update.slotId : reg.slotId, warning: overbookedWarning };
+        const result = await changeRegistrationStatus({
+            registrationId: req.params.id,
+            status: req.body.status,
+            actor: req.session.user
         });
-        debugLog('admin.updateRegStatus', { regId: req.params.id, newStatus: status });
-
-        // The single action tells only accepted and rejected members (no waitlist DM here)
-        if (status === 'accepted' || status === 'rejected') {
-            await notifyStatusChange({ registration: reg, eventId: reg.eventId, event, status, slotId });
+        if (!result.ok) {
+            return res.status(404).json({ error: result.error });
         }
-        if (status === 'rejected') {
-            await promoteFromWaitlist(reg.eventId, event);
-        }
-
-        notifyRegistrationsChanged(reg.eventId);
-        await addAuditLog('UPDATE_REGISTRATION_STATUS', req.session.user.id, `Set status to ${status} for user ${reg.userName}`, req.params.id);
-
-        res.json({ id: req.params.id, status, slotId: slotId || null, ...(warning ? { warning } : {}) });
+        const { status, slotId, warning } = result;
+        res.json({ id: req.params.id, status, slotId, ...(warning ? { warning } : {}) });
     } catch (err) {
         console.error('Update registration status error:', err);
         res.status(500).json({ error: 'Fehler beim Aktualisieren des Status' });
@@ -1509,42 +1537,10 @@ router.post('/events/:id/message', async (req, res) => {
  */
 router.post('/events/:id/announce', async (req, res) => {
     try {
-        // Bot center choice, else DISCORD_ANNOUNCE_CHANNEL_ID (B-02)
-        const target = announceTarget(await loadBotSettings());
-        if (target.error) return res.status(400).json({ error: target.error });
-        const { channelId } = target;
-
-        const eventSnap = await getDoc(doc(db, 'events', req.params.id));
-        if (!eventSnap.exists()) {
-            return res.status(404).json({ error: 'Event nicht gefunden' });
-        }
-
-        const event = eventSnap.data();
         const { text, roleIds, pingEveryone } = req.body;
-        const pings = { text: typeof text === 'string' ? text : '', roleIds: Array.isArray(roleIds) ? roleIds : [], pingEveryone: !!pingEveryone };
-        // Stored with the record: live updates keep the ping line (B-05)
-        const intro = buildAnnouncementIntro(pings);
-
-        const roster = await loadEventRoster(req.params.id, event);
-        const sent = await sendChannelMessage(channelId, buildEventAnnouncement(event, req.params.id, roster, intro), pings);
-
-        if (sent) {
-            const announcements = [
-                ...(Array.isArray(event.announcements) ? event.announcements : []),
-                { channelId: sent.channelId, messageId: sent.messageId, intro }
-            ].slice(-MAX_TRACKED_ANNOUNCEMENTS);
-            const updates = { announcements };
-            // One discussion thread per event (B-14); a failed thread never fails the announcement
-            if ((await loadBotSettings()).announcementThreads) {
-                const thread = await ensureAnnouncementThread(sent, event.title, event.discordThread || null);
-                if (thread && thread !== event.discordThread) updates.discordThread = thread;
-            }
-            await updateDoc(doc(db, 'events', req.params.id), updates);
-            await addAuditLog('ANNOUNCE_EVENT', req.session.user.id, `Announced event "${event.title}"`, req.params.id);
-            res.json({ success: true, message: 'Event im Discord-Channel angekündigt!' });
-        } else {
-            res.status(500).json({ error: 'Konnte nicht in den Channel posten.' });
-        }
+        const result = await announceEvent(req.params.id, req.session.user.id, { pings: { text, roleIds, pingEveryone } });
+        if (!result.ok) return res.status(result.status).json({ error: result.error });
+        res.json({ success: true, message: 'Event im Discord-Channel angekündigt!' });
     } catch (err) {
         console.error('Announce error:', err);
         res.status(500).json({ error: 'Fehler beim Ankündigen' });
@@ -1572,6 +1568,7 @@ router.post('/events/:id/sync-discord', async (req, res) => {
         if (scheduledEventId) {
             await updateDoc(doc(db, 'events', req.params.id), {
                 discordScheduledEventId: scheduledEventId,
+                discordScheduledEventStatus: 'scheduled',
                 updatedAt: new Date().toISOString()
             });
             await addAuditLog('SYNC_DISCORD_EVENT', req.session.user.id, `Synced event "${event.title}" to Discord`, req.params.id);
@@ -1594,25 +1591,11 @@ router.post('/events/:id/sync-discord', async (req, res) => {
  */
 router.post('/polls', async (req, res) => {
     try {
-        const result = normalizePollInput(req.body);
-        if (result.error) {
+        const result = await createPoll(req.body, req.session.user.id);
+        if (!result.ok) {
             return res.status(400).json({ error: result.error });
         }
-        const now = new Date().toISOString();
-        const poll = {
-            ...result.poll,
-            status: 'open',
-            winnerOptionId: '',
-            eventId: '',
-            announcements: [],
-            createdBy: req.session.user.id,
-            createdAt: now,
-            updatedAt: now,
-            closedAt: ''
-        };
-        const ref = await addDoc(collection(db, 'polls'), poll);
-        await addAuditLog('CREATE_POLL', req.session.user.id, `Created poll "${poll.title}"`, ref.id);
-        res.json({ id: ref.id, ...poll });
+        res.json(result.poll);
     } catch (err) {
         console.error('Create poll error:', err);
         res.status(500).json({ error: 'Fehler beim Erstellen der Abstimmung' });
@@ -1658,30 +1641,9 @@ router.post('/polls/:id/close', async (req, res) => {
  */
 router.post('/polls/:id/announce', async (req, res) => {
     try {
-        // Bot center choice, else DISCORD_ANNOUNCE_CHANNEL_ID (B-02)
-        const target = announceTarget(await loadBotSettings());
-        if (target.error) return res.status(400).json({ error: target.error });
-        const { channelId } = target;
-        const poll = await loadPoll(req.params.id);
-        if (!poll) {
-            return res.status(404).json({ error: 'Abstimmung nicht gefunden' });
-        }
-
         const { text, roleIds, pingEveryone } = req.body;
-        const pings = { text: typeof text === 'string' ? text : '', roleIds: Array.isArray(roleIds) ? roleIds : [], pingEveryone: !!pingEveryone };
-        const intro = buildAnnouncementIntro(pings);
-        const tally = tallyPoll(poll, await loadPollVotes(poll.id));
-        const sent = await sendChannelMessage(channelId, buildPollMessage(poll, tally, intro), pings);
-        if (!sent) {
-            return res.status(500).json({ error: 'Konnte nicht in den Channel posten.' });
-        }
-
-        const announcements = [
-            ...(Array.isArray(poll.announcements) ? poll.announcements : []),
-            { channelId: sent.channelId, messageId: sent.messageId, intro }
-        ].slice(-MAX_TRACKED_ANNOUNCEMENTS);
-        await updateDoc(doc(db, 'polls', poll.id), { announcements });
-        await addAuditLog('ANNOUNCE_POLL', req.session.user.id, `Announced poll "${poll.title}"`, poll.id);
+        const result = await announcePoll(req.params.id, req.session.user.id, { pings: { text, roleIds, pingEveryone } });
+        if (!result.ok) return res.status(result.status).json({ error: result.error });
         res.json({ success: true, message: 'Abstimmung im Discord-Channel gepostet!' });
     } catch (err) {
         console.error('Announce poll error:', err);
@@ -1949,7 +1911,8 @@ router.get('/bot/status', async (req, res) => {
 router.get('/bot/settings', async (req, res) => {
     try {
         const settings = await getBotSettings();
-        res.json(settings);
+        // The channel announcements use without an own event channel, also the .env one (B-11)
+        res.json({ ...settings, defaultAnnounceChannel: announceChannelId(settings) });
     } catch (err) {
         console.error('Bot settings error:', err);
         res.status(500).json({ error: 'Fehler beim Laden der Bot-Einstellungen' });
@@ -1965,8 +1928,14 @@ router.put('/bot/settings', async (req, res) => {
             statusType, activityType, activityText,
             dmNotifications, reminderEnabled, eventStartNotifications,
             autoChannelCreation, announcementThreads, autoUpdatePresence, autoStatusCalendarEvents,
-            announceChannel, welcomeMessage
+            announceChannel, approvalChannel, welcomeMessage, waitlistConfirmation, waitlistConfirmHours
         } = req.body;
+
+        // Confirmation period of waitlist offers in whole hours (B-15); left out = default
+        const hasHours = waitlistConfirmHours !== undefined && waitlistConfirmHours !== null && waitlistConfirmHours !== '';
+        if (hasHours && !isValidConfirmHours(Number(waitlistConfirmHours))) {
+            return res.status(400).json({ error: 'Die Bestätigungsfrist muss zwischen 1 und 72 Stunden liegen.' });
+        }
 
         const settings = {
             statusType: statusType || 'online',
@@ -1980,16 +1949,25 @@ router.put('/bot/settings', async (req, res) => {
             autoUpdatePresence: !!autoUpdatePresence,
             autoStatusCalendarEvents: !!autoStatusCalendarEvents,
             announceChannel: announceChannel || '',
+            approvalChannel: approvalChannel || '',
             welcomeMessage: welcomeMessage || '',
+            waitlistConfirmation: waitlistConfirmation !== false,
+            waitlistConfirmHours: hasHours ? Number(waitlistConfirmHours) : 12,
         };
 
         // Only text channels of the server; while the list cannot be read, only the stored value or none (B-02)
         const stored = await getBotSettings();
-        if (settings.announceChannel && settings.announceChannel !== stored.announceChannel) {
+        const changedChannels = [
+            ['announceChannel', 'Ankündigungskanal nicht gefunden.'],
+            ['approvalChannel', 'Freigabe-Kanal nicht gefunden.']
+        ].filter(([key]) => settings[key] && settings[key] !== stored[key]);
+        if (changedChannels.length > 0) {
             const guildId = process.env.DISCORD_GUILD_ID;
             const channels = guildId ? await getGuildChannels(guildId) : [];
-            if (!channels.some(channel => channel.id === settings.announceChannel && channel.type === 'text')) {
-                return res.status(400).json({ error: 'Ankündigungskanal nicht gefunden.' });
+            for (const [key, error] of changedChannels) {
+                if (!channels.some(channel => channel.id === settings[key] && channel.type === 'text')) {
+                    return res.status(400).json({ error });
+                }
             }
         }
 

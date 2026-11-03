@@ -39,6 +39,12 @@ test('all registrations add pending and waitlisted, never rejected or open invit
     for (const never of ['r1', 'rg', 'open']) assert.ok(!all.includes(never), never);
 });
 
+test('all registrations reach the bench, accepted only does not (B-17)', () => {
+    const registrations = [reg('a1', 'accepted'), reg('a2', 'accepted'), reg('t1', 'tentative'), reg('t2', 'tentative'), reg('t3', 'tentative')];
+    assert.deepEqual(messageRecipients(registrations, 'all').sort(), ['a1', 'a2', 't1', 't2', 't3']);
+    assert.deepEqual(messageRecipients(registrations, 'accepted').sort(), ['a1', 'a2']);
+});
+
 test('a member who is also a guest is addressed once', () => {
     const registrations = [reg('a1', 'accepted', { guests: ['a2'] }), reg('a2', 'accepted')];
     assert.deepEqual(messageRecipients(registrations, 'accepted').sort(), ['a1', 'a2']);

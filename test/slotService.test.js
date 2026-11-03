@@ -4,7 +4,7 @@ const {
     MAX_SLOTS, getSlots, hasSlots, findSlot, formatSlotLabel, isSingleEmoji, sumCapacity,
     normalizeSlots, countSlotOccupancy, sanitizeAltSlotIds, pickSlot,
     pickWaitlistPromotions, resolveAcceptanceSlot, buildSlotSummary, withSlotSummary,
-    buildRoster, validateSlotChange
+    buildRoster, validateSlotChange, decideStatus
 } = require('../utils/slotService');
 
 const SLOTS = [
@@ -85,6 +85,14 @@ test('slot occupancy counts pending and accepted registrations only', () => {
         { status: 'waitlisted', slotId: null },
         { status: 'rejected', slotId: 'heal' },
         { status: 'accepted', slotId: 'removed-slot' }
+    ]);
+    assert.deepEqual(occupancy, { tank: 1, heal: 1, dps: 0 });
+});
+
+test('an offered registration holds its slot (B-15)', () => {
+    const occupancy = countSlotOccupancy(SLOTS, [
+        { status: 'offered', slotId: 'tank' },
+        { status: 'accepted', slotId: 'heal' }
     ]);
     assert.deepEqual(occupancy, { tank: 1, heal: 1, dps: 0 });
 });
@@ -194,7 +202,7 @@ test('the roster lists members per slot and the waitlist in order', () => {
 test('the roster of a normal event counts guests and has no slots', () => {
     const registrations = [slotReg('a', 'accepted', undefined, '1', { guests: ['g1'] }), slotReg('w', 'waitlisted', undefined, '2')];
     const roster = buildRoster({ maxParticipants: 10 }, registrations);
-    assert.deepEqual(roster, { taken: 2, capacity: 10, waitlistCount: 1, places: { taken: 2, capacity: 10, guests: 1, pending: 0, waitlist: 1 }, slots: [], waitlist: [] });
+    assert.deepEqual(roster, { taken: 2, capacity: 10, waitlistCount: 1, places: { taken: 2, capacity: 10, guests: 1, pending: 0, waitlist: 1, bench: 0 }, benchCount: 0, slots: [], waitlist: [] });
     assert.equal(buildRoster({ maxParticipants: 0 }, []).capacity, 0);
 });
 
@@ -232,4 +240,45 @@ test('accepting without a known main role prefers a free slot over a false overb
         slotReg('w', 'waitlisted', null, '2', { preferredSlotId: 'gone', altSlotIds: [] })
     ];
     assert.deepEqual(resolveAcceptanceSlot(SLOTS, registrations, registrations[1]), { slotId: 'heal', overbooked: false });
+});
+
+test('a slot held by an offer is not given to the next waitlist entry (B-15)', () => {
+    const registrations = [
+        slotReg('o', 'offered', 'tank', '2026-10-01T08:00:00.000Z'),
+        slotReg('wTank', 'waitlisted', null, '2026-10-01T09:00:00.000Z', { preferredSlotId: 'tank' })
+    ];
+    assert.deepEqual(pickWaitlistPromotions(SLOTS, registrations), []);
+});
+
+test('decideStatus gives a new registration its main role, a fallback or the waitlist', () => {
+    const event = { slots: SLOTS, approvalMode: 'instant' };
+    const registrations = [slotReg('a', 'accepted', 'tank', '1'), slotReg('b', 'accepted', 'heal', '2'), slotReg('c', 'pending', 'heal', '3')];
+    assert.deepEqual(decideStatus(event, registrations, { preferredSlotId: 'dps' }), { status: 'accepted', slotId: 'dps' });
+    assert.deepEqual(decideStatus(event, registrations, { preferredSlotId: 'tank', altSlotIds: ['heal', 'dps'] }), { status: 'accepted', slotId: 'dps' });
+    assert.deepEqual(decideStatus(event, registrations, { preferredSlotId: 'tank', altSlotIds: ['heal'] }), { status: 'waitlisted', slotId: null });
+    assert.deepEqual(decideStatus({ ...event, approvalMode: 'manual' }, registrations, { preferredSlotId: 'dps' }), { status: 'pending', slotId: 'dps' });
+});
+
+test('decideStatus counts guests against the places of an event without slots', () => {
+    const registrations = [slotReg('a', 'accepted', undefined, '1', { guests: ['g1'] }), slotReg('b', 'pending', undefined, '2')];
+    assert.deepEqual(decideStatus({ maxParticipants: 4, approvalMode: 'instant' }, registrations), { status: 'accepted', slotId: null });
+    assert.deepEqual(decideStatus({ maxParticipants: 4, approvalMode: 'manual' }, registrations, { guestCount: 1 }), { status: 'waitlisted', slotId: null });
+    assert.deepEqual(decideStatus({ maxParticipants: 3 }, registrations), { status: 'waitlisted', slotId: null });
+    assert.deepEqual(decideStatus({ maxParticipants: 0 }, registrations, { guestCount: 5 }), { status: 'pending', slotId: null });
+});
+
+test('tentative registrations hold no slot and stand on the bench of the roster (B-17)', () => {
+    const registrations = [
+        slotReg('a', 'accepted', 'tank', '1'),
+        slotReg('t', 'tentative', null, '2', { preferredSlotId: 'tank' }),
+        slotReg('u', 'tentative', null, '3', { slotId: 'heal', preferredSlotId: 'heal' })
+    ];
+    assert.deepEqual(countSlotOccupancy(SLOTS, registrations), { tank: 1, heal: 0, dps: 0 });
+    // Even a stray slot id on a tentative registration takes no place
+    assert.deepEqual(decideStatus({ slots: SLOTS, approvalMode: 'instant' }, registrations, { preferredSlotId: 'heal' }), { status: 'accepted', slotId: 'heal' });
+    const roster = buildRoster({ slots: SLOTS }, registrations);
+    assert.equal(roster.benchCount, 2);
+    assert.equal(roster.places.bench, 2);
+    assert.deepEqual(roster.slots[0].members.map(member => member.displayName), ['Name a']);
+    assert.deepEqual(roster.waitlist, []);
 });

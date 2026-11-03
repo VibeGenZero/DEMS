@@ -14,8 +14,8 @@ const CHANGEABLE_STATUSES = ['draft', 'active'];
 // Settings the following dates take from the edited one; status, dates, check-in and origin stay per date
 const SERIES_FIELDS = [
     'title', 'description', 'bannerUrl', 'accentColor', 'location', 'category', 'maxParticipants', 'slots',
-    'allowGuests', 'accessMode', 'requiredRoles', 'approvalMode', 'assignRoleId', 'formFields', 'reminderHours',
-    'checkinMessage', 'customBotMessages', 'autoCreateChannels', 'channelConfig'
+    'allowGuests', 'allowTentative', 'accessMode', 'requiredRoles', 'approvalMode', 'assignRoleId', 'formFields', 'reminderHours',
+    'checkinMessage', 'customBotMessages', 'autoCreateChannels', 'channelConfig', 'announceChannelId'
 ];
 
 /**
@@ -195,5 +195,5 @@ function slotsForDate(rawSlots, targetSlots) {
 
 module.exports = {
     SHORTEN_SERIES_MESSAGE, SERIES_FIELDS, followingDates, transferTime, nextSeriesStart, planExtension,
-    seriesUpdateFields, slotsForDate, localDay
+    seriesUpdateFields, slotsForDate, localDay, zonedParts, fromZonedParts
 };

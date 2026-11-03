@@ -25,6 +25,7 @@ const FULL_EVENT = {
     autoCreateChannels: true,
     channelConfig: { type: 'voice', voiceName: 'Raid', textName: '' },
     customBotMessages: { registration: 'Danke', accepted: '', rejected: '' },
+    announceChannelId: '120000000000000003',
     // Never part of a template
     startDate: '2099-03-06T19:00:00.000Z',
     endDate: '2099-03-06T22:00:00.000Z',
@@ -58,6 +59,13 @@ test('a template keeps exactly the recurring event settings', () => {
     assert.deepEqual(settings.location, { text: 'Raid-Kanal', channelId: 'c1', channelType: 'voice' });
 });
 
+test('a template keeps the announcement channel as a string (B-11)', () => {
+    assert.equal(TEMPLATE_FIELDS.includes('announceChannelId'), true);
+    assert.equal(pickTemplateSettings(FULL_EVENT).settings.announceChannelId, '120000000000000003');
+    assert.equal(pickTemplateSettings({ announceChannelId: 42 }).settings.announceChannelId, '');
+    assert.equal(pickTemplateSettings({}).settings.announceChannelId, '');
+});
+
 test('a template never holds date or lifecycle data', () => {
     const { settings } = pickTemplateSettings(FULL_EVENT);
     for (const field of ['startDate', 'endDate', 'registrationDeadline', 'unregisterDeadline', 'status', 'recurring',
@@ -81,6 +89,7 @@ test('missing template settings get the defaults of a new event', () => {
     assert.equal(settings.accessMode, 'open');
     assert.equal(settings.approvalMode, 'manual');
     assert.equal(settings.allowGuests, true);
+    assert.equal(settings.allowTentative, false);
     assert.equal(settings.autoCreateChannels, false);
     assert.deepEqual(settings.formFields, []);
     assert.deepEqual(settings.slots, []);
@@ -101,6 +110,12 @@ test('template slots set the capacity and turn guests off like an event', () => 
     assert.ok(settings.slots.every(slot => slot.id));
     assert.equal(settings.maxParticipants, 5);
     assert.equal(settings.allowGuests, false);
+});
+
+test('templates keep „Vielleicht“ (B-17)', () => {
+    assert.equal(TEMPLATE_FIELDS.includes('allowTentative'), true);
+    assert.equal(pickTemplateSettings({ allowTentative: true }).settings.allowTentative, true);
+    assert.equal(pickTemplateSettings({ allowTentative: 'yes' }).settings.allowTentative, false);
 });
 
 test('invalid template slots are refused with the slot sentence', () => {

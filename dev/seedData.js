@@ -160,7 +160,10 @@ function buildEvents(clock) {
             category: 'Gaming',
             accentColor: '#8b5cf6',
             reminderHours: [{ hours: 24, sent: false }, { hours: 1, sent: false }],
-            location: { text: 'Lobby', channelId: CHANNEL_ID.LOBBY, channelType: 'voice' }
+            location: { text: 'Lobby', channelId: CHANNEL_ID.LOBBY, channelType: 'voice' },
+            // Synced to Discord (B-09): saving or cancelling it shows the server event in the mock log
+            discordScheduledEventId: '180000000000000001',
+            discordScheduledEventStatus: 'scheduled'
         }),
         [EVENT_ID.FORM]: buildEvent(clock, {
             title: 'Turnier: Arena-Cup',
@@ -188,8 +191,12 @@ function buildEvents(clock) {
         [EVENT_ID.ROLE]: buildEvent(clock, {
             title: 'Raid: Schattenfestung',
             description: 'Nur für Mitglieder mit der Rolle **Raid-Team**.',
+            // „Ankündigen“ posts in #events instead of the default channel (B-11)
+            announceChannelId: CHANNEL_ID.EVENTS,
             maxParticipants: 6,
             allowGuests: false,
+            // „Vielleicht“ / Ersatzbank (B-17): Dennis waits on the bench for the healer role
+            allowTentative: true,
             slots: [
                 { id: RAID_SLOT_ID.TANK, name: 'Tank', emoji: '🛡️', capacity: 1 },
                 { id: RAID_SLOT_ID.HEAL, name: 'Heiler', emoji: '💚', capacity: 2 },
@@ -231,7 +238,14 @@ function buildEvents(clock) {
             checkinEnabled: true,
             checkinCode: CHECKIN_CODE,
             checkinMessage: 'Schön, dass du da bist! Viel Spaß beim Marathon.',
-            eventStartNotificationSent: true
+            eventStartNotificationSent: true,
+            // Its Discord server event runs; „Beenden“ completes it (B-09)
+            discordScheduledEventId: '180000000000000002',
+            discordScheduledEventStatus: 'active',
+            // „Beenden“ takes the role from its accepted members and deletes the channels (B-10)
+            assignRoleId: ROLE_ID.EVENT,
+            discordChannelId: '190000000000000001',
+            discordTextChannelId: '190000000000000002'
         }),
         [EVENT_ID.PAST]: buildEvent(clock, {
             title: 'Retro-Spieleabend',
@@ -244,7 +258,12 @@ function buildEvents(clock) {
             checkinEnabled: true,
             checkinCode: '481516',
             eventStartNotificationSent: true,
-            createdAt: clock.offset(-21 * DAY)
+            createdAt: clock.offset(-21 * DAY),
+            // Archived at start a day after its end, then cleaned up: the channels go and
+            // Aylin loses the role; Lena and Tom keep it for the running event (B-10)
+            assignRoleId: ROLE_ID.EVENT,
+            discordChannelId: '190000000000000003',
+            discordTextChannelId: '190000000000000004'
         }),
         // Ended three hours ago: over, but archived only a day after its end (W-01)
         [EVENT_ID.ENDED]: buildEvent(clock, {
@@ -406,6 +425,11 @@ function buildRegistrations(clock) {
         entry('role-felix', EVENT_ID.ROLE, felix, {
             status: 'waitlisted', slotId: null, preferredSlotId: RAID_SLOT_ID.TANK, altSlotIds: [], createdAt: clock.offset(-2 * DAY)
         }),
+        // „Vielleicht“ (B-17): on the bench for the healer role, no place taken
+        entry('role-dennis', EVENT_ID.ROLE, dennis, {
+            status: 'tentative', source: 'discord', slotId: null, preferredSlotId: RAID_SLOT_ID.HEAL, altSlotIds: [],
+            createdAt: clock.offset(-36 * HOUR), tentativeAt: clock.offset(-36 * HOUR)
+        }),
 
         // Workshop -> web-only form; Neo (newbie persona) is Chiara's guest and must not see her answers
         entry('bigform-chiara', EVENT_ID.BIG_FORM, chiara, {
@@ -422,11 +446,13 @@ function buildRegistrations(clock) {
             }
         }),
 
-        // Running event -> Tom is not checked in yet and can use CHECKIN_CODE
+        // Running event -> Tom is not checked in yet and can use CHECKIN_CODE; he has no Discord check-in
+        // invitation yet, so generating a new code shows one in the mock log (B-07). Jonas got his
+        // invitation at the start and has not clicked „Einchecken“ yet
         entry('running-tom', EVENT_ID.RUNNING, tom),
         entry('running-lena', EVENT_ID.RUNNING, lena, checkedIn(clock.offset(-20 * MINUTE))),
         entry('running-kira', EVENT_ID.RUNNING, kira, checkedIn(clock.offset(-15 * MINUTE))),
-        entry('running-jonas', EVENT_ID.RUNNING, jonas),
+        entry('running-jonas', EVENT_ID.RUNNING, jonas, { checkinInvitedAt: clock.offset(-30 * MINUTE) }),
 
         // Past event with check-ins
         entry('past-lena', EVENT_ID.PAST, lena, checkedIn(clock.slot(-7, 19))),
@@ -443,6 +469,10 @@ function buildRegistrations(clock) {
         entry('series1-lena', SERIES_EVENT_IDS[0], lena),
         entry('series1-ben', SERIES_EVENT_IDS[0], ben),
         entry('series2-lena', SERIES_EVENT_IDS[1], lena),
+        // A freed place waits for Elif's confirmation until six hours from now (B-15)
+        entry('series2-elif', SERIES_EVENT_IDS[1], elif, {
+            status: 'offered', offer: { offeredAt: clock.offset(-2 * HOUR), expiresAt: clock.offset(6 * HOUR) }, createdAt: clock.offset(-3 * DAY)
+        }),
 
         // Profile page: a persona with a slot, one with a rejection, two with a cancelled event
         entry('role-mori', EVENT_ID.ROLE, mori, {
@@ -460,7 +490,7 @@ function buildRegistrations(clock) {
 
 function buildComments(clock) {
     const { mori, lena, kira, jonas, ben } = people;
-    const comment = (person, eventId, text, createdAt, replyTo = null) => ({
+    const comment = (person, eventId, text, createdAt, replyTo = null, fields = {}) => ({
         eventId,
         userId: person.userId,
         userName: person.displayName,
@@ -468,7 +498,8 @@ function buildComments(clock) {
         text,
         isAdmin: person === mori,
         replyTo,
-        createdAt
+        createdAt,
+        ...fields
     });
 
     return {
@@ -477,7 +508,13 @@ function buildComments(clock) {
         'dev-comment-open-3': comment(mori, EVENT_ID.OPEN, 'Start ist pünktlich um 19 Uhr, die Lobby ist 15 Minuten vorher offen.', clock.offset(-1 * DAY)),
         'dev-comment-form-1': comment(ben, EVENT_ID.FORM, 'Darf man als Duo antreten oder nur solo?', clock.offset(-3 * DAY)),
         'dev-comment-form-2': comment(mori, EVENT_ID.FORM, 'Nur solo — die Paarungen werden am Turniertag ausgelost.', clock.offset(-3 * DAY + 3 * HOUR), 'dev-comment-form-1'),
-        'dev-comment-running-1': comment(lena, EVENT_ID.RUNNING, 'Stream läuft, kommt rein!', clock.offset(-10 * MINUTE))
+        'dev-comment-running-1': comment(lena, EVENT_ID.RUNNING, 'Stream läuft, kommt rein!', clock.offset(-10 * MINUTE)),
+        // Raid with discussion thread (B-16): Kira wrote in Discord, Lena answered on the website
+        // and her answer was mirrored into the thread
+        'dev-comment-role-1': comment(kira, EVENT_ID.ROLE, 'Bringt bitte Tränke mit, der Endboss ist zäh.', clock.offset(-1 * DAY),
+            null, { source: 'discord', discordMessageId: '150000000000000101' }),
+        'dev-comment-role-2': comment(lena, EVENT_ID.ROLE, 'Ich hab 20 Stück dabei!', clock.offset(-1 * DAY + HOUR),
+            'dev-comment-role-1', { source: 'web', discordMessageId: '150000000000000102' })
     };
 }
 
@@ -650,6 +687,35 @@ function buildEventTemplates(clock) {
                 customBotMessages: {}
             },
             createdAt: clock.offset(-10 * DAY),
+            createdBy: people.mori.userId,
+            updatedAt: null,
+            updatedBy: null
+        },
+        // Without slots: /event erstellen prefills title, description and places from it (B-13)
+        'dev-template-community': {
+            name: 'Community-Abend',
+            settings: {
+                title: 'Community-Abend',
+                description: 'Brettspiele, Quatschen und Snacks im Voice.',
+                bannerUrl: '',
+                accentColor: '#f59e0b',
+                category: 'Community',
+                location: null,
+                maxParticipants: 12,
+                accessMode: 'open',
+                requiredRoles: [],
+                approvalMode: 'instant',
+                allowGuests: true,
+                slots: [],
+                assignRoleId: '',
+                formFields: [],
+                reminderHours: [{ hours: 24 }],
+                checkinMessage: '',
+                autoCreateChannels: false,
+                channelConfig: {},
+                customBotMessages: {}
+            },
+            createdAt: clock.offset(-4 * DAY),
             createdBy: people.mori.userId,
             updatedAt: null,
             updatedBy: null
