@@ -53,7 +53,7 @@ Line counts as of 2026-10-02 (approximate; they drift).
 | `.github/workflows/ci.yml` | GitHub Actions pipeline (tests + Docker image check) | [ci](../ops/ci.md) |
 | `.gitlab-ci.yml`, `ci/runner/` | GitLab CI pipeline and the self-hosted runner setup | [ci](../ops/ci.md) |
 | `updates.json` | release notes of every version since 1.1.0 (newest first, entries may be marked `highlight`), served at `/api/updates`; popup via `core/updates.js`, page `#news` via `pages/news.js` | [server](../modules/server.md) |
-| `landing/` | standalone marketing page (not served by the app) | [landing-page](../modules/landing-page.md) |
+| `landing/` | local landing page, git-ignored (not served by the app) | [landing-page](../modules/landing-page.md) |
 | `docs/superpowers/specs`, `docs/superpowers/plans` | design specs and implementation plans | [decisions](../reference/decisions.md) |
 | `docs/security/` | security audit (2026-04-22) + PoC | [security](../concepts/security.md) |
 | `ISSUE.md` | older security audit notes (2026-02-15) | [decisions](../reference/decisions.md) |

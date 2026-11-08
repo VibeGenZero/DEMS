@@ -37,3 +37,6 @@ playwright-report/
 
 # Superpowers working files (brainstorming mockups, plan ledgers)
 .superpowers/
+
+# Landing page: local only, not part of the repo (spec: docs/superpowers/specs/2026-11-08-landing-page-design.md)
+landing/
