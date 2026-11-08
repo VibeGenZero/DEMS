@@ -11,7 +11,7 @@ process.chdir(tmpDir);
 delete process.env.NODE_ENV;
 delete process.env.DEV_MOCK;
 for (const key of Object.keys(process.env)) {
-    if (key.startsWith('FIREBASE_') || key.startsWith('DISCORD_')) delete process.env[key];
+    if (key === 'DATABASE_URL' || key.startsWith('PG') || key.startsWith('DISCORD_')) delete process.env[key];
 }
 process.env.SQLITE_PATH = path.join(tmpDir, 'real-exports.sqlite');
 

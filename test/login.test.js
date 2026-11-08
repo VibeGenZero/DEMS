@@ -99,12 +99,13 @@ test('logging out needs a POST with the CSRF token', async () => {
     assert.equal(await currentUser(client), null);
 });
 
-test('session and CSRF cookies are Secure in production only', async () => {
+// Production needs PostgreSQL (firebaseAdmin.js refuses SQLite there) -> runs where TEST_DATABASE_URL is set, e.g. in CI
+test('session and CSRF cookies are Secure in production only', { skip: !process.env.TEST_DATABASE_URL && 'TEST_DATABASE_URL nicht gesetzt' }, async () => {
     // GET /api/csrf-token creates the session and the CSRF token -> both cookies
     const development = await fetch(`${server.baseUrl}/api/csrf-token`);
     assert.doesNotMatch(sessionCookieOf(development), /;\s*Secure/i);
 
-    const production = await startServer(FIXTURE, serverEnv('login-production', { NODE_ENV: 'production' }));
+    const production = await startServer(FIXTURE, serverEnv('login-production', { NODE_ENV: 'production', DATABASE_URL: process.env.TEST_DATABASE_URL }));
     try {
         // Production runs behind a TLS proxy (trust proxy 1) that sets X-Forwarded-Proto
         const res = await fetch(`${production.baseUrl}/api/csrf-token`, { headers: { 'X-Forwarded-Proto': 'https' } });
