@@ -25,8 +25,16 @@ test:
   # Same Node major as the Dockerfile. The full (non-slim) image ships python3, make
   # and g++, which npm's implicit node-gyp step for better-sqlite3 needs.
   image: node:24-bookworm
+  # The document store contract tests also run against a real PostgreSQL
+  services:
+    - name: postgres:18-alpine
+      alias: postgres
   variables:
     npm_config_cache: $CI_PROJECT_DIR/.npm
+    POSTGRES_USER: dems
+    POSTGRES_PASSWORD: dems
+    POSTGRES_DB: dems_test
+    TEST_DATABASE_URL: postgres://dems:dems@postgres:5432/dems_test
   cache:
     key:
       files:
@@ -58,20 +66,24 @@ docker-build:
         - package.json
         - package-lock.json
         - compose*.yaml
+        - db/**/*
     # Rules match in order; a bare "never" must come last or it swallows the rest.
     - when: never
   script:
     - docker build --target runtime --tag dems:ci .
     - docker build --target dev --tag dems:ci-dev .
-    # Start the production image once and wait for its HEALTHCHECK (GET /healthz).
-    - docker run --detach --name dems-ci --env SESSION_SECRET=ci-only-secret dems:ci
+    # Start compose.yaml (password init, PostgreSQL, DEMS) and wait for the DEMS
+    # HEALTHCHECK (GET /healthz); production refuses to run without PostgreSQL.
+    - printf 'SESSION_SECRET=ci-only-secret\n' > .env
+    - docker compose -f compose.yaml up --detach --build
     - |
+      container=$(docker compose -f compose.yaml ps -q dems)
       for i in $(seq 1 40); do
-        status=$(docker inspect --format '{{.State.Health.Status}}' dems-ci)
+        status=$(docker inspect --format '{{.State.Health.Status}}' "$container")
         echo "health: $status"
         if [ "$status" = healthy ]; then exit 0; fi
         if [ "$status" = unhealthy ]; then break; fi
         sleep 3
       done
-      docker logs dems-ci
+      docker compose -f compose.yaml logs
       exit 1

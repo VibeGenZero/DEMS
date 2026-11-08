@@ -131,7 +131,7 @@ router.get('/discord/callback', async (req, res) => {
                 avatar: avatarUrl
             });
         } catch (err) {
-            console.error('Failed to save user to Firestore:', err.message);
+            console.error('Failed to save user to the database:', err.message);
         }
 
         await startUserSession(req, {

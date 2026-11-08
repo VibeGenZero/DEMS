@@ -56,18 +56,18 @@ ist erkennbar, ob sie über Discord oder die Website erstellt wurde.
 Das Projekt basiert auf einem modernen Tech-Stack:
 
 *   **Backend**: Node.js, Express
-*   **Datenbank**: Google Firebase (Firestore) – *optional*, mit automatischem SQLite-Fallback
+*   **Datenbank**: PostgreSQL (Produktion, per Docker Compose automatisch eingerichtet), SQLite für Entwicklung und Tests
 *   **Bot-Integration**: Discord.js
 *   **Frontend**: HTML5, CSS3, JavaScript (EJS Templating)
 
-### 🗄️ Datenbank: Firebase oder SQLite
+### 🗄️ Datenbank: PostgreSQL oder SQLite
 
-DEMS ist **nicht mehr zwingend von Firebase abhängig**. Beim Start entscheidet die App automatisch:
+Seit 3.0 nutzt DEMS kein Firebase mehr. Beim Start entscheidet die App:
 
-*   **Firebase Firestore** – wird genutzt, wenn alle `FIREBASE_*`-Werte in der `.env` gesetzt sind.
-*   **Lokale SQLite-Datenbank** – wird automatisch als Fallback genutzt, wenn **keine** `FIREBASE_*`-Werte gesetzt sind. Es ist keine externe Datenbank nötig; die Daten liegen in einer Datei (Standard: `./data/dems.sqlite`, konfigurierbar über `SQLITE_PATH`).
+*   **PostgreSQL** – wird genutzt, wenn `DATABASE_URL` oder `PGHOST` gesetzt ist. `docker compose up` startet PostgreSQL mit und richtet Datenbank, Nutzer und Passwort beim ersten Start selbst ein. In Produktion (`NODE_ENV=production`) startet DEMS ohne PostgreSQL nicht.
+*   **Lokale SQLite-Datenbank** – wird für Entwicklung und Tests genutzt, wenn keine PostgreSQL-Werte gesetzt sind. Es ist keine externe Datenbank nötig; die Daten liegen in einer Datei (Standard: `./data/dems.sqlite`, konfigurierbar über `SQLITE_PATH`).
 
-> **Hinweis:** Auf Plattformen mit flüchtigem Dateisystem (z. B. Heroku, Railway ohne persistentes Volume) gehen SQLite-Daten bei einem Neustart verloren. Für dauerhafte Speicherung in der Cloud entweder Firebase verwenden oder ein persistentes Volume einbinden.
+> **Hinweis:** Auf Plattformen mit flüchtigem Dateisystem (z. B. Heroku, Railway ohne persistentes Volume) gehen SQLite-Daten bei einem Neustart verloren. Für den Betrieb deshalb PostgreSQL verwenden.
 
 ## 📦 Installation & Einrichtung
 
@@ -76,7 +76,6 @@ Folge diesen Schritten, um das Projekt lokal einzurichten:
 ### 1. Voraussetzungen
 Stelle sicher, dass du folgende Tools installiert hast:
 *   [Node.js](https://nodejs.org/) (Version 22 oder höher) – oder nur [Docker](https://docs.docker.com/get-docker/), siehe unten
-*   Optional: ein Firebase-Projekt (sonst wird SQLite genutzt)
 *   Eine Discord-Applikation im [Developer Portal](https://discord.com/developers/applications)
 
 ### 2. Installation
@@ -98,10 +97,7 @@ DISCORD_CLIENT_SECRET=dein_client_secret
 DISCORD_BOT_TOKEN=dein_bot_token
 DISCORD_REDIRECT_URI=http://localhost:3000/auth/discord/callback
 
-# Firebase Konfiguration
-FIREBASE_API_KEY=dein_api_key
-FIREBASE_AUTH_DOMAIN=dein_project.firebaseapp.com
-FIREBASE_PROJECT_ID=dein_project_id
+# Datenbank: lokal ohne Eintrag SQLite, mit Docker Compose automatisch PostgreSQL
 ...
 ```
 
@@ -116,7 +112,7 @@ Der Server läuft nun unter `http://localhost:3000`.
 
 ## 🧪 Dev-Modus mit Dummy-Daten
 
-Zum Entwickeln und Ausprobieren ohne Discord-Token, OAuth und Firebase:
+Zum Entwickeln und Ausprobieren ohne Discord-Token, OAuth und PostgreSQL:
 
 ```bash
 npm install
@@ -129,7 +125,7 @@ npm run dev:mock
 *   Alle Termine sind relativ zum Zeitpunkt des ersten Seedens. Nach ein paar Tagen liegen die Beispiel-Events in der Vergangenheit und das „laufende“ Event (Check-in `DEMO42`) läuft nur ca. 2,5 Stunden lang — `npm run dev:reset` setzt alle Termine wieder relativ zu jetzt.
 *   Discord ist simuliert: Rollen, Channels und Scheduled Events kommen von einem Fake-Server, DMs, Ankündigungen und Rollenvergaben erscheinen als `[MOCK-DISCORD]` in der Konsole.
 *   Check-in-Code des laufenden Beispiel-Events: `DEMO42`. Admin-Reset-Passwort (Panic-Mode, System-Reset): `dev`, sofern in der `.env` nichts anderes steht.
-*   Eine `.env` ist nicht nötig. Vorhandene Discord- und Firebase-Werte werden im Dev-Modus ignoriert.
+*   Eine `.env` ist nicht nötig. Vorhandene Discord- und PostgreSQL-Werte werden im Dev-Modus ignoriert.
 *   Der Dev-Modus lässt sich nicht in Produktion aktivieren: mit `NODE_ENV=production` bricht der Start ab.
 
 ### Dev-Modus mit Docker
@@ -156,16 +152,17 @@ docker compose logs -f dems
 ```
 
 *   Die App läuft unter `http://localhost:3000`. Einen anderen Host-Port setzt du über `DEMS_PORT` in der `.env`.
-*   Die SQLite-Datenbank liegt im Volume `dems-data` (`/app/data` im Container) und überlebt Rebuilds und Updates.
+*   Compose startet drei Dienste: `db-secret` erzeugt beim ersten Start ein zufälliges Datenbank-Passwort (Volume `dems-secrets`), `postgres` hält die Daten (Volume `dems-pg`, kein Port nach außen), `dems` ist die App. Hochgeladene Banner liegen im Volume `dems-data`. Alles überlebt Rebuilds und Updates.
+*   Backup der Datenbank: `docker compose exec -T postgres pg_dump -U dems dems > dems-backup.sql`.
 *   Der Container hat einen Healthcheck auf `GET /healthz` (`docker compose ps` zeigt den Status).
 *   Stoppen mit `docker compose down` – die Daten bleiben erhalten. `docker compose down -v` löscht auch das Volume.
 *   Update: `git pull && docker compose up -d --build`.
 
-Ohne Compose:
+Ohne Compose braucht der Container einen eigenen PostgreSQL-Server:
 
 ```bash
 docker build -t dems .
-docker run -d --init --env-file .env -e PORT=3000 -e SQLITE_PATH=/app/data/dems.sqlite \
+docker run -d --init --env-file .env -e PORT=3000 -e DATABASE_URL=postgres://dems:passwort@host:5432/dems \
   -p 3000:3000 -v dems-data:/app/data --name dems dems
 ```
 

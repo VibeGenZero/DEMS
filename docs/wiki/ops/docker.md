@@ -9,7 +9,7 @@ see_also: [deployment, dev-mock-mode]
 ---
 # Docker — image, stages, compose files
 
-> TL;DR: Multi-stage `Dockerfile` on `node:24-bookworm-slim`: `runtime` (default, production: non-root `node` user, `NODE_ENV=production`, SQLite and uploaded banners (`/app/data/uploads`, W-12) on volume `/app/data`, healthcheck `GET /healthz`) and `dev` (all deps, nodemon polling, used by `compose.dev.yaml`). `compose.yaml` runs production from `.env`; `compose.dev.yaml` runs the dev mock mode with the source bind-mounted.
+> TL;DR: Multi-stage `Dockerfile` on `node:24-bookworm-slim`: `runtime` (default, production: non-root `node` user, `NODE_ENV=production`, uploaded banners (`/app/data/uploads`, W-12) on volume `/app/data`, healthcheck `GET /healthz`) and `dev` (all deps, nodemon polling, used by `compose.dev.yaml`). `compose.yaml` runs production from `.env` together with PostgreSQL and a generated database password; `compose.dev.yaml` runs the dev mock mode with the source bind-mounted.
 
 ## Dockerfile stages
 
@@ -26,7 +26,7 @@ see_also: [deployment, dev-mock-mode]
 
 | File | Use | Key settings |
 |---|---|---|
-| `compose.yaml` | production build + run | `env_file: .env`; pinned `NODE_ENV=production`, `PORT=3000`, `SQLITE_PATH=/app/data/dems.sqlite`; port `${DEMS_PORT:-3000}:3000`; volume `dems-data`; `init: true`; `restart: unless-stopped` |
+| `compose.yaml` | production build + run | three services: `db-secret` (one-shot `postgres:18-alpine`: writes a random password to `db_password` in volume `dems-secrets` if missing, `chmod 0444`), `postgres` (`postgres:18-alpine`, db/user `dems`, `POSTGRES_PASSWORD_FILE`, data in volume `dems-pg` at `/var/lib/postgresql`, healthcheck `pg_isready`, **no ports**), `dems` (`env_file: .env`; pinned `NODE_ENV=production`, `PORT=3000`, `PGHOST=postgres`, `PGPORT`, `PGDATABASE`, `PGUSER`, `PGPASSWORD_FILE=/run/dems-secrets/db_password`; port `${DEMS_PORT:-3000}:3000`; volumes `dems-data` + `dems-secrets` read-only; `depends_on` postgres healthy; `init: true`; `restart: unless-stopped`) |
 | `compose.dev.yaml` | dev mock mode | target `dev`; optional `.env`; `127.0.0.1:${DEMS_DEV_PORT:-3000}:3000`; bind mount `.:/app` + anonymous `/app/node_modules` + volume `dems-dev-data` |
 
 ## Commands
@@ -41,7 +41,7 @@ docker build -t <user>/dems:latest . && docker push <user>/dems:latest
 
 Published image: private Docker Hub repository `moritakahashi/dems` (tags `latest` + commit sha); see [deployment](deployment.md).
 
-GitLab CI builds both targets and waits for the runtime HEALTHCHECK in the `docker-build` job, without pushing; see [ci](ci.md).
+CI builds both targets, starts `compose.yaml` with a dummy `.env` and waits for the HEALTHCHECK of `dems` in the `docker-build` job, without pushing; see [ci](ci.md). The runtime image alone does not start (production needs PostgreSQL).
 
 ## .dockerignore
 

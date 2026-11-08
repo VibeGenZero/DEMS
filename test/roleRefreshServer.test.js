@@ -11,7 +11,7 @@ const dbPath = path.join(tmpDir, 'dev.sqlite');
 process.chdir(tmpDir);
 process.env.SQLITE_PATH = dbPath;
 for (const key of Object.keys(process.env)) {
-    if (key.startsWith('FIREBASE_')) delete process.env[key];
+    if (key === 'DATABASE_URL' || key.startsWith('PG')) delete process.env[key];
 }
 
 const { PersistentSessionStore } = require('../utils/sessionStore');

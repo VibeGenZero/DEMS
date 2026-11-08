@@ -31,7 +31,7 @@ router.get('/registrations', requireAuth, async (req, res) => {
         // Batch-load events (avoid N+1 query problem)
         const eventMap = new Map();
         const eventIdArr = [...eventIds];
-        // Firestore 'in' queries support max 30 items per batch
+        // 'in' queries in batches of 30 ids (the old Firestore limit, kept for small queries)
         for (let i = 0; i < eventIdArr.length; i += 30) {
             const batch = eventIdArr.slice(i, i + 30);
             for (const eid of batch) {

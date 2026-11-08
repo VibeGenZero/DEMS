@@ -1,6 +1,6 @@
 ---
 id: dev-mock-mode
-title: Dev mock mode (dev/) — run without Discord and Firebase
+title: Dev mock mode (dev/) — run without Discord and PostgreSQL
 type: module
 tags: [dev, mock, seed, personas, local-development, testing]
 sources: [dev/mockMode.js, dev/mockGuild.js, dev/mockBot.js, dev/devAuth.js, dev/dev-login.css, dev/seed.js, dev/seedData.js, dev/banners, dev/start.js, dev/reset.js, compose.dev.yaml]
@@ -8,7 +8,7 @@ part_of: [architecture]
 depends_on: [bot, data-layer, routes-auth]
 see_also: [run-and-debug, testing, docker]
 ---
-# Dev mock mode (dev/) — run without Discord and Firebase
+# Dev mock mode (dev/) — run without Discord and PostgreSQL
 
 > TL;DR: `npm run dev:mock` (or `docker compose -f compose.dev.yaml up --build`) starts DEMS with `DEV_MOCK=true`: a separate SQLite file with seeded dummy data, a persona login instead of Discord OAuth, and a simulated Discord server whose actions are logged as `[MOCK-DISCORD]`. It refuses to start with `NODE_ENV=production`.
 
@@ -16,7 +16,7 @@ see_also: [run-and-debug, testing, docker]
 
 | File | Role |
 |---|---|
-| `dev/mockMode.js` | switch `IS_MOCK_MODE`; production guard (exit 1); forces env: `SQLITE_PATH` = `DEV_SQLITE_PATH` or `data/dems.dev.sqlite`, `UPLOAD_DIR` = `DEV_UPLOAD_DIR` or `data/dev-uploads` (uploaded banners, W-12), blank `FIREBASE_*` + bot token, mock guild/admin role/announce channel ids, `BASE_URL=http://localhost:<PORT>`; defaults `SESSION_SECRET=dems-dev-mock-secret`, `ADMIN_RESET_PASSWORD=dev` |
+| `dev/mockMode.js` | switch `IS_MOCK_MODE`; production guard (exit 1); forces env: `SQLITE_PATH` = `DEV_SQLITE_PATH` or `data/dems.dev.sqlite`, `UPLOAD_DIR` = `DEV_UPLOAD_DIR` or `data/dev-uploads` (uploaded banners, W-12), blank `DATABASE_URL`/`PG*` (always SQLite) + bot token, mock guild/admin role/announce channel ids, `BASE_URL=http://localhost:<PORT>`; defaults `SESSION_SECRET=dems-dev-mock-secret`, `ADMIN_RESET_PASSWORD=dev` |
 | `dev/mockGuild.js` | static mock server "DEMS Dev Server": roles (Admin, Moderator, Raid-Team, VIP, Event-Teilnehmer, Mitglied, managed "DEMS Bot"), channels (incl. non-public `#mod-intern`), 2 scheduled events, 4 personas, 9 members, `findMember`, `defaultAvatar` |
 | `dev/mockBot.js` | replaces the Discord-facing exports of `bot.js` (merged at the end of `bot.js`; calls between the `bot/` modules keep the real functions); `sendChannelMessage` logs the V2 component JSON and returns fake `{ channelId, messageId, guildId }`, `ensureAnnouncementThread` keeps a stored thread or logs `Diskussions-Thread "…" … eröffnet` with a fake id of the mock server, `refreshEventAnnouncements` logs `Ankündigung von "…" aktualisiert` + the payload, `refreshPollMessages` logs `Abstimmung "…" aktualisiert` + the payload, `markPollMessagesDeleted` logs the delete notice |
 | `dev/devAuth.js` | `/auth/discord` and `/auth/discord/callback` → `/auth/dev-login` (persona page; its look is `dev/dev-login.css`, served as `/auth/dev-login.css`, because the CSP allows no style element) → `/auth/dev-login/:personaId` starts the session like the real login (`startUserSession`: new session id + CSRF token) |

@@ -9,12 +9,12 @@ see_also: [security, known-issues]
 ---
 # Deployment — VPS with Docker (Hostinger + Traefik example)
 
-> TL;DR: Run the private image `moritakahashi/dems` (or build from source) with a compose file that passes `.env` into the container (`env_file`), keeps SQLite on a volume and sits behind a TLS reverse proxy. On a Hostinger VPS the Docker Manager stores projects under `/docker/<project>/` and Traefik routes `*.hstgr.cloud` hosts via container labels. One SemVer version lives in package, news and git tag; pre-release images carry the moving tag `beta`, live releases `latest`.
+> TL;DR: Run the private image `moritakahashi/dems` (or build from source) with a compose file that passes `.env` into the container (`env_file`), runs PostgreSQL next to DEMS (password generated on the first start) and sits behind a TLS reverse proxy. On a Hostinger VPS the Docker Manager stores projects under `/docker/<project>/` and Traefik routes `*.hstgr.cloud` hosts via container labels. One SemVer version lives in package, news and git tag; pre-release images carry the moving tag `beta`, live releases `latest`.
 
 ## Requirements
 
 - HTTPS in front of DEMS (Traefik, Caddy, PaaS) — plain `http://<ip>:3000` breaks the SPA (CSP `upgrade-insecure-requests`, see [security](../concepts/security.md)).
-- Persistent storage: Docker volume for SQLite, or Firebase. Uploaded banners always live on the local disk (`UPLOAD_DIR`, default `/app/data/uploads` in the image), so keep `/app/data` on a volume even with Firebase.
+- Persistent storage: PostgreSQL with its data on a volume (production refuses to start without it), plus `/app/data` on a volume for uploaded banners (`UPLOAD_DIR`, default `/app/data/uploads`).
 - Discord developer portal: redirect `https://<host>/auth/discord/callback`, Server Members Intent enabled.
 - Bot invited with the URL it logs on startup ("Bot Invite URL"); a bot invited before 2.7 lacks Connect and CreateEvents — re-invite or add them to the bot role.
 - `.env` with at least `SESSION_SECRET`, `BASE_URL=https://<host>`, Discord values ([configuration](configuration.md)).
@@ -25,6 +25,38 @@ Project folder `/docker/dems/` contains `docker-compose.yml` and the `.env` writ
 
 ```yaml
 services:
+  db-secret:
+    image: postgres:18-alpine
+    restart: "no"
+    volumes:
+      - dems-secrets:/secrets
+    command:
+      - sh
+      - -c
+      - |
+        if [ ! -s /secrets/db_password ]; then
+          head -c 32 /dev/urandom | base64 | tr '+/' '-_' | tr -d '=\n' > /secrets/db_password
+        fi
+        chmod 0444 /secrets/db_password
+
+  postgres:
+    image: postgres:18-alpine
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=dems
+      - POSTGRES_USER=dems
+      - POSTGRES_PASSWORD_FILE=/run/dems-secrets/db_password
+    volumes:
+      - dems-pg:/var/lib/postgresql
+      - dems-secrets:/run/dems-secrets:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dems -d dems"]
+      interval: 5s
+      retries: 12
+    depends_on:
+      db-secret:
+        condition: service_completed_successfully
+
   dems:
     image: moritakahashi/dems:latest
     container_name: dems
@@ -35,7 +67,13 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=3000
-      - SQLITE_PATH=/app/data/dems.sqlite
+      - PGHOST=postgres
+      - PGDATABASE=dems
+      - PGUSER=dems
+      - PGPASSWORD_FILE=/run/dems-secrets/db_password
+    depends_on:
+      postgres:
+        condition: service_healthy
     ports:
       - "3000"
     labels:
@@ -46,10 +84,15 @@ services:
       - traefik.http.services.dems.loadbalancer.server.port=3000
     volumes:
       - dems-data:/app/data
+      - dems-secrets:/run/dems-secrets:ro
 
 volumes:
   dems-data:
+  dems-pg:
+  dems-secrets:
 ```
+
+Traefik labels go on `dems` only; `postgres` publishes no port. Switching an existing 2.x/rc install over: replace the old file with this one, remove `FIREBASE_*` from `.env`, `docker compose up -d` — the database starts empty (3.0 has no Firestore import).
 
 Hostinger's own templates use `${COMPOSE_PROJECT_NAME}.${TRAEFIK_HOST}` for the host rule; a fixed host works as well. Pulling the private image needs `docker login` on the VPS (read-only access token).
 
@@ -59,7 +102,8 @@ Hostinger's own templates use `${COMPOSE_PROJECT_NAME}.${TRAEFIK_HOST}` for the 
 cd /docker/dems && docker compose pull && docker compose up -d --force-recreate
 docker compose logs -f
 docker inspect dems --format '{{range .Config.Env}}{{println .}}{{end}}' | cut -d= -f1   # which variables arrived (names only)
-docker run --rm -v dems_dems-data:/data -v $PWD:/backup alpine tar czf /backup/dems-backup.tgz -C /data .   # backup
+docker compose exec -T postgres pg_dump -U dems dems > dems-db-backup.sql                                    # database backup
+docker run --rm -v dems_dems-data:/data -v $PWD:/backup alpine tar czf /backup/dems-uploads.tgz -C /data .   # uploads backup
 ```
 
 ## Versions and pre-releases

@@ -1,5 +1,5 @@
 /**
- * express-session store on top of firebaseAdmin.js (SQLite or Firestore), so
+ * express-session store on top of firebaseAdmin.js (PostgreSQL or SQLite), so
  * logins survive restarts and deploys.
  *
  * - Write-through cache: this single process keeps every session it knows in

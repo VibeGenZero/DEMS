@@ -611,7 +611,7 @@ router.get('/:id/comments', requireAuth, async (req, res) => {
             // Older comments stored a wrapped avatar URL -> shown with the real one
             comments.push({ id: docSnap.id, ...comment, userAvatar: repairAvatarUrl(comment.userAvatar) });
         });
-        // Sort in memory to avoid Firestore composite index requirement
+        // Sort in memory (convention: no composite indexes)
         comments.sort((a, b) => (a.createdAt || '').localeCompare(b.createdAt || ''));
         res.json(comments);
     } catch (err) {

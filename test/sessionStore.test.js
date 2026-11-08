@@ -4,12 +4,12 @@ const path = require('path');
 const { promisify } = require('util');
 const { createTempDir } = require('./helpers');
 
-// Own SQLite file; the empty cwd keeps a local .env out, no FIREBASE_* -> SQLite backend
+// Own SQLite file; the empty cwd keeps a local .env out, no PostgreSQL variables -> SQLite backend
 const tmpDir = createTempDir('session-store');
 process.chdir(tmpDir);
 process.env.SQLITE_PATH = path.join(tmpDir, 'sessions.sqlite');
 for (const key of Object.keys(process.env)) {
-    if (key.startsWith('FIREBASE_')) delete process.env[key];
+    if (key === 'DATABASE_URL' || key.startsWith('PG')) delete process.env[key];
 }
 
 const { db, collection, doc, getDocs, deleteDoc } = require('../firebaseAdmin');

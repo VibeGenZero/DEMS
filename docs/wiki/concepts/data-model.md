@@ -2,7 +2,7 @@
 id: data-model
 title: Data model — collections and document shapes
 type: concept
-tags: [data-model, schema, collections, events, registrations, users, firestore]
+tags: [data-model, schema, collections, events, registrations, users, postgresql]
 sources: [routes/admin.js, utils/registrationService.js, utils/userProfile.js, utils/sessionStore.js, routes/events.js, utils/eventUtils.js, bot/registration.js, utils/checkin.js, bot/threadSync.js, dev/seedData.js, utils/eventTemplates.js, utils/botSettings.js]
 depends_on: [data-layer]
 see_also: [registration-flow, event-lifecycle, maintenance-mode, glossary]

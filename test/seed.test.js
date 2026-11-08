@@ -254,17 +254,13 @@ test('the seed refuses to run outside the dev mock mode', () => {
     assert.match(result.stderr, /nur im Dev-Mock-Modus/);
 });
 
-test('the seed refuses to touch Firebase', () => {
-    const firebaseEnv = {
-        FIREBASE_API_KEY: 'test', FIREBASE_AUTH_DOMAIN: 'test', FIREBASE_PROJECT_ID: 'test',
-        FIREBASE_STORAGE_BUCKET: 'test', FIREBASE_MESSAGING_SENDER_ID: 'test', FIREBASE_APP_ID: 'test'
-    };
-    // firebaseAdmin.js is loaded before the mock mode -> it picks Firestore
+test('the seed refuses to touch PostgreSQL', () => {
+    // firebaseAdmin.js is loaded before the mock mode -> it picks PostgreSQL (connects lazily, so no server needed)
     const result = runNode(`
         require(${repoPath('firebaseAdmin')});
         process.env.DEV_MOCK = 'true';
         require(${repoPath('dev/seed')});
-    `, firebaseEnv);
+    `, { DATABASE_URL: 'postgres://dems:x@127.0.0.1:1/dems' });
     assert.notEqual(result.status, 0);
-    assert.match(result.stderr, /nicht Firebase/);
+    assert.match(result.stderr, /nur die lokale SQLite-Datenbank befüllen, nicht PostgreSQL/);
 });

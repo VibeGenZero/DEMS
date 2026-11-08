@@ -7,7 +7,7 @@ const { createTempDir } = require('./helpers');
 // Own SQLite file and upload folder; the empty cwd keeps a local .env out
 const tmpDir = createTempDir('banners');
 process.chdir(tmpDir);
-for (const key of Object.keys(process.env)) if (key.startsWith('FIREBASE_')) delete process.env[key];
+for (const key of Object.keys(process.env)) if (key === 'DATABASE_URL' || key.startsWith('PG')) delete process.env[key];
 process.env.SQLITE_PATH = path.join(tmpDir, 'banners.sqlite');
 process.env.UPLOAD_DIR = path.join(tmpDir, 'uploads');
 process.env.BASE_URL = 'https://dems.example';
