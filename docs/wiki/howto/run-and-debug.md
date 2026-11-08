@@ -17,7 +17,7 @@ see_also: [docker, testing, known-issues]
 |---|---|---|
 | `npm run dev:mock` | nothing (Node ≥ 22) | mock mode, seeded `data/dems.dev.sqlite`, personas, `[MOCK-DISCORD]` logs, nodemon reload |
 | `npm run dev:reset` | — | wipe + reseed the dev database (works while running) |
-| `npm run dev` | `.env` with Discord values + `SESSION_SECRET` | real Discord, SQLite or Firebase, nodemon reload |
+| `npm run dev` | `.env` with Discord values + `SESSION_SECRET` | real Discord, SQLite (or PostgreSQL with `DATABASE_URL`), nodemon reload |
 | `npm start` | `.env` | like production, no reload |
 | `docker compose -f compose.dev.yaml up --build` | Docker | mock mode in a container (port bound to 127.0.0.1) |
 | `npm test` | — | all node:test suites |
@@ -40,7 +40,8 @@ Personas `admin`, `raider`, `member`, `newbie` (`/auth/dev-login/<id>`); check-i
 | Message / symptom | Fix |
 |---|---|
 | `SESSION_SECRET ist nicht gesetzt` | set it in `.env` (or use `npm run dev:mock`) |
-| `Unvollständige Firebase-Konfiguration` | set all six `FIREBASE_*` or none |
+| `Keine PostgreSQL-Verbindung konfiguriert` | production needs PostgreSQL: start with `compose.yaml` or set `DATABASE_URL`/`PGHOST` |
+| `PostgreSQL nicht erreichbar` / `Start abgebrochen` | database down or wrong credentials (DEMS retries 60 s); a failing migration step names itself |
 | `Server konnte nicht auf Port 3000 starten` | port in use → change `PORT` |
 | 429 "Zu viele Anfragen" while developing | rate limits (`/auth` 30 / 15 min); restart or use mock mode |
 | stuck on "Initialisiere System..." | page opened via `http://<ip>` instead of localhost/HTTPS ([security](../concepts/security.md)) |

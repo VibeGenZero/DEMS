@@ -44,7 +44,7 @@ async function getBotSettings() {
 }
 
 /**
- * Save bot settings to Firestore and apply them
+ * Save bot settings to the database and apply them
  */
 async function saveBotSettings(settings) {
     try {

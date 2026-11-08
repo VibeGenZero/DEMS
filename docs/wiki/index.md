@@ -59,7 +59,7 @@ sources: [scripts/wiki-graph.js, docs/wiki/graph.json, CLAUDE.md]
 | `server.js` | server, request-lifecycle, security |
 | `bot.js` | bot, discord-integration, reminders-presence, form-fields |
 | `bot/*.js` | bot (module table), plus the node of the area: discord-integration, reminders-presence, form-fields |
-| `firebaseAdmin.js`, `db/sqliteAdapter.js` | data-layer |
+| `firebaseAdmin.js`, `db/*.js`, `db/migrations/` | data-layer |
 | `routes/auth.js` | routes-auth, auth-session |
 | `routes/events.js` | routes-events, registration-flow, event-lifecycle |
 | `routes/admin.js` | routes-admin, event-lifecycle, maintenance-mode |

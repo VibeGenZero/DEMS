@@ -15,8 +15,8 @@ see_also: [deployment]
 
 | Job | Runs | What it does |
 |---|---|---|
-| `test` | every run | `ubuntu-latest` (ships python3, make, g++ for npm's implicit `node-gyp rebuild` of better-sqlite3), `actions/setup-node` with Node 24 and the npm cache keyed on `package-lock.json`, `npm ci`, `npm test` (includes the wiki validation; `npm run test:e2e` does not run in CI) |
-| `docker-build` | always on `main`, tags, manual runs; in PRs only when `Dockerfile`, `.dockerignore`, `package*.json` or `compose*.yaml` change | the runner's own Docker (no dind needed); builds `--target runtime` and `--target dev`, starts the runtime image with a dummy `SESSION_SECRET` and polls `docker inspect` until the HEALTHCHECK reports `healthy` (about 2 minutes at most). Nothing is pushed. |
+| `test` | every run | `ubuntu-latest` (ships python3, make, g++ for npm's implicit `node-gyp rebuild` of better-sqlite3), `actions/setup-node` with Node 24 and the npm cache keyed on `package-lock.json`, `npm ci`, `npm test` (includes the wiki validation; `npm run test:e2e` does not run in CI); service `postgres:18-alpine` + `TEST_DATABASE_URL`, so the document store contract also runs on PostgreSQL |
+| `docker-build` | always on `main`, tags, manual runs; in PRs only when `Dockerfile`, `.dockerignore`, `package*.json`, `compose*.yaml` or `db/` change | the runner's own Docker (no dind needed); builds `--target runtime` and `--target dev`, writes a `.env` with a dummy `SESSION_SECRET`, starts `compose.yaml` (password init, PostgreSQL, DEMS) and polls `docker inspect` on the `dems` container until the HEALTHCHECK reports `healthy` (about 2 minutes at most). Nothing is pushed. |
 
 - Triggers: `push` to `main` and tags, `pull_request`, `workflow_dispatch` (Actions tab → CI → *Run workflow*). A branch without a PR gets no run, like a GitLab branch with an open MR gets no branch pipeline.
 - `concurrency` cancels the older run of the same PR or ref when a new commit arrives.
@@ -30,8 +30,8 @@ The sections below describe the GitLab pipeline, which still runs as long as the
 
 | Job | Stage | Runs | What it does |
 |---|---|---|---|
-| `test` | test | every pipeline | `node:24-bookworm` (full image: python3, make, g++ for npm's implicit `node-gyp rebuild` of better-sqlite3), npm cache keyed on `package-lock.json`, `npm ci`, `npm test` (includes the wiki validation; the Playwright browser tests `npm run test:e2e` do not run in CI) |
-| `docker-build` | build | tags, `main`, MRs that change `Dockerfile`, `.dockerignore`, `package*.json` or `compose*.yaml` | `docker:29` with the `docker:29-dind` service; builds `--target runtime` and `--target dev`, starts the runtime image with a dummy `SESSION_SECRET` and polls `docker inspect` until the HEALTHCHECK reports `healthy` (about 2 minutes at most). Nothing is pushed. |
+| `test` | test | every pipeline | `node:24-bookworm` (full image: python3, make, g++ for npm's implicit `node-gyp rebuild` of better-sqlite3), npm cache keyed on `package-lock.json`, `npm ci`, `npm test` (includes the wiki validation; the Playwright browser tests `npm run test:e2e` do not run in CI); service `postgres:18-alpine` (alias `postgres`) + `TEST_DATABASE_URL` |
+| `docker-build` | build | tags, `main`, MRs that change `Dockerfile`, `.dockerignore`, `package*.json`, `compose*.yaml` or `db/` | `docker:29` with the `docker:29-dind` service; builds `--target runtime` and `--target dev`, writes a `.env` with a dummy `SESSION_SECRET`, starts `compose.yaml` (password init, PostgreSQL, DEMS) and polls `docker inspect` on the `dems` container until the HEALTHCHECK reports `healthy` (about 2 minutes at most). Nothing is pushed. |
 
 - `workflow:rules`: MR pipelines, tags and the default branch always; a branch pipeline only when the branch has no open MR, so there are no duplicate pipelines.
 - All jobs are `interruptible`, and `auto_cancel: on_new_commit: interruptible` cancels older pipelines of the same ref.

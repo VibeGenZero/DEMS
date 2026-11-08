@@ -25,10 +25,11 @@ see_also: [security, dev-mock-mode, docker]
 | 2026-10-08 | all frontend libraries and fonts vendored in `public/vendor/` with pinned versions (F-07); CSP without CDN hosts and without `unsafe-eval` | the SPA stayed empty when the CDN was unreachable (`gsap is not defined`), `marked` had no version pin; smaller CSP (audit M-02, part of H-05) | `test/vendorAssets.test.js`, [frontend-markup](../modules/frontend-markup.md) |
 | 2026-10-09 | frontend as native ES modules per area, event delegation (`data-click`/`data-change`/`data-input`, `data-fallback`) instead of inline handlers, CSP without `'unsafe-inline'` for scripts (D-01) | redesign tickets work in small modules; the CSP stops inline handlers from coming back | [spec](../../superpowers/specs/2026-10-09-frontend-modules-design.md), [plan](../../superpowers/plans/2026-10-09-frontend-modules.md) |
 | 2026-10-12 | CSP without inline styles: `style-src 'self'`, `style-src-attr 'none'`; markup carries no `style` attribute, start states come from the class `.is-hidden`, runtime values from `data-style-*` + `applyStyleData` (D-16) | last part of audit finding H-05; texts of users can no longer style or overlay the page | [prio plan](../../superpowers/plans/2026-10-07-dems-3.0-prioplan.md) |
+| 2026-11-08 | PostgreSQL replaces Firestore (R-01): `compose.yaml` runs PostgreSQL with a generated password, production refuses to start without it, SQLite stays for dev mock mode and tests; one document store core for both, schema migrations at startup. The Admin-SDK switch (audit M-01) is obsolete | Firestore only held test data; one production database the operator does not have to configure | [spec](../../superpowers/specs/2026-11-08-postgres-replaces-firestore-design.md), [data-layer](../modules/data-layer.md) |
 
 ## Standing decisions (apply to new work)
 
-- Data access only via the Firestore-compatible API (keeps Firebase and SQLite interchangeable).
+- Data access only via the Firestore-style API of `firebaseAdmin.js` (keeps PostgreSQL and SQLite interchangeable).
 - No frontend build pipeline; vanilla JS as native ES modules + pinned libraries and fonts in `public/vendor/` (no CDN).
 - No inline event handlers or inline scripts: markup names actions (`data-click`), modules register them (`registerActions`).
 - German user-facing language.

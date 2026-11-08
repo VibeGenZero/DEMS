@@ -19,8 +19,10 @@ Line counts as of 2026-10-02 (approximate; they drift).
 | `server.js` | ~280 | Express setup, middleware chain, misc endpoints, startup/shutdown | read whole | [server](../modules/server.md) |
 | `bot.js` | ~80 | entry point of the discord.js bot: wires the client, exports every Discord helper used by routes, mock overlay | read whole | [bot](../modules/bot.md) |
 | `bot/*.js` | ~30–480 each | the bot's 16 area modules (commands, interactions, layout, messages, polls, threads, registration, guild, channels, scheduler, settings, …) | read the one module from the table in [bot](../modules/bot.md) whole | [bot](../modules/bot.md) |
-| `firebaseAdmin.js` | ~60 | picks Firestore or SQLite, re-exports the data API | read whole | [data-layer](../modules/data-layer.md) |
-| `db/sqliteAdapter.js` | ~250 | Firestore-compatible SQLite document store | read whole when touching queries | [data-layer](../modules/data-layer.md) |
+| `firebaseAdmin.js` | ~30 | picks PostgreSQL or SQLite (`db/config.js`), re-exports the data API | read whole | [data-layer](../modules/data-layer.md) |
+| `db/documentStore.js` | ~240 | Firestore-style API, filters, sorting, merge rule on a storage interface | read whole when touching queries | [data-layer](../modules/data-layer.md) |
+| `db/postgresStorage.js`, `db/sqliteStorage.js`, `db/sqliteAdapter.js` | ~150, ~90, ~15 | the two storages; SQLite file of dev and tests | read the one you touch | [data-layer](../modules/data-layer.md) |
+| `db/config.js`, `db/migrate.js`, `db/migrations/` | ~80, ~60 | store selection from the environment; schema migration runner and steps | read whole | [data-layer](../modules/data-layer.md) |
 | `routes/auth.js` | ~170 | Discord OAuth2 login, `/auth/me`, logout | read whole | [routes-auth](../modules/routes-auth.md) |
 | `routes/events.js` | ~600 | public/user event endpoints, registration, check-in, comments | grep `router.(get\|post\|put\|delete)` | [routes-events](../modules/routes-events.md) |
 | `routes/admin.js` | ~1180 | admin CRUD, registrations, Discord sync, bot control, maintenance | grep `router.` then read one handler | [routes-admin](../modules/routes-admin.md) |
@@ -55,4 +57,4 @@ Line counts as of 2026-10-02 (approximate; they drift).
 | `docs/superpowers/specs`, `docs/superpowers/plans` | design specs and implementation plans | [decisions](../reference/decisions.md) |
 | `docs/security/` | security audit (2026-04-22) + PoC | [security](../concepts/security.md) |
 | `ISSUE.md` | older security audit notes (2026-02-15) | [decisions](../reference/decisions.md) |
-| `data/` | local SQLite files (git-ignored) | [data-layer](../modules/data-layer.md) |
+| `data/` | local SQLite files of dev mode, uploads (git-ignored) | [data-layer](../modules/data-layer.md) |

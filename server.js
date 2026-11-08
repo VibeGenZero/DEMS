@@ -112,7 +112,7 @@ app.use((req, res, next) => {
     next();
 });
 app.use(session({
-    // Sessions in the database (SQLite/Firestore) -> logins survive restarts and deploys
+    // Sessions in the database (PostgreSQL/SQLite) -> logins survive restarts and deploys
     store: sharedSessionStore(),
     secret: process.env.SESSION_SECRET,
     resave: false,

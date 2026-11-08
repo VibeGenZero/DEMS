@@ -1806,7 +1806,7 @@ router.get('/audit-log', async (req, res) => {
 
         const logs = [];
         snapshot.forEach(d => logs.push({ id: d.id, ...d.data() }));
-        // Sort by timestamp descending in memory (avoids Firestore index)
+        // Sort by timestamp descending in memory (convention: no composite indexes)
         logs.sort((a, b) => (b.timestamp || '').localeCompare(a.timestamp || ''));
 
         // Pagination

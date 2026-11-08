@@ -15,7 +15,7 @@ const { TIMEZONE } = require('./constants');
  * @param {string} guestUserId - Discord ID of the invited guest
  * @param {Object} registrant - {id, displayName} of the person sending the invite
  * @param {Object} event - event object with title and id
- * @param {string} registrationId - Firestore registration document ID
+ * @param {string} registrationId - registration document ID
  */
 async function sendGuestInvitation(guestUserId, registrant, event, registrationId) {
     if (!state.isReady) return false;

@@ -2,7 +2,7 @@
 id: add-collection
 title: How to add a data collection
 type: howto
-tags: [howto, database, collection, seed, reset, firestore]
+tags: [howto, database, collection, seed, reset, migrations]
 sources: [firebaseAdmin.js, dev/seed.js, dev/seedData.js, test/seed.test.js, routes/admin.js]
 depends_on: [data-layer, data-model, dev-mock-mode]
 see_also: [conventions]
@@ -27,4 +27,4 @@ see_also: [conventions]
 - Store dates as ISO strings, ids as strings, booleans as booleans.
 - Design queries for in-memory filtering: one or two `where` clauses, sort in JS (no composite indexes, no `limit` in the adapter).
 - Singleton settings → one document with a fixed id (pattern: `botSettings/config`).
-- With Firebase: Firestore Security Rules are not in this repo — check access rules separately.
+- Reshaping existing documents of a collection for a release (new required field, renamed field) → a migration step in `db/migrations/` — see [data-layer](../modules/data-layer.md).
