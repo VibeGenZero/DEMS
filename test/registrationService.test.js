@@ -454,3 +454,15 @@ test('a member brings at most 10 guests', async () => {
     const ten = await register(eventId, 'Gruppe', { guests: ids.slice(0, 10).map(id => ({ id })) });
     assert.equal(ten.ok, true, ten.error);
 });
+
+test('a registration stores only answers to the event form (pentest vuln-0009)', async () => {
+    const formless = await createEvent();
+    assert.equal((await register(formless, 'Ohneform', { formAnswers: { isAdmin: true, x: 'y'.repeat(5000) } })).ok, true);
+    assert.deepEqual((await registrationOf(formless, 'Ohneform')).formAnswers, {});
+
+    const withForm = await createEvent({ formFields: [{ label: 'Charakter', type: 'text', required: true }] });
+    const missing = await register(withForm, 'Leer', { formAnswers: { Charakter: ['Thrall'] } });
+    assert.equal(missing.code, 'missing_fields');
+    assert.equal((await register(withForm, 'Voll', { formAnswers: { Charakter: 'Thrall', extra: 1 } })).ok, true);
+    assert.deepEqual((await registrationOf(withForm, 'Voll')).formAnswers, { Charakter: 'Thrall' });
+});

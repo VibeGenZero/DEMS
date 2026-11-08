@@ -5,7 +5,7 @@ const {
 } = require('../bot');
 const { sendAutomaticDM, sendWelcomeOnce } = require('./botSettings');
 const { debugLog } = require('./debugLog');
-const { findMissingRequiredFields } = require('./formFields');
+const { findMissingRequiredFields, sanitizeFormAnswers } = require('./formFields');
 const { buildEventUrl } = require('./eventUrl');
 const { withEventLock } = require('./eventLock');
 const { notifyRegistrationsChanged } = require('./announcementRefresh');
@@ -309,7 +309,7 @@ async function loadValidGuests(rawGuests, inviterId) {
  * @param {Object} params -> Same input as registerUserForEvent().
  * @returns {Promise<Object>} -> `{ ok: true, event, registrationId, registration }` or a failure.
  */
-async function createRegistration({ eventId, user, formAnswers, guests, source, slotId, altSlotIds, tentative = false }) {
+async function createRegistration({ eventId, user, formAnswers: submittedAnswers, guests, source, slotId, altSlotIds, tentative = false }) {
     const eventSnap = await getDoc(doc(db, 'events', eventId));
     if (!eventSnap.exists()) {
         return buildFailure(REGISTRATION_ERROR.NOT_FOUND, 'Event nicht gefunden');
@@ -352,6 +352,8 @@ async function createRegistration({ eventId, user, formAnswers, guests, source, 
     }
 
     const formFields = Array.isArray(event.formFields) ? event.formFields : [];
+    // Only answers to this form are stored, in its shape (pentest vuln-0009)
+    const formAnswers = sanitizeFormAnswers(formFields, submittedAnswers);
     const missingFields = findMissingRequiredFields(formFields, formAnswers);
     if (missingFields.length > 0) {
         return buildFailure(
