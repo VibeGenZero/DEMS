@@ -68,7 +68,7 @@ jobs:
           fi
           changed=$(git diff --name-only "origin/${{ github.base_ref }}...HEAD")
           echo "$changed"
-          if echo "$changed" | grep -qE '^(Dockerfile|\.dockerignore|package\.json|package-lock\.json|compose[^/]*\.yaml)$'; then
+          if echo "$changed" | grep -qE '^(Dockerfile|\.dockerignore|package\.json|package-lock\.json|compose[^/]*\.yaml|db/.*)$'; then
             echo "run=true" >> "$GITHUB_OUTPUT"
           else
             echo "run=false" >> "$GITHUB_OUTPUT"
@@ -79,17 +79,20 @@ jobs:
         run: |
           docker build --target runtime --tag dems:ci .
           docker build --target dev --tag dems:ci-dev .
-      # Start the production image once and wait for its HEALTHCHECK (GET /healthz).
+      # Start compose.yaml (password init, PostgreSQL, DEMS) and wait for the DEMS
+      # HEALTHCHECK (GET /healthz); production refuses to run without PostgreSQL.
       - name: Wait for the runtime healthcheck
         if: steps.scope.outputs.run == 'true'
         run: |
-          docker run --detach --name dems-ci --env SESSION_SECRET=ci-only-secret dems:ci
+          printf 'SESSION_SECRET=ci-only-secret\n' > .env
+          docker compose -f compose.yaml up --detach --build
+          container=$(docker compose -f compose.yaml ps -q dems)
           for i in $(seq 1 40); do
-            status=$(docker inspect --format '{{.State.Health.Status}}' dems-ci)
+            status=$(docker inspect --format '{{.State.Health.Status}}' "$container")
             echo "health: $status"
             if [ "$status" = healthy ]; then exit 0; fi
             if [ "$status" = unhealthy ]; then break; fi
             sleep 3
           done
-          docker logs dems-ci
+          docker compose -f compose.yaml logs
           exit 1
