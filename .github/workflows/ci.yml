@@ -22,6 +22,23 @@ jobs:
   test:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    # The document store contract tests also run against a real PostgreSQL
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: dems
+          POSTGRES_PASSWORD: dems
+          POSTGRES_DB: dems_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U dems -d dems_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      TEST_DATABASE_URL: postgres://dems:dems@localhost:5432/dems_test
     steps:
       - uses: actions/checkout@v7
       # Same Node major as the Dockerfile. The runner image ships python3, make and g++,

@@ -25,8 +25,16 @@ test:
   # Same Node major as the Dockerfile. The full (non-slim) image ships python3, make
   # and g++, which npm's implicit node-gyp step for better-sqlite3 needs.
   image: node:24-bookworm
+  # The document store contract tests also run against a real PostgreSQL
+  services:
+    - name: postgres:18-alpine
+      alias: postgres
   variables:
     npm_config_cache: $CI_PROJECT_DIR/.npm
+    POSTGRES_USER: dems
+    POSTGRES_PASSWORD: dems
+    POSTGRES_DB: dems_test
+    TEST_DATABASE_URL: postgres://dems:dems@postgres:5432/dems_test
   cache:
     key:
       files:
