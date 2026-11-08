@@ -102,7 +102,7 @@ Hostinger's own templates use `${COMPOSE_PROJECT_NAME}.${TRAEFIK_HOST}` for the 
 cd /docker/dems && docker compose pull && docker compose up -d --force-recreate
 docker compose logs -f
 docker inspect dems --format '{{range .Config.Env}}{{println .}}{{end}}' | cut -d= -f1   # which variables arrived (names only)
-docker compose exec postgres pg_dump -U dems dems > dems-db-backup.sql                                    # database backup
+docker compose exec -T postgres pg_dump -U dems dems > dems-db-backup.sql                                    # database backup
 docker run --rm -v dems_dems-data:/data -v $PWD:/backup alpine tar czf /backup/dems-uploads.tgz -C /data .   # uploads backup
 ```
 

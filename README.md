@@ -153,7 +153,7 @@ docker compose logs -f dems
 
 *   Die App läuft unter `http://localhost:3000`. Einen anderen Host-Port setzt du über `DEMS_PORT` in der `.env`.
 *   Compose startet drei Dienste: `db-secret` erzeugt beim ersten Start ein zufälliges Datenbank-Passwort (Volume `dems-secrets`), `postgres` hält die Daten (Volume `dems-pg`, kein Port nach außen), `dems` ist die App. Hochgeladene Banner liegen im Volume `dems-data`. Alles überlebt Rebuilds und Updates.
-*   Backup der Datenbank: `docker compose exec postgres pg_dump -U dems dems > dems-backup.sql`.
+*   Backup der Datenbank: `docker compose exec -T postgres pg_dump -U dems dems > dems-backup.sql`.
 *   Der Container hat einen Healthcheck auf `GET /healthz` (`docker compose ps` zeigt den Status).
 *   Stoppen mit `docker compose down` – die Daten bleiben erhalten. `docker compose down -v` löscht auch das Volume.
 *   Update: `git pull && docker compose up -d --build`.
