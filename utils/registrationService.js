@@ -37,6 +37,9 @@ const REGISTRATION_STATUS = {
 };
 
 /** Machine readable failure codes returned by the functions of this module. */
+/** Most guests one member can invite to one event. */
+const MAX_GUESTS = 10;
+
 const REGISTRATION_ERROR = {
     NOT_FOUND: 'event_not_found',
     INACTIVE: 'event_inactive',
@@ -46,6 +49,7 @@ const REGISTRATION_ERROR = {
     ALREADY_REGISTERED: 'already_registered',
     MISSING_ROLE: 'missing_role',
     GUESTS_NOT_ALLOWED: 'guests_not_allowed',
+    INVALID_GUESTS: 'invalid_guests',
     MISSING_FIELDS: 'missing_fields',
     INVALID_SLOT: 'invalid_slot',
     SLOT_FULL: 'slot_full',
@@ -263,6 +267,43 @@ function buildStatusMessage(status, slot, fullPreferredSlot) {
 }
 
 /**
+ * Resolve the invited guests against the stored user profiles. Only ids from the
+ * request count: name and avatar always come from the profile, duplicates count
+ * once, and nobody can be invited who is unknown, the member themself or has
+ * turned guest invitations off (pentest vuln-0008).
+ *
+ * @param {Array<Object>} rawGuests -> Guests from the request (`{ id }`, other fields ignored).
+ * @param {string} inviterId -> Discord ID of the registering member.
+ * @returns {Promise<Object>} -> `{ guests: [{ id, displayName, avatar }] }` or `{ error }` (German).
+ */
+async function loadValidGuests(rawGuests, inviterId) {
+    const ids = [...new Set(rawGuests
+        .map(guest => (guest && typeof guest.id === 'string' ? guest.id.trim() : ''))
+        .filter(Boolean))];
+    if (ids.length > MAX_GUESTS) {
+        return { error: `Du kannst höchstens ${MAX_GUESTS} Gäste einladen.` };
+    }
+    if (ids.includes(inviterId)) {
+        return { error: 'Du kannst dich nicht selbst als Gast einladen.' };
+    }
+
+    const guests = [];
+    for (const id of ids) {
+        const snap = await getDoc(doc(db, 'users', id));
+        if (!snap.exists()) {
+            return { error: 'Ein eingeladener Gast ist nicht bei DEMS registriert.' };
+        }
+        const profile = snap.data();
+        const displayName = profile.displayName || profile.username || id;
+        if (profile.acceptInvitations === false) {
+            return { error: `${displayName} nimmt keine Gast-Einladungen an.` };
+        }
+        guests.push({ id, displayName, avatar: profile.avatar || '' });
+    }
+    return { guests };
+}
+
+/**
  * Validate a registration and write it. The caller holds the event lock.
  *
  * @param {Object} params -> Same input as registerUserForEvent().
@@ -320,7 +361,11 @@ async function createRegistration({ eventId, user, formAnswers, guests, source, 
     }
 
     // Guests reserve a place each until they accept or decline the invitation
-    const incomingGuests = rawGuests.filter(guest => guest && typeof guest.id === 'string' && guest.id.trim());
+    const guestCheck = await loadValidGuests(rawGuests, user.id);
+    if (guestCheck.error) {
+        return buildFailure(REGISTRATION_ERROR.INVALID_GUESTS, guestCheck.error);
+    }
+    const incomingGuests = guestCheck.guests;
 
     let wish = { guestCount: incomingGuests.length };
     if (slots.length > 0) {
@@ -342,8 +387,8 @@ async function createRegistration({ eventId, user, formAnswers, guests, source, 
 
     const pendingGuests = incomingGuests.map(guest => ({
         userId: guest.id,
-        displayName: guest.displayName || guest.id,
-        avatar: guest.avatar || '',
+        displayName: guest.displayName,
+        avatar: guest.avatar,
         status: REGISTRATION_STATUS.PENDING
     }));
 
