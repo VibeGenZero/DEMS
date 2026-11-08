@@ -141,6 +141,20 @@ export async function loadServerInfo() {
     }
 }
 
+/**
+ * Texts that name the Discord server. The guild name is used as it is:
+ * many names already end in "Server" ("DEMS Dev Server").
+ *
+ * @param {string} guildName -> Name of the Discord server.
+ * @returns {{ meta: string, events: string }} -> Meta description and events intro.
+ */
+export function serverNameTexts(guildName) {
+    return {
+        meta: `Dein Event-Management-System für ${guildName}`,
+        events: `Entdecke die Events von ${guildName} und melde dich an!`
+    };
+}
+
 export function updateServerNameInUI() {
     // The name comes from Discord -> always as text, never as markup
     for (const id of ['nav-brand-name', 'login-server-name', 'login-server-ref']) {
@@ -156,13 +170,13 @@ export function updateServerNameInUI() {
     // Update meta description
     const metaDesc = document.querySelector('meta[name="description"]');
     if (metaDesc) {
-        metaDesc.setAttribute('content', `Dein Event-Management-System für den ${state.serverName} Server`);
+        metaDesc.setAttribute('content', serverNameTexts(state.serverName).meta);
     }
 
     // Update events section description
     const eventsDesc = document.querySelector('#events-section .section-header p');
     if (eventsDesc) {
-        eventsDesc.textContent = `Entdecke Events vom ${state.serverName} Server und registriere dich!`;
+        eventsDesc.textContent = serverNameTexts(state.serverName).events;
     }
 }
 
