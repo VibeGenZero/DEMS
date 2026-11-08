@@ -24,13 +24,13 @@ see_also: [registration-flow, form-fields, role-slots]
 | `buildTemplateVars({ user, eventId, event, slot })` | variables for `parseTemplate` incl. `slot.name`, `slot.emoji` |
 | `REGISTRATION_SOURCE` | `WEB: 'web'`, `DISCORD: 'discord'` |
 | `REGISTRATION_STATUS` | `PENDING`, `ACCEPTED`, `WAITLISTED` |
-| `REGISTRATION_ERROR` | `event_not_found` 404, `event_inactive` 400, `already_registered` 400, `missing_role` 403, `guests_not_allowed` 400, `missing_fields` 400, `invalid_slot` 400, `slot_full` 409, `not_registered` 404, `not_movable` 400, `registration_failed` 500 |
+| `REGISTRATION_ERROR` | `event_not_found` 404, `event_inactive` 400, `already_registered` 400, `missing_role` 403, `guests_not_allowed` 400, `invalid_guests` 400, `missing_fields` 400, `invalid_slot` 400, `slot_full` 409, `not_registered` 404, `not_movable` 400, `registration_failed` 500 |
 
 Used by `POST /api/events/:id/register` and by the Discord button/modal. Rules: [registration-flow](../concepts/registration-flow.md).
 
 ## utils/formFields.js
 
-Exports `FORM_FIELD_TYPE` (`text, textarea, dropdown, checkbox, user, role, channel, mentionable`), `FORM_FIELD_TYPES`, `ENTITY_FIELD_TYPES`, `MODAL_MAX_FIELDS = 5`, `getModalFieldLimit` (4 for slot events with more than one slot), `getFormFields`, `getFieldType`, `isEntityFieldType`, `formatEntityAnswer`, `fitsIntoDiscordModal`, `findMissingRequiredFields`. Details: [form-fields](../concepts/form-fields.md).
+Exports `FORM_FIELD_TYPE` (`text, textarea, dropdown, checkbox, user, role, channel, mentionable`), `FORM_FIELD_TYPES`, `ENTITY_FIELD_TYPES`, `MODAL_MAX_FIELDS = 5`, `getModalFieldLimit` (4 for slot events with more than one slot), `getFormFields`, `getFieldType`, `isEntityFieldType`, `formatEntityAnswer`, `fitsIntoDiscordModal`, `findMissingRequiredFields`, `sanitizeFormAnswers(formFields, formAnswers)` (answers safe to store, `FORM_ANSWER_MAX_LENGTH = 2000`). Details: [form-fields](../concepts/form-fields.md).
 
 ## utils/eventUtils.js
 
@@ -243,7 +243,7 @@ Settings of the bot control center (`botSettings/config`). `DEFAULT_BOT_SETTINGS
 
 ## utils/sessionStore.js
 
-`PersistentSessionStore` (extends express-session `Store`, used by `server.js`): `get` / `set` / `destroy` on the collection `sessions` (`SESSION_COLLECTION`) through `firebaseAdmin.js`, document id = SHA-256 of the session id. Write-through cache in memory, database read only on a miss; expiry = cookie expiry (default 24 h), expired sessions are deleted on read; `pruneExpired()` runs every 6 h (`pruneIntervalMs`, 0 = off) and returns the number of deleted documents. No `touch` on purpose. `sharedSessionStore()` returns the one instance of the process (server and panic mode share its cache). `destroyAll({ keepAdmins })` deletes every session in cache and database, with `keepAdmins` all but those whose `user.isAdmin` is true; an unreadable record counts as non-admin and is deleted too, so one broken document cannot stop the panic lockdown.
+`PersistentSessionStore` (extends express-session `Store`, used by `server.js`): `get` / `set` / `destroy` on the collection `sessions` (`SESSION_COLLECTION`) through `firebaseAdmin.js`, document id = SHA-256 of the session id. Write-through cache in memory, database read only on a miss; expiry = cookie expiry (default 24 h); on read a session counts only if both the record's `expiresAt` and the stored `cookie.expires` lie in the future and its JSON parses — otherwise the record is deleted and the request has no session; `pruneExpired()` runs every 6 h (`pruneIntervalMs`, 0 = off) and returns the number of deleted documents. No `touch` on purpose. `sharedSessionStore()` returns the one instance of the process (server and panic mode share its cache). `destroyAll({ keepAdmins })` deletes every session in cache and database, with `keepAdmins` all but those whose `user.isAdmin` is true; an unreadable record counts as non-admin and is deleted too, so one broken document cannot stop the panic lockdown.
 
 ## utils/reminders.js
 

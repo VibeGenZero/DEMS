@@ -1877,8 +1877,12 @@ router.delete('/reset', async (req, res) => {
 
         console.log(`⚠️ SYSTEM RESET by ${req.session.user.id}: Deleted ${totalDeleted} documents.`);
 
-        // If users were deleted, destroy session? 
-        // Logic: if current user is deleted, next request fails auth anyway.
+        // Deleted users must not keep a working login: end every session except the
+        // admins' (like panic mode), so the admin who ran the reset stays signed in
+        if (targets.includes('users')) {
+            const ended = await sharedSessionStore().destroyAll({ keepAdmins: true });
+            console.log(`🔒 ${ended} Sessions nach dem Löschen der Nutzer beendet.`);
+        }
 
         res.json({ success: true, count: totalDeleted });
 

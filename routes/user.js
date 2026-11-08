@@ -1,4 +1,5 @@
 const express = require('express');
+const rateLimit = require('express-rate-limit');
 const router = express.Router();
 const { db, collection, doc, getDoc, getDocs, setDoc, deleteDoc, query, where, orderBy, writeBatch } = require('../firebaseAdmin');
 const { requireAuth } = require('../middleware/auth');
@@ -308,7 +309,18 @@ router.get('/profile', requireAuth, async (req, res) => {
  * GET /api/users/search?q=... — Search registered users by name
  * Only returns users who accept invitations
  */
-router.get('/search', requireAuth, async (req, res) => {
+// Per member: typing a name searches on every key, but listing the whole member
+// base by brute force should take a while (pentest recommendation)
+const searchLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    limit: 60,
+    keyGenerator: (req) => req.session.user.id,
+    message: { error: 'Zu viele Suchanfragen. Bitte warte einen Moment.' },
+    standardHeaders: true,
+    legacyHeaders: false
+});
+
+router.get('/search', requireAuth, searchLimiter, async (req, res) => {
     try {
         const q = (req.query.q || '').toLowerCase().trim();
         if (!q || q.length < 2) {

@@ -84,11 +84,20 @@ class PersistentSessionStore extends Store {
             entry = { json: snap.data().data, expiresAt: snap.data().expiresAt };
             this.cache.set(sid, entry);
         }
-        if (isExpired(entry.expiresAt)) {
+        // The record's expiresAt and the session's own cookie expiry must both be in the
+        // future; an unreadable record is no session either (pentest vuln-0007)
+        let session = null;
+        try {
+            session = JSON.parse(entry.json);
+        } catch {
+            session = null;
+        }
+        const cookieExpires = session?.cookie?.expires;
+        if (!session || isExpired(entry.expiresAt) || (cookieExpires && isExpired(cookieExpires))) {
             await new Promise(resolve => this.destroy(sid, resolve));
             return null;
         }
-        return JSON.parse(entry.json);
+        return session;
     }
 
     /**

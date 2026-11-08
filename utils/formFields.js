@@ -37,6 +37,9 @@ const ENTITY_FIELD_TYPES = [
  */
 const MODAL_MAX_FIELDS = 5;
 
+/** Longest text answer a registration stores (pentest vuln-0009). */
+const FORM_ANSWER_MAX_LENGTH = 2000;
+
 /** Prefix used when an answer references a user or a role. */
 const MENTION_PREFIX = '@';
 
@@ -140,8 +143,40 @@ function findMissingRequiredFields(formFields, formAnswers) {
     return missingFields;
 }
 
+/**
+ * Reduce submitted answers to the event form: only labels of its fields, in form
+ * order; checkboxes as strict booleans, everything else as a string of at most
+ * FORM_ANSWER_MAX_LENGTH characters; a dropdown only with one of its options.
+ * Anything else a request sends is dropped (pentest vuln-0009).
+ *
+ * @param {Array<Object>} formFields -> Form field definitions of the event.
+ * @param {*} formAnswers -> Answers from the request, keyed by field label.
+ * @returns {Object} -> Answers safe to store; {} for an event without a form.
+ */
+function sanitizeFormAnswers(formFields, formAnswers) {
+    const answers = {};
+    if (!formAnswers || typeof formAnswers !== 'object' || Array.isArray(formAnswers)) return answers;
+
+    for (const field of formFields) {
+        if (!field || !field.label || !Object.hasOwn(formAnswers, field.label)) continue;
+        const raw = formAnswers[field.label];
+        const type = getFieldType(field);
+        if (type === FORM_FIELD_TYPE.CHECKBOX) {
+            answers[field.label] = raw === true;
+            continue;
+        }
+        let value = typeof raw === 'string' ? raw.slice(0, FORM_ANSWER_MAX_LENGTH) : '';
+        const options = Array.isArray(field.options) ? field.options : [];
+        if (type === FORM_FIELD_TYPE.DROPDOWN && options.length > 0 && !options.includes(value)) value = '';
+        answers[field.label] = value;
+    }
+    return answers;
+}
+
 module.exports = {
     FORM_FIELD_TYPE,
+    FORM_ANSWER_MAX_LENGTH,
+    sanitizeFormAnswers,
     FORM_FIELD_TYPES,
     ENTITY_FIELD_TYPES,
     MODAL_MAX_FIELDS,

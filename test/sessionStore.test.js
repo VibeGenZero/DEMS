@@ -105,3 +105,33 @@ test('known sessions are served from memory without reading the database', async
 
     assert.equal((await get('sid-cached')).user.username, 'tom');
 });
+
+// ── Hardening from the pentest (vuln-0007) ──────────────────────────────
+
+const crypto = require('crypto');
+const { setDoc } = require('../firebaseAdmin');
+const sessionDocId = (sid) => crypto.createHash('sha256').update(sid).digest('hex');
+
+test('a record whose cookie has expired gives no session, whatever its expiresAt says', async () => {
+    // expiresAt in the future, the session's own cookie long expired
+    await setDoc(doc(db, SESSION_COLLECTION, sessionDocId('sid-backdated')), {
+        data: JSON.stringify(sessionData(-365 * 24 * HOUR)),
+        expiresAt: new Date(Date.now() + HOUR).toISOString(),
+        updatedAt: new Date().toISOString()
+    });
+
+    const { get } = openStore();
+    assert.equal(await get('sid-backdated'), null);
+    assert.equal((await storedDocs()).some(snap => snap.id === sessionDocId('sid-backdated')), false);
+});
+
+test('a broken record gives no session instead of an error', async () => {
+    await setDoc(doc(db, SESSION_COLLECTION, sessionDocId('sid-broken')), {
+        data: '{kein json',
+        expiresAt: new Date(Date.now() + HOUR).toISOString()
+    });
+
+    const { get } = openStore();
+    assert.equal(await get('sid-broken'), null);
+    assert.equal((await storedDocs()).some(snap => snap.id === sessionDocId('sid-broken')), false);
+});
