@@ -35,9 +35,27 @@ function createPostgresStorage(config, { schema = 'public', retryTimeoutMs = DEF
     console.error('⚠️ PostgreSQL-Verbindung unterbrochen:', err.message);
   });
 
-  async function createTable() {
+  // Run fn with a checked-out client. pg-pool listens for client errors only while a
+  // client is idle, so a connection dropped during fn would otherwise emit an unhandled
+  // 'error' and crash the process. A broken client is destroyed instead of reused.
+  async function withClient(fn) {
     const client = await pool.connect();
+    let broken = null;
+    const onError = (err) => {
+      broken = err;
+      console.error('⚠️ PostgreSQL-Verbindung unterbrochen:', err.message);
+    };
+    client.on('error', onError);
     try {
+      return await fn(client, () => { broken = broken || new Error('Verbindung unbrauchbar'); });
+    } finally {
+      client.off('error', onError);
+      client.release(broken || undefined);
+    }
+  }
+
+  async function createTable() {
+    await withClient(async (client) => {
       if (schema !== 'public') await client.query(`CREATE SCHEMA IF NOT EXISTS "${schema}"`);
       await client.query(`
         CREATE TABLE IF NOT EXISTS ${table} (
@@ -47,9 +65,7 @@ function createPostgresStorage(config, { schema = 'public', retryTimeoutMs = DEF
           PRIMARY KEY (collection, id)
         )`);
       await client.query(`CREATE INDEX IF NOT EXISTS idx_documents_collection ON ${table} (collection)`);
-    } finally {
-      client.release();
-    }
+    });
   }
 
   // Retry with growing pauses, e.g. while the Postgres container still starts
@@ -119,17 +135,17 @@ function createPostgresStorage(config, { schema = 'public', retryTimeoutMs = DEF
       return rows.map((row) => ({ id: row.id, data: JSON.parse(row.data) }));
     },
     async applyBatch(ops) {
-      const client = await pool.connect();
-      try {
-        await client.query('BEGIN');
-        await runBatch(client, ops);
-        await client.query('COMMIT');
-      } catch (err) {
-        await client.query('ROLLBACK').catch(() => {});
-        throw err;
-      } finally {
-        client.release();
-      }
+      await withClient(async (client, markBroken) => {
+        try {
+          await client.query('BEGIN');
+          await runBatch(client, ops);
+          await client.query('COMMIT');
+        } catch (err) {
+          // A failed ROLLBACK means the connection itself is gone
+          await client.query('ROLLBACK').catch(markBroken);
+          throw err;
+        }
+      });
     },
     async close() {
       if (closed) return;
