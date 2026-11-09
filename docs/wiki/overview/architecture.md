@@ -22,7 +22,7 @@ see_also: [directory-map, request-lifecycle, data-model]
 | Domain helpers | `utils/*.js` | registration service, form fields, waitlist, audit log, profiles, debug log | [utils](../modules/utils.md) |
 | Frontend | `public/` | SPA: `index.html` + `js/main.js` with ES modules per area (`js/core`, `js/events`, `js/polls`, `js/admin`, `js/pages`) + `css/style.css` + vendored libs | [frontend-app](../modules/frontend-app.md), [frontend-markup](../modules/frontend-markup.md) |
 | Dev mock mode | `dev/` | runs without Discord and PostgreSQL: persona login, mock bot, seed data | [dev-mock-mode](../modules/dev-mock-mode.md) |
-| Landing page | `landing/` | separate static marketing site, NOT served by `server.js` | [landing-page](../modules/landing-page.md) |
+| Landing page | `landing/` (git-ignored) | local static marketing site, NOT served by `server.js` | [landing-page](../modules/landing-page.md) |
 
 ## Diagram
 
