@@ -3,7 +3,7 @@ id: routes-admin
 title: routes/admin.js — admin API
 type: module
 tags: [api, admin, events, registrations, discord, bot-control, maintenance, audit-log, csv]
-sources: [routes/admin.js, middleware/validators.js, utils/eventUtils.js, utils/capacity.js, utils/memberOverview.js, utils/insights.js, utils/participantMessage.js, utils/eventTemplates.js, utils/adminActions.js]
+sources: [routes/admin.js, routes/adminSystem.js, utils/systemValues.js, middleware/validators.js, utils/eventUtils.js, utils/capacity.js, utils/memberOverview.js, utils/insights.js, utils/participantMessage.js, utils/eventTemplates.js, utils/adminActions.js]
 part_of: [architecture]
 depends_on: [middleware, utils, data-layer, bot]
 see_also: [event-lifecycle, maintenance-mode, discord-integration, api-index]
@@ -16,6 +16,10 @@ see_also: [event-lifecycle, maintenance-mode, discord-integration, api-index]
 
 | Method | Path | Notes | Audit action |
 |---|---|---|---|
+| GET | `/system/settings` | #138, `routes/adminSystem.js` (mounted at `/system`): `{ settings }` from `listSystemSettings()` — `{ key, group, secret, value, isSet, source: env|db|none, locked, applies: live|bot|restart }`; secrets only as `isSet`, `SESSION_SECRET` never | — |
+| PUT | `/system/settings` | `{ password, values: { KEY: value } }`: 401 without the right `ADMIN_RESET_PASSWORD`; 400 for an unknown key, a key set by `.env` or an invalid value (`normalizeSystemValue` of `utils/systemValues.js`, shared with the setup wizard); an empty secret keeps the stored one; a new `DISCORD_BOT_TOKEN`/`DISCORD_GUILD_ID` is tried with `restartBot` first (failure: old values back, the old token logs in again, 400/502 naming the guide step); answers `{ success, changed, restartRequired, bot }` | `UPDATE_SYSTEM_SETTINGS` (`{ keys }`, never values) |
+| PUT | `/privacy` | #138: `{ markdown }` → `savePrivacyPolicy` (changed text = next version, empty = removed, > 50000 → 400) → `{ success, version, changed }`; the saving admin is gated by the new version as well | `UPDATE_PRIVACY_POLICY` (`{ version }`, only when changed) |
+| GET | `/system/invite-url` | `{ url }` of `buildBotInviteUrl(DISCORD_CLIENT_ID)`; 400 without a valid client id | — |
 | GET | `/roles` | guild roles (`getGuildRoles`) | — |
 | GET | `/channels` | guild channels for location autocomplete | — |
 | GET | `/stats` | counts of events by status and registrations by status incl. `tentative` (guests counted) | — |

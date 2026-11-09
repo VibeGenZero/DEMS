@@ -8,12 +8,14 @@ import { showBotControlSection } from '../admin/bot-control.js';
 import { showAdminSection } from '../admin/dashboard.js';
 import { showInsightsSection } from '../admin/insights.js';
 import { showMemberDetail, showMembersSection } from '../admin/members.js';
+import { showSystemSection } from '../admin/system.js';
 import { beginCardClose, landCardFlight } from '../events/card-flight.js';
 import { showEventDetail } from '../events/detail.js';
 import { showEventsSection } from '../events/list.js';
 import { showDebugSection } from '../pages/debug.js';
 import { showInfoSection } from '../pages/info.js';
 import { showNewsSection } from '../pages/news.js';
+import { showPrivacySection } from '../pages/privacy.js';
 import { showProfileSection } from '../pages/profile.js';
 import { showPollDetail, showPollsSection } from '../polls/polls.js';
 
@@ -21,7 +23,7 @@ import { showPollDetail, showPollsSection } from '../polls/polls.js';
 export const LEGACY_EVENT_ROUTE = /^events\/(.+)$/;
 
 // Pages without their own navbar link mark the link of their list
-const NAV_ROUTE = { member: 'members', insights: 'admin', news: 'info' };
+const NAV_ROUTE = { member: 'members', insights: 'admin', system: 'admin', news: 'info', privacy: 'info' };
 
 // Event a logged-out user opened -> shown after the Discord login
 export const PENDING_ROUTE_KEY = 'dems_pending_route';
@@ -101,8 +103,8 @@ export function handleRoute() {
     });
     placeNavMarker();
 
-    // Info and the release notes are public
-    if (!state.currentUser && route !== 'login' && route !== 'info' && route !== 'news') {
+    // Info, the release notes and the privacy policy are public
+    if (!state.currentUser && route !== 'login' && route !== 'info' && route !== 'news' && route !== 'privacy') {
         if ((route === 'event' || route === 'poll') && param) rememberPendingRoute(hash);
         document.getElementById('login-section').style.display = 'block';
         return;
@@ -146,6 +148,13 @@ export function handleRoute() {
                 navigateTo('events');
             }
             break;
+        case 'system':
+            if (state.currentUser && state.currentUser.isAdmin) {
+                showSystemSection();
+            } else {
+                navigateTo('events');
+            }
+            break;
         case 'member':
             if (state.currentUser && state.currentUser.isAdmin) {
                 showMemberDetail(param);
@@ -165,6 +174,9 @@ export function handleRoute() {
             break;
         case 'news':
             showNewsSection();
+            break;
+        case 'privacy':
+            showPrivacySection();
             break;
         case 'debug':
             if (window.DEBUG_MODE) {

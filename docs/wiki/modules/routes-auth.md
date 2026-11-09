@@ -3,7 +3,7 @@ id: routes-auth
 title: routes/auth.js — Discord OAuth2 login
 type: module
 tags: [auth, oauth2, discord, login, logout, session]
-sources: [routes/auth.js, middleware/maintenance.js, utils/userProfile.js]
+sources: [routes/auth.js, middleware/maintenance.js, utils/userProfile.js, utils/discordFetch.js]
 part_of: [architecture]
 depends_on: [middleware, utils, data-layer]
 see_also: [auth-session, dev-mock-mode, maintenance-mode]
@@ -18,14 +18,14 @@ see_also: [auth-session, dev-mock-mode, maintenance-mode]
 |---|---|---|
 | GET | `/auth/discord` | 302 to `https://discord.com/api/oauth2/authorize?...` with `redirect_uri = ${BASE_URL}/auth/discord/callback` and `state` (32 random bytes hex, stored as `req.session.oauthState`) |
 | GET | `/auth/discord/callback?code=&state=` | 302 to `/#events` on success, else `/?error=<code>` |
-| GET | `/auth/me` | session user JSON, or `null` (status 200) when logged out; clears `isNewUser` after the first read |
+| GET | `/auth/me` | session user JSON plus `privacyRequired` and `privacyVersion` (#138, [auth-session](../concepts/auth-session.md#privacy-consent-138); `privacyAcceptedVersion` stays in the session), or `null` (status 200) when logged out; clears `isNewUser` after the first read |
 | POST | `/auth/logout` | CSRF token required (server.js); destroys the session → `{ success: true }` |
 
 ## Callback steps
 
 1. `state` missing or not the one stored in the session → `/?error=invalid_state`; the stored state is deleted on every callback, so it works once.
 2. No `code` → `/?error=no_code`.
-3. `POST https://discord.com/api/v10/oauth2/token` (via `discordFetch`, retries transient socket errors twice) → no `access_token` → `/?error=token_failed`.
+3. `POST https://discord.com/api/v10/oauth2/token` (via `discordFetch` of `utils/discordFetch.js`, retries transient socket errors twice) → no `access_token` → `/?error=token_failed`.
 4. `GET /users/@me` (profile) and `GET /users/@me/guilds/{DISCORD_GUILD_ID}/member` → not OK → `/?error=not_member`.
 5. `isAdmin = member.roles.includes(DISCORD_ADMIN_ROLE_ID)` (false when the variable is empty).
 6. `getLoginBlockReason(isAdmin)` → `panic_mode` / `maintenance_login_disabled` redirect for non-admins.
@@ -39,7 +39,7 @@ Error codes are translated in the frontend by `getErrorMessage(code)` (`public/j
 
 | What | grep anchor |
 |---|---|
-| retry wrapper | `async function discordFetch` |
+| retry wrapper | `async function discordFetch` (`utils/discordFetch.js`, also `checkClientCredentials` for the setup wizard) |
 | OAuth redirect | `router.get('/discord',` |
 | callback | `router.get('/discord/callback'` |
 | logout | `router.post('/logout'` |

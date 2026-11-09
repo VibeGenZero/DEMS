@@ -12,7 +12,7 @@ const REPO_ROOT = path.join(__dirname, '..');
 
 // Variables that would leak the developer's own setup into a test process
 const LEAKING_PREFIXES = ['DISCORD_', 'DEV_', 'PG'];
-const LEAKING_KEYS = ['NODE_ENV', 'DATABASE_URL', 'SQLITE_PATH', 'UPLOAD_DIR', 'SESSION_SECRET', 'ADMIN_RESET_PASSWORD', 'PORT', 'BASE_URL', 'DEBUG_MODE'];
+const LEAKING_KEYS = ['NODE_ENV', 'DATABASE_URL', 'SQLITE_PATH', 'UPLOAD_DIR', 'SESSION_SECRET', 'ADMIN_RESET_PASSWORD', 'PORT', 'BASE_URL', 'DEBUG_MODE', 'SETUP_PIN', 'SERVER_NAME', 'TIMEZONE'];
 
 const SERVER_START_TIMEOUT_MS = 20000;
 const POLL_INTERVAL_MS = 100;
@@ -367,7 +367,8 @@ async function loadFrontendModules(entryFile, context) {
  * Load the frontend ES modules (public/js/main.js) into a fresh node:vm
  * context with a fake DOM built from the ids in public/index.html. `fetch`
  * answers from `routes`: a value is
- * sent as JSON body, a function may return a value or a promise of one,
+ * sent as JSON body, a function (called with the fetch options) may return a value or a promise of one,
+ * httpAnswer(status, body) answers with another status,
  * unknown URLs answer 404; every call is recorded in `requests`. Toasts are
  * recorded instead of shown, so a test can assert that no error was swallowed
  * by a catch block. document listeners are recorded; fire(type) runs them,
@@ -419,7 +420,8 @@ async function loadFrontendApp(routes, { storage = {}, confirm = true, reducedMo
         requests.push({ url, method: options.method || 'GET', headers: options.headers || {}, body: options.body });
         if (!(url in routes)) return { ok: false, status: 404, json: async () => ({ error: 'Nicht gefunden' }) };
         const route = routes[url];
-        const body = typeof route === 'function' ? await route() : route;
+        const body = typeof route === 'function' ? await route(options) : route;
+        if (body instanceof HttpAnswer) return { ok: body.status < 400, status: body.status, json: async () => body.body };
         return { ok: true, status: 200, json: async () => body };
     };
     const noop = () => {};
@@ -519,6 +521,25 @@ async function loadFrontendApp(routes, { storage = {}, confirm = true, reducedMo
     return { app, state: app.state, element: (id) => registry.get(id) || null, toasts, dialogs, requests, animations, location: context.location, localStorage: context.localStorage, fire, root, setSystemLight };
 }
 
+/** Answer of a loadFrontendApp() route with its own status, e.g. an API error. */
+class HttpAnswer {
+    constructor(status, body) {
+        this.status = status;
+        this.body = body;
+    }
+}
+
+/**
+ * Route answer with a status other than 200 for loadFrontendApp().
+ *
+ * @param {number} status -> HTTP status.
+ * @param {*} body -> JSON body.
+ * @returns {HttpAnswer}
+ */
+function httpAnswer(status, body) {
+    return new HttpAnswer(status, body);
+}
+
 /**
  * A gsap double that records every call instead of animating. Tweens finish
  * at once (their onComplete runs right away); a timeline calls its own
@@ -573,6 +594,7 @@ module.exports = {
     createFakeInteraction,
     dispatchInteraction,
     loadFrontendApp,
+    httpAnswer,
     loadFrontendModules,
     frontendSources,
     isHidden

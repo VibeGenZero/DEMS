@@ -43,7 +43,11 @@ services:
     image: dems:latest
     init: true
     restart: unless-stopped
-    env_file: .env
+    # Optional (#138): without .env DEMS starts its setup wizard and keeps the
+    # values in PostgreSQL; a value set in .env always wins
+    env_file:
+      - path: .env
+        required: false
     environment:
       # Fixed inside the container; change the host port via DEMS_PORT instead
       NODE_ENV: production

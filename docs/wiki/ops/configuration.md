@@ -3,16 +3,16 @@ id: configuration
 title: Configuration — environment variables
 type: ops
 tags: [config, env, dotenv, secrets, discord, postgresql, sqlite]
-sources: [.env.example, server.js, firebaseAdmin.js, db/config.js, dev/mockMode.js, compose.yaml, compose.dev.yaml]
+sources: [.env.example, server.js, utils/systemConfig.js, utils/systemValues.js, utils/timezone.js, firebaseAdmin.js, db/config.js, dev/mockMode.js, compose.yaml, compose.dev.yaml]
 see_also: [docker, deployment, dev-mock-mode]
 ---
 # Configuration — environment variables
 
-> TL;DR: All configuration comes from environment variables (loaded from `.env` by dotenv; in Docker passed via `env_file`). Only `SESSION_SECRET` is strictly required to start; real use also needs the Discord app values, `DISCORD_GUILD_ID` and `BASE_URL`. `.env.example` lists everything.
+> TL;DR: Code reads all configuration from `process.env`. It comes from `.env` (dotenv; in Docker via `env_file`) and, for the keys `.env` leaves empty, from the database document `systemSettings/config` that the setup wizard and the admin "System" view write (#138). A non-empty `.env` value always wins. Nothing is strictly required to start: a missing `SESSION_SECRET` is generated and stored. Real use needs the Discord app values, `DISCORD_GUILD_ID` and `BASE_URL` (from `.env` or the wizard). `.env.example` lists everything.
 
 | Variable | Required | Default | Used for |
 |---|---|---|---|
-| `SESSION_SECRET` | **yes** | — | session signing; missing or `your_random_session_secret_here` → exit 1; changing it invalidates all stored sessions (everyone logged out) |
+| `SESSION_SECRET` | no | generated | session signing; missing → a random 64-hex secret is generated on the first start and kept in `systemSettings/config` (never shown, never editable); the placeholder `your_random_session_secret_here` → exit 1; changing it invalidates all stored sessions (everyone logged out) |
 | `BASE_URL` | yes (prod) | `http://localhost:3000` fallback | OAuth redirect (`${BASE_URL}/auth/discord/callback`), links in Discord messages, CORS origin |
 | `DISCORD_CLIENT_ID` / `DISCORD_CLIENT_SECRET` | yes (login) | — | OAuth2; client id also in the bot invite URL |
 | `DISCORD_BOT_TOKEN` | no | — | bot login; empty → bot off, Discord helpers no-op |
@@ -28,6 +28,7 @@ see_also: [docker, deployment, dev-mock-mode]
 | `SQLITE_PATH` | no | `./data/dems.sqlite` | SQLite file for dev and tests; used only without PostgreSQL values and outside production |
 | `TEST_DATABASE_URL` | no | — | tests only: PostgreSQL for the contract tests and the production cookie test ([testing](testing.md)) |
 | `UPLOAD_DIR` | no | `./data/uploads` | folder of uploaded banners (`banners/` below it, W-12); in Docker `/app/data/uploads` on the data volume. The files always live on the local disk, not in the database, so a host without a persistent disk loses them on redeploy |
+| `SETUP_PIN` | no | generated per start | PIN that unlocks the setup wizard while DEMS is not set up (#138); empty → a random 8-digit PIN is printed in the log at every start (`🔑 … Setup-PIN: …`); ignored once the setup is done ([first-run setup](../concepts/security.md#first-run-setup-138)) |
 | `PORT` | no | `3000` | HTTP port (fixed to 3000 inside containers) |
 | `TIMEZONE` | no | `Europe/Berlin` | date formatting in bot messages |
 | `DEBUG_MODE` | no | `false` | verbose request/database/bot logging + `#debug` UI section; never in production |
@@ -38,6 +39,16 @@ see_also: [docker, deployment, dev-mock-mode]
 | `DEV_SQLITE_PATH` | no | `data/dems.dev.sqlite` | database of the dev mock mode |
 | `DEV_UPLOAD_DIR` | no | `data/dev-uploads` | banner folder of the dev mock mode (becomes `UPLOAD_DIR`) |
 | `DEMS_DEV_PORT` | no | `3000` | host port in `compose.dev.yaml` |
+
+## Database-backed values (#138)
+
+`utils/systemConfig.js#MANAGED_KEYS` lists the keys that may live in `systemSettings/config`: `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`, `DISCORD_BOT_TOKEN`, `DISCORD_GUILD_ID`, `DISCORD_ADMIN_ROLE_ID`, `DISCORD_ANNOUNCE_CHANNEL_ID`, `DISCORD_EVENT_CATEGORY_ID`, `DISCORD_THREAD_SYNC`, `SERVER_NAME`, `BASE_URL`, `TIMEZONE`, `ADMIN_RESET_PASSWORD` (plus the internal `SESSION_SECRET`). Database, port, `NODE_ENV`, `UPLOAD_DIR`, `DEBUG_MODE`, `SQLITE_PATH` and `DEV_*` stay environment-only: they are needed before the database is reachable or are developer switches.
+
+- `loadSystemConfig()` runs in `server.js#start()` after the migrations: keys with a non-empty environment value are **locked** (source `env`); the others are copied from the database into `process.env`. An installation whose environment holds `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET` and `DISCORD_GUILD_ID` is marked as set up (`setupSource: env`).
+- `saveSystemValues()` refuses unknown and locked keys (nothing changes), stores the rest and updates `process.env` at once (empty value → key deleted). Each key has an `applies` class: `live` (read at call time), `bot` (`DISCORD_BOT_TOKEN`, `DISCORD_GUILD_ID`: the bot logs in again), `restart` (`DISCORD_THREAD_SYNC`: the client intents are fixed at start).
+- Admins change unlocked values on the admin page `#system` (`PUT /api/admin/system/settings`, [routes-admin](../modules/routes-admin.md)); saving needs the admin reset password, a key set by `.env` can only be changed there.
+- Code must read these keys at call time, never into a module constant. The time zone goes through `getTimezone()` of `utils/timezone.js`; `test/timezone.test.js` fails on a module-level `TIMEZONE` constant.
+- Secrets (`DISCORD_CLIENT_SECRET`, `DISCORD_BOT_TOKEN`, `ADMIN_RESET_PASSWORD`, `SESSION_SECRET`) are stored in plain text; the API only ever reports whether they are set. Database backups therefore contain them.
 
 ## Rules
 

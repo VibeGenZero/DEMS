@@ -8,6 +8,8 @@ import { checkAuth } from './auth.js';
 import { handleRoute, restorePendingRoute } from './router.js';
 import { getErrorMessage, showError, showToast } from './ui.js';
 import { avatar } from './components.js';
+import { checkSetupMode } from '../pages/setup.js';
+import { loadPrivacyLinks, settlePrivacyConsent } from '../pages/privacy.js';
 
 
 export function createParticles() {
@@ -188,6 +190,9 @@ export async function finishLoading() {
 
     await fetchCSRFToken();
     await loadServerInfo();
+    // A fresh installation shows the setup wizard instead of login and router (#138)
+    if (await checkSetupMode()) return;
+    loadPrivacyLinks();
 
     const params = new URLSearchParams(window.location.search);
     if (params.get('error')) {
@@ -196,6 +201,8 @@ export async function finishLoading() {
     }
 
     await checkAuth();
+    // A policy the member has not accepted: only the consent dialog until they do (#138)
+    await settlePrivacyConsent();
     await checkMaintenanceStatus();
     restorePendingRoute();
     handleRoute();

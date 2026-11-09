@@ -26,8 +26,12 @@ see_also: [deployment, dev-mock-mode]
 
 | File | Use | Key settings |
 |---|---|---|
-| `compose.yaml` | production build + run | three services: `db-secret` (one-shot `postgres:18-alpine`: writes a random password to `db_password` in volume `dems-secrets` if missing, `chmod 0444`), `postgres` (`postgres:18-alpine`, db/user `dems`, `POSTGRES_PASSWORD_FILE`, data in volume `dems-pg` at `/var/lib/postgresql`, healthcheck `pg_isready`, **no ports**), `dems` (`env_file: .env`; pinned `NODE_ENV=production`, `PORT=3000`, `PGHOST=postgres`, `PGPORT`, `PGDATABASE`, `PGUSER`, `PGPASSWORD_FILE=/run/dems-secrets/db_password`; port `${DEMS_PORT:-3000}:3000`; volumes `dems-data` + `dems-secrets` read-only; `depends_on` postgres healthy; `init: true`; `restart: unless-stopped`) |
+| `compose.yaml` | production build + run | three services: `db-secret` (one-shot `postgres:18-alpine`: writes a random password to `db_password` in volume `dems-secrets` if missing, `chmod 0444`), `postgres` (`postgres:18-alpine`, db/user `dems`, `POSTGRES_PASSWORD_FILE`, data in volume `dems-pg` at `/var/lib/postgresql`, healthcheck `pg_isready`, **no ports**), `dems` (`env_file` `.env` with `required: false` (#138: without `.env` DEMS starts its setup wizard); a value in `.env` wins over the stored configuration; pinned `NODE_ENV=production`, `PORT=3000`, `PGHOST=postgres`, `PGPORT`, `PGDATABASE`, `PGUSER`, `PGPASSWORD_FILE=/run/dems-secrets/db_password`; port `${DEMS_PORT:-3000}:3000`; volumes `dems-data` + `dems-secrets` read-only; `depends_on` postgres healthy; `init: true`; `restart: unless-stopped`) |
 | `compose.dev.yaml` | dev mock mode | target `dev`; optional `.env`; `127.0.0.1:${DEMS_DEV_PORT:-3000}:3000`; bind mount `.:/app` + anonymous `/app/node_modules` + volume `dems-dev-data` |
+
+## First start without .env (#138)
+
+`docker compose up -d --build` with no `.env` brings up PostgreSQL (password generated) and DEMS in setup mode. The setup PIN is in the log: `docker compose logs dems | grep Setup-PIN` (a new PIN on every start until the setup is done). Open DEMS via HTTPS (behind the TLS proxy; the production image keeps the session only over HTTPS, so plain `http://localhost:<DEMS_PORT>` shows a warning instead), enter the PIN and complete the wizard; its values live in PostgreSQL (volume `dems-pg`), so a restart or an image update keeps them. A `.env` can still set any value; it then shows as locked („aus .env“). See [security](../concepts/security.md#first-run-setup-138).
 
 ## Commands
 

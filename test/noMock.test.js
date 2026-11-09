@@ -9,7 +9,9 @@ before(async () => {
     server = await startServer('server.js', {
         SESSION_SECRET: 'no-mock-test-secret',
         SQLITE_PATH: path.join(createTempDir('no-mock'), 'db.sqlite'),
-        DISCORD_CLIENT_ID: '123'
+        DISCORD_CLIENT_ID: '123',
+        DISCORD_CLIENT_SECRET: 'no-mock-client-secret',
+        DISCORD_GUILD_ID: '999'
     });
 });
 

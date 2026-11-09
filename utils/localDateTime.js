@@ -4,7 +4,7 @@
  */
 const { zonedParts, fromZonedParts } = require('./eventSeries');
 
-const DEFAULT_TIMEZONE = process.env.TIMEZONE || 'Europe/Berlin';
+const { getTimezone } = require('./timezone');
 const DATE_FORMAT_HINT = 'TT.MM.JJJJ HH:MM, z. B. 24.12.2026 19:30';
 
 const DATE_TIME_PATTERN = /^(\d{1,2})\.(\d{1,2})\.(\d{2}|\d{4})\s+(\d{1,2}):(\d{2})$/;
@@ -37,7 +37,7 @@ function exactZoned(parts, timeZone) {
  * @param {string} [timeZone] -> IANA time zone.
  * @returns {Date|null} -> The point in time, or null when unreadable or impossible.
  */
-function parseLocalDateTime(text, timeZone = DEFAULT_TIMEZONE) {
+function parseLocalDateTime(text, timeZone = getTimezone()) {
     if (typeof text !== 'string') return null;
     const match = text.trim().match(DATE_TIME_PATTERN);
     if (!match) return null;
@@ -56,7 +56,7 @@ function parseLocalDateTime(text, timeZone = DEFAULT_TIMEZONE) {
  * @param {string} [timeZone] -> IANA time zone.
  * @returns {Date|null|undefined} -> The end, null for no end, undefined when unreadable.
  */
-function parseEndInput(text, start, timeZone = DEFAULT_TIMEZONE) {
+function parseEndInput(text, start, timeZone = getTimezone()) {
     const value = typeof text === 'string' ? text.trim() : '';
     if (!value) return null;
     const time = value.match(TIME_PATTERN);
@@ -78,7 +78,7 @@ function parseEndInput(text, start, timeZone = DEFAULT_TIMEZONE) {
  * @param {string} [timeZone] -> IANA time zone.
  * @returns {{ options: Array<{ startDate: string, endDate: string }> } | { error: string }}
  */
-function parsePollLines(text, timeZone = DEFAULT_TIMEZONE) {
+function parsePollLines(text, timeZone = getTimezone()) {
     const lines = (typeof text === 'string' ? text : '').split(/\r?\n/);
     const options = [];
     for (let index = 0; index < lines.length; index++) {

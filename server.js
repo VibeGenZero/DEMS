@@ -20,6 +20,11 @@ const { createCsrfToken, createRoleRefresh } = require('./middleware/auth');
 const { sharedSessionStore } = require('./utils/sessionStore');
 const store = require('./firebaseAdmin');
 const { runMigrations } = require('./db/migrate');
+const { loadSystemConfig } = require('./utils/systemConfig');
+const { initSetupState, isSetupRequired } = require('./utils/setupState');
+const { createSetupRouter } = require('./routes/setup');
+const { privacyGate } = require('./middleware/privacy');
+const { getPrivacyPolicy } = require('./utils/privacyPolicy');
 const { BANNER_FILE, bannerDir, sweepOrphanBanners } = require('./utils/bannerStore');
 
 // Production runs behind a TLS proxy (trust proxy below) -> cookies only over HTTPS
@@ -33,8 +38,10 @@ const PORT = process.env.PORT || 3000;
 app.set('trust proxy', 1);
 
 // ── Validate required env vars ──────────────────────────────────────────
-if (!process.env.SESSION_SECRET || process.env.SESSION_SECRET === 'your_random_session_secret_here') {
-    console.error('❌ SESSION_SECRET ist nicht gesetzt oder noch auf dem Standardwert. Bitte in .env setzen.');
+// A missing SESSION_SECRET is generated and stored at start (utils/systemConfig.js, #138);
+// the placeholder from old examples would sign every session with a known secret
+if (process.env.SESSION_SECRET === 'your_random_session_secret_here') {
+    console.error('❌ SESSION_SECRET steht noch auf dem Standardwert. Bitte in .env ändern oder die Zeile löschen (DEMS erzeugt dann selbst eins).');
     process.exit(1);
 }
 
@@ -70,7 +77,8 @@ app.use(helmet({
     crossOriginEmbedderPolicy: false
 }));
 app.use(cors({
-    origin: process.env.BASE_URL || 'http://localhost:3000',
+    // Read per request: BASE_URL can come from the setup wizard or the admin "System" view (#138)
+    origin: (origin, callback) => callback(null, process.env.BASE_URL || 'http://localhost:3000'),
     credentials: true
 }));
 
@@ -111,19 +119,25 @@ app.use((req, res, next) => {
     if (req.body === undefined) req.body = {};
     next();
 });
-app.use(session({
-    // Sessions in the database (PostgreSQL/SQLite) -> logins survive restarts and deploys
-    store: sharedSessionStore(),
-    secret: process.env.SESSION_SECRET,
-    resave: false,
-    saveUninitialized: false,
-    cookie: {
-        secure: IS_PRODUCTION,
-        httpOnly: true,
-        sameSite: 'lax',
-        maxAge: 24 * 60 * 60 * 1000 // 24 hours
-    }
-}));
+// The secret may come from the database (#138), so the session middleware is
+// built in start() once the configuration is loaded; nothing listens before that
+let sessionMiddleware = null;
+function createSessionMiddleware() {
+    return session({
+        // Sessions in the database (PostgreSQL/SQLite) -> logins survive restarts and deploys
+        store: sharedSessionStore(),
+        secret: process.env.SESSION_SECRET,
+        resave: false,
+        saveUninitialized: false,
+        cookie: {
+            secure: IS_PRODUCTION,
+            httpOnly: true,
+            sameSite: 'lax',
+            maxAge: 24 * 60 * 60 * 1000 // 24 hours
+        }
+    });
+}
+app.use((req, res, next) => sessionMiddleware(req, res, next));
 
 // ── CSRF Protection (Double-Submit Cookie) ──────────────────────────────
 // Generate a CSRF token per session and validate on mutating requests
@@ -201,6 +215,21 @@ if (IS_DEBUG) {
     });
 }
 
+// ── Setup mode (#138) ───────────────────────────────────────────────────
+// A fresh installation answers only the setup wizard and the endpoints the
+// start page needs until the wizard is completed
+const SETUP_OPEN_PATHS = ['/api/csrf-token', '/api/server-info', '/api/maintenance/status', '/api/privacy', '/api/updates'];
+app.use((req, res, next) => {
+    if (!isSetupRequired()) return next();
+    const isApi = req.path.startsWith('/api/') || req.path.startsWith('/auth/');
+    if (!isApi || req.path.startsWith('/api/setup/') || SETUP_OPEN_PATHS.includes(req.path)) return next();
+    res.status(503).json({ error: 'DEMS ist noch nicht eingerichtet.', setupRequired: true });
+});
+app.use('/api/setup', createSetupRouter());
+
+// Members accept the current privacy policy before anything else (#138)
+app.use(privacyGate);
+
 // ── Routes ──────────────────────────────────────────────────────────────
 // Dev mock mode: persona login instead of Discord OAuth2 (see dev/devAuth.js)
 if (IS_MOCK_MODE) app.use('/auth', require('./dev/devAuth'));
@@ -267,6 +296,18 @@ app.get('/api/server-info', async (req, res) => {
     }
 });
 
+// Privacy policy of this installation (#138): public, linked from the login page
+app.get('/api/privacy', async (req, res) => {
+    try {
+        const policy = await getPrivacyPolicy();
+        if (!policy) return res.status(404).json({ error: 'Es gibt keine Datenschutzerklärung.' });
+        res.json({ markdown: policy.markdown, version: policy.version, updatedAt: policy.updatedAt });
+    } catch (err) {
+        console.error('Privacy policy error:', err);
+        res.status(500).json({ error: 'Die Datenschutzerklärung konnte nicht geladen werden.' });
+    }
+});
+
 // Updates endpoint
 app.get('/api/updates', (req, res) => {
     try {
@@ -291,6 +332,12 @@ let server = null;
 async function start() {
     await store.ready();
     await runMigrations(store);
+    // Stored configuration (setup wizard, admin "System" view) fills what .env leaves empty
+    const loaded = await loadSystemConfig();
+    console.log(`⚙️ Konfiguration: ${loaded.fromDb} Werte aus der Datenbank, ${loaded.fromEnv} aus der Umgebung (.env).`);
+    sessionMiddleware = createSessionMiddleware();
+    // Setup mode: no Discord values yet -> the wizard runs, the PIN goes to the log
+    await initSetupState({ mockMode: IS_MOCK_MODE });
 
     server = app.listen(PORT, (err) => {
         // Express 5 hands listen errors (e.g. EADDRINUSE) to this callback instead

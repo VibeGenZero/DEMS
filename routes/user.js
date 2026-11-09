@@ -10,6 +10,28 @@ const { notifyRegistrationsChanged } = require('../utils/announcementRefresh');
 const { OCCUPYING_STATUSES, waitlistPositions } = require('../utils/capacity');
 const { buildProfileEvents } = require('../utils/profileEvents');
 const { NOTIFICATION_KINDS, normalizeNotificationPrefs } = require('../utils/notificationPrefs');
+const { currentPrivacyVersion } = require('../utils/privacyPolicy');
+const { savePrivacyAcceptance } = require('../utils/userProfile');
+
+/**
+ * POST /api/user/privacy/accept — { version }: the member accepts the current privacy policy (#138)
+ */
+router.post('/privacy/accept', requireAuth, async (req, res) => {
+    try {
+        const current = await currentPrivacyVersion();
+        if (current === 0) return res.status(409).json({ error: 'Es gibt keine Datenschutzerklärung zum Akzeptieren.' });
+        if (req.body.version !== current) {
+            return res.status(409).json({ error: 'Es gibt eine neue Fassung der Datenschutzerklärung. Bitte lies sie und stimme erneut zu.', version: current });
+        }
+        const acceptedAt = await savePrivacyAcceptance(req.session.user.id, current);
+        req.session.user.privacyAcceptedVersion = current;
+        debugLog('privacy.accept', { userId: req.session.user.id, version: current });
+        res.json({ success: true, version: current, acceptedAt });
+    } catch (err) {
+        console.error('Privacy accept error:', err);
+        res.status(500).json({ error: 'Die Zustimmung konnte nicht gespeichert werden.' });
+    }
+});
 
 /**
  * GET /api/user/registrations — Get all registrations for the logged-in user

@@ -11,7 +11,7 @@ process.env.DEV_MOCK = 'true';
 process.env.DEV_SQLITE_PATH = path.join(tmpDir, 'bot.sqlite');
 
 const bot = require('../bot');
-const { GUILD, ROLE_ID, CHANNEL_ID, PERSONAS } = require('../dev/mockGuild');
+const { GUILD, ROLE_ID, CHANNEL_ID, CATEGORY_ID, PERSONAS } = require('../dev/mockGuild');
 const { db, doc, getDoc, setDoc } = require('../firebaseAdmin');
 
 const raider = PERSONAS.find(persona => persona.id === 'raider');
@@ -41,6 +41,10 @@ test('only public channels are offered to members', async () => {
 
     const names = publicChannels.map(channel => channel.name);
     assert.deepEqual(names, [...names].sort((a, b) => a.localeCompare(b)));
+});
+
+test('the mock server offers one category for event channels (#138)', async () => {
+    assert.deepEqual(await bot.getGuildCategories(GUILD.id), [{ id: CATEGORY_ID.EVENTS, name: 'Events' }]);
 });
 
 test('scheduled events for the import lie in the future', async () => {
@@ -167,4 +171,8 @@ test('the member search finds personas and members by the start or a part of the
 test('a member lookup returns the member or false', async () => {
     assert.deepEqual(await bot.fetchGuildMember(raider.userId), { id: raider.userId, username: 'lena', displayName: 'Lena', avatar: '' });
     assert.equal(await bot.fetchGuildMember('1'), false);
+});
+
+test('the simulated bot logs in again at once (#138)', async () => {
+    assert.deepEqual(await bot.restartBot('any-token'), { ok: true, guildName: GUILD.name });
 });

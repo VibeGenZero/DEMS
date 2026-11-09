@@ -21,7 +21,7 @@ const OPTION_ID_LENGTH = 8;
 const DEFAULT_POLL_LABELS = { yes: 'passt', maybe: 'wenn nötig', no: 'passt nicht' };
 const LABEL_MAX_LENGTH = 30;
 
-const TIMEZONE = process.env.TIMEZONE || 'Europe/Berlin';
+const { getTimezone } = require('./timezone');
 
 /**
  * Parse a date value.
@@ -57,7 +57,7 @@ function generateOptionId(taken) {
  * @returns {Object} -> Parts keyed by type (weekday, day, month, hour, minute).
  */
 function dateParts(date, options) {
-    const formatter = new Intl.DateTimeFormat('de-DE', { ...options, timeZone: TIMEZONE, hourCycle: 'h23' });
+    const formatter = new Intl.DateTimeFormat('de-DE', { ...options, timeZone: getTimezone(), hourCycle: 'h23' });
     return Object.fromEntries(formatter.formatToParts(date).map(part => [part.type, part.value]));
 }
 

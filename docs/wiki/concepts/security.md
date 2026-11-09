@@ -3,7 +3,7 @@ id: security
 title: Security model and open audit findings
 type: concept
 tags: [security, csp, helmet, csrf, xss, rate-limit, audit, https]
-sources: [server.js, docs/security/SECURITY_AUDIT_2026-04-22.md, ISSUE.md, routes/events.js, routes/user.js, utils/eventUtils.js, bot/threadSync.js, public/js/core/ui.js, public/js/core/actions.js]
+sources: [server.js, routes/setup.js, utils/setupState.js, docs/security/SECURITY_AUDIT_2026-04-22.md, ISSUE.md, routes/events.js, routes/user.js, utils/eventUtils.js, bot/threadSync.js, public/js/core/ui.js, public/js/core/actions.js]
 depends_on: [server]
 see_also: [auth-session, known-issues, deployment]
 ---
@@ -24,6 +24,7 @@ see_also: [auth-session, known-issues, deployment]
 | Secrets | `.env` never in the image (`.dockerignore`); `checkinCode` removed from every event answer outside `/api/admin` (`toPublicEvent` in `utils/eventUtils.js`); the token of the comment-sync webhook (B-16) lives only in memory (`bot/threadSync.js`), never in the database or an answer |
 | Mirrored comments (B-16) | web comments go into Discord with `allowedMentions: { parse: [] }` (no `@everyone`, role or user pings) and the suffix „(Web)“; comments from Discord are plain text rendered with `escapeHtml` and marked „Discord“ |
 | Uploads (W-12) | banners only via `POST /api/admin/uploads/banner` (admin + CSRF); type read from the magic bytes (PNG, JPEG, GIF, WebP — never SVG), ≤ 5 MB, random `<uuid>.<ext>` name; served read-only under `/uploads/banners/` only for that name pattern, with the image content type and helmet's `nosniff`, so a polyglot file is never run as HTML |
+| Setup mode (#138) | see [First-run setup](#first-run-setup-138): only the wizard answers until it is completed, its steps need the setup PIN |
 | Dev mode | `DEV_MOCK=true` + `NODE_ENV=production` → refuses to start |
 | Container | runs as user `node`; production compose pins `NODE_ENV=production` |
 
@@ -72,6 +73,17 @@ The report itself is confidential and stays in the issue; this table only tracks
 ## HTTPS requirement
 
 Helmet adds `upgrade-insecure-requests` to the CSP by default. Browsers then rewrite all asset URLs of a page served via `http://<ip>:3000` to `https://` → CSS/JS fail, the SPA hangs on the loading screen ("Initialisiere System..."). `http://localhost` is exempt. Use a TLS reverse proxy ([deployment](../ops/deployment.md)) or set `upgradeInsecureRequests: null` in the CSP directives for intentional plain-HTTP setups.
+
+## First-run setup (#138)
+
+A fresh installation (no setup completed, `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET` or `DISCORD_GUILD_ID` missing after the stored configuration was loaded; never in dev mock mode) runs in **setup mode** (`utils/setupState.js`):
+
+- The gate in `server.js` answers every `/api/*` and `/auth/*` request with 503 except `/api/setup/*` and the public start-page endpoints ([api-index](../reference/api-index.md)). Static files and `/healthz` stay up.
+- The setup PIN is `SETUP_PIN` or a random 8-digit PIN (`crypto.randomInt`) created at every start, printed in the log, kept in memory only and compared with `safeEqual`. Whoever reads the container log already controls the host; the PIN changes with each start and is void once the setup is done.
+- `POST /api/setup/unlock` is limited to 5 attempts per 15 minutes and IP and regenerates the session (a planted cookie is useless); only that session may run the steps.
+- The Discord step checks the client id/secret with an OAuth2 `client_credentials` request and the bot token with a real login before anything is stored; the values reach `process.env` for the login and are taken back on failure.
+- Completing stores the values (`systemSettings/config`, secrets in plain text, never returned), ends setup mode without a restart and destroys the setup session.
+- The setup needs HTTPS like the login: in production the session cookie is `Secure`, so over plain HTTP — `http://localhost` included — the PIN never sticks (the unlock answers 403 „Ungültiges CSRF-Token“); `GET /api/setup/status` then reports `httpsRequired: true` and the PIN step shows a warning. Plain `http://<ip>` also hangs on the loading screen (see below). Outside production (`npm start` without `NODE_ENV`, dev) plain HTTP works.
 
 ## Rules for changes
 

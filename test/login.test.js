@@ -9,6 +9,7 @@ const serverEnv = (name, env = {}) => ({
     SESSION_SECRET: 'login-test-secret',
     SQLITE_PATH: path.join(createTempDir(name), 'db.sqlite'),
     DISCORD_CLIENT_ID: '123',
+    DISCORD_CLIENT_SECRET: 'login-test-client-secret',
     DISCORD_GUILD_ID: '999',
     BASE_URL: 'http://127.0.0.1',
     ...env

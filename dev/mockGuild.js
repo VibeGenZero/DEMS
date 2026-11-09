@@ -58,6 +58,10 @@ const CHANNELS = [
     { id: CHANNEL_ID.MOD_INTERNAL, name: 'mod-intern', type: 'text', isPublic: false }
 ];
 
+// Categories for auto-created event channels (setup wizard, #138)
+const CATEGORY_ID = { EVENTS: '120000000000000020' };
+const CATEGORIES = [{ id: CATEGORY_ID.EVENTS, name: 'Events' }];
+
 // Accounts offered on the dev login page
 const PERSONAS = [
     {
@@ -144,6 +148,8 @@ module.exports = {
     ROLES,
     CHANNEL_ID,
     CHANNELS,
+    CATEGORY_ID,
+    CATEGORIES,
     PERSONAS,
     MEMBERS,
     findMember,

@@ -9,7 +9,8 @@ const { buildEventUrl } = require('../utils/eventUrl');
 const { parseTemplate } = require('../utils/template');
 const { withEventLock } = require('../utils/eventLock');
 const { client, state } = require('./client');
-const { TIMEZONE } = require('./constants');
+
+const { getTimezone } = require('../utils/timezone');
 
 /**
  * Send a guest invitation DM with Accept/Decline buttons
@@ -29,7 +30,7 @@ async function sendGuestInvitation(guestUserId, registrant, event, registrationI
             .setDescription(
                 `**${registrant.displayName}** hat dich als Gast zum Event eingeladen.\n\n` +
                 `**Event:** ${event.title}\n` +
-                (event.startDate ? `**Datum:** ${new Date(event.startDate).toLocaleString('de-DE', { timeZone: TIMEZONE })}\n` : '') +
+                (event.startDate ? `**Datum:** ${new Date(event.startDate).toLocaleString('de-DE', { timeZone: getTimezone() })}\n` : '') +
                 `\nMöchtest du die Einladung annehmen?`
             )
             .addFields({ name: '🔗 Event', value: `[Zur Event-Seite](${buildEventUrl(event.id)})` })
