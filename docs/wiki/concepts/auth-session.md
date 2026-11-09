@@ -3,7 +3,7 @@ id: auth-session
 title: Authentication, session and CSRF
 type: concept
 tags: [auth, session, csrf, oauth2, admin, cookies, login]
-sources: [routes/auth.js, server.js, middleware/auth.js, utils/sessionStore.js, public/js/core/auth.js, public/js/core/boot.js, dev/devAuth.js]
+sources: [routes/auth.js, server.js, middleware/auth.js, middleware/privacy.js, utils/privacyPolicy.js, public/js/pages/privacy.js, utils/sessionStore.js, public/js/core/auth.js, public/js/core/boot.js, dev/devAuth.js]
 depends_on: [routes-auth, middleware]
 see_also: [security, maintenance-mode, request-lifecycle]
 ---
@@ -42,6 +42,17 @@ sequenceDiagram
 ## Guards
 
 `requireAuth` (401) and `requireAdmin` (403) in `middleware/auth.js`; the SPA additionally hides admin navigation (`showLoggedIn`) — UI hiding is not security, the API guards are.
+
+## Privacy consent (#138)
+
+While a privacy policy exists (`privacyPolicy/current`, `utils/privacyPolicy.js`; written by admins on `#system` or in the setup wizard, every changed text = next version), a logged-in member whose accepted version is lower must accept it first:
+
+- `privacyGate` (`middleware/privacy.js`, in `server.js` after the role refresh) answers every `/api/*` request with 403 `{ error: 'Bitte akzeptiere zuerst die Datenschutzerklärung.', privacyRequired: true }` — admins included — except `/api/privacy`, `/api/user/privacy/accept`, `/api/csrf-token`, `/api/server-info`, `/api/maintenance/status`, `/api/updates`. `/auth/*` is never gated. A failing lookup lets the request through.
+- The current version comes from memory; the accepted one from `req.session.user.privacyAcceptedVersion`. A session without that field (every new login, sessions from before #138) reads `users/<id>.privacyAcceptedVersion` once (`null` = never accepted).
+- `/auth/me` adds `privacyRequired` and `privacyVersion` (and never returns `privacyAcceptedVersion`).
+- `POST /api/user/privacy/accept { version }`: only the current version (409 otherwise, also without a policy); stores `privacyAcceptedVersion` + `privacyAcceptedAt` on the user and in the session.
+- SPA: `finishLoading` → `checkAuth` → `settlePrivacyConsent()` waits in `#privacyConsentModal` (static backdrop, no Escape) before maintenance check and routing; the news and first-login popups follow the consent (`showLoginPopups`). „Ablehnen und abmelden“ calls `logout()`. `watchPrivacyAnswers()` (set up in `main.js`) wraps `window.fetch` once: a 403 with `privacyRequired` during the visit (a new version) reopens the dialog and re-runs the route after the consent.
+- Discord interactions (registration button, modal, slash commands) are not gated.
 
 ## CSRF (double submit)
 

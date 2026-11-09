@@ -5,36 +5,8 @@ const { getLoginBlockReason } = require('../middleware/maintenance');
 const { startUserSession } = require('../middleware/auth');
 const { saveUserProfile } = require('../utils/userProfile');
 const { debugLog } = require('../utils/debugLog');
-
-const DISCORD_API = 'https://discord.com/api/v10';
-
-// Transient network errors that are safe to retry
-const RETRYABLE_CODES = new Set([
-    'ERR_STREAM_PREMATURE_CLOSE',
-    'ECONNRESET',
-    'ETIMEDOUT',
-    'EPIPE',
-    'UND_ERR_SOCKET'
-]);
-
-/**
- * fetch with a small retry for transient connection errors
- * (e.g. Discord/Cloudflare closing the connection mid-response).
- */
-async function discordFetch(url, options = {}, retries = 2) {
-    for (let attempt = 0; ; attempt++) {
-        try {
-            return await fetch(url, options);
-        } catch (err) {
-            const code = err.code || err.errno || (err.cause && err.cause.code);
-            if (attempt >= retries || !RETRYABLE_CODES.has(code)) {
-                throw err;
-            }
-            console.warn(`Discord API request failed (${code}), retrying (${attempt + 1}/${retries})...`);
-            await new Promise((resolve) => setTimeout(resolve, 300 * (attempt + 1)));
-        }
-    }
-}
+const { DISCORD_API, discordFetch } = require('../utils/discordFetch');
+const { privacyStateOf } = require('../middleware/privacy');
 
 /**
  * GET /auth/discord — Redirect to Discord OAuth2
@@ -155,16 +127,24 @@ router.get('/discord/callback', async (req, res) => {
 /**
  * GET /auth/me — Get current user
  */
-router.get('/me', (req, res) => {
-    if (!req.session || !req.session.user) {
-        return res.status(200).json(null);
+router.get('/me', async (req, res) => {
+    try {
+        if (!req.session || !req.session.user) {
+            return res.status(200).json(null);
+        }
+        // Consent to the privacy policy (#138): the SPA shows only the dialog while required
+        const privacy = await privacyStateOf(req);
+        const { privacyAcceptedVersion, ...user } = req.session.user;
+        void privacyAcceptedVersion;
+        // Clear isNewUser flag after first read so it only shows once
+        if (req.session.user.isNewUser) {
+            req.session.user.isNewUser = false;
+        }
+        res.json({ ...user, privacyRequired: privacy.required, privacyVersion: privacy.version });
+    } catch (err) {
+        console.error('Auth me error:', err);
+        res.status(500).json({ error: 'Anmeldestatus konnte nicht geladen werden.' });
     }
-    const user = { ...req.session.user };
-    // Clear isNewUser flag after first read so it only shows once
-    if (req.session.user.isNewUser) {
-        req.session.user.isNewUser = false;
-    }
-    res.json(user);
 });
 
 /**

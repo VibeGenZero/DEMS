@@ -17,9 +17,10 @@ const { DATE_FORMAT_HINT, parseLocalDateTime, parseEndInput, parsePollLines } = 
 const { normalizeSlots } = require('../utils/slotService');
 const { resolveInteractionRoles } = require('./registration');
 const {
-    TIMEZONE, ADMIN_EVENT_MODAL_PREFIX, ADMIN_POLL_MODAL_PREFIX, ADMIN_EVENT_PUBLISH_PREFIX,
+    ADMIN_EVENT_MODAL_PREFIX, ADMIN_POLL_MODAL_PREFIX, ADMIN_EVENT_PUBLISH_PREFIX,
     ADMIN_EVENT_ACTIVATE_PREFIX, ADMIN_RETRY_PREFIX
 } = require('./constants');
+const { getTimezone } = require('../utils/timezone');
 
 const NOT_ADMIN = '⛔ Nur Admins können Events und Abstimmungen erstellen.';
 const TEMPLATE_GONE = 'Diese Vorlage gibt es nicht mehr.';
@@ -313,7 +314,7 @@ function readValues(interaction, ids) {
 
 /** Start in the server time zone, e.g. "Do., 24.12.2026, 19:30". */
 const formatStart = (iso) => new Date(iso).toLocaleString('de-DE', {
-    timeZone: TIMEZONE, weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
+    timeZone: getTimezone(), weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
 });
 
 /**
@@ -327,10 +328,10 @@ const formatStart = (iso) => new Date(iso).toLocaleString('de-DE', {
 function readEventInput(values, withPlaces, now) {
     const title = values.title.trim();
     if (!title) return { error: 'Titel ist erforderlich.' };
-    const start = parseLocalDateTime(values.start, TIMEZONE);
+    const start = parseLocalDateTime(values.start, getTimezone());
     if (!start) return { error: `Beginn: bitte als ${DATE_FORMAT_HINT} angeben.` };
     if (start <= now) return { error: 'Der Beginn muss in der Zukunft liegen.' };
-    const end = parseEndInput(values.end, start, TIMEZONE);
+    const end = parseEndInput(values.end, start, getTimezone());
     if (end === undefined) return { error: `Ende: bitte als Uhrzeit (22:00) oder als ${DATE_FORMAT_HINT} angeben.` };
     if (end && end <= start) return { error: 'Das Ende muss nach dem Beginn liegen.' };
     const fields = { title, description: values.description.trim(), startDate: start.toISOString(), endDate: end ? end.toISOString() : '' };
@@ -408,7 +409,7 @@ async function handleAdminPollModal(interaction) {
     const retry = { kind: 'poll', values };
     const title = values.title.trim();
     if (!title) return refuseInput(interaction, 'Titel ist erforderlich.', retry);
-    const lines = parsePollLines(values.dates, TIMEZONE);
+    const lines = parsePollLines(values.dates, getTimezone());
     if (lines.error) return refuseInput(interaction, lines.error, retry);
 
     const { createPoll, announcePoll } = require('../utils/adminActions');

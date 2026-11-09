@@ -9,11 +9,12 @@ const { buildEventUrl } = require('../utils/eventUrl');
 const { debugLog } = require('../utils/debugLog');
 const { state } = require('./client');
 const { sendDM } = require('./messages');
-const { TIMEZONE, OFFER_CONFIRM_PREFIX, OFFER_DECLINE_PREFIX } = require('./constants');
+const { OFFER_CONFIRM_PREFIX, OFFER_DECLINE_PREFIX } = require('./constants');
+const { getTimezone } = require('../utils/timezone');
 
 /** Deadline in the server time zone, e.g. "Fr., 06.11., 20:00". */
 const formatDeadline = (iso) => new Date(iso).toLocaleString('de-DE', {
-    timeZone: TIMEZONE, weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'
+    timeZone: getTimezone(), weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'
 });
 
 /** „Zum Event“ link button. */

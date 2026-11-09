@@ -24,12 +24,12 @@ after(async () => {
 });
 
 const EXPORTS = [
-    'client', 'startBot', 'whenBotSettled', 'stopBot', 'sendDM', 'sendChannelMessage',
+    'client', 'startBot', 'restartBot', 'whenBotSettled', 'stopBot', 'sendDM', 'sendChannelMessage',
     'refreshEventAnnouncements', 'isGoneDiscordError', 'buildPollMessage',
     'buildPollVoteReply', 'refreshPollMessages', 'markPollMessagesDeleted', 'buildSlotModal',
     'buildRegisteredSlotReply', 'buildEventAnnouncement', 'assignRole', 'removeRole', 'getUserRoles',
     'fetchMemberRoleIds', 'isGuildMember', 'searchGuildMembers', 'fetchGuildMember', 'getGuildName',
-    'getGuildIconUrl', 'getGuildRoles', 'getGuildChannels', 'getPublicGuildChannels',
+    'getGuildIconUrl', 'getGuildRoles', 'getGuildChannels', 'getPublicGuildChannels', 'getGuildCategories',
     'getGuildScheduledEvents', 'parseTemplate', 'startReminderScheduler', 'checkReminders',
     'createEventChannels', 'addParticipantToEventChannels', 'removeParticipantFromEventChannels',
     'deleteEventChannels', 'createScheduledEvent', 'getBotStatus', 'getBotSettings', 'saveBotSettings',

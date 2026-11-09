@@ -76,6 +76,12 @@ sources: [scripts/wiki-graph.js, docs/wiki/graph.json, CLAUDE.md]
 | `bot/tentative.js` | bot, discord-integration, registration-flow |
 | `utils/adminActions.js` | routes-admin, event-lifecycle, date-polls, discord-integration, utils |
 | `utils/localDateTime.js` | discord-integration, utils |
+| `utils/systemConfig.js` | configuration, utils, data-model |
+| `utils/setupState.js`, `routes/setup.js` | security, api-index, configuration |
+| `routes/adminSystem.js`, `utils/systemValues.js` | routes-admin, configuration |
+| `middleware/privacy.js`, `utils/privacyPolicy.js`, `public/js/pages/privacy.js` | auth-session, data-model |
+| `utils/timezone.js` | configuration, utils |
+| `utils/discordFetch.js` | routes-auth, utils |
 | `utils/threadSync.js` | discord-integration, routes-events, utils |
 | `utils/slotService.js`, `utils/capacity.js`, `utils/eventLock.js`, `utils/announcementRefresh.js` | role-slots, utils |
 | `utils/pollService.js`, `utils/pollStore.js` | date-polls, utils |
@@ -94,6 +100,7 @@ sources: [scripts/wiki-graph.js, docs/wiki/graph.json, CLAUDE.md]
 | `utils/eventUtils.js`, `utils/eventListing.js`, `utils/profileEvents.js`, `utils/userProfile.js`, `utils/avatar.js`, `utils/botPermissions.js`, `utils/csv.js`, `utils/template.js`, `utils/sessionStore.js`, `utils/debugLog.js` | utils |
 | `utils/reminders.js` | utils, reminders-presence |
 | `public/js/**`, `public/theme-boot.js` | frontend-app |
+| `public/js/pages/discord-guide.js` | frontend-app, deployment |
 | `public/index.html`, `public/css/tokens.css`, `public/css/components.css`, `public/css/style.css` | frontend-markup |
 | `dev/*` | dev-mock-mode |
 | `test/*` | testing |

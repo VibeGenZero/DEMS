@@ -54,6 +54,7 @@ test('every Discord helper answers with its neutral value while the bot is not r
         getGuildRoles: [['g1'], []],
         getGuildChannels: [['g1'], []],
         getPublicGuildChannels: [['g1'], []],
+        getGuildCategories: [['g1'], []],
         getGuildScheduledEvents: [['g1'], []],
         createScheduledEvent: [[event], null],
         createEventChannels: [[event], null],
@@ -119,4 +120,19 @@ test('closing a request whose message was deleted in Discord answers false witho
         bot.client.channels.fetch = originalFetch;
         console.error = originalError;
     }
+});
+
+test('restartBot without a token answers invalid_token and stays offline (#138)', async () => {
+    assert.deepEqual(await bot.restartBot(''), { ok: false, error: 'invalid_token' });
+    assert.equal(bot.getBotStatus().online, false);
+});
+
+test('login errors are mapped to the codes the setup names (#138)', () => {
+    const { classifyLoginError } = require('../bot/lifecycle');
+    assert.equal(classifyLoginError(Object.assign(new Error('An invalid token was provided.'), { code: 'TokenInvalid' })), 'invalid_token');
+    assert.equal(classifyLoginError(new Error('Used disallowed intents')), 'disallowed_intents');
+    assert.equal(classifyLoginError(Object.assign(new Error('closed'), { code: 4014 })), 'disallowed_intents');
+    assert.equal(classifyLoginError(Object.assign(new Error('closed'), { code: 4004 })), 'invalid_token');
+    assert.equal(classifyLoginError(new Error('socket hang up')), 'unknown');
+    assert.equal(classifyLoginError(null), 'unknown');
 });

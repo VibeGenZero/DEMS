@@ -3,13 +3,13 @@ id: api-index
 title: API index — every HTTP endpoint
 type: reference
 tags: [api, endpoints, rest, index, routes]
-sources: [server.js, routes/auth.js, routes/events.js, routes/user.js, routes/admin.js, dev/devAuth.js]
+sources: [server.js, routes/setup.js, routes/auth.js, routes/events.js, routes/user.js, routes/admin.js, dev/devAuth.js]
 depends_on: [routes-auth, routes-events, routes-admin, routes-user, server]
 see_also: [request-lifecycle, add-api-endpoint]
 ---
 # API index — every HTTP endpoint
 
-> TL;DR: One line per endpoint with its guard and the node that documents it. Guards: `—` public, `U` logged-in user (`requireAuth`), `A` admin (`requireAuth` + `requireAdmin`). All mutating `/api/*` calls also need the `X-CSRF-TOKEN` header.
+> TL;DR: One line per endpoint with its guard and the node that documents it. Guards: `—` public, `U` logged-in user (`requireAuth`), `A` admin (`requireAuth` + `requireAdmin`). All mutating `/api/*` calls also need the `X-CSRF-TOKEN` header. While a privacy policy waits for the member's consent, `U` and `A` endpoints answer 403 `privacyRequired` ([auth-session](../concepts/auth-session.md#privacy-consent-138)).
 
 ## server.js — [server](../modules/server.md)
 
@@ -19,9 +19,23 @@ see_also: [request-lifecycle, add-api-endpoint]
 | GET | `/uploads/banners/<uuid>.<png\|jpg\|gif\|webp>` (W-12, uploaded banners, read-only, no session; other names 404) | — |
 | GET | `/api/csrf-token` | — |
 | GET | `/api/maintenance/status` | — |
+| GET | `/api/privacy` (#138: current privacy policy `{ markdown, version, updatedAt }`, 404 without one) | — |
 | GET | `/api/server-info` | — |
 | GET | `/api/updates` | — |
 | GET | `/{*splat}` (SPA fallback) | — |
+
+## /api/setup — setup wizard (#138, `routes/setup.js`, [security](../concepts/security.md#first-run-setup-138))
+
+Only in setup mode (afterwards 409 `Die Einrichtung ist bereits abgeschlossen.`); `P` = session that entered the setup PIN (else 403). In setup mode every other `/api/*` and `/auth/*` path except `/api/csrf-token`, `/api/server-info`, `/api/maintenance/status`, `/api/privacy` and `/api/updates` answers 503 `{ error: 'DEMS ist noch nicht eingerichtet.', setupRequired: true }`.
+
+| Method | Path | Guard |
+|---|---|---|
+| GET | `/api/setup/status` → `{ required, unlocked, locked, httpsRequired (production over plain HTTP), defaults: { BASE_URL, TIMEZONE } }`, with `P` also `discordDone`, `values` (non-secret), `secretsSet` | — |
+| POST | `/api/setup/unlock` `{ pin }` (5 attempts / 15 min / IP → 429; new session) | — |
+| GET | `/api/setup/invite-url?clientId=` → `{ url }` | P |
+| POST | `/api/setup/discord` `{ clientId, clientSecret, botToken, guildId }` → `{ guildName, roles, channels, categories }`; 400 names the guide step, `inviteUrl` when the bot is not on the guild | P |
+| GET | `/api/setup/guild` → roles, channels, categories again | P |
+| POST | `/api/setup/complete` `{ baseUrl, serverName, timezone, adminRoleId, announceChannelId, eventCategoryId, threadSync, adminResetPassword, privacyMarkdown? }` → `{ success, restartRequired }`; ends setup mode and the session | P |
 
 ## /auth — [routes-auth](../modules/routes-auth.md)
 
@@ -62,6 +76,7 @@ see_also: [request-lifecycle, add-api-endpoint]
 
 | Method | Path | Guard |
 |---|---|---|
+| POST | `/api/user/privacy/accept` (#138) | U |
 | GET | `/api/user/registrations` | U |
 | GET | `/api/user/profile` | U |
 | GET | `/api/user/search?q=` | U |
@@ -73,6 +88,8 @@ see_also: [request-lifecycle, add-api-endpoint]
 | Method | Path |
 |---|---|
 | GET | `/api/admin/roles`, `/channels`, `/stats`, `/all-events`, `/import/discord-events` |
+| GET | `/api/admin/system/settings`, `/system/invite-url` (#138) |
+| PUT | `/api/admin/system/settings` (#138, needs `password` = admin reset password), `/api/admin/privacy` (#138, `{ markdown }`) |
 | POST | `/api/admin/events`, `/events/preview` |
 | POST | `/api/admin/uploads/banner` (W-12, raw image body ≤ 5 MB) |
 | PUT | `/api/admin/events/:id` (series dates: optional `applyTo: 'following'`, a later `recurringUntil` extends the series, answer adds `updatedDates` and `createdDates`, W-11), `/events/:id/status`, `/events/:id/cancel` |

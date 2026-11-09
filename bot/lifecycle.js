@@ -27,7 +27,8 @@ function wireClient() {
     if (clientWired) return;
     clientWired = true;
 
-    client.once(Events.ClientReady, async () => {
+    // "on", not "once": restartBot() logs in again after a token or guild change (#138)
+    client.on(Events.ClientReady, async () => {
         console.log(`🤖 Bot logged in as ${client.user.tag}`);
         debugLog('bot.ready', { tag: client.user.tag, guildId: process.env.DISCORD_GUILD_ID });
         state.isReady = true;
@@ -94,6 +95,62 @@ async function startBot(token) {
     }
 }
 
+// How long a re-login may take before the setup reports it as failed
+const RESTART_TIMEOUT_MS = 30 * 1000;
+// Gateway close codes: 4004 = authentication failed, 4014 = disallowed intents
+const CLOSE_AUTH_FAILED = 4004;
+const CLOSE_DISALLOWED_INTENTS = 4014;
+
+/**
+ * Map a login error to the code the setup wizard and the "System" view
+ * turn into a German message.
+ *
+ * @param {Error|null} err -> Error thrown by client.login().
+ * @returns {'invalid_token'|'disallowed_intents'|'unknown'}
+ */
+function classifyLoginError(err) {
+    if (!err) return 'unknown';
+    if (err.code === CLOSE_DISALLOWED_INTENTS || /disallowed intents/i.test(err.message || '')) return 'disallowed_intents';
+    if (err.code === 'TokenInvalid' || err.code === CLOSE_AUTH_FAILED || /invalid token|authentication failed/i.test(err.message || '')) return 'invalid_token';
+    return 'unknown';
+}
+
+/**
+ * Log the bot out (if it is logged in) and in again with a token, without a
+ * restart of DEMS (#138). The reminder scheduler keeps running; the ready
+ * handler registers the slash commands and applies the bot-center settings again.
+ *
+ * @param {string} token -> Bot token.
+ * @param {Object} [options] -> `{ timeoutMs }` how long to wait for the ready event.
+ * @returns {Promise<{ ok: true, guildName: string|null }|{ ok: false, error: string }>}
+ */
+async function restartBot(token, { timeoutMs = RESTART_TIMEOUT_MS } = {}) {
+    if (!token) return { ok: false, error: 'invalid_token' };
+    let timer;
+    try {
+        stopPresenceUpdates();
+        state.isReady = false;
+        await client.destroy();
+
+        const ready = new Promise(resolve => client.once(Events.ClientReady, () => resolve(true)));
+        const timeout = new Promise(resolve => {
+            timer = setTimeout(() => resolve(false), timeoutMs);
+            if (typeof timer.unref === 'function') timer.unref();
+        });
+        await client.login(token);
+        if (!(await Promise.race([ready, timeout]))) return { ok: false, error: 'timeout' };
+
+        settleBotStart(true);
+        const guild = client.guilds.cache.get(process.env.DISCORD_GUILD_ID);
+        return { ok: true, guildName: guild ? guild.name : null };
+    } catch (err) {
+        console.error('❌ Bot-Neuanmeldung fehlgeschlagen:', err.message);
+        return { ok: false, error: classifyLoginError(err) };
+    } finally {
+        clearTimeout(timer);
+    }
+}
+
 /**
  * Wait until the bot is ready, or until it is clear that it will not be:
  * no token, a failed login, or no ready event within two minutes.
@@ -126,6 +183,8 @@ function stopBot() {
 module.exports = {
     wireClient,
     startBot,
+    restartBot,
+    classifyLoginError,
     whenBotSettled,
     stopBot
 };

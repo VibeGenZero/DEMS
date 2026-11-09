@@ -490,3 +490,21 @@ test('admins choose the announcement channel and lock channel creation in the bo
         await adminRequest(page, 'PUT', '/api/admin/bot/settings', before);
     }
 });
+
+// #138: the System page shows the mock values as set by .env and opens the Discord guide
+test('the System page shows the configuration and the Discord guide', async ({ page }) => {
+    const errors = watchErrors(page);
+    await loginAs(page, 'admin');
+    await navigate(page, 'admin');
+    await page.click('#admin-section a[href="#system"]');
+    await expect(page.locator('#system-section')).toBeVisible();
+    await expect(page.locator('#system-DISCORD_GUILD_ID')).toHaveAttribute('readonly', '');
+    await expect(page.locator('#system-discord-fields .chip-info').first()).toHaveText('aus .env');
+    await expect(page.locator('#system-DISCORD_BOT_TOKEN')).toHaveValue('');
+
+    await page.click('[data-click="showDiscordGuideDialog"]');
+    await waitForDialog(page, '#discordGuideModal');
+    await expect(page.locator('#system-guide .setup-guide-step')).toHaveCount(5);
+    await expect(page.locator('#system-guide #guide-step-2 code')).toContainText('/auth/discord/callback');
+    expect(errors).toEqual([]);
+});

@@ -64,11 +64,14 @@ function followStatusInDiscord(eventId, oldEvent, status) {
 }
 
 // Days and clock times of series dates (W-11)
-const SERIES_TIMEZONE = process.env.TIMEZONE || 'Europe/Berlin';
+const { getTimezone } = require('../utils/timezone');
 
 
 // All admin routes require auth + admin
 router.use(requireAuth, requireAdmin);
+
+// Database-backed configuration and privacy policy, the "System" view (#138)
+router.use(require('./adminSystem'));
 
 /**
  * GET /api/admin/roles — Get all guild roles
@@ -422,7 +425,7 @@ function buildEventUpdates(body, slots, oldEvent) {
  * @returns {Object} -> Updates for the date's document.
  */
 function buildFollowingUpdates(edited, slots, oldEvent) {
-    const times = transferTime(oldEvent.startDate, edited, SERIES_TIMEZONE) || {
+    const times = transferTime(oldEvent.startDate, edited, getTimezone()) || {
         startDate: oldEvent.startDate || '',
         endDate: oldEvent.endDate || '',
         registrationDeadline: oldEvent.registrationDeadline || '',
@@ -529,7 +532,7 @@ async function applySavedEvent({ eventId, oldEvent, updates, notify, adminId }) 
 }
 
 // Day of a series date in German messages, e.g. "14.11."
-const seriesDayLabel = (iso) => new Intl.DateTimeFormat('de-DE', { timeZone: SERIES_TIMEZONE, day: '2-digit', month: '2-digit' }).format(new Date(iso));
+const seriesDayLabel = (iso) => new Intl.DateTimeFormat('de-DE', { timeZone: getTimezone(), day: '2-digit', month: '2-digit' }).format(new Date(iso));
 
 /**
  * Check the slots of the request against the registrations of every following date.
@@ -561,7 +564,7 @@ async function extendSeries({ seriesId, editedId, starts, newUntil, adminId }) {
     const { id: _templateId, ...base } = template;
     const now = new Date().toISOString();
     for (const start of starts) {
-        const times = transferTime(start, template, SERIES_TIMEZONE);
+        const times = transferTime(start, template, getTimezone());
         const created = {
             ...base,
             ...times,
@@ -611,7 +614,7 @@ async function saveSeriesDate({ eventId, stored, body, applyTo, adminId }) {
     const all = await loadSeriesDates(stored.seriesId);
     const plan = planExtension({
         seriesEvents: all, interval: stored.recurringInterval, oldUntil: stored.recurringUntil || '',
-        newUntil: typeof body.recurringUntil === 'string' ? body.recurringUntil : '', timeZone: SERIES_TIMEZONE
+        newUntil: typeof body.recurringUntil === 'string' ? body.recurringUntil : '', timeZone: getTimezone()
     });
     if (plan.error) return { status: 400, body: { error: plan.error } };
 

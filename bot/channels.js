@@ -5,7 +5,8 @@ const { EmbedBuilder, PermissionsBitField, ChannelType } = require('discord.js')
 const { db, collection, doc, getDoc, getDocs, updateDoc, query, where } = require('../firebaseAdmin');
 const { buildEventUrl } = require('../utils/eventUrl');
 const { client, state } = require('./client');
-const { TIMEZONE } = require('./constants');
+
+const { getTimezone } = require('../utils/timezone');
 
 /**
  * Create private voice and/or text channels for an event
@@ -97,7 +98,7 @@ async function createEventChannels(event) {
                 .setColor(0x8b5cf6)
                 .setDescription(event.description ? event.description.substring(0, 1000) : 'Keine Beschreibung.')
                 .addFields(
-                    { name: '📅 Start', value: event.startDate ? new Date(event.startDate).toLocaleString('de-DE', { timeZone: TIMEZONE, dateStyle: 'long', timeStyle: 'short' }) + ' Uhr' : 'TBD', inline: true },
+                    { name: '📅 Start', value: event.startDate ? new Date(event.startDate).toLocaleString('de-DE', { timeZone: getTimezone(), dateStyle: 'long', timeStyle: 'short' }) + ' Uhr' : 'TBD', inline: true },
                     { name: '🔗 Link', value: `[Zur Event-Seite](${buildEventUrl(event.id)})`, inline: true }
                 )
                 .setFooter({ text: 'Automatisierter Event Channel' });

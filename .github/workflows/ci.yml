@@ -79,12 +79,13 @@ jobs:
         run: |
           docker build --target runtime --tag dems:ci .
           docker build --target dev --tag dems:ci-dev .
-      # Start compose.yaml (password init, PostgreSQL, DEMS) and wait for the DEMS
-      # HEALTHCHECK (GET /healthz); production refuses to run without PostgreSQL.
+      # Start compose.yaml (password init, PostgreSQL, DEMS) without any .env, as a
+      # fresh installation does (#138), and wait for the DEMS HEALTHCHECK (GET /healthz);
+      # production refuses to run without PostgreSQL.
       - name: Wait for the runtime healthcheck
         if: steps.scope.outputs.run == 'true'
         run: |
-          printf 'SESSION_SECRET=ci-only-secret\n' > .env
+          rm -f .env
           docker compose -f compose.yaml up --detach --build
           container=$(docker compose -f compose.yaml ps -q dems)
           for i in $(seq 1 40); do
@@ -96,3 +97,11 @@ jobs:
           done
           docker compose -f compose.yaml logs
           exit 1
+      # A fresh installation answers in setup mode and prints its setup PIN (#138)
+      - name: Check the setup mode of a fresh installation
+        if: steps.scope.outputs.run == 'true'
+        run: |
+          status=$(curl --silent --show-error http://localhost:3000/api/setup/status)
+          echo "$status"
+          echo "$status" | grep -q '"required":true'
+          docker compose -f compose.yaml logs dems | grep -q 'Setup-PIN: [0-9]\{8\}'

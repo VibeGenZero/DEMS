@@ -1,10 +1,8 @@
 /**
- * Constants of the Discord bot: time zone, Discord length limits and the
+ * Constants of the Discord bot: Discord length limits and the
  * custom ID prefixes of buttons, selects and modals.
  */
 const { ChannelType } = require('discord.js');
-
-const TIMEZONE = process.env.TIMEZONE || 'Europe/Berlin';
 
 // Discord length limits for modal components
 const MODAL_TITLE_MAX_LENGTH = 45;
@@ -77,7 +75,6 @@ module.exports = {
     ADMIN_EVENT_PUBLISH_PREFIX,
     ADMIN_EVENT_ACTIVATE_PREFIX,
     ADMIN_RETRY_PREFIX,
-    TIMEZONE,
     MODAL_TITLE_MAX_LENGTH,
     MODAL_LABEL_MAX_LENGTH,
     MODAL_DESCRIPTION_MAX_LENGTH,

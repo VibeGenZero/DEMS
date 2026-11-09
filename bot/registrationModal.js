@@ -12,11 +12,12 @@ const { isRegistrationClosed, isUnregisterClosed, UNREGISTER_CLOSED_MESSAGE } = 
 const { FORM_FIELD_TYPE, MODAL_MAX_FIELDS, getFormFields, getFieldType, formatEntityAnswer, getModalFieldLimit } = require('../utils/formFields');
 const { getSlots, findSlot, formatSlotLabel, countSlotOccupancy, hasFreePlace } = require('../utils/slotService');
 const {
-    TIMEZONE, MODAL_TITLE_MAX_LENGTH, MODAL_LABEL_MAX_LENGTH, MODAL_DESCRIPTION_MAX_LENGTH,
+    MODAL_TITLE_MAX_LENGTH, MODAL_LABEL_MAX_LENGTH, MODAL_DESCRIPTION_MAX_LENGTH,
     MODAL_PLACEHOLDER_MAX_LENGTH, SELECT_OPTION_LABEL_MAX_LENGTH, CHECKBOX_VALUE_YES, CHECKBOX_VALUE_NO,
     SELECTABLE_CHANNEL_TYPES, REGISTER_MODAL_PREFIX, MODAL_FIELD_PREFIX, SLOT_MODAL_PREFIX,
     SLOT_SWITCH_PREFIX, SLOT_LEAVE_PREFIX, ALT_SLOTS_FIELD_ID
 } = require('./constants');
+const { getTimezone } = require('../utils/timezone');
 
 /**
  * Build the custom ID of a modal field.
@@ -38,7 +39,7 @@ function buildModalIntro(event) {
     const lines = [`### ${event.title}`];
 
     if (event.startDate) {
-        lines.push(`📅 ${new Date(event.startDate).toLocaleString('de-DE', { timeZone: TIMEZONE })}`);
+        lines.push(`📅 ${new Date(event.startDate).toLocaleString('de-DE', { timeZone: getTimezone() })}`);
     }
     if (event.maxParticipants > 0) {
         lines.push(`👥 Maximal ${event.maxParticipants} Teilnehmer`);

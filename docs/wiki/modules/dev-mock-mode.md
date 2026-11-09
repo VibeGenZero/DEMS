@@ -36,6 +36,7 @@ see_also: [run-and-debug, testing, docker]
 ## Behaviour differences to production
 
 - Rate limiters are skipped (`skip: () => IS_MOCK_MODE` in `server.js`).
+- Setup mode (#138) never applies: the forced values count as set by `.env`, so on `#system` guild, admin role, announcement channel, `BASE_URL`, thread sync and the reset password `dev` show as „aus .env“. `restartBot` logs `Bot simuliert neu angemeldet`. A privacy policy saved on `#system` gates every persona until they accept it (consent dialog); remove it again with an empty text, or `npm run dev:reset`.
 - Reminder DMs from `checkReminders` call the real (not ready) `sendDM` → only "Bot not ready" warnings.
 - Dates are relative to the first seed; after a few days the sample events are in the past (and a day after their end the archive scheduler moves them into the archive tab) → `npm run dev:reset` (a dev database seeded before D-04 also needs it once for the banners).
 - Check-in invitations (B-07): the scheduler does not send them (bot not ready, internal call). `sendCheckinInvitations` logs `Check-in-Einladung an <member> ("<event>") mit Button „Einchecken“` and sets `checkinInvitedAt`. Seed: in the running event Jonas is already invited, Tom is not — generate a new check-in code as Mori to see Tom's invitation. The button itself is covered by `test/discordCheckin.test.js`.

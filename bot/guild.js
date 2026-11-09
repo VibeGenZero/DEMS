@@ -290,6 +290,28 @@ async function getPublicGuildChannels(guildId) {
     }
 }
 
+/**
+ * Categories of the guild, for the parent of auto-created event channels
+ * (setup wizard and admin "System" view, #138).
+ *
+ * @param {string} guildId -> Discord server ID.
+ * @returns {Promise<Array<{ id: string, name: string }>>} -> Sorted by name; [] while the bot is not ready.
+ */
+async function getGuildCategories(guildId) {
+    if (!state.isReady) return [];
+    try {
+        const guild = await client.guilds.fetch(guildId);
+        const channels = await guild.channels.fetch();
+        return channels
+            .filter(channel => channel && channel.type === ChannelType.GuildCategory)
+            .sort((a, b) => a.name.localeCompare(b.name))
+            .map(channel => ({ id: channel.id, name: channel.name }));
+    } catch (err) {
+        console.error('Failed to get guild categories:', err.message);
+        return [];
+    }
+}
+
 module.exports = {
     assignRole,
     removeRole,
@@ -303,5 +325,6 @@ module.exports = {
     getGuildIconUrl,
     getGuildRoles,
     getGuildChannels,
-    getPublicGuildChannels
+    getPublicGuildChannels,
+    getGuildCategories
 };

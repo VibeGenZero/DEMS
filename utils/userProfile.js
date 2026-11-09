@@ -22,4 +22,20 @@ async function saveUserProfile({ id, username, displayName, avatar }) {
     return false;
 }
 
-module.exports = { saveUserProfile };
+/**
+ * Store that a member accepted a version of the privacy policy (#138).
+ *
+ * @param {string} id -> Discord user id.
+ * @param {number} version -> Accepted policy version.
+ * @returns {Promise<string>} -> Time of the acceptance (ISO).
+ */
+async function savePrivacyAcceptance(id, version) {
+    const userRef = doc(db, 'users', id);
+    const snap = await getDoc(userRef);
+    const now = new Date().toISOString();
+    const base = snap.exists() ? snap.data() : { id, acceptInvitations: true, createdAt: now };
+    await setDoc(userRef, { ...base, privacyAcceptedVersion: version, privacyAcceptedAt: now, updatedAt: now });
+    return now;
+}
+
+module.exports = { saveUserProfile, savePrivacyAcceptance };

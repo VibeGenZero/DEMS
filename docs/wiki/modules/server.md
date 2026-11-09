@@ -15,10 +15,10 @@ see_also: [request-lifecycle, security, configuration]
 ## Responsibilities
 
 1. Load `.env` (`require('dotenv').config({ quiet: true })`) and `dev/mockMode` **before** anything that reads the environment.
-2. Refuse to start without `SESSION_SECRET` (or with the placeholder `your_random_session_secret_here`) → exit 1.
+2. Refuse to start with the placeholder `SESSION_SECRET=your_random_session_secret_here` → exit 1. A missing `SESSION_SECRET` is generated on the first start and kept in `systemSettings/config` (#138, [configuration](../ops/configuration.md)).
 3. Register the middleware chain → see [request-lifecycle](../overview/request-lifecycle.md).
 4. Mount routers: `/auth` (+ `dev/devAuth` first in mock mode), `/api/events`, `/api/polls`, `/api/admin`, `/api/user`.
-5. Start: `app.listen(PORT)`, `startBot(DISCORD_BOT_TOKEN)`, `startReminderScheduler()`, `startPollScheduler()` (date poll deadlines), `startArchiveScheduler({ waitFor: whenBotSettled() })` (archives active events 24 h after their end; the first run waits until the bot is ready or will not start, see [event-lifecycle](../concepts/event-lifecycle.md)); `sweepOrphanBanners()` once (deletes uploaded banners no event uses that are older than 24 h, W-12); both stopped in `gracefulShutdown`.
+5. Start: `store.ready()` → `runMigrations()` → `loadSystemConfig()` (`utils/systemConfig.js`: stored configuration fills the keys `.env` leaves empty; log line `⚙️ Konfiguration: …`) → build the session middleware (its secret may come from the database, so a delegating wrapper holds its place in the chain; the CORS origin reads `BASE_URL` per request) → `app.listen(PORT)`, `startBot(DISCORD_BOT_TOKEN)`, `startReminderScheduler()`, `startPollScheduler()` (date poll deadlines), `startArchiveScheduler({ waitFor: whenBotSettled() })` (archives active events 24 h after their end; the first run waits until the bot is ready or will not start, see [event-lifecycle](../concepts/event-lifecycle.md)); `sweepOrphanBanners()` once (deletes uploaded banners no event uses that are older than 24 h, W-12); both stopped in `gracefulShutdown`.
 6. Graceful shutdown on `SIGINT`/`SIGTERM` (close server → `stopBot()` → exit; forced exit after 10 s).
 
 ## Endpoints defined in server.js
