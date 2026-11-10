@@ -7,7 +7,7 @@ Lets admins create an event or a date poll straight from Discord through a slash
 ## ADDED Requirements
 
 ### Requirement: Only admins use the admin commands
-`/event erstellen` and `/abstimmung erstellen` SHALL be visible to every member. A member without the DEMS admin role SHALL get the private answer „⛔ Nur Admins können Events und Abstimmungen erstellen.“ and no modal; the same SHALL apply to every button and modal of these commands. Without a configured admin role nobody SHALL pass.
+`/event erstellen` and `/abstimmung erstellen` SHALL be visible to every member. A member who is no DEMS admin (neither the admin role nor the Discord permission „Administrator“) SHALL get the private answer „⛔ Nur Admins können Events und Abstimmungen erstellen.“ and no modal; the same SHALL apply to every button and modal of these commands. Without a configured admin role only members with the Discord permission „Administrator“ (the owner included) SHALL pass.
 
 #### Scenario: Member tries the command
 - **WHEN** a member without the admin role runs `/event erstellen`
@@ -16,6 +16,10 @@ Lets admins create an event or a date poll straight from Discord through a slash
 #### Scenario: Admin runs the command
 - **WHEN** a member with the admin role runs `/abstimmung erstellen`
 - **THEN** the poll modal opens
+
+#### Scenario: Discord Administrator without the admin role
+- **WHEN** a member with the Discord permission „Administrator“ but without the admin role runs `/event erstellen`
+- **THEN** the event modal opens
 
 ### Requirement: Event modal
 `/event erstellen` SHALL open a modal with Titel (required, ≤ 200), Beginn (required), Ende (optional), Plätze (optional, empty or 0 = unbegrenzt) and Beschreibung (optional). With the option `vorlage` the modal SHALL be prefilled with the template's title, description and places; a template with slots SHALL leave out Plätze, its places come from the slots.

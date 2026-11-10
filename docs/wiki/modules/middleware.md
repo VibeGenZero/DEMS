@@ -18,12 +18,12 @@ see_also: [maintenance-mode, auth-session]
 |---|---|
 | `requireAuth` | 401 `{ error: 'Nicht eingeloggt. ...' }` without `req.session.user` |
 | `requireAdmin` | 401 without user, 403 unless `req.session.user.isAdmin` |
-| `createRoleRefresh({ fetchMemberRoleIds, getAdminRoleId?, now? })` | middleware (used in `server.js` after the static files): if `session.user.rolesCheckedAt` is older than 5 min, reads `{ isMember, roleIds }` and updates `roles` / `isAdmin` (`DISCORD_ADMIN_ROLE_ID`); `null` or an error → values kept, retry after 1 min; one shared lookup per user |
+| `createRoleRefresh({ fetchMemberRoleIds, getAdminRoleId?, now? })` | middleware (used in `server.js` after the static files): if `session.user.rolesCheckedAt` is older than 5 min, reads `{ isMember, roleIds, isAdministrator }` and updates `roles` / `isAdmin` (`isDemsAdmin`: `DISCORD_ADMIN_ROLE_ID` or Discord „Administrator“); `null` or an error → values kept, retry after 1 min; one shared lookup per user |
 | `safeEqual(submitted, expected)` | SHA-256 of both + `crypto.timingSafeEqual`; false for non-strings and an empty expected secret; used for `ADMIN_RESET_PASSWORD` |
 | `createCsrfToken()` | 32 random bytes hex; used by the CSRF middleware in `server.js` and by `startUserSession` |
 | `startUserSession(req, user)` | `req.session.regenerate` (new id), then `user` + a fresh CSRF token, saved; used by `routes/auth.js` and `dev/devAuth.js` |
 
-`isAdmin` comes from the login (Discord admin role, see [auth-session](../concepts/auth-session.md)). `routes/admin.js` applies both via `router.use(requireAuth, requireAdmin)`.
+`isAdmin` comes from the login (admin role or Discord „Administrator“, see [auth-session](../concepts/auth-session.md)). `routes/admin.js` applies both via `router.use(requireAuth, requireAdmin)`.
 
 ## middleware/maintenance.js
 

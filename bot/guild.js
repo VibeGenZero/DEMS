@@ -3,6 +3,7 @@
  */
 const { PermissionsBitField, ChannelType } = require('discord.js');
 const { debugLog } = require('../utils/debugLog');
+const { hasAdministratorPermission } = require('../utils/adminAccess');
 const { client, state } = require('./client');
 const { SELECTABLE_CHANNEL_TYPES } = require('./constants');
 
@@ -101,17 +102,22 @@ async function getUserRoles(userId, guildId) {
  * Unlike getUserRoles it tells "not a member" apart from "Discord cannot answer".
  *
  * @param {string} userId -> Discord user id.
- * @returns {Promise<{isMember: boolean, roleIds: string[]}|null>} -> null when the bot is not ready or Discord fails.
+ * @returns {Promise<{isMember: boolean, roleIds: string[], isAdministrator: boolean}|null>} -> null when the bot is not ready or Discord fails.
  */
 async function fetchMemberRoleIds(userId) {
     if (!state.isReady) return null;
     try {
         const guild = await client.guilds.fetch(process.env.DISCORD_GUILD_ID);
         const member = await guild.members.fetch({ user: userId, force: true });
-        // roles.cache contains @everyone (id = guild id); the OAuth login does not list it
-        return { isMember: true, roleIds: [...member.roles.cache.keys()].filter(id => id !== guild.id) };
+        // roles.cache contains @everyone (id = guild id); the OAuth login does not list it.
+        // member.permissions is complete for the owner, so the owner counts as Administrator
+        return {
+            isMember: true,
+            roleIds: [...member.roles.cache.keys()].filter(id => id !== guild.id),
+            isAdministrator: hasAdministratorPermission(member.permissions)
+        };
     } catch (err) {
-        if (err.code === 10007 || err.code === 10013) return { isMember: false, roleIds: [] }; // Unknown Member / User
+        if (err.code === 10007 || err.code === 10013) return { isMember: false, roleIds: [], isAdministrator: false }; // Unknown Member / User
         console.error(`Failed to check roles of ${userId}:`, err.message);
         return null;
     }

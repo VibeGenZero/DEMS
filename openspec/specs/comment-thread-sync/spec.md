@@ -54,7 +54,7 @@ A website reply SHALL be posted in the thread with the line „↪ Antwort an <n
 - **THEN** the thread message from „Tom (Web)“ starts with „↪ Antwort an Kira“ and links Kira's message
 
 ### Requirement: Thread messages appear as comments
-A member's message in the thread SHALL become a comment of the event with the member's Discord display name, avatar, the admin badge when the member holds the admin role, and the mark „Discord“. Messages of bots, webhooks and Discord system messages SHALL NOT become comments.
+A member's message in the thread SHALL become a comment of the event with the member's Discord display name, avatar, the admin badge when the member is a DEMS admin (admin role or Discord permission „Administrator“), and the mark „Discord“. Messages of bots, webhooks and Discord system messages SHALL NOT become comments.
 
 #### Scenario: Message in the thread
 - **WHEN** Kira writes "Wer bringt Snacks?" in the event's thread

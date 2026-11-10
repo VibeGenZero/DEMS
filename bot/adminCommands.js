@@ -1,8 +1,8 @@
 /**
  * Admin slash commands (B-13): `/event erstellen` and `/abstimmung erstellen`
  * open a modal; the event becomes a draft that can be published or announced
- * from the answer, the poll is posted at once. Only members with the DEMS
- * admin role (DISCORD_ADMIN_ROLE_ID) pass; every entry point checks it.
+ * from the answer, the poll is posted at once. Only DEMS admins pass (admin
+ * role DISCORD_ADMIN_ROLE_ID or Discord "Administrator"); every entry point checks it.
  *
  * Saving and posting go through utils/adminActions.js (shared with the
  * website), loaded inside the handlers so mock mode gets its twins.
@@ -16,6 +16,7 @@ const { buildEventUrl } = require('../utils/eventUrl');
 const { DATE_FORMAT_HINT, parseLocalDateTime, parseEndInput, parsePollLines } = require('../utils/localDateTime');
 const { normalizeSlots } = require('../utils/slotService');
 const { resolveInteractionRoles } = require('./registration');
+const { hasAdministratorPermission, isDemsAdmin } = require('../utils/adminAccess');
 const {
     ADMIN_EVENT_MODAL_PREFIX, ADMIN_POLL_MODAL_PREFIX, ADMIN_EVENT_PUBLISH_PREFIX,
     ADMIN_EVENT_ACTIVATE_PREFIX, ADMIN_RETRY_PREFIX
@@ -66,16 +67,16 @@ const corrections = {
 };
 
 /**
- * Whether the member of an interaction holds the DEMS admin role.
+ * Whether the member of an interaction is a DEMS admin: the admin role or the
+ * Discord permission "Administrator" (utils/adminAccess.js).
  *
  * @param {Object} interaction -> Any interaction from a guild.
- * @returns {Promise<boolean>} -> False without a configured admin role.
+ * @returns {Promise<boolean>}
  */
 async function hasAdminRole(interaction) {
-    const adminRoleId = process.env.DISCORD_ADMIN_ROLE_ID;
-    if (!adminRoleId) return false;
-    const roleIds = await resolveInteractionRoles(interaction);
-    return roleIds.includes(adminRoleId);
+    if (hasAdministratorPermission(interaction.memberPermissions)) return true;
+    if (!process.env.DISCORD_ADMIN_ROLE_ID) return false;
+    return isDemsAdmin({ roleIds: await resolveInteractionRoles(interaction) });
 }
 
 /**

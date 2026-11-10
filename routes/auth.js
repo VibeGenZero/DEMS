@@ -7,6 +7,33 @@ const { saveUserProfile } = require('../utils/userProfile');
 const { debugLog } = require('../utils/debugLog');
 const { DISCORD_API, discordFetch } = require('../utils/discordFetch');
 const { privacyStateOf } = require('../middleware/privacy');
+const { isDemsAdmin, isGuildAdministrator } = require('../utils/adminAccess');
+
+/**
+ * Whether the logged-in user is owner or "Administrator" of the guild, read from
+ * the OAuth guild list (scope `guilds`). An error only costs this path: the admin
+ * role still counts, and the role check repeats it every five minutes.
+ *
+ * @param {string} accessToken -> OAuth access token of the user.
+ * @param {string} guildId -> DISCORD_GUILD_ID.
+ * @returns {Promise<boolean>}
+ */
+async function isAdministratorOnGuild(accessToken, guildId) {
+    try {
+        const res = await discordFetch(`${DISCORD_API}/users/@me/guilds`, {
+            headers: { Authorization: `Bearer ${accessToken}` }
+        });
+        if (!res.ok) {
+            console.error('Guild list for the admin check failed:', res.status);
+            return false;
+        }
+        const guilds = await res.json();
+        return Array.isArray(guilds) && isGuildAdministrator(guilds.find(guild => guild && guild.id === guildId));
+    } catch (err) {
+        console.error('Guild list for the admin check failed:', err.message);
+        return false;
+    }
+}
 
 /**
  * GET /auth/discord — Redirect to Discord OAuth2
@@ -77,11 +104,11 @@ router.get('/discord/callback', async (req, res) => {
 
         const memberData = await memberRes.json();
 
-        // Check if user has admin role
-        const adminRoleId = process.env.DISCORD_ADMIN_ROLE_ID;
-        const isAdmin = adminRoleId
-            ? (memberData.roles || []).includes(adminRoleId)
-            : false;
+        // Admin: the admin role or the Discord permission "Administrator" (the owner has every permission)
+        const isAdmin = isDemsAdmin({
+            roleIds: memberData.roles || [],
+            isAdministrator: await isAdministratorOnGuild(tokenData.access_token, guildId)
+        });
 
         // Maintenance mode: panic mode and "login disabled" block non-admin logins
         const blockReason = await getLoginBlockReason(isAdmin);

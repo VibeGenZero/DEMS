@@ -17,7 +17,7 @@ see_also: [docker, deployment, dev-mock-mode]
 | `DISCORD_CLIENT_ID` / `DISCORD_CLIENT_SECRET` | yes (login) | — | OAuth2; client id also in the bot invite URL |
 | `DISCORD_BOT_TOKEN` | no | — | bot login; empty → bot off, Discord helpers no-op |
 | `DISCORD_GUILD_ID` | yes (login) | — | membership check at login, all guild helpers, slash command registration |
-| `DISCORD_ADMIN_ROLE_ID` | practically yes | — | members with this role are admins; empty → nobody is admin |
+| `DISCORD_ADMIN_ROLE_ID` | no | — | members with this role are admins; members with the Discord permission „Administrator“ (and the owner) are admins anyway; empty → only those |
 | `DISCORD_ANNOUNCE_CHANNEL_ID` | fallback | — | announcement channel of events and date polls while the bot center has no "Ankündigungskanal" chosen (B-02); with neither, announcing answers 400 |
 | `DISCORD_EVENT_CATEGORY_ID` | no | — | parent category for auto-created event channels |
 | `DISCORD_THREAD_SYNC` | no | off (`true` in dev mock mode) | `true` → comments of the event page and the event's Discord discussion thread are mirrored (B-16, [discord-integration](../concepts/discord-integration.md)); the bot then requests the privileged *Message Content* intent and needs „Webhooks verwalten“ + „Nachrichten verwalten“. Switch the intent on in the Developer Portal first, otherwise the login fails with "Used disallowed intents" and the bot stays offline |

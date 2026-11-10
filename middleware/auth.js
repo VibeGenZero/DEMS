@@ -1,4 +1,5 @@
 const crypto = require('crypto');
+const { isDemsAdmin } = require('../utils/adminAccess');
 
 /**
  * Middleware: Require authenticated user
@@ -12,8 +13,8 @@ function requireAuth(req, res, next) {
 
 /**
  * Middleware: Require admin role
- * Checks if the user has the admin role configured in ENV,
- * or has the ADMINISTRATOR permission on Discord.
+ * Reads `isAdmin` of the session: the admin role (DISCORD_ADMIN_ROLE_ID) or the
+ * Discord permission "Administrator", set at login and by createRoleRefresh.
  */
 function requireAdmin(req, res, next) {
     if (!req.session || !req.session.user) {
@@ -35,12 +36,13 @@ const ROLE_RETRY_MS = 60 * 1000;
 
 /**
  * Middleware that re-reads the Discord roles of a logged-in user at most every
- * five minutes, so a revoked admin role (or a new one) takes effect without a
- * new login. If Discord cannot answer, the session keeps its values and the
- * check is retried a minute later — a bot outage must not lock admins out.
+ * five minutes, so a revoked admin role (or a new one, or the Discord
+ * permission "Administrator") takes effect without a new login. If Discord
+ * cannot answer, the session keeps its values and the check is retried a
+ * minute later — a bot outage must not lock admins out.
  *
  * @param {Object} options -> Dependencies.
- * @param {Function} options.fetchMemberRoleIds -> (userId) => { isMember, roleIds } or null (bot.js).
+ * @param {Function} options.fetchMemberRoleIds -> (userId) => { isMember, roleIds, isAdministrator } or null (bot.js).
  * @param {Function} [options.getAdminRoleId] -> Admin role id, default DISCORD_ADMIN_ROLE_ID.
  * @param {Function} [options.now] -> Clock in ms.
  * @returns {Function} -> Express middleware.
@@ -68,9 +70,12 @@ function createRoleRefresh({ fetchMemberRoleIds, getAdminRoleId = () => process.
 
         const result = await lookup(user.id);
         if (result) {
-            const adminRoleId = getAdminRoleId();
             user.roles = result.isMember ? result.roleIds : [];
-            user.isAdmin = !!adminRoleId && user.roles.includes(adminRoleId);
+            user.isAdmin = result.isMember && isDemsAdmin({
+                roleIds: user.roles,
+                isAdministrator: result.isAdministrator === true,
+                adminRoleId: getAdminRoleId()
+            });
             user.rolesCheckedAt = now();
         } else {
             // Discord unreachable: keep the values, ask again in a minute
