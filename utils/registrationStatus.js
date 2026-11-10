@@ -10,6 +10,7 @@ const { withEventLock } = require('./eventLock');
 const { getSlots, findSlot, resolveAcceptanceSlot } = require('./slotService');
 const { notifyRegistrationsChanged } = require('./announcementRefresh');
 const { debugLog } = require('./debugLog');
+const { hasAnyCheckin, clearedCheckins } = require('./participations');
 const { actorName } = require('./approvalRequests');
 
 /**
@@ -55,10 +56,9 @@ async function changeRegistrationStatus({ registrationId, status, actor, expectS
         if (slots.length > 0 && (status === 'waitlisted' || status === 'rejected')) {
             update.slotId = null;
         }
-        // Only accepted registrations carry a check-in (badges count every checkedIn)
-        if (status !== 'accepted' && reg.checkedIn) {
-            update.checkedIn = false;
-            update.checkedInAt = null;
+        // Only accepted registrations carry a check-in, also for their guests (badges count every checkedIn)
+        if (status !== 'accepted' && hasAnyCheckin(reg)) {
+            Object.assign(update, clearedCheckins(reg));
         }
         if (slots.length > 0 && status === 'accepted' && !findSlot(slots, reg.slotId)) {
             const registrations = await loadEventRegistrations(reg.eventId);

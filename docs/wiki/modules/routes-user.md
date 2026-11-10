@@ -26,7 +26,7 @@ see_also: [api-index, data-model]
 
 ## Profile lists (`utils/profileEvents.js`)
 
-`buildProfileEvents(registrations, eventsById, now)` splits the member's own registrations (every status, also `rejected`):
+`buildProfileEvents(registrations, eventsById, now)` splits the member's own registrations (every status, also `rejected`) and their guest places on other members' registrations (`loadUserParticipations` in `utils/eventUtils.js`; entries carry `asGuest`, the page shows a chip „Gast“, #110). Stats: `total`, Newcomer, Early Bird and Multitasker count own registrations only; `accepted` (Teilnahmen), `checkedIn` and the other badges count guest places too:
 
 | List | Contains | Order |
 |---|---|---|

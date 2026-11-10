@@ -409,3 +409,10 @@ test('nothing uses the classes of the old profile any more', () => {
     ];
     for (const [file, source] of sources) assert.doesNotMatch(source, OLD_CLASSES, file);
 });
+
+test('a guest entry shows „Gast“ in both lists (#110)', async () => {
+    const { app } = await frontend;
+    assert.match(app.renderUpcomingRow(entry({ asGuest: true }), NOW, true), /<span class="chip chip-sm"><i class="bi bi-person-plus"><\/i>Gast<\/span>/);
+    assert.doesNotMatch(app.renderUpcomingRow(entry(), NOW, true), />Gast</);
+    assert.match(app.renderHistoryRow(entry({ asGuest: true, event: event({ startDate: at(-72), endDate: at(-70) }) }), true), />Gast</);
+});

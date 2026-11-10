@@ -10,12 +10,14 @@ const { csvCell } = require('../utils/csv');
 const { checkEventFields, validateEvent, validateRegStatus, validateBotMessages } = require('../middleware/validators');
 const { MAX_TEMPLATES, pickTemplateSettings, normalizeTemplateName, nameTaken } = require('../utils/eventTemplates');
 const { sendDM, getGuildRoles, buildEventAnnouncement, getGuildScheduledEvents, deleteEventChannels, createScheduledEvent, updateScheduledEvent, removeScheduledEvent, setScheduledEventStatus, getBotStatus, getBotSettings, saveBotSettings, getRunningEvents, getGuildChannels, searchGuildMembers, fetchGuildMember, sendCheckinInvitations } = require('../bot');
-const { promoteFromWaitlist, addAuditLog, loadEventRoster, loadEventRegistrations, saveEventWithSlots } = require('../utils/eventUtils');
+const { promoteFromWaitlist, addAuditLog, loadEventRoster, loadEventRegistrations, loadUserParticipations, saveEventWithSlots } = require('../utils/eventUtils');
 const { mergeReminderHours } = require('../utils/reminders');
 const { keepDeadlineRefreshFlag } = require('../utils/eventListing');
 const { describeEventChanges, notifyEventChange } = require('../utils/eventChangeNotice');
 const { filterByPreference, normalizeNotificationPrefs } = require('../utils/notificationPrefs');
 const { trackedEventIds, memberStats, memberBase, buildMemberList, buildMemberHistory } = require('../utils/memberOverview');
+const { clearedCheckins, toParticipations, isListedGuest, guestCheckinOf } = require('../utils/participations');
+const { setGuestCheckin } = require('../utils/checkin');
 const { DEFAULT_RANGE, isValidRange, buildInsights } = require('../utils/insights');
 const { MESSAGE_GROUPS, messageRecipients, recipientCounts, validateMessageText, sendParticipantMessage } = require('../utils/participantMessage');
 const { describePlaces, formatPlaces, formatWaitlist, waitlistPositions } = require('../utils/capacity');
@@ -1131,12 +1133,10 @@ router.get('/events/:id/checkin-stats', async (req, res) => {
             where('status', '==', 'accepted')
         );
         const regs = await getDocs(regQ);
-        let total = 0;
-        let checkedIn = 0;
-        regs.forEach(d => {
-            total++;
-            if (d.data().checkedIn) checkedIn++;
-        });
+        // Persons: the members and their listed guests (#110)
+        const people = toParticipations(regs.docs.map(d => ({ id: d.id, ...d.data() })));
+        const total = people.length;
+        const checkedIn = people.filter(person => person.checkedIn === true).length;
 
         const eventSnap = await getDoc(doc(db, 'events', req.params.id));
         const checkinCode = eventSnap.exists() ? eventSnap.data().checkinCode || '' : '';
@@ -1252,7 +1252,7 @@ router.post('/events/:id/registrations/bulk', async (req, res) => {
                     if (change.from === 'offered') update.offer = null;
                     // Leaving the bench counts as registered now, for the waitlist order (B-17)
                     if (change.from === 'tentative') update.createdAt = new Date().toISOString();
-                    if (change.clearCheckin) Object.assign(update, { checkedIn: false, checkedInAt: null });
+                    if (change.clearCheckin) Object.assign(update, clearedCheckins(registrations.find(reg => reg.id === change.id)));
                     batch.update(doc(db, 'registrations', change.id), update);
                 }
                 await batch.commit();
@@ -1364,10 +1364,11 @@ router.get('/events/:id/registrations/export', async (req, res) => {
 
         // Build CSV
         const slotHeaders = slots.length > 0 ? ['Slot', 'Wunschrolle'] : [];
-        const headers = ['User', 'UserID', 'Status', 'Eingecheckt', 'Quelle', 'Datum', 'Gäste (Anzahl)', 'Gäste IDs', ...slotHeaders, ...formKeysArr].map(csvCell);
+        const headers = ['User', 'UserID', 'Status', 'Eingecheckt', 'Quelle', 'Datum', 'Gäste (Anzahl)', 'Gäste IDs', 'Gäste eingecheckt', ...slotHeaders, ...formKeysArr].map(csvCell);
         const rows = registrations.map(r => {
             const guestCount = Array.isArray(r.guests) ? r.guests.length : 0;
             const guestIds = Array.isArray(r.guests) ? r.guests.join('; ') : '';
+            const guestsCheckedIn = (r.guests || []).filter(guest => guestCheckinOf(r, guest).checkedIn).length;
             const base = [
                 r.userName || '',
                 r.userId,
@@ -1376,7 +1377,8 @@ router.get('/events/:id/registrations/export', async (req, res) => {
                 ({ discord: 'Discord', admin: 'Admin' })[r.source] || 'Website',
                 r.createdAt ? new Date(r.createdAt).toLocaleDateString('de-DE') : '',
                 guestCount,
-                guestIds
+                guestIds,
+                guestsCheckedIn
             ];
             const formVals = formKeysArr.map(k => (r.formAnswers ? r.formAnswers[k] : '') || '');
             const slotValues = slots.length > 0 ? [slotLabel(r.slotId), slotLabel(r.preferredSlotId)] : [];
@@ -1424,7 +1426,7 @@ router.put('/registrations/:id/status', validateRegStatus, async (req, res) => {
  */
 router.put('/registrations/:id/checkin', async (req, res) => {
     try {
-        const { checkedIn } = req.body;
+        const { checkedIn, guestId } = req.body;
         if (typeof checkedIn !== 'boolean') {
             return res.status(400).json({ error: 'Bitte gib an, ob eingecheckt werden soll.' });
         }
@@ -1436,6 +1438,26 @@ router.put('/registrations/:id/checkin', async (req, res) => {
         const reg = regSnap.data();
         if (reg.status !== 'accepted') {
             return res.status(400).json({ error: 'Nur angenommene Anmeldungen können eingecheckt werden.' });
+        }
+
+        // A guest of the registration (#110): written under the event lock, like the guest's own check-in
+        if (guestId !== undefined) {
+            if (typeof guestId !== 'string' || !isListedGuest(reg, guestId)) {
+                return res.status(400).json({ error: 'Dieser Gast gehört nicht zu der Anmeldung.' });
+            }
+            // Checked again under the lock: the registration may have left „accepted“ meanwhile
+            const result = await setGuestCheckin({ registrationId: req.params.id, guestId, checkedIn });
+            if (!result) {
+                return res.status(400).json({ error: 'Nur angenommene Anmeldungen können eingecheckt werden.' });
+            }
+            const guestName = toParticipations([{ id: req.params.id, ...reg }]).find(person => person.userId === guestId).userName;
+            await addAuditLog(
+                checkedIn ? 'CHECKIN_REGISTRATION' : 'UNDO_CHECKIN_REGISTRATION',
+                req.session.user.id,
+                checkedIn ? `Checked in guest ${guestName} of ${reg.userName}` : `Took back check-in of guest ${guestName} of ${reg.userName}`,
+                req.params.id
+            );
+            return res.json({ id: req.params.id, guestId, checkedIn, checkedInAt: result.checkedInAt });
         }
 
         // A repeated check-in keeps the original time
@@ -1766,8 +1788,8 @@ router.get('/members/:id', async (req, res) => {
             return res.status(404).json({ error: 'Mitglied nicht gefunden.' });
         }
         const user = { ...userSnap.data(), id: userSnap.id };
-        const regSnap = await getDocs(query(collection(db, 'registrations'), where('userId', '==', user.id)));
-        const registrations = regSnap.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
+        // Own registrations and guest places (#110)
+        const registrations = await loadUserParticipations(user.id);
 
         // Events of the history, and their registrations to know whether attendance was tracked
         const eventsById = new Map();
@@ -1783,7 +1805,7 @@ router.get('/members/:id', async (req, res) => {
 
         res.json({
             member: {
-                ...memberBase(user, registrations),
+                ...memberBase(user, registrations.filter(registration => !registration.asGuest)),
                 acceptInvitations: user.acceptInvitations !== false,
                 notifications: normalizeNotificationPrefs(user.notifications)
             },

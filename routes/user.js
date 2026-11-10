@@ -5,7 +5,7 @@ const { db, collection, doc, getDoc, getDocs, setDoc, deleteDoc, query, where, o
 const { requireAuth } = require('../middleware/auth');
 const { debugLog } = require('../utils/debugLog');
 const { deleteUserPollVotes } = require('../utils/pollStore');
-const { promoteFromWaitlist, toPublicEvent, loadEventRegistrations } = require('../utils/eventUtils');
+const { promoteFromWaitlist, toPublicEvent, loadEventRegistrations, loadUserParticipations } = require('../utils/eventUtils');
 const { notifyRegistrationsChanged } = require('../utils/announcementRefresh');
 const { OCCUPYING_STATUSES, waitlistPositions } = require('../utils/capacity');
 const { buildProfileEvents } = require('../utils/profileEvents');
@@ -93,19 +93,12 @@ router.get('/profile', requireAuth, async (req, res) => {
     try {
         const user = req.session.user;
 
-        // ── Fetch registrations ──────────────────────────────────
-        const regQ = query(
-            collection(db, 'registrations'),
-            where('userId', '==', user.id)
-        );
-        const regSnap = await getDocs(regQ);
+        // ── Fetch registrations and guest places (#110) ──────────
+        const participations = await loadUserParticipations(user.id);
         debugLog('user.getProfile', { userId: req.session?.user?.id });
 
         // Batch-load events
-        const eventIds = new Set();
-        regSnap.docs.forEach(d => {
-            if (d.data().eventId) eventIds.add(d.data().eventId);
-        });
+        const eventIds = new Set(participations.map(entry => entry.eventId).filter(Boolean));
 
         const eventMap = new Map();
         // Complete event data for the lists of the page; never sent as it is
@@ -120,21 +113,16 @@ router.get('/profile', requireAuth, async (req, res) => {
             } catch { /* event may have been deleted */ }
         }
 
-        const registrations = regSnap.docs.map(regDoc => {
-            const reg = regDoc.data();
-            return {
-                id: regDoc.id,
-                ...reg,
-                event: eventMap.get(reg.eventId) || null
-            };
-        });
+        // A guest place counts as Teilnahme and Check-in of the guest, not as their registration (#110)
+        const registrations = participations.map(entry => ({ ...entry, event: eventMap.get(entry.eventId) || null }));
 
         // Sort by createdAt desc
         registrations.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+        const ownWithEvents = registrations.filter(entry => !entry.asGuest);
 
         // ── Compute stats ────────────────────────────────────────
         const stats = {
-            total: registrations.length,
+            total: ownWithEvents.length,
             accepted: 0,
             pending: 0,
             rejected: 0,
@@ -157,7 +145,7 @@ router.get('/profile', requireAuth, async (req, res) => {
         const badges = [];
 
         // 🌱 Newcomer — first registration
-        if (registrations.length >= 1) {
+        if (ownWithEvents.length >= 1) {
             badges.push({
                 id: 'newcomer',
                 name: 'Newcomer',
@@ -178,7 +166,7 @@ router.get('/profile', requireAuth, async (req, res) => {
         }
 
         // ⚡ Early Bird — registered within 1h of event creation
-        const hasEarlyBird = registrations.some(r => {
+        const hasEarlyBird = ownWithEvents.some(r => {
             if (!r.event || !r.createdAt || !r.event.createdAt) return false;
             const regTime = new Date(r.createdAt).getTime();
             const eventCreated = new Date(r.event.createdAt).getTime();
@@ -278,7 +266,7 @@ router.get('/profile', requireAuth, async (req, res) => {
         });
 
         // 🏅 Multitasker — 3+ simultaneously active registrations
-        const activeRegs = registrations.filter(r =>
+        const activeRegs = ownWithEvents.filter(r =>
             ['accepted', 'pending'].includes(r.status) &&
             r.event?.startDate &&
             new Date(r.event.startDate) > new Date()
@@ -296,15 +284,14 @@ router.get('/profile', requireAuth, async (req, res) => {
         });
 
         // ── Lists of the profile page ────────────────────────────
-        const ownRegistrations = regSnap.docs.map(regDoc => ({ id: regDoc.id, ...regDoc.data() }));
-        // Place on the waitlist (W-05): one read per active event the member waits for
+        // Place on the waitlist (W-05): one read per active event the member waits for; never for a guest place
         const waitlistPositionsById = new Map();
-        for (const registration of ownRegistrations) {
-            if (registration.status !== 'waitlisted' || eventsById.get(registration.eventId)?.status !== 'active') continue;
+        for (const registration of participations) {
+            if (registration.asGuest || registration.status !== 'waitlisted' || eventsById.get(registration.eventId)?.status !== 'active') continue;
             const position = waitlistPositions(await loadEventRegistrations(registration.eventId)).get(registration.id);
             if (position) waitlistPositionsById.set(registration.id, position);
         }
-        const { upcoming, history } = buildProfileEvents(ownRegistrations, eventsById, new Date(), waitlistPositionsById);
+        const { upcoming, history } = buildProfileEvents(participations, eventsById, new Date(), waitlistPositionsById);
 
         res.json({
             user: {

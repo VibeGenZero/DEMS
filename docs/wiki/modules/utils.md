@@ -3,7 +3,7 @@ id: utils
 title: utils/ — domain helpers
 type: module
 tags: [utils, registration, form-fields, waitlist, audit-log, profile, debug, change-notice, banner]
-sources: [utils/registrationService.js, utils/registrationStatus.js, utils/approvalRequests.js, utils/checkin.js, utils/threadSync.js, utils/formFields.js, utils/eventUtils.js, utils/eventListing.js, utils/profileEvents.js, utils/eventUrl.js, utils/userProfile.js, utils/avatar.js, utils/botPermissions.js, utils/csv.js, utils/template.js, utils/sessionStore.js, utils/reminders.js, utils/debugLog.js, utils/capacity.js, utils/slotService.js, utils/eventLock.js, utils/announcementRefresh.js, utils/pollService.js, utils/pollStore.js, utils/eventPreview.js, utils/eventArchive.js, utils/eventCleanup.js, utils/adminActions.js, utils/localDateTime.js, utils/eventChangeNotice.js, utils/notificationPrefs.js, utils/memberOverview.js, utils/insights.js, utils/participantMessage.js, utils/bannerStore.js, utils/bulkRegistrations.js, utils/eventSeries.js, utils/eventTemplates.js, utils/botSettings.js, utils/waitlistOffers.js, utils/tentativeRegistration.js, utils/systemConfig.js, utils/timezone.js, utils/discordFetch.js, utils/adminAccess.js]
+sources: [utils/registrationService.js, utils/registrationStatus.js, utils/approvalRequests.js, utils/checkin.js, utils/threadSync.js, utils/formFields.js, utils/eventUtils.js, utils/eventListing.js, utils/profileEvents.js, utils/eventUrl.js, utils/userProfile.js, utils/avatar.js, utils/botPermissions.js, utils/csv.js, utils/template.js, utils/sessionStore.js, utils/reminders.js, utils/debugLog.js, utils/capacity.js, utils/slotService.js, utils/eventLock.js, utils/announcementRefresh.js, utils/pollService.js, utils/pollStore.js, utils/eventPreview.js, utils/eventArchive.js, utils/eventCleanup.js, utils/adminActions.js, utils/localDateTime.js, utils/eventChangeNotice.js, utils/notificationPrefs.js, utils/memberOverview.js, utils/insights.js, utils/participantMessage.js, utils/bannerStore.js, utils/bulkRegistrations.js, utils/eventSeries.js, utils/eventTemplates.js, utils/botSettings.js, utils/waitlistOffers.js, utils/tentativeRegistration.js, utils/systemConfig.js, utils/timezone.js, utils/discordFetch.js, utils/adminAccess.js, utils/participations.js]
 part_of: [architecture]
 depends_on: [data-layer, bot]
 see_also: [registration-flow, form-fields, role-slots]
@@ -85,6 +85,10 @@ Database-backed configuration in `systemSettings/config`: `MANAGED_KEYS` (`group
 
 `getTimezone()` → `process.env.TIMEZONE` or `Europe/Berlin`, read at every call, so a time zone stored by the setup wizard works without a restart. Every module formats and parses dates through it; no module keeps `TIMEZONE` in a constant (`test/timezone.test.js`).
 
+## utils/participations.js (pure, #110)
+
+One entry per person: `toParticipations(registrations)` gives each registration (`asGuest: false`) and then one entry per id in `guests`: `{ id: '<registrationId>#<guestId>', registrationId, eventId, status (of the inviting registration), createdAt, source, userId, userName / userAvatar (from `pendingGuests`, else id / ''), checkedIn, checkedInAt, asGuest: true, hostUserId }`. A person who appears more than once for one event (own registration and guest place, or two guest places — `registerUserForEvent` does not refuse a listed guest) keeps one entry: own accepted, else accepted guest place, else own, else the first guest place (the order `checkInMember` uses). `participationsOf(registrations, userId)` filters to one person. `isListedGuest(registration, userId)`, `guestCheckinOf(registration, guestId)` (`{ checkedIn, checkedInAt, checkinInvitedAt }` from `guestCheckins`, defaults for unlisted ids), `hasAnyCheckin(registration)` (member or a listed guest), `clearedCheckins(registration)` (update fields that take back every check-in and keep the invitation times).
+
 ## utils/adminAccess.js (pure)
 
 One rule for who is a DEMS admin (admin = admin role `DISCORD_ADMIN_ROLE_ID` or the Discord permission „Administrator“ (the owner has every permission)), used by the OAuth login, `createRoleRefresh` and the bot (`hasAdminRole`, thread comments). `hasAdministratorPermission(permissions)` reads the bit from an OAuth decimal string, a bigint or a discord.js `PermissionsBitField` (missing/unreadable → false); `isGuildAdministrator(guild)` for an entry of `/users/@me/guilds` (`owner` or the bit); `isDemsAdmin({ roleIds, isAdministrator, adminRoleId = DISCORD_ADMIN_ROLE_ID })`.
@@ -154,7 +158,7 @@ One rule for who is a DEMS admin (admin = admin role `DISCORD_ADMIN_ROLE_ID` or 
 
 ## utils/memberOverview.js (pure, W-15)
 
-Rules of the admin member overview. **Over** = event exists, not `cancelled`, and `archived` or `isEventOver`. **Teilnahme** (`attended`) = accepted registration of an over event. **Tracked** event = `checkinEnabled` or at least one checked-in registration. **No-Show** = accepted, over, tracked, not checked in — an event nobody checked in for has no no-shows.
+Rules of the admin member overview. **Over** = event exists, not `cancelled`, and `archived` or `isEventOver`. **Teilnahme** (`attended`) = accepted registration of an over event. **Tracked** event = `checkinEnabled` or at least one checked-in registration or guest (`hasAnyCheckin`). **No-Show** = accepted, over, tracked, not checked in — an event nobody checked in for has no no-shows. Guests (#110): the numbers work on participations (`utils/participations.js`) — a guest place counts as Teilnahme, Check-in and No-Show of the guest, not as Anmeldung (`registrations` counts entries without `asGuest`) and not for `lastActiveAt`; `buildMemberList` expands the registrations itself, `memberStats`/`buildMemberHistory` take the person's participations.
 
 | Export | Behaviour |
 |---|---|
@@ -181,7 +185,7 @@ Recipients, text and sending loop of the participant message. `send` is injected
 
 ## utils/insights.js (pure, W-14)
 
-Evaluations over a time range, built on the rules of `memberOverview.js`. **Evaluated** event = `isOver` (so never cancelled) and start within `now - days … now`; range `all` takes every over event, also undated archived ones. Rates are whole percent (`Math.round`) or `null` without a base; totals are weighted (summed counts, not averages of rates).
+Evaluations over a time range, built on the rules of `memberOverview.js`. **Evaluated** event = `isOver` (so never cancelled) and start within `now - days … now`; range `all` takes every over event, also undated archived ones. Rates are whole percent (`Math.round`) or `null` without a base; totals are weighted (summed counts, not averages of rates). Persons, not registrations (#110): `accepted`, `checkedIn`, `noShows` and the rates count members and their listed guests, top members count a guest place for the guest; `placesTaken` and the category `registrations` stay on registrations.
 
 | Export | Behaviour |
 |---|---|

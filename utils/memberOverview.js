@@ -8,9 +8,13 @@
  *   archived), not cancelled, not deleted.
  * - No-Show: such a Teilnahme that is not checked in, but only for events
  *   with attendance tracking (check-in switched on, or anybody checked in).
+ * - A guest place counts like an own Teilnahme of the guest (#110), but not as
+ *   Anmeldung and not as activity: the numbers work on participations
+ *   (utils/participations.js), entries with `asGuest` are guest places.
  */
 const { isEventOver, parseDate } = require('./eventListing');
 const { toProfileEntry, byDateDescending } = require('./profileEvents');
+const { toParticipations, hasAnyCheckin } = require('./participations');
 
 const SOURCES = ['web', 'discord', 'admin'];
 
@@ -39,7 +43,7 @@ function trackedEventIds(eventsById, registrations) {
         if (event && event.checkinEnabled) tracked.add(id);
     }
     for (const registration of registrations) {
-        if (registration.checkedIn === true && registration.eventId) tracked.add(registration.eventId);
+        if (hasAnyCheckin(registration) && registration.eventId) tracked.add(registration.eventId);
     }
     return tracked;
 }
@@ -63,14 +67,14 @@ function isNoShow(registration, event, tracked, now) {
 /**
  * The four numbers of one member.
  *
- * @param {Array<Object>} registrations -> The member's registrations, every status.
+ * @param {Array<Object>} registrations -> The member's participations (own registrations and guest places), every status.
  * @param {Map<string, Object>} eventsById -> Event data by id; deleted events are missing.
  * @param {Set<string>} tracked -> Ids of tracked events (trackedEventIds).
  * @param {Date} [now] -> Reference time.
  * @returns {{ registrations: number, attended: number, checkedIn: number, noShows: number }}
  */
 function memberStats(registrations, eventsById, tracked, now = new Date()) {
-    const stats = { registrations: registrations.length, attended: 0, checkedIn: 0, noShows: 0 };
+    const stats = { registrations: registrations.filter(registration => registration.asGuest !== true).length, attended: 0, checkedIn: 0, noShows: 0 };
     for (const registration of registrations) {
         const event = eventsById.get(registration.eventId);
         if (registration.checkedIn === true) stats.checkedIn += 1;
@@ -150,11 +154,12 @@ function memberBase(user, registrations) {
  */
 function buildMemberList(users, registrations, eventsById, now = new Date()) {
     const tracked = trackedEventIds(eventsById, registrations);
-    const byUser = groupByUser(registrations);
+    const byUser = groupByUser(toParticipations(registrations));
     return users
         .map(user => {
-            const own = byUser.get(user.id) || [];
-            return { ...memberBase(user, own), stats: memberStats(own, eventsById, tracked, now) };
+            const mine = byUser.get(user.id) || [];
+            const own = mine.filter(entry => !entry.asGuest);
+            return { ...memberBase(user, own), stats: memberStats(mine, eventsById, tracked, now) };
         })
         .sort((a, b) => a.displayName.localeCompare(b.displayName, 'de') || a.id.localeCompare(b.id));
 }
@@ -162,7 +167,7 @@ function buildMemberList(users, registrations, eventsById, now = new Date()) {
 /**
  * One member's complete history, newest event first.
  *
- * @param {Array<Object>} registrations -> The member's registrations with `id`.
+ * @param {Array<Object>} registrations -> The member's participations with `id` (guest places carry `asGuest`).
  * @param {Map<string, Object>} eventsById -> Their events by id; deleted events are missing.
  * @param {Set<string>} tracked -> Ids of tracked events.
  * @param {Date} [now] -> Reference time.

@@ -13,7 +13,7 @@ process.env.DEV_SQLITE_PATH = path.join(tmpDir, 'checkin.sqlite');
 const bot = require('../bot');
 const { db, doc, getDoc, setDoc } = require('../firebaseAdmin');
 const {
-    isCheckinActive, isCheckinRunning, checkInMember, listCheckinInvitees
+    isCheckinActive, isCheckinRunning, checkInMember, listCheckinInvitees, markInvited
 } = require('../utils/checkin');
 
 after(async () => {
@@ -296,4 +296,144 @@ test('two invitation runs at the same time send one DM per member', async () => 
     await Promise.all([inviteToCheckin('now-race', event, { send }), inviteToCheckin('now-race', event, { send })]);
 
     assert.deepEqual(sent.sort(), ['race-user-a', 'race-user-b']);
+});
+
+// ── Guests (#110) ───────────────────────────────────────────────────────
+
+const { withEventLock } = require('../utils/eventLock');
+const { updateDoc } = require('../firebaseAdmin');
+
+test('a listed guest of an accepted registration checks in on that registration', async () => {
+    await seedEvent('guest-ok');
+    await seedRegistration('guest-ok-reg', 'guest-ok', 'guest-host', { guests: ['guest-1', 'guest-2'] });
+
+    const first = await checkInMember({ eventId: 'guest-ok', userId: 'guest-1', now: NOW });
+    assert.deepEqual([first.ok, first.asGuest, first.alreadyCheckedIn], [true, true, false]);
+    const stored = await registrationOf('guest-ok-reg');
+    assert.deepEqual(stored.guestCheckins['guest-1'], { checkedIn: true, checkedInAt: NOW.toISOString(), checkinInvitedAt: null });
+    assert.notEqual(stored.checkedIn, true, 'the host stays as they were');
+    assert.equal(stored.guestCheckins['guest-2'], undefined);
+
+    const second = await checkInMember({ eventId: 'guest-ok', userId: 'guest-1', now: new Date(NOW.getTime() + MINUTE) });
+    assert.deepEqual([second.ok, second.alreadyCheckedIn, second.checkedInAt], [true, true, NOW.toISOString()]);
+    assert.equal((await registrationOf('guest-ok-reg')).guestCheckins['guest-1'].checkedInAt, NOW.toISOString());
+});
+
+test('a guest of a pending or waitlisted registration gets no_registration', async () => {
+    for (const status of ['pending', 'waitlisted']) {
+        await seedEvent(`guest-${status}`);
+        await seedRegistration(`guest-${status}-reg`, `guest-${status}`, 'guest-host', { status, guests: ['guest-1'] });
+        const result = await checkInMember({ eventId: `guest-${status}`, userId: 'guest-1', now: NOW });
+        assert.deepEqual([result.ok, result.code], [false, 'no_registration'], status);
+        assert.equal((await registrationOf(`guest-${status}-reg`)).guestCheckins, undefined, status);
+    }
+});
+
+test('an own accepted registration wins over a guest place', async () => {
+    await seedEvent('guest-own');
+    await seedRegistration('guest-own-host', 'guest-own', 'guest-host', { guests: ['guest-1'] });
+    await seedRegistration('guest-own-reg', 'guest-own', 'guest-1');
+
+    const result = await checkInMember({ eventId: 'guest-own', userId: 'guest-1', now: NOW });
+
+    assert.deepEqual([result.ok, result.asGuest], [true, false]);
+    assert.equal((await registrationOf('guest-own-reg')).checkedIn, true);
+    assert.equal((await registrationOf('guest-own-host')).guestCheckins, undefined);
+});
+
+test('invitees list guests after their host and only once', async () => {
+    await seedEvent('guest-invitees');
+    await seedRegistration('guest-inv-reg', 'guest-invitees', 'guest-host', {
+        guests: ['guest-1', 'guest-2'],
+        guestCheckins: { 'guest-1': { checkedIn: true, checkedInAt: at(-MINUTE), checkinInvitedAt: null } }
+    });
+
+    assert.deepEqual(await listCheckinInvitees('guest-invitees'), [
+        { id: 'guest-inv-reg', userId: 'guest-host', guestId: null },
+        { id: 'guest-inv-reg', userId: 'guest-2', guestId: 'guest-2' }
+    ]);
+
+    await markInvited('guest-inv-reg', NOW, 'guest-2');
+    assert.equal((await registrationOf('guest-inv-reg')).guestCheckins['guest-2'].checkinInvitedAt, NOW.toISOString());
+    assert.deepEqual((await listCheckinInvitees('guest-invitees')).map(entry => entry.userId), ['guest-host']);
+});
+
+test('the Discord button checks a guest in', async () => {
+    await seedEvent('guest-btn');
+    await seedRegistration('guest-btn-reg', 'guest-btn', 'guest-host', { guests: ['guest-1'] });
+
+    const { kind, payload } = await clickCheckin('guest-btn', 'guest-1');
+
+    assert.equal(kind, 'update');
+    assert.match(payload.content, /✅ Du bist eingecheckt!/);
+    assert.equal((await registrationOf('guest-btn-reg')).guestCheckins['guest-1'].checkedIn, true);
+});
+
+test('the mock twin invites guests too', async () => {
+    await seedEvent('guest-now', { title: 'Gast-Abend' });
+    await seedRegistration('guest-now-reg', 'guest-now', 'guest-host', { guests: ['guest-1'] });
+
+    let count;
+    const lines = await captureLog(async () => { count = await bot.sendCheckinInvitations('guest-now'); });
+
+    assert.equal(count, 2);
+    assert.equal(lines.filter(line => line.includes('Check-in-Einladung') && line.includes('guest-1')).length, 1);
+    assert.ok((await registrationOf('guest-now-reg')).guestCheckins['guest-1'].checkinInvitedAt);
+    assert.equal(await bot.sendCheckinInvitations('guest-now'), 0, 'only once');
+});
+
+test('a guest check-in and a guest answer at the same time both stay', async () => {
+    await seedEvent('guest-race');
+    await seedRegistration('guest-race-reg', 'guest-race', 'guest-host', { guests: ['guest-1'] });
+
+    // The guest buttons (bot/guests.js) write the same document under the event lock
+    const acceptInvitation = withEventLock('guest-race', async () => {
+        const current = await registrationOf('guest-race-reg');
+        await new Promise(resolve => setTimeout(resolve, 10));
+        await updateDoc(doc(db, 'registrations', 'guest-race-reg'), { guests: [...current.guests, 'guest-3'] });
+    });
+    await Promise.all([acceptInvitation, checkInMember({ eventId: 'guest-race', userId: 'guest-1', now: NOW })]);
+
+    const stored = await registrationOf('guest-race-reg');
+    assert.deepEqual(stored.guests, ['guest-1', 'guest-3']);
+    assert.equal(stored.guestCheckins['guest-1'].checkedIn, true);
+});
+
+test('a person with an own registration and a guest place gets one invitation', async () => {
+    await seedEvent('guest-double');
+    await seedRegistration('guest-double-host', 'guest-double', 'guest-host', { guests: ['guest-1'], createdAt: at(-30 * HOUR) });
+    await seedRegistration('guest-double-own', 'guest-double', 'guest-1');
+    await seedRegistration('guest-double-other', 'guest-double', 'guest-host-2', { guests: ['guest-2'] });
+    await seedRegistration('guest-double-third', 'guest-double', 'guest-host-3', { guests: ['guest-2'] });
+
+    const invitees = (await listCheckinInvitees('guest-double')).map(entry => entry.userId).sort();
+    assert.deepEqual(invitees, ['guest-1', 'guest-2', 'guest-host', 'guest-host-2', 'guest-host-3']);
+});
+
+test('two guests of one registration checking in at the same time both stay', async () => {
+    await seedEvent('guest-pair');
+    await seedRegistration('guest-pair-reg', 'guest-pair', 'guest-host', { guests: ['guest-1', 'guest-2'] });
+
+    await Promise.all([
+        checkInMember({ eventId: 'guest-pair', userId: 'guest-1', now: NOW }),
+        checkInMember({ eventId: 'guest-pair', userId: 'guest-2', now: NOW })
+    ]);
+
+    const stored = await registrationOf('guest-pair-reg');
+    assert.equal(stored.guestCheckins['guest-1'].checkedIn, true);
+    assert.equal(stored.guestCheckins['guest-2'].checkedIn, true);
+});
+
+test('setGuestCheckin refuses a registration that is not accepted any more', async () => {
+    const { setGuestCheckin } = require('../utils/checkin');
+    await seedEvent('guest-admin');
+    await seedRegistration('guest-admin-reg', 'guest-admin', 'guest-host', { status: 'waitlisted', guests: ['guest-1'] });
+
+    assert.equal(await setGuestCheckin({ registrationId: 'guest-admin-reg', guestId: 'guest-1', checkedIn: true, now: NOW }), null);
+    assert.equal((await registrationOf('guest-admin-reg')).guestCheckins, undefined);
+
+    await updateDoc(doc(db, 'registrations', 'guest-admin-reg'), { status: 'accepted' });
+    const done = await setGuestCheckin({ registrationId: 'guest-admin-reg', guestId: 'guest-1', checkedIn: true, now: NOW });
+    assert.deepEqual([done.checkedIn, done.checkedInAt], [true, NOW.toISOString()]);
+    assert.equal(await setGuestCheckin({ registrationId: 'guest-admin-reg', guestId: 'nobody', checkedIn: true, now: NOW }), null);
 });

@@ -183,7 +183,36 @@ test('the answer carries no codes, answers, guests or DM settings', () => {
     const registrations = [reg('e', 'u1', { checkedIn: true, formAnswers: { Frage: 'geheime Antwort' }, guests: ['guest-id'] })];
     const users = [{ id: 'u1', displayName: 'U', notifications: { changes: false } }];
     const text = JSON.stringify(build(events, registrations, '90', users));
-    for (const secret of ['987654', 'geheime Antwort', 'formAnswers', 'guest-id', 'notifications', 'checkinCode']) {
+    for (const secret of ['987654', 'geheime Antwort', 'formAnswers', '"guests"', 'guestCheckins', 'notifications', 'checkinCode']) {
         assert.ok(!text.includes(secret), `leaks ${secret}`);
     }
+    // A guest counts as a participant (#110): they appear as a member of their own, not as the host's guest list
+    const guest = build(events, registrations, '90', users).members.find(member => member.id === 'guest-id');
+    assert.deepEqual(Object.keys(guest).sort(), ['attended', 'checkedIn', 'hasProfile', 'id', 'name']);
+});
+
+// ── Guests (#110) ─────────────────────────────────────────────
+
+test('a checked-in guest counts as a participant who came', () => {
+    const host = reg('guestNight', 'host', {
+        checkedIn: true,
+        guests: ['g1', 'g2'],
+        pendingGuests: [{ userId: 'g1', displayName: 'Greta', avatar: '', status: 'accepted' }],
+        guestCheckins: { g1: { checkedIn: true, checkedInAt: daysAgo(5), checkinInvitedAt: null } }
+    });
+    const result = build({ guestNight: event('Gäste-Abend', { checkinEnabled: true, maxParticipants: 5 }) }, [host], '90', [{ id: 'g1', displayName: 'Greta' }]);
+    const [row] = result.events;
+    assert.deepEqual(
+        [row.accepted, row.checkedIn, row.noShows, row.attendanceRate, row.placesTaken],
+        [3, 2, 1, 67, 3]
+    );
+    const greta = result.members.find(member => member.id === 'g1');
+    assert.deepEqual([greta.attended, greta.checkedIn], [1, 1]);
+});
+
+test('an event counts as tracked when only a guest checked in', () => {
+    const host = reg('guestOnly', 'host', { guests: ['g1'], guestCheckins: { g1: { checkedIn: true, checkedInAt: daysAgo(5) } } });
+    const result = build({ guestOnly: event('Nur Gast') }, [host]);
+    assert.equal(result.totals.trackedEvents, 1);
+    assert.equal(result.events[0].noShows, 1, 'the host did not check in');
 });

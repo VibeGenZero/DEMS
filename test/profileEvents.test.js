@@ -117,7 +117,7 @@ test('an entry carries eight event fields and never the check-in code', () => {
     });
     const entry = toProfileEntry(registration('full', { checkedIn: true, formAnswers: { Name: 'Tom' }, guests: ['u2'], userName: 'Tom' }), full);
     assert.deepEqual(entry, {
-        id: 'reg-full', status: 'accepted', checkedIn: true, createdAt: at(-72), slot: null, waitlistPosition: null, offerExpiresAt: '',
+        id: 'reg-full', status: 'accepted', asGuest: false, checkedIn: true, createdAt: at(-72), slot: null, waitlistPosition: null, offerExpiresAt: '',
         event: { id: 'full', title: 'Full', startDate: at(48), endDate: at(50), status: 'active', category: 'Gaming', location: 'Lobby', checkinEnabled: true }
     });
     assert.doesNotMatch(JSON.stringify(entry), /123456|Geheim|formFields|formAnswers|userName/);
@@ -143,10 +143,10 @@ test('missing and broken values do not break the lists', () => {
     // A date nobody can read counts as "no date yet"; the older format with a space is read
     assert.deepEqual(upcoming.map(entry => entry.id), ['reg-legacy', 'reg-bare', 'reg-broken']);
     assert.deepEqual(upcoming[1], {
-        id: 'reg-bare', status: '', checkedIn: false, createdAt: '', slot: null, waitlistPosition: null, offerExpiresAt: '',
+        id: 'reg-bare', status: '', asGuest: false, checkedIn: false, createdAt: '', slot: null, waitlistPosition: null, offerExpiresAt: '',
         event: { id: 'bare', title: '', startDate: '', endDate: '', status: '', category: '', location: '', checkinEnabled: false }
     });
-    assert.deepEqual(history, [{ id: 'reg-none', status: '', checkedIn: false, createdAt: '', slot: null, waitlistPosition: null, offerExpiresAt: '', event: null }]);
+    assert.deepEqual(history, [{ id: 'reg-none', status: '', asGuest: false, checkedIn: false, createdAt: '', slot: null, waitlistPosition: null, offerExpiresAt: '', event: null }]);
     // Only a location object with a text gives a place
     assert.equal(toProfileEntry(registration('e'), event('E', { location: 'Lobby' })).event.location, '');
     assert.equal(toProfileEntry(registration('e'), event('E', { location: { channelId: '1' } })).event.location, '');
@@ -167,4 +167,10 @@ test('a tentative registration is listed among the upcoming events with its stat
     assert.deepEqual(titles(upcoming), ['Raid']);
     assert.equal(upcoming[0].status, 'tentative');
     assert.deepEqual(history, []);
+});
+
+test('guest entries are marked (#110)', () => {
+    const { upcoming } = build({ ahead: event('Ahead') }, [registration('ahead', { id: 'reg-ahead#u1', asGuest: true, registrationId: 'reg-ahead' })]);
+    assert.equal(upcoming[0].asGuest, true);
+    assert.equal(build({ ahead: event('Ahead') }).upcoming[0].asGuest, false);
 });

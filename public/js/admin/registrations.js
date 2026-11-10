@@ -57,9 +57,7 @@ export async function showRegistrations(eventId, eventTitle) {
 
         tbody.innerHTML = regs.map(reg => {
             const sourceBadge = sourceBadges[reg.source] || sourceBadges.web;
-            const guestsText = Array.isArray(reg.guests) && reg.guests.length > 0
-                ? `<span class="badge text-bg-secondary mb-1">${reg.guests.length} Gast/Gäste</span><br><small class="text-muted text-break reg-guests">${reg.guests.map(g => escapeHtml(g)).join(', ')}</small>`
-                : '<span class="text-muted">—</span>';
+            const guestsText = renderRegistrationGuestsCell(reg, eventId, eventTitle);
 
             return `
       <tr>
@@ -249,26 +247,54 @@ export async function addRegistrationMember({ userId, displayName }) {
  */
 export function renderRegistrationCheckinCell(reg, eventId, eventTitle) {
     if (reg.status !== 'accepted') return '<span class="text-muted">—</span>';
-    const checkedIn = reg.checkedIn === true;
+    return checkinToggle({ regId: reg.id, checkedIn: reg.checkedIn === true, eventId, eventTitle });
+}
+
+/**
+ * The check-in button of a member or, with `guestId`, of one of their guests.
+ * @param {Object} options -> `{ regId, guestId?, checkedIn, eventId, eventTitle }`.
+ * @returns {string} -> HTML of the button.
+ */
+function checkinToggle({ regId, guestId = null, checkedIn, eventId, eventTitle }) {
     const look = checkedIn
         ? { button: 'btn-success', icon: 'bi-check2-square', label: 'Eingecheckt' }
         : { button: 'btn-outline-secondary', icon: 'bi-square', label: 'Abhaken' };
+    const guestAttribute = guestId === null ? '' : ` data-guest-id="${escapeHtml(guestId)}"`;
     return `<button type="button" class="btn btn-sm ${look.button} text-nowrap" data-click="toggleRegCheckin"
-        data-reg-id="${escapeHtml(reg.id)}" data-checked-in="${checkedIn}" data-event-id="${escapeHtml(eventId)}" data-event-title="${escapeHtml(eventTitle)}"
+        data-reg-id="${escapeHtml(regId)}"${guestAttribute} data-checked-in="${checkedIn}" data-event-id="${escapeHtml(eventId)}" data-event-title="${escapeHtml(eventTitle)}"
         aria-pressed="${checkedIn}"><i class="bi ${look.icon} me-1"></i>${look.label}</button>`;
 }
 
 /**
- * Sets or takes back the check-in of one registration, then reloads the dialog.
- * @param {Object} dataset -> `regId`, `checkedIn` ('true'|'false', the current state), `eventId`, `eventTitle`.
+ * Guest cell: the confirmed guests by name (profile name from `pendingGuests`, else the id);
+ * for accepted registrations each with their own check-in button (#110).
+ * @param {Object} reg -> Registration with `guests`, `pendingGuests`, `guestCheckins`.
+ * @returns {string} -> HTML of the cell content.
  */
-export async function toggleRegCheckin({ regId, checkedIn, eventId, eventTitle }) {
+export function renderRegistrationGuestsCell(reg, eventId, eventTitle) {
+    const guests = Array.isArray(reg.guests) ? reg.guests : [];
+    if (guests.length === 0) return '<span class="text-muted">—</span>';
+    const names = new Map((reg.pendingGuests || []).filter(Boolean).map(guest => [guest.userId, guest.displayName]));
+    const rows = guests.map(guestId => {
+        const toggle = reg.status === 'accepted'
+            ? checkinToggle({ regId: reg.id, guestId, checkedIn: reg.guestCheckins?.[guestId]?.checkedIn === true, eventId, eventTitle })
+            : '';
+        return `<div class="d-flex align-items-center gap-2 mb-1"><small class="text-break reg-guests">${escapeHtml(names.get(guestId) || guestId)}</small>${toggle}</div>`;
+    });
+    return `<span class="badge text-bg-secondary mb-1">${guests.length} Gast/Gäste</span>${rows.join('')}`;
+}
+
+/**
+ * Sets or takes back the check-in of one registration or one of its guests, then reloads the dialog.
+ * @param {Object} dataset -> `regId`, `guestId` (only for a guest), `checkedIn` ('true'|'false', the current state), `eventId`, `eventTitle`.
+ */
+export async function toggleRegCheckin({ regId, guestId, checkedIn, eventId, eventTitle }) {
     const target = checkedIn !== 'true';
     try {
         const res = await fetch(`/api/admin/registrations/${encodeURIComponent(regId)}/checkin`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': state.csrfToken },
-            body: JSON.stringify({ checkedIn: target })
+            body: JSON.stringify(guestId ? { checkedIn: target, guestId } : { checkedIn: target })
         });
         const result = await res.json();
         if (!res.ok) {

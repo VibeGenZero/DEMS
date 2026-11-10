@@ -153,3 +153,9 @@ test('an unselected bench holds no places during a bulk accept (B-17)', () => {
     const slotPlan = planBulkAction({ action: 'accept', ids: ['bench', 'p'], registrations: slotRegs, event: event({ slots: SLOTS }) });
     assert.deepEqual(slotPlan.changes.map(change => [change.id, change.to, change.slotId]), [['bench', 'accepted', 'heal'], ['p', 'accepted', 'heal']]);
 });
+
+test('planBulkAction marks clearCheckin when only a guest is checked in (#110)', () => {
+    const registrations = [reg('host', 'accepted', { guests: ['g1'], guestCheckins: { g1: { checkedIn: true, checkedInAt: 'T1' } } })];
+    const byId = toById(planBulkAction({ action: 'waitlist', ids: ['host'], registrations, event: event() }));
+    assert.equal(byId.host.clearCheckin, true);
+});
