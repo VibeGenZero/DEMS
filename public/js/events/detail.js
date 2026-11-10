@@ -408,8 +408,9 @@ export async function showEventDetail(eventId, { celebrate, fromTaken } = {}) {
             const statusTexts = { pending: 'Ausstehend', accepted: 'Angenommen', rejected: 'Abgelehnt', waitlisted: 'Warteliste', offered: 'Platz angeboten' };
             const statusColors = { pending: 'warning', accepted: 'success', rejected: 'danger', waitlisted: 'info' };
             const place = regData.status === 'waitlisted' && regData.waitlistPosition;
+            // A guest sees the real status of the registration that invited them (#110)
             statusEl.textContent = regData.asGuest
-                ? 'Angenommen (Gast)'
+                ? `${statusTexts[regData.status] || regData.status} (Gast)`
                 : place
                     // Own place on the waitlist (W-05)
                     ? `Platz ${place.position} von ${place.total} auf der Warteliste`
