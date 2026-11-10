@@ -15,6 +15,7 @@ const { describePlaces, waitlistPositions, byCreatedAt, TENTATIVE_STATUS } = req
 const { debugLog } = require('../utils/debugLog');
 const { avatarUrlOf, repairAvatarUrl } = require('../utils/avatar');
 const { checkInMember } = require('../utils/checkin');
+const { guestCheckinOf } = require('../utils/participations');
 
 /**
  * Event with its places: the numbers and the one sentence every view shows
@@ -456,10 +457,12 @@ router.get('/:id/my-registration', requireAuth, async (req, res) => {
         );
         const guestSnap = await getDocs(guestQ);
 
-        // The document belongs to the inviting member (form answers, guest list) -> only status and id
+        // The document belongs to the inviting member (form answers, guest list) -> only status, id
+        // and the guest's own check-in (#110)
         if (!guestSnap.empty) {
             const regDoc = guestSnap.docs[0];
-            return res.json({ registered: true, asGuest: true, id: regDoc.id, status: regDoc.data().status });
+            const { checkedIn, checkedInAt } = guestCheckinOf(regDoc.data(), user.id);
+            return res.json({ registered: true, asGuest: true, id: regDoc.id, status: regDoc.data().status, checkedIn, checkedInAt });
         }
 
         res.json({ registered: false });

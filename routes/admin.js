@@ -16,7 +16,8 @@ const { keepDeadlineRefreshFlag } = require('../utils/eventListing');
 const { describeEventChanges, notifyEventChange } = require('../utils/eventChangeNotice');
 const { filterByPreference, normalizeNotificationPrefs } = require('../utils/notificationPrefs');
 const { trackedEventIds, memberStats, memberBase, buildMemberList, buildMemberHistory } = require('../utils/memberOverview');
-const { clearedCheckins } = require('../utils/participations');
+const { clearedCheckins, toParticipations, isListedGuest, guestCheckinOf } = require('../utils/participations');
+const { updateGuestCheckin } = require('../utils/checkin');
 const { DEFAULT_RANGE, isValidRange, buildInsights } = require('../utils/insights');
 const { MESSAGE_GROUPS, messageRecipients, recipientCounts, validateMessageText, sendParticipantMessage } = require('../utils/participantMessage');
 const { describePlaces, formatPlaces, formatWaitlist, waitlistPositions } = require('../utils/capacity');
@@ -1132,12 +1133,10 @@ router.get('/events/:id/checkin-stats', async (req, res) => {
             where('status', '==', 'accepted')
         );
         const regs = await getDocs(regQ);
-        let total = 0;
-        let checkedIn = 0;
-        regs.forEach(d => {
-            total++;
-            if (d.data().checkedIn) checkedIn++;
-        });
+        // Persons: the members and their listed guests (#110)
+        const people = toParticipations(regs.docs.map(d => ({ id: d.id, ...d.data() })));
+        const total = people.length;
+        const checkedIn = people.filter(person => person.checkedIn === true).length;
 
         const eventSnap = await getDoc(doc(db, 'events', req.params.id));
         const checkinCode = eventSnap.exists() ? eventSnap.data().checkinCode || '' : '';
@@ -1365,10 +1364,11 @@ router.get('/events/:id/registrations/export', async (req, res) => {
 
         // Build CSV
         const slotHeaders = slots.length > 0 ? ['Slot', 'Wunschrolle'] : [];
-        const headers = ['User', 'UserID', 'Status', 'Eingecheckt', 'Quelle', 'Datum', 'Gäste (Anzahl)', 'Gäste IDs', ...slotHeaders, ...formKeysArr].map(csvCell);
+        const headers = ['User', 'UserID', 'Status', 'Eingecheckt', 'Quelle', 'Datum', 'Gäste (Anzahl)', 'Gäste IDs', 'Gäste eingecheckt', ...slotHeaders, ...formKeysArr].map(csvCell);
         const rows = registrations.map(r => {
             const guestCount = Array.isArray(r.guests) ? r.guests.length : 0;
             const guestIds = Array.isArray(r.guests) ? r.guests.join('; ') : '';
+            const guestsCheckedIn = (r.guests || []).filter(guest => guestCheckinOf(r, guest).checkedIn).length;
             const base = [
                 r.userName || '',
                 r.userId,
@@ -1377,7 +1377,8 @@ router.get('/events/:id/registrations/export', async (req, res) => {
                 ({ discord: 'Discord', admin: 'Admin' })[r.source] || 'Website',
                 r.createdAt ? new Date(r.createdAt).toLocaleDateString('de-DE') : '',
                 guestCount,
-                guestIds
+                guestIds,
+                guestsCheckedIn
             ];
             const formVals = formKeysArr.map(k => (r.formAnswers ? r.formAnswers[k] : '') || '');
             const slotValues = slots.length > 0 ? [slotLabel(r.slotId), slotLabel(r.preferredSlotId)] : [];
@@ -1425,7 +1426,7 @@ router.put('/registrations/:id/status', validateRegStatus, async (req, res) => {
  */
 router.put('/registrations/:id/checkin', async (req, res) => {
     try {
-        const { checkedIn } = req.body;
+        const { checkedIn, guestId } = req.body;
         if (typeof checkedIn !== 'boolean') {
             return res.status(400).json({ error: 'Bitte gib an, ob eingecheckt werden soll.' });
         }
@@ -1437,6 +1438,29 @@ router.put('/registrations/:id/checkin', async (req, res) => {
         const reg = regSnap.data();
         if (reg.status !== 'accepted') {
             return res.status(400).json({ error: 'Nur angenommene Anmeldungen können eingecheckt werden.' });
+        }
+
+        // A guest of the registration (#110): written under the event lock, like the guest's own check-in
+        if (guestId !== undefined) {
+            if (typeof guestId !== 'string' || !isListedGuest(reg, guestId)) {
+                return res.status(400).json({ error: 'Dieser Gast gehört nicht zu der Anmeldung.' });
+            }
+            const result = await updateGuestCheckin(reg.eventId, req.params.id, guestId, (entry) => ({
+                ...entry,
+                checkedIn,
+                checkedInAt: checkedIn ? (entry.checkedIn && entry.checkedInAt) || new Date().toISOString() : null
+            }));
+            if (!result) {
+                return res.status(400).json({ error: 'Dieser Gast gehört nicht zu der Anmeldung.' });
+            }
+            const guestName = toParticipations([{ id: req.params.id, ...reg }]).find(person => person.userId === guestId).userName;
+            await addAuditLog(
+                checkedIn ? 'CHECKIN_REGISTRATION' : 'UNDO_CHECKIN_REGISTRATION',
+                req.session.user.id,
+                checkedIn ? `Checked in guest ${guestName} of ${reg.userName}` : `Took back check-in of guest ${guestName} of ${reg.userName}`,
+                req.params.id
+            );
+            return res.json({ id: req.params.id, guestId, checkedIn, checkedInAt: result.after.checkedInAt });
         }
 
         // A repeated check-in keeps the original time

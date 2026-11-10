@@ -337,11 +337,11 @@ test('no event answer outside the admin area contains a check-in code', async ()
     }
 });
 
-test('a guest sees only status and id of the registration that invited them', async () => {
+test('a guest sees only status, id and their own check-in of the registration that invited them', async () => {
     const newbie = await loginAs('newbie');
     const res = await newbie.request(`/api/events/${EVENT_ID.BIG_FORM}/my-registration`);
     assert.equal(res.status, 200);
-    assert.deepEqual(await res.json(), { registered: true, asGuest: true, id: 'dev-reg-bigform-chiara', status: 'pending' });
+    assert.deepEqual(await res.json(), { registered: true, asGuest: true, id: 'dev-reg-bigform-chiara', status: 'pending', checkedIn: false, checkedInAt: null });
 });
 
 test('the overview gets only events that are not over, each with the own status', async () => {
