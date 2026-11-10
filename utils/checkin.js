@@ -111,6 +111,29 @@ async function checkInGuest(eventId, registration, userId, now, event) {
 }
 
 /**
+ * Admin tick-off of a guest (W-07 for guests, #110): sets or takes back the check-in
+ * under the event lock; a registration that is no longer accepted is refused there.
+ *
+ * @param {Object} options -> `{ registrationId, guestId, checkedIn: boolean, now }`.
+ * @returns {Promise<Object|null>} -> The guest's new `{ checkedIn, checkedInAt, checkinInvitedAt }`,
+ *   null for a missing or not accepted registration or a guest who is not listed.
+ */
+async function setGuestCheckin({ registrationId, guestId, checkedIn, now = new Date() }) {
+    const snap = await getDoc(doc(db, 'registrations', registrationId));
+    if (!snap.exists()) return null;
+    let refused = false;
+    const result = await updateGuestCheckin(snap.data().eventId, registrationId, guestId, (entry, current) => {
+        if (current.status !== 'accepted') {
+            refused = true;
+            return null;
+        }
+        // A repeated check-in keeps the original time
+        return { ...entry, checkedIn, checkedInAt: checkedIn ? (entry.checkedIn && entry.checkedInAt) || now.toISOString() : null };
+    });
+    return !result || refused ? null : result.after;
+}
+
+/**
  * Check a member in.
  *
  * @param {Object} options
@@ -167,14 +190,24 @@ async function listCheckinInvitees(eventId) {
     const registrations = snapshot.docs
         .map(regDoc => ({ id: regDoc.id, ...regDoc.data() }))
         .sort((a, b) => String(a.createdAt || '').localeCompare(String(b.createdAt || '')));
+    // One invitation per person: someone with an own accepted registration is invited through it,
+    // a guest of two registrations once (and not at all when one of the places already invited them)
+    const handled = new Set(registrations.map(registration => registration.userId));
+    for (const registration of registrations) {
+        for (const guestId of registration.guests || []) {
+            const entry = guestCheckinOf(registration, guestId);
+            if (entry.checkedIn || entry.checkinInvitedAt) handled.add(guestId);
+        }
+    }
     const invitees = [];
     for (const registration of registrations) {
         if (!registration.checkedIn && !registration.checkinInvitedAt) {
             invitees.push({ id: registration.id, userId: registration.userId, guestId: null });
         }
         for (const guestId of registration.guests || []) {
-            const entry = guestCheckinOf(registration, guestId);
-            if (!entry.checkedIn && !entry.checkinInvitedAt) invitees.push({ id: registration.id, userId: guestId, guestId });
+            if (handled.has(guestId)) continue;
+            handled.add(guestId);
+            invitees.push({ id: registration.id, userId: guestId, guestId });
         }
     }
     return invitees;
@@ -204,6 +237,7 @@ module.exports = {
     findAcceptedRegistration,
     findAcceptedGuestRegistration,
     updateGuestCheckin,
+    setGuestCheckin,
     checkInMember,
     listCheckinInvitees,
     markInvited

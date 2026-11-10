@@ -460,7 +460,8 @@ router.get('/:id/my-registration', requireAuth, async (req, res) => {
         // The document belongs to the inviting member (form answers, guest list) -> only status, id
         // and the guest's own check-in (#110)
         if (!guestSnap.empty) {
-            const regDoc = guestSnap.docs[0];
+            // Guest of two registrations: the accepted place counts, as for check-in and the numbers
+            const regDoc = guestSnap.docs.find(candidate => candidate.data().status === 'accepted') || guestSnap.docs[0];
             const { checkedIn, checkedInAt } = guestCheckinOf(regDoc.data(), user.id);
             return res.json({ registered: true, asGuest: true, id: regDoc.id, status: regDoc.data().status, checkedIn, checkedInAt });
         }

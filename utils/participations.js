@@ -60,7 +60,21 @@ function guestParticipation(registration, guestId) {
 }
 
 /**
- * One entry per person: each registration for its member, then one per listed guest.
+ * Which entry stands for a person who appears more than once for one event (own
+ * registration and guest place, or two guest places): lower wins. Matches the
+ * order in which checkInMember looks for a place.
+ */
+function placeRank(entry) {
+    const accepted = entry.status === 'accepted';
+    if (!entry.asGuest) return accepted ? 0 : 2;
+    return accepted ? 1 : 3;
+}
+
+/**
+ * One entry per person and event: each registration for its member, then one per
+ * listed guest. A person who appears more than once for the same event keeps one
+ * entry: the own accepted registration, else an accepted guest place, else the own
+ * registration, else the first guest place.
  *
  * @param {Array<Object>} registrations -> Registrations with `id`.
  * @returns {Array<Object>} -> The registration itself with `asGuest: false`, and guest entries
@@ -74,7 +88,13 @@ function toParticipations(registrations) {
         if (!Array.isArray(registration.guests)) continue;
         for (const guestId of registration.guests) participations.push(guestParticipation(registration, guestId));
     }
-    return participations;
+    const best = new Map();
+    for (const entry of participations) {
+        if (!entry.eventId || !entry.userId) continue;
+        const key = `${entry.eventId}\u0000${entry.userId}`;
+        if (!best.has(key) || placeRank(entry) < placeRank(best.get(key))) best.set(key, entry);
+    }
+    return participations.filter(entry => !entry.eventId || !entry.userId || best.get(`${entry.eventId}\u0000${entry.userId}`) === entry);
 }
 
 /**

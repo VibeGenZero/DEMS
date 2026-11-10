@@ -69,3 +69,19 @@ test('clearedCheckins resets own and guest check-ins and keeps the invitation ti
     });
     assert.deepEqual(clearedCheckins(registration({ checkedIn: true })), { checkedIn: false, checkedInAt: null });
 });
+
+test('one person with an own registration and a guest place on one event counts once', () => {
+    const guestPlace = registration({ id: 'r1', guests: ['g1'] });
+    const own = (status) => registration({ id: 'own', userId: 'g1', status, guests: [], pendingGuests: [] });
+    // Own accepted registration wins
+    assert.deepEqual(participationsOf([guestPlace, own('accepted')], 'g1').map(entry => entry.id), ['own']);
+    // An accepted guest place wins over an own request
+    assert.deepEqual(participationsOf([guestPlace, own('pending')], 'g1').map(entry => entry.id), ['r1#g1']);
+    // Two guest places: the accepted one
+    const pendingPlace = registration({ id: 'r0', userId: 'other', status: 'pending', guests: ['g1'] });
+    assert.deepEqual(participationsOf([pendingPlace, guestPlace], 'g1').map(entry => entry.id), ['r1#g1']);
+    // Other events and other people stay
+    const otherEvent = registration({ id: 'r9', eventId: 'ev9', guests: ['g1'] });
+    assert.equal(toParticipations([guestPlace, own('accepted'), otherEvent]).filter(entry => entry.userId === 'g1').length, 2);
+    assert.equal(toParticipations([guestPlace, own('accepted')]).filter(entry => entry.userId === 'host').length, 1);
+});

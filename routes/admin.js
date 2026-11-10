@@ -17,7 +17,7 @@ const { describeEventChanges, notifyEventChange } = require('../utils/eventChang
 const { filterByPreference, normalizeNotificationPrefs } = require('../utils/notificationPrefs');
 const { trackedEventIds, memberStats, memberBase, buildMemberList, buildMemberHistory } = require('../utils/memberOverview');
 const { clearedCheckins, toParticipations, isListedGuest, guestCheckinOf } = require('../utils/participations');
-const { updateGuestCheckin } = require('../utils/checkin');
+const { setGuestCheckin } = require('../utils/checkin');
 const { DEFAULT_RANGE, isValidRange, buildInsights } = require('../utils/insights');
 const { MESSAGE_GROUPS, messageRecipients, recipientCounts, validateMessageText, sendParticipantMessage } = require('../utils/participantMessage');
 const { describePlaces, formatPlaces, formatWaitlist, waitlistPositions } = require('../utils/capacity');
@@ -1445,13 +1445,10 @@ router.put('/registrations/:id/checkin', async (req, res) => {
             if (typeof guestId !== 'string' || !isListedGuest(reg, guestId)) {
                 return res.status(400).json({ error: 'Dieser Gast gehört nicht zu der Anmeldung.' });
             }
-            const result = await updateGuestCheckin(reg.eventId, req.params.id, guestId, (entry) => ({
-                ...entry,
-                checkedIn,
-                checkedInAt: checkedIn ? (entry.checkedIn && entry.checkedInAt) || new Date().toISOString() : null
-            }));
+            // Checked again under the lock: the registration may have left „accepted“ meanwhile
+            const result = await setGuestCheckin({ registrationId: req.params.id, guestId, checkedIn });
             if (!result) {
-                return res.status(400).json({ error: 'Dieser Gast gehört nicht zu der Anmeldung.' });
+                return res.status(400).json({ error: 'Nur angenommene Anmeldungen können eingecheckt werden.' });
             }
             const guestName = toParticipations([{ id: req.params.id, ...reg }]).find(person => person.userId === guestId).userName;
             await addAuditLog(
@@ -1460,7 +1457,7 @@ router.put('/registrations/:id/checkin', async (req, res) => {
                 checkedIn ? `Checked in guest ${guestName} of ${reg.userName}` : `Took back check-in of guest ${guestName} of ${reg.userName}`,
                 req.params.id
             );
-            return res.json({ id: req.params.id, guestId, checkedIn, checkedInAt: result.after.checkedInAt });
+            return res.json({ id: req.params.id, guestId, checkedIn, checkedInAt: result.checkedInAt });
         }
 
         // A repeated check-in keeps the original time

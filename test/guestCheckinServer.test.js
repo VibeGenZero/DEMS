@@ -35,6 +35,11 @@ before(async () => {
         maxParticipants: 10, formFields: [], startDate: at(-HOUR), endDate: at(2 * HOUR),
         checkinEnabled: true, checkinCode: CODE, checkinMessage: 'Willkommen!', createdAt: at(-48 * HOUR)
     });
+    // Neo is also the guest of an open request planted first: the accepted guest place must win (#110 review)
+    await setDoc(doc(db, 'registrations', 'gc-early'), {
+        eventId: EVENT, userId: 'u-early-host', userName: 'Früh', status: 'pending', source: 'web',
+        createdAt: at(-30 * HOUR), formAnswers: {}, guests: [NEWBIE.userId], pendingGuests: []
+    });
     await setDoc(doc(db, 'registrations', 'gc-member'), {
         eventId: EVENT, userId: MEMBER.userId, userName: MEMBER.displayName, status: 'accepted', source: 'web',
         createdAt: at(-24 * HOUR), formAnswers: { Geheim: 'nur für Admins' },
