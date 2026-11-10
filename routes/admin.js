@@ -10,7 +10,7 @@ const { csvCell } = require('../utils/csv');
 const { checkEventFields, validateEvent, validateRegStatus, validateBotMessages } = require('../middleware/validators');
 const { MAX_TEMPLATES, pickTemplateSettings, normalizeTemplateName, nameTaken } = require('../utils/eventTemplates');
 const { sendDM, getGuildRoles, buildEventAnnouncement, getGuildScheduledEvents, deleteEventChannels, createScheduledEvent, updateScheduledEvent, removeScheduledEvent, setScheduledEventStatus, getBotStatus, getBotSettings, saveBotSettings, getRunningEvents, getGuildChannels, searchGuildMembers, fetchGuildMember, sendCheckinInvitations } = require('../bot');
-const { promoteFromWaitlist, addAuditLog, loadEventRoster, loadEventRegistrations, saveEventWithSlots } = require('../utils/eventUtils');
+const { promoteFromWaitlist, addAuditLog, loadEventRoster, loadEventRegistrations, loadUserParticipations, saveEventWithSlots } = require('../utils/eventUtils');
 const { mergeReminderHours } = require('../utils/reminders');
 const { keepDeadlineRefreshFlag } = require('../utils/eventListing');
 const { describeEventChanges, notifyEventChange } = require('../utils/eventChangeNotice');
@@ -1791,8 +1791,8 @@ router.get('/members/:id', async (req, res) => {
             return res.status(404).json({ error: 'Mitglied nicht gefunden.' });
         }
         const user = { ...userSnap.data(), id: userSnap.id };
-        const regSnap = await getDocs(query(collection(db, 'registrations'), where('userId', '==', user.id)));
-        const registrations = regSnap.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
+        // Own registrations and guest places (#110)
+        const registrations = await loadUserParticipations(user.id);
 
         // Events of the history, and their registrations to know whether attendance was tracked
         const eventsById = new Map();
@@ -1808,7 +1808,7 @@ router.get('/members/:id', async (req, res) => {
 
         res.json({
             member: {
-                ...memberBase(user, registrations),
+                ...memberBase(user, registrations.filter(registration => !registration.asGuest)),
                 acceptInvitations: user.acceptInvitations !== false,
                 notifications: normalizeNotificationPrefs(user.notifications)
             },

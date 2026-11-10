@@ -158,7 +158,7 @@ One rule for who is a DEMS admin (admin = admin role `DISCORD_ADMIN_ROLE_ID` or 
 
 ## utils/memberOverview.js (pure, W-15)
 
-Rules of the admin member overview. **Over** = event exists, not `cancelled`, and `archived` or `isEventOver`. **Teilnahme** (`attended`) = accepted registration of an over event. **Tracked** event = `checkinEnabled` or at least one checked-in registration. **No-Show** = accepted, over, tracked, not checked in — an event nobody checked in for has no no-shows.
+Rules of the admin member overview. **Over** = event exists, not `cancelled`, and `archived` or `isEventOver`. **Teilnahme** (`attended`) = accepted registration of an over event. **Tracked** event = `checkinEnabled` or at least one checked-in registration or guest (`hasAnyCheckin`). **No-Show** = accepted, over, tracked, not checked in — an event nobody checked in for has no no-shows. Guests (#110): the numbers work on participations (`utils/participations.js`) — a guest place counts as Teilnahme, Check-in and No-Show of the guest, not as Anmeldung (`registrations` counts entries without `asGuest`) and not for `lastActiveAt`; `buildMemberList` expands the registrations itself, `memberStats`/`buildMemberHistory` take the person's participations.
 
 | Export | Behaviour |
 |---|---|
@@ -185,7 +185,7 @@ Recipients, text and sending loop of the participant message. `send` is injected
 
 ## utils/insights.js (pure, W-14)
 
-Evaluations over a time range, built on the rules of `memberOverview.js`. **Evaluated** event = `isOver` (so never cancelled) and start within `now - days … now`; range `all` takes every over event, also undated archived ones. Rates are whole percent (`Math.round`) or `null` without a base; totals are weighted (summed counts, not averages of rates).
+Evaluations over a time range, built on the rules of `memberOverview.js`. **Evaluated** event = `isOver` (so never cancelled) and start within `now - days … now`; range `all` takes every over event, also undated archived ones. Rates are whole percent (`Math.round`) or `null` without a base; totals are weighted (summed counts, not averages of rates). Persons, not registrations (#110): `accepted`, `checkedIn`, `noShows` and the rates count members and their listed guests, top members count a guest place for the guest; `placesTaken` and the category `registrations` stay on registrations.
 
 | Export | Behaviour |
 |---|---|

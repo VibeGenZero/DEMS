@@ -41,6 +41,8 @@ function toProfileEntry(registration, event, waitlistPosition = null) {
     return {
         id: registration.id,
         status: registration.status || '',
+        // A guest place on someone else's registration (#110)
+        asGuest: registration.asGuest === true,
         checkedIn: registration.checkedIn === true,
         createdAt: registration.createdAt || '',
         slot: event ? profileSlot(registration, event) : null,

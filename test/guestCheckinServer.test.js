@@ -117,3 +117,16 @@ test('an admin ticks a guest off and back', async () => {
     const memberRow = rows.find(row => row.includes(MEMBER.userId)).split(',');
     assert.equal(memberRow[column], '"1"');
 });
+
+test('the guest\'s profile and member page count the guest check-in', async () => {
+    // Runs after the check-in above: Neo is checked in as Mitglied's guest
+    const profile = await (await (await loginAs('newbie')).request('/api/user/profile')).json();
+    const entry = [...profile.upcoming, ...profile.history].find(item => item.event && item.event.id === EVENT);
+    assert.ok(entry, 'the guest place is listed');
+    assert.deepEqual([entry.asGuest, entry.checkedIn, entry.status], [true, true, 'accepted']);
+    assert.ok(profile.stats.checkedIn >= 1);
+
+    const member = await (await (await loginAs('admin')).request(`/api/admin/members/${NEWBIE.userId}`)).json();
+    assert.ok(member.stats.checkedIn >= 1);
+    assert.ok(member.history.some(item => item.event && item.event.id === EVENT && item.asGuest === true));
+});

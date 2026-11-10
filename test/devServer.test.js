@@ -237,7 +237,7 @@ test('a profile entry carries only what the page shows', async () => {
     const entries = [...profile.upcoming, ...profile.history];
     assert.equal(entries.length, profile.stats.total);
     for (const entry of entries) {
-        assert.deepEqual(Object.keys(entry).sort(), ['checkedIn', 'createdAt', 'event', 'id', 'offerExpiresAt', 'slot', 'status', 'waitlistPosition']);
+        assert.deepEqual(Object.keys(entry).sort(), ['asGuest', 'checkedIn', 'createdAt', 'event', 'id', 'offerExpiresAt', 'slot', 'status', 'waitlistPosition']);
         assert.deepEqual(Object.keys(entry.event).sort(), ['category', 'checkinEnabled', 'endDate', 'id', 'location', 'startDate', 'status', 'title']);
     }
     assert.equal(profile.upcoming.find(entry => entry.event.id === EVENT_ID.OPEN).event.location, 'Lobby');
@@ -247,14 +247,16 @@ test('a profile entry carries only what the page shows', async () => {
     assert.notEqual(series[0].event.startDate, series[1].event.startDate);
 });
 
-test('the profile tells the slot of a registration, a new member gets two empty lists', async () => {
+test('the profile tells the slot of a registration, a new member sees only their guest place', async () => {
     const admin = await (await (await loginAs('admin')).request('/api/user/profile')).json();
     const raid = admin.upcoming.find(entry => entry.event.id === EVENT_ID.ROLE);
     assert.deepEqual([raid.slot.name, raid.slot.wish], ['Schaden', false]);
     assert.notEqual(raid.slot.emoji, '');
 
     const newbie = await (await (await loginAs('newbie')).request('/api/user/profile')).json();
-    assert.deepEqual([newbie.upcoming, newbie.history, newbie.stats.total], [[], [], 0]);
+    // Neo has no registration of their own; the guest place on Chiara's request is listed, marked as guest (#110)
+    assert.deepEqual([newbie.history, newbie.stats.total, newbie.stats.accepted], [[], 0, 0]);
+    assert.deepEqual(newbie.upcoming.map(entry => [entry.event.id, entry.status, entry.asGuest]), [[EVENT_ID.BIG_FORM, 'pending', true]]);
 });
 
 test('announcing an event is logged instead of sent to Discord', async () => {
