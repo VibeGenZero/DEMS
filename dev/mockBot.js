@@ -294,8 +294,8 @@ async function sendCheckinInvitations(eventId) {
     const event = eventSnap.data();
     return withEventLock(`checkin:${eventId}`, async () => {
         const invitees = await listCheckinInvitees(eventId);
-        for (const { id, userId } of invitees) {
-            await markInvited(id);
+        for (const { id, userId, guestId } of invitees) {
+            await markInvited(id, new Date(), guestId);
             mockLog(`Check-in-Einladung an ${describeUser(userId)} ("${event.title}") mit Button „Einchecken“`);
         }
         return invitees.length;

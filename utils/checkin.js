@@ -6,6 +6,8 @@
  */
 const { db, collection, doc, getDoc, getDocs, updateDoc, query, where } = require('../firebaseAdmin');
 const { parseDate, isEventOver } = require('./eventListing');
+const { withEventLock } = require('./eventLock');
+const { isListedGuest, guestCheckinOf } = require('./participations');
 
 /**
  * Whether an event has check-in switched on.
@@ -50,6 +52,65 @@ async function findAcceptedRegistration(eventId, userId) {
 }
 
 /**
+ * The accepted registration of an event that lists a member as guest (#110).
+ *
+ * @param {string} eventId -> Event document id.
+ * @param {string} userId -> Discord user id of the guest.
+ * @returns {Promise<{ id: string, data: Object }|null>} -> The inviting registration, or null.
+ */
+async function findAcceptedGuestRegistration(eventId, userId) {
+    const snapshot = await getDocs(query(
+        collection(db, 'registrations'),
+        where('eventId', '==', eventId),
+        where('status', '==', 'accepted')
+    ));
+    const regDoc = snapshot.docs.find(candidate => isListedGuest(candidate.data(), userId));
+    return regDoc ? { id: regDoc.id, data: regDoc.data() } : null;
+}
+
+/**
+ * Change the check-in entry of one guest. Runs under the event lock with a fresh
+ * read and writes the whole map, because the guest buttons write the same document.
+ *
+ * @param {string} eventId -> Event document id (lock key).
+ * @param {string} registrationId -> The inviting registration.
+ * @param {string} guestId -> Discord user id of the guest.
+ * @param {Function} change -> (current entry, registration) => new entry, or null to leave everything as it is.
+ * @returns {Promise<Object|null>} -> `{ before, after }` entries, null when the guest is not listed (any more).
+ */
+function updateGuestCheckin(eventId, registrationId, guestId, change) {
+    return withEventLock(eventId, async () => {
+        const snap = await getDoc(doc(db, 'registrations', registrationId));
+        if (!snap.exists() || !isListedGuest(snap.data(), guestId)) return null;
+        const registration = snap.data();
+        const before = guestCheckinOf(registration, guestId);
+        const after = change(before, registration);
+        if (after) {
+            await updateDoc(doc(db, 'registrations', registrationId), {
+                guestCheckins: { ...(registration.guestCheckins || {}), [guestId]: after }
+            });
+        }
+        return { before, after: after || before, registration };
+    });
+}
+
+/**
+ * Check a guest in on the inviting registration.
+ */
+async function checkInGuest(eventId, registration, userId, now, event) {
+    const checkedInAt = now.toISOString();
+    // The status is checked again under the lock: a registration that just left „accepted“ gets no check-in
+    const result = await updateGuestCheckin(eventId, registration.id, userId, (entry, current) => (
+        entry.checkedIn || current.status !== 'accepted' ? null : { ...entry, checkedIn: true, checkedInAt }
+    ));
+    if (!result || result.registration.status !== 'accepted') return { ok: false, code: 'no_registration', event };
+    if (result.before.checkedIn) {
+        return { ok: true, alreadyCheckedIn: true, checkedInAt: result.before.checkedInAt, event, asGuest: true };
+    }
+    return { ok: true, alreadyCheckedIn: false, checkedInAt, event, asGuest: true };
+}
+
+/**
  * Check a member in.
  *
  * @param {Object} options
@@ -58,8 +119,9 @@ async function findAcceptedRegistration(eventId, userId) {
  * @param {Date} [options.now] -> Check-in time.
  * @param {boolean} [options.requireRunning] -> Discord button: the event must be active, started and not over.
  *   The code route leaves it off and keeps its old rules (switch and code only).
- * @returns {Promise<Object>} -> `{ ok: true, alreadyCheckedIn, checkedInAt, event }` or `{ ok: false, code, event? }`
+ * @returns {Promise<Object>} -> `{ ok: true, alreadyCheckedIn, checkedInAt, event, asGuest }` or `{ ok: false, code, event? }`
  *   with code `not_found`, `not_active`, `disabled`, `not_started`, `over` or `no_registration`.
+ *   Without an own accepted registration a listed guest of an accepted one is checked in there (#110).
  */
 async function checkInMember({ eventId, userId, now = new Date(), requireRunning = false }) {
     const eventSnap = await getDoc(doc(db, 'events', eventId));
@@ -75,21 +137,26 @@ async function checkInMember({ eventId, userId, now = new Date(), requireRunning
     }
 
     const registration = await findAcceptedRegistration(eventId, userId);
-    if (!registration) return { ok: false, code: 'no_registration', event };
+    if (!registration) {
+        const inviting = await findAcceptedGuestRegistration(eventId, userId);
+        if (!inviting) return { ok: false, code: 'no_registration', event };
+        return checkInGuest(eventId, inviting, userId, now, event);
+    }
 
     if (registration.data.checkedIn) {
-        return { ok: true, alreadyCheckedIn: true, checkedInAt: registration.data.checkedInAt || null, event };
+        return { ok: true, alreadyCheckedIn: true, checkedInAt: registration.data.checkedInAt || null, event, asGuest: false };
     }
     const checkedInAt = now.toISOString();
     await updateDoc(doc(db, 'registrations', registration.id), { checkedIn: true, checkedInAt });
-    return { ok: true, alreadyCheckedIn: false, checkedInAt, event };
+    return { ok: true, alreadyCheckedIn: false, checkedInAt, event, asGuest: false };
 }
 
 /**
  * Registrations that still need a check-in invitation.
  *
  * @param {string} eventId -> Event document id.
- * @returns {Promise<Array<{ id: string, userId: string }>>} -> Accepted, not checked in, not invited yet; in creation order.
+ * @returns {Promise<Array<{ id: string, userId: string, guestId: string|null }>>} -> Accepted, not checked in,
+ *   not invited yet; per registration in creation order the member, then its listed guests (`userId` = `guestId`).
  */
 async function listCheckinInvitees(eventId) {
     const snapshot = await getDocs(query(
@@ -97,28 +164,46 @@ async function listCheckinInvitees(eventId) {
         where('eventId', '==', eventId),
         where('status', '==', 'accepted')
     ));
-    return snapshot.docs
+    const registrations = snapshot.docs
         .map(regDoc => ({ id: regDoc.id, ...regDoc.data() }))
-        .filter(registration => !registration.checkedIn && !registration.checkinInvitedAt)
-        .sort((a, b) => String(a.createdAt || '').localeCompare(String(b.createdAt || '')))
-        .map(registration => ({ id: registration.id, userId: registration.userId }));
+        .sort((a, b) => String(a.createdAt || '').localeCompare(String(b.createdAt || '')));
+    const invitees = [];
+    for (const registration of registrations) {
+        if (!registration.checkedIn && !registration.checkinInvitedAt) {
+            invitees.push({ id: registration.id, userId: registration.userId, guestId: null });
+        }
+        for (const guestId of registration.guests || []) {
+            const entry = guestCheckinOf(registration, guestId);
+            if (!entry.checkedIn && !entry.checkinInvitedAt) invitees.push({ id: registration.id, userId: guestId, guestId });
+        }
+    }
+    return invitees;
 }
 
 /**
- * Record that a registration got its check-in invitation (written before the DM).
+ * Record that a member or guest got the check-in invitation (written before the DM).
  *
  * @param {string} registrationId -> Registration document id.
  * @param {Date} [now] -> Invitation time.
+ * @param {string|null} [guestId] -> A listed guest of the registration instead of its member.
  * @returns {Promise<void>}
  */
-async function markInvited(registrationId, now = new Date()) {
-    await updateDoc(doc(db, 'registrations', registrationId), { checkinInvitedAt: now.toISOString() });
+async function markInvited(registrationId, now = new Date(), guestId = null) {
+    if (!guestId) {
+        await updateDoc(doc(db, 'registrations', registrationId), { checkinInvitedAt: now.toISOString() });
+        return;
+    }
+    const snap = await getDoc(doc(db, 'registrations', registrationId));
+    if (!snap.exists()) return;
+    await updateGuestCheckin(snap.data().eventId, registrationId, guestId, (entry) => ({ ...entry, checkinInvitedAt: now.toISOString() }));
 }
 
 module.exports = {
     isCheckinActive,
     isCheckinRunning,
     findAcceptedRegistration,
+    findAcceptedGuestRegistration,
+    updateGuestCheckin,
     checkInMember,
     listCheckinInvitees,
     markInvited
