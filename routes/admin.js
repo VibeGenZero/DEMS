@@ -16,6 +16,7 @@ const { keepDeadlineRefreshFlag } = require('../utils/eventListing');
 const { describeEventChanges, notifyEventChange } = require('../utils/eventChangeNotice');
 const { filterByPreference, normalizeNotificationPrefs } = require('../utils/notificationPrefs');
 const { trackedEventIds, memberStats, memberBase, buildMemberList, buildMemberHistory } = require('../utils/memberOverview');
+const { clearedCheckins } = require('../utils/participations');
 const { DEFAULT_RANGE, isValidRange, buildInsights } = require('../utils/insights');
 const { MESSAGE_GROUPS, messageRecipients, recipientCounts, validateMessageText, sendParticipantMessage } = require('../utils/participantMessage');
 const { describePlaces, formatPlaces, formatWaitlist, waitlistPositions } = require('../utils/capacity');
@@ -1252,7 +1253,7 @@ router.post('/events/:id/registrations/bulk', async (req, res) => {
                     if (change.from === 'offered') update.offer = null;
                     // Leaving the bench counts as registered now, for the waitlist order (B-17)
                     if (change.from === 'tentative') update.createdAt = new Date().toISOString();
-                    if (change.clearCheckin) Object.assign(update, { checkedIn: false, checkedInAt: null });
+                    if (change.clearCheckin) Object.assign(update, clearedCheckins(registrations.find(reg => reg.id === change.id)));
                     batch.update(doc(db, 'registrations', change.id), update);
                 }
                 await batch.commit();

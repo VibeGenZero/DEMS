@@ -120,6 +120,7 @@ Pending registrations can also be decided in the approval channel of the bot cen
 - Inviting: the registrant picks users via `GET /api/user/search` (only users with `acceptInvitations !== false`, 60 searches per minute and member); the server checks them again (step 6a) and stores them in `pendingGuests` with `status: 'pending'` and the name/avatar of their profile and receive a DM with `guest_accept` / `guest_decline` buttons.
 - Accept → `pendingGuests[i].status = 'accepted'` and user id pushed to `guests`; decline → removed from `pendingGuests` and the waitlist may move up (the invitation no longer reserves a place). Only the invited user can press the buttons. `handleGuestButton` (`bot/guests.js`) re-reads and writes the registration inside `withEventLock`, so two guests answering at once both count; DMs and the waitlist step run after the lock.
 - Pending invitations already reserve a slot.
+- When the inviting registration leaves `accepted` (single change, bulk action), the check-ins of its guests are taken back with its own (`clearedCheckins` in `utils/participations.js`; invitation times stay).
 - An accepted guest has no registration of their own: `GET /api/events/:id/my-registration` answers `{ registered: true, asGuest: true, id, status }` with the id and status of the inviting registration and nothing else from it.
 
 ## Message templates

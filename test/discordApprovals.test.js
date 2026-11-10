@@ -71,6 +71,22 @@ test('a request that is no longer pending stays as it is', async () => {
     assert.equal((await auditLogsFor('svc-decided-reg')).length, 0);
 });
 
+test('changeRegistrationStatus to waitlisted clears own and guest check-ins (#110)', async () => {
+    await seedEvent('svc-checkins');
+    const invitedAt = inHours(-2);
+    await seedRegistration('svc-checkins-reg', 'svc-checkins', 'svc-user', {
+        status: 'accepted', guests: ['svc-guest'], checkedIn: true, checkedInAt: inHours(-1),
+        guestCheckins: { 'svc-guest': { checkedIn: true, checkedInAt: inHours(-1), checkinInvitedAt: invitedAt } }
+    });
+
+    const result = await changeRegistrationStatus({ registrationId: 'svc-checkins-reg', status: 'waitlisted', actor: ADMIN });
+
+    assert.equal(result.ok, true);
+    const stored = (await getDoc(doc(db, 'registrations', 'svc-checkins-reg'))).data();
+    assert.deepEqual([stored.checkedIn, stored.checkedInAt], [false, null]);
+    assert.deepEqual(stored.guestCheckins['svc-guest'], { checkedIn: false, checkedInAt: null, checkinInvitedAt: invitedAt });
+});
+
 test('an unknown registration is reported as not found', async () => {
     const result = await changeRegistrationStatus({ registrationId: 'svc-missing', status: 'accepted', actor: ADMIN });
     assert.deepEqual([result.ok, result.code], [false, 'not_found']);
