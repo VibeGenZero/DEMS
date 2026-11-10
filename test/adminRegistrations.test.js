@@ -83,6 +83,52 @@ test('a refused check-in shows the error of the server', async () => {
     assert.equal(toasts.at(-1), 'Nicht gefunden');
 });
 
+// ── Guests (#110) ──────────────────────────────────────────────────────
+
+const WITH_GUESTS = [
+    registration('host', {
+        guests: ['g1', 'g2<x>'],
+        pendingGuests: [{ userId: 'g1', displayName: 'Greta', avatar: '', status: 'accepted' }],
+        guestCheckins: { g1: { checkedIn: true, checkedInAt: '2026-10-01T19:00:00.000Z', checkinInvitedAt: null } }
+    }),
+    registration('asking', { status: 'pending', guests: ['g3'], pendingGuests: [{ userId: 'g3', displayName: 'Gil', avatar: '', status: 'accepted' }] })
+];
+const guestRoutes = (routes = {}) => ({ '/api/admin/events/ev1/registrations': { data: WITH_GUESTS, slots: [] }, ...routes });
+
+test('guests are listed by name with their own check-in toggle', async () => {
+    const { body } = await openDialog(guestRoutes());
+    const html = body();
+    assertNoInlineHandlers(html);
+    const row = rowOf(html, 'host');
+    assert.match(row, /Greta/);
+    assert.match(row, /g2&lt;x&gt;/, 'a guest without profile name shows the escaped id');
+    assert.doesNotMatch(html, /<x>/);
+
+    const guestToggles = actionTargets(row, 'toggleRegCheckin').filter(target => target.attributes['data-guest-id']);
+    assert.deepEqual(guestToggles.map(target => [target.attributes['data-guest-id'], target.attributes['aria-pressed']]), [['g1', 'true'], ['g2<x>', 'false']]);
+    assert.ok(guestToggles.every(target => target.attributes['data-reg-id'] === 'host'));
+});
+
+test('guests of open requests get no toggle', async () => {
+    const { body } = await openDialog(guestRoutes());
+    const row = rowOf(body(), 'asking');
+    assert.match(row, /Gil/);
+    assert.doesNotMatch(row, /toggleRegCheckin/);
+});
+
+test('the guest toggle sends guestId', async () => {
+    const { app, body, requests, toasts } = await openDialog(guestRoutes({
+        '/api/admin/registrations/host/checkin': { id: 'host', guestId: 'g1', checkedIn: false, checkedInAt: null }
+    }));
+    const target = actionTargets(body(), 'toggleRegCheckin').find(entry => entry.attributes['data-guest-id'] === 'g1');
+    await app.runAction('toggleRegCheckin', actionElement(target));
+    const put = requests.find(request => request.url === '/api/admin/registrations/host/checkin');
+    assert.equal(put.headers['X-CSRF-TOKEN'], 'csrf-1');
+    assert.deepEqual(JSON.parse(put.body), { checkedIn: false, guestId: 'g1' });
+    assert.equal(toasts.at(-1), 'Check-in zurückgenommen.');
+    assert.equal(requests.filter(request => request.url === '/api/admin/events/ev1/registrations').length, 2);
+});
+
 // ── Member entry (W-06) ────────────────────────────────────────────────
 
 const isShown = (element) => !element.classList.contains('is-hidden') && element.style.display !== 'none';
