@@ -65,6 +65,7 @@ see_also: [dev-mock-mode, conventions]
 | `announcementDelivery.test.js` | real `sendChannelMessage` / `editStoredMessages` / `refreshEventAnnouncements` / `refreshPollMessages` / `markPollMessagesDeleted` against a fake Discord: mentions, per-record intro, conversion of old embed messages, dropped and kept records |
 | `botThreads.test.js` | `ensureAnnouncementThread` (B-14) against a fake Discord: not ready, first thread (name ≤ 100, one week), existing kept, deleted replaced, other errors keep it, refused thread logged |
 | `hardening.test.js` | `safeEqual`, `csvCell` (formula starts defused, quoting), `parseTemplate` (values literal, no wildcard keys) |
+| `participations.test.js` | `utils/participations.js`: one entry per person, guest check-ins only for listed guests, `hasAnyCheckin`, `clearedCheckins` keeps invitation times |
 | `adminAccess.test.js` | `utils/adminAccess.js`: „Administrator“ bit from OAuth strings, bigints and `PermissionsBitField`, owner, admin role, none configured |
 | `roleRefresh.test.js` | `createRoleRefresh` with a fake clock and fake Discord: revoked/new admin role within 5 min, Discord „Administrator“ without the role, left server, sessions without check time, Discord unreachable (values kept, retry after 1 min), shared lookup |
 | `roleRefreshServer.test.js` | plants a session with a stale `isAdmin: true` for the member persona in the shared SQLite file, signs the cookie with the mock secret → `/api/admin/stats` answers 403, `/auth/me` shows the real roles |

@@ -3,7 +3,7 @@ id: utils
 title: utils/ — domain helpers
 type: module
 tags: [utils, registration, form-fields, waitlist, audit-log, profile, debug, change-notice, banner]
-sources: [utils/registrationService.js, utils/registrationStatus.js, utils/approvalRequests.js, utils/checkin.js, utils/threadSync.js, utils/formFields.js, utils/eventUtils.js, utils/eventListing.js, utils/profileEvents.js, utils/eventUrl.js, utils/userProfile.js, utils/avatar.js, utils/botPermissions.js, utils/csv.js, utils/template.js, utils/sessionStore.js, utils/reminders.js, utils/debugLog.js, utils/capacity.js, utils/slotService.js, utils/eventLock.js, utils/announcementRefresh.js, utils/pollService.js, utils/pollStore.js, utils/eventPreview.js, utils/eventArchive.js, utils/eventCleanup.js, utils/adminActions.js, utils/localDateTime.js, utils/eventChangeNotice.js, utils/notificationPrefs.js, utils/memberOverview.js, utils/insights.js, utils/participantMessage.js, utils/bannerStore.js, utils/bulkRegistrations.js, utils/eventSeries.js, utils/eventTemplates.js, utils/botSettings.js, utils/waitlistOffers.js, utils/tentativeRegistration.js, utils/systemConfig.js, utils/timezone.js, utils/discordFetch.js, utils/adminAccess.js]
+sources: [utils/registrationService.js, utils/registrationStatus.js, utils/approvalRequests.js, utils/checkin.js, utils/threadSync.js, utils/formFields.js, utils/eventUtils.js, utils/eventListing.js, utils/profileEvents.js, utils/eventUrl.js, utils/userProfile.js, utils/avatar.js, utils/botPermissions.js, utils/csv.js, utils/template.js, utils/sessionStore.js, utils/reminders.js, utils/debugLog.js, utils/capacity.js, utils/slotService.js, utils/eventLock.js, utils/announcementRefresh.js, utils/pollService.js, utils/pollStore.js, utils/eventPreview.js, utils/eventArchive.js, utils/eventCleanup.js, utils/adminActions.js, utils/localDateTime.js, utils/eventChangeNotice.js, utils/notificationPrefs.js, utils/memberOverview.js, utils/insights.js, utils/participantMessage.js, utils/bannerStore.js, utils/bulkRegistrations.js, utils/eventSeries.js, utils/eventTemplates.js, utils/botSettings.js, utils/waitlistOffers.js, utils/tentativeRegistration.js, utils/systemConfig.js, utils/timezone.js, utils/discordFetch.js, utils/adminAccess.js, utils/participations.js]
 part_of: [architecture]
 depends_on: [data-layer, bot]
 see_also: [registration-flow, form-fields, role-slots]
@@ -84,6 +84,10 @@ Database-backed configuration in `systemSettings/config`: `MANAGED_KEYS` (`group
 ## utils/timezone.js (#138)
 
 `getTimezone()` → `process.env.TIMEZONE` or `Europe/Berlin`, read at every call, so a time zone stored by the setup wizard works without a restart. Every module formats and parses dates through it; no module keeps `TIMEZONE` in a constant (`test/timezone.test.js`).
+
+## utils/participations.js (pure, #110)
+
+One entry per person: `toParticipations(registrations)` gives each registration (`asGuest: false`) and then one entry per id in `guests`: `{ id: '<registrationId>#<guestId>', registrationId, eventId, status (of the inviting registration), createdAt, source, userId, userName / userAvatar (from `pendingGuests`, else id / ''), checkedIn, checkedInAt, asGuest: true, hostUserId }`. `participationsOf(registrations, userId)` filters to one person. `isListedGuest(registration, userId)`, `guestCheckinOf(registration, guestId)` (`{ checkedIn, checkedInAt, checkinInvitedAt }` from `guestCheckins`, defaults for unlisted ids), `hasAnyCheckin(registration)` (member or a listed guest), `clearedCheckins(registration)` (update fields that take back every check-in and keep the invitation times).
 
 ## utils/adminAccess.js (pure)
 
