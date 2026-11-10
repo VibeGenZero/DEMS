@@ -181,10 +181,8 @@ async function handleApprovalButton(interaction, action, registrationId) {
     // Acknowledge first -> DMs, roles and promotions can exceed Discord's 3 second limit
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-    const { resolveInteractionRoles } = require('./registration');
-    const adminRoleId = process.env.DISCORD_ADMIN_ROLE_ID;
-    const roleIds = await resolveInteractionRoles(interaction);
-    if (!adminRoleId || !roleIds.includes(adminRoleId)) {
+    const { hasAdminRole } = require('./adminCommands');
+    if (!(await hasAdminRole(interaction))) {
         return interaction.editReply({ content: '⛔ Nur Admins können Anmeldungen freigeben.' });
     }
 

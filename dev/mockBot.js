@@ -139,7 +139,8 @@ async function getUserRoles(userId) {
 
 async function fetchMemberRoleIds(userId) {
     const member = findMember(userId);
-    return member ? { isMember: true, roleIds: [...member.roles] } : { isMember: false, roleIds: [] };
+    // The personas are no Discord Administrators: admin rights come from the admin role
+    return member ? { isMember: true, roleIds: [...member.roles], isAdministrator: false } : { isMember: false, roleIds: [], isAdministrator: false };
 }
 
 async function isGuildMember(userId) {

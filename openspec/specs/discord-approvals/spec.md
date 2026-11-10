@@ -36,7 +36,7 @@ A request message SHALL show the event title and start, the member as a mention 
 - **THEN** Discord accepts the message and the answer ends with "…"
 
 ### Requirement: Only admins decide, checked at the click
-A click on „Annehmen“, „Ablehnen“ or „Warteliste“ SHALL be carried out only when the clicking member holds the admin role at that moment. Everybody else SHALL get the private answer "⛔ Nur Admins können Anmeldungen freigeben." and nothing SHALL change.
+A click on „Annehmen“, „Ablehnen“ or „Warteliste“ SHALL be carried out only when the clicking member is a DEMS admin at that moment: they hold the admin role or the Discord permission „Administrator“ (the owner included). Everybody else SHALL get the private answer "⛔ Nur Admins können Anmeldungen freigeben." and nothing SHALL change.
 
 #### Scenario: Member without the admin role
 - **WHEN** a member without the admin role clicks „Annehmen“
@@ -45,6 +45,10 @@ A click on „Annehmen“, „Ablehnen“ or „Warteliste“ SHALL be carried o
 #### Scenario: Admin role removed
 - **WHEN** an admin loses the admin role in Discord and then clicks „Ablehnen“
 - **THEN** the click is refused although their website session still says admin
+
+#### Scenario: Discord Administrator without the admin role
+- **WHEN** a member with the Discord permission „Administrator“ but without the admin role clicks „Ablehnen“
+- **THEN** the registration is rejected
 
 ### Requirement: A decision in Discord equals the decision on the website
 „Annehmen“, „Ablehnen“ and „Warteliste“ SHALL change the registration exactly like the matching status change on the website: acceptance picks a slot when needed and may warn about an overbooked slot, the member gets the same DM, a rejection lets the waitlist move up, the announcement is refreshed and the audit log names the deciding admin.

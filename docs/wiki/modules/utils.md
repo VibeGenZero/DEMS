@@ -3,7 +3,7 @@ id: utils
 title: utils/ — domain helpers
 type: module
 tags: [utils, registration, form-fields, waitlist, audit-log, profile, debug, change-notice, banner]
-sources: [utils/registrationService.js, utils/registrationStatus.js, utils/approvalRequests.js, utils/checkin.js, utils/threadSync.js, utils/formFields.js, utils/eventUtils.js, utils/eventListing.js, utils/profileEvents.js, utils/eventUrl.js, utils/userProfile.js, utils/avatar.js, utils/botPermissions.js, utils/csv.js, utils/template.js, utils/sessionStore.js, utils/reminders.js, utils/debugLog.js, utils/capacity.js, utils/slotService.js, utils/eventLock.js, utils/announcementRefresh.js, utils/pollService.js, utils/pollStore.js, utils/eventPreview.js, utils/eventArchive.js, utils/eventCleanup.js, utils/adminActions.js, utils/localDateTime.js, utils/eventChangeNotice.js, utils/notificationPrefs.js, utils/memberOverview.js, utils/insights.js, utils/participantMessage.js, utils/bannerStore.js, utils/bulkRegistrations.js, utils/eventSeries.js, utils/eventTemplates.js, utils/botSettings.js, utils/waitlistOffers.js, utils/tentativeRegistration.js, utils/systemConfig.js, utils/timezone.js, utils/discordFetch.js]
+sources: [utils/registrationService.js, utils/registrationStatus.js, utils/approvalRequests.js, utils/checkin.js, utils/threadSync.js, utils/formFields.js, utils/eventUtils.js, utils/eventListing.js, utils/profileEvents.js, utils/eventUrl.js, utils/userProfile.js, utils/avatar.js, utils/botPermissions.js, utils/csv.js, utils/template.js, utils/sessionStore.js, utils/reminders.js, utils/debugLog.js, utils/capacity.js, utils/slotService.js, utils/eventLock.js, utils/announcementRefresh.js, utils/pollService.js, utils/pollStore.js, utils/eventPreview.js, utils/eventArchive.js, utils/eventCleanup.js, utils/adminActions.js, utils/localDateTime.js, utils/eventChangeNotice.js, utils/notificationPrefs.js, utils/memberOverview.js, utils/insights.js, utils/participantMessage.js, utils/bannerStore.js, utils/bulkRegistrations.js, utils/eventSeries.js, utils/eventTemplates.js, utils/botSettings.js, utils/waitlistOffers.js, utils/tentativeRegistration.js, utils/systemConfig.js, utils/timezone.js, utils/discordFetch.js, utils/adminAccess.js]
 part_of: [architecture]
 depends_on: [data-layer, bot]
 see_also: [registration-flow, form-fields, role-slots]
@@ -84,6 +84,10 @@ Database-backed configuration in `systemSettings/config`: `MANAGED_KEYS` (`group
 ## utils/timezone.js (#138)
 
 `getTimezone()` → `process.env.TIMEZONE` or `Europe/Berlin`, read at every call, so a time zone stored by the setup wizard works without a restart. Every module formats and parses dates through it; no module keeps `TIMEZONE` in a constant (`test/timezone.test.js`).
+
+## utils/adminAccess.js (pure)
+
+One rule for who is a DEMS admin (admin = admin role `DISCORD_ADMIN_ROLE_ID` or the Discord permission „Administrator“ (the owner has every permission)), used by the OAuth login, `createRoleRefresh` and the bot (`hasAdminRole`, thread comments). `hasAdministratorPermission(permissions)` reads the bit from an OAuth decimal string, a bigint or a discord.js `PermissionsBitField` (missing/unreadable → false); `isGuildAdministrator(guild)` for an entry of `/users/@me/guilds` (`owner` or the bit); `isDemsAdmin({ roleIds, isAdministrator, adminRoleId = DISCORD_ADMIN_ROLE_ID })`.
 
 ## utils/discordFetch.js (#138)
 

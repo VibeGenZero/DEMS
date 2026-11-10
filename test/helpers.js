@@ -199,10 +199,10 @@ function createClient(baseUrl) {
  * Discord interaction double that records every answer in call order.
  * `answered` resolves with the first answer that is not a defer.
  *
- * @param {Object} options -> `{ kind: 'button'|'select'|'command'|'modal'|'autocomplete', customId, userId, commandName, eventOption, focused, values, roles }`; a modal answers every field empty, an autocomplete reads `focused` as the typed text, `showModal` counts as an answer.
+ * @param {Object} options -> `{ kind: 'button'|'select'|'command'|'modal'|'autocomplete', customId, userId, commandName, eventOption, focused, values, roles, permissions }`; `permissions` is the member's discord.js PermissionsBitField (`memberPermissions`); a modal answers every field empty, an autocomplete reads `focused` as the typed text, `showModal` counts as an answer.
  * @returns {Object} -> The fake interaction.
  */
-function createFakeInteraction({ kind, customId, userId, commandName, eventOption, focused = '', values = [], roles = null }) {
+function createFakeInteraction({ kind, customId, userId, commandName, eventOption, focused = '', values = [], roles = null, permissions = null }) {
     const calls = [];
     let resolveAnswered;
     const answered = new Promise(resolve => { resolveAnswered = resolve; });
@@ -210,6 +210,7 @@ function createFakeInteraction({ kind, customId, userId, commandName, eventOptio
         customId, commandName, values, calls, answered,
         user: { id: userId, username: userId, globalName: userId },
         member: roles ? { roles, displayName: userId } : null,
+        memberPermissions: permissions,
         deferred: false,
         replied: false,
         options: { getString: () => eventOption, getFocused: () => focused },

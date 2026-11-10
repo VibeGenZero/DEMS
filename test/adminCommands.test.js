@@ -1,6 +1,7 @@
 const { test, before, after } = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('path');
+const { PermissionsBitField, PermissionFlagsBits } = require('discord.js');
 const { createTempDir, createFakeInteraction, dispatchInteraction } = require('./helpers');
 
 // Mock mode with an own, seeded database; the empty cwd keeps a local .env out
@@ -34,8 +35,8 @@ after(async () => {
  *
  * @param {Object} spec -> `{ kind, persona, commandName, subcommand, customId, options, fields, focused }`.
  */
-function interactionOf({ kind, persona = ADMIN, commandName, subcommand = 'create', customId, options = {}, fields = {}, focused = '' }) {
-    const interaction = createFakeInteraction({ kind, customId, commandName, userId: persona.userId, roles: persona.roles, focused });
+function interactionOf({ kind, persona = ADMIN, commandName, subcommand = 'create', customId, options = {}, fields = {}, focused = '', permissions = null }) {
+    const interaction = createFakeInteraction({ kind, customId, commandName, userId: persona.userId, roles: persona.roles, focused, permissions });
     interaction.options = {
         getSubcommand: () => subcommand,
         getString: (name) => (name in options ? options[name] : null),
@@ -95,6 +96,30 @@ test('members without the admin role are refused everywhere', async () => {
     await dispatchInteraction(bot.client, button);
     assert.match(answerText(button), /Nur Admins/);
     assert.equal((await getDoc(doc(db, 'events', 'dev-event-draft'))).data().status, 'draft');
+});
+
+test('a Discord Administrator passes without the admin role, also with none configured', async () => {
+    const previous = process.env.DISCORD_ADMIN_ROLE_ID;
+    try {
+        for (const adminRoleId of [previous, '']) {
+            process.env.DISCORD_ADMIN_ROLE_ID = adminRoleId;
+            const interaction = interactionOf({
+                kind: 'command', persona: MEMBER, commandName: 'event',
+                permissions: new PermissionsBitField(PermissionFlagsBits.Administrator)
+            });
+            await dispatchInteraction(bot.client, interaction);
+            assert.ok(interaction.calls.some(([name]) => name === 'showModal'), `admin role "${adminRoleId}"`);
+        }
+        // Other rights such as "Manage Server" are not enough
+        const manager = interactionOf({
+            kind: 'command', persona: MEMBER, commandName: 'event',
+            permissions: new PermissionsBitField(PermissionFlagsBits.ManageGuild)
+        });
+        await dispatchInteraction(bot.client, manager);
+        assert.match(answerText(manager), /Nur Admins/);
+    } finally {
+        process.env.DISCORD_ADMIN_ROLE_ID = previous;
+    }
 });
 
 test('the template autocomplete offers matching templates to admins', async () => {

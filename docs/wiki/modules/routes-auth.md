@@ -10,7 +10,7 @@ see_also: [auth-session, dev-mock-mode, maintenance-mode]
 ---
 # routes/auth.js — Discord OAuth2 login
 
-> TL;DR: Mounted at `/auth`. `/auth/discord` redirects to Discord OAuth2 (scopes `identify guilds guilds.members.read`) with a one-time `state` kept in the session; `/auth/discord/callback` exchanges the code, checks guild membership and admin role, applies the maintenance login block, upserts the `users` document and stores the session user; `/auth/me` returns the session user; `POST /auth/logout` (CSRF token) destroys the session.
+> TL;DR: Mounted at `/auth`. `/auth/discord` redirects to Discord OAuth2 (scopes `identify guilds guilds.members.read`) with a one-time `state` kept in the session; `/auth/discord/callback` exchanges the code, checks guild membership and admin rights (admin role or Discord „Administrator“), applies the maintenance login block, upserts the `users` document and stores the session user; `/auth/me` returns the session user; `POST /auth/logout` (CSRF token) destroys the session.
 
 ## Endpoints
 
@@ -27,7 +27,7 @@ see_also: [auth-session, dev-mock-mode, maintenance-mode]
 2. No `code` → `/?error=no_code`.
 3. `POST https://discord.com/api/v10/oauth2/token` (via `discordFetch` of `utils/discordFetch.js`, retries transient socket errors twice) → no `access_token` → `/?error=token_failed`.
 4. `GET /users/@me` (profile) and `GET /users/@me/guilds/{DISCORD_GUILD_ID}/member` → not OK → `/?error=not_member`.
-5. `isAdmin = member.roles.includes(DISCORD_ADMIN_ROLE_ID)` (false when the variable is empty).
+5. `isAdmin = isDemsAdmin({ roleIds: member.roles, isAdministrator })` (`utils/adminAccess.js`): the admin role, or owner / „Administrator“ on the guild from `GET /users/@me/guilds` (scope `guilds`, `isAdministratorOnGuild`; a failed request counts as false and only costs this path).
 6. `getLoginBlockReason(isAdmin)` → `panic_mode` / `maintenance_login_disabled` redirect for non-admins.
 7. Avatar URL: `cdn.discordapp.com/avatars/{id}/{hash}.png` or the default embed avatar.
 8. `saveUserProfile(...)` (errors are logged, login continues) → `isNewUser`.

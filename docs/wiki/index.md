@@ -82,6 +82,7 @@ sources: [scripts/wiki-graph.js, docs/wiki/graph.json, CLAUDE.md]
 | `middleware/privacy.js`, `utils/privacyPolicy.js`, `public/js/pages/privacy.js` | auth-session, data-model |
 | `utils/timezone.js` | configuration, utils |
 | `utils/discordFetch.js` | routes-auth, utils |
+| `utils/adminAccess.js` | auth-session, routes-auth, middleware, discord-integration, utils |
 | `utils/threadSync.js` | discord-integration, routes-events, utils |
 | `utils/slotService.js`, `utils/capacity.js`, `utils/eventLock.js`, `utils/announcementRefresh.js` | role-slots, utils |
 | `utils/pollService.js`, `utils/pollStore.js` | date-polls, utils |

@@ -85,6 +85,24 @@ test('a successful login starts a new session and uses the state up', async () =
     assert.equal(replay.headers.get('location'), '/?error=invalid_state');
 });
 
+test('a member without the admin role and without Discord Administrator is no admin', async () => {
+    assert.equal((await currentUser(await loggedInClient())).isAdmin, false);
+});
+
+// Setup wizard: "Keine (nur Discord-Administratoren)" -> no DISCORD_ADMIN_ROLE_ID at all
+test('a Discord Administrator is admin even without an admin role', async () => {
+    const adminServer = await startServer(FIXTURE, serverEnv('login-administrator', { FAKE_DISCORD_PERMISSIONS: '8' }));
+    try {
+        const client = createClient(adminServer.baseUrl);
+        const state = await startLogin(client);
+        const res = await client.request(`/auth/discord/callback?code=abc&state=${state}`);
+        assert.equal(res.headers.get('location'), '/#events');
+        assert.equal((await currentUser(client)).isAdmin, true);
+    } finally {
+        await adminServer.stop();
+    }
+});
+
 test('logging out needs a POST with the CSRF token', async () => {
     const client = await loggedInClient();
 
