@@ -45,7 +45,9 @@ docker compose pull && docker compose up -d                              # updat
 docker compose -f compose.yaml -f compose.build.yaml up -d --build    # build from this checkout instead
 ```
 
-Published image: public Docker Hub repository `moritakahashi/dems`, pushed by the `publish` job of the CI: `edge` (every push to `main`), the version, `latest` (releases) or `beta` (pre-releases) on a git tag, and `sha-<7>` on every image; see [ci](ci.md) and [deployment](deployment.md).
+Published image: public Docker Hub repository `moritakahashi/dems`, pushed by the `publish` job of the CI: `edge` + `edge-<7>` (every push to `main`), the version + `sha-<7>` + `latest` (releases) or `beta` (pre-releases) on a git tag; edge and release builds never share a tag, because the `main` run and the tag run of one commit run in parallel. See [ci](ci.md) and [deployment](deployment.md).
+
+Installs built from source before: `compose.yaml` now pulls the published image and `--build` alone builds nothing; keep building with `docker compose -f compose.yaml -f compose.build.yaml up -d --build`.
 
 CI builds both targets, starts `compose.yaml` + `compose.build.yaml` (so it tests the image built from the branch, not the published one) without any `.env` and waits for the HEALTHCHECK of `dems` in the `docker-build` job, without pushing; see [ci](ci.md). The runtime image alone does not start (production needs PostgreSQL).
 

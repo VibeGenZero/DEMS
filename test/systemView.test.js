@@ -164,6 +164,8 @@ test('a pre-release install is told to switch to latest for a final release', as
     const { body } = await versionCard({ ...STATUS, current: '3.0.0-rc.1', latest: '3.0.0', updateAvailable: true, switchToLatest: true });
     assert.match(body, /fertige Release/);
     assert.match(body, /DEMS_TAG=latest/);
+    // A compose file with a fixed tag (deployment example) changes the image line instead
+    assert.match(body, /image: moritakahashi\/dems:latest/);
     assert.doesNotMatch(body, /Neue Version/);
 });
 

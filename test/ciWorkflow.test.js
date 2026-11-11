@@ -35,8 +35,16 @@ test('a tag is checked against the version files before anything is pushed', () 
 test('main publishes edge and the commit, never latest or beta', () => {
     const job = publishJob();
     assert.match(job, /\$IMAGE:edge/);
-    assert.match(job, /\$IMAGE:sha-/);
     assert.doesNotMatch(job, /\$IMAGE:latest|\$IMAGE:beta/, 'latest/beta only come from the release script channel');
+});
+
+test('edge and release builds of one commit never share a tag', () => {
+    // main and the tag of the same commit run in parallel; a shared sha tag would go to the last one
+    const job = publishJob();
+    const mainBranch = job.slice(job.indexOf('else'), job.indexOf('fi', job.indexOf('else')));
+    assert.match(mainBranch, /tags="\$IMAGE:edge,\$IMAGE:edge-\$short"/);
+    assert.doesNotMatch(mainBranch, /sha-/);
+    assert.match(job, /tags="\$IMAGE:\$version,\$IMAGE:sha-\$short,\$IMAGE:\$channel"/);
 });
 
 test('the image is multi-arch, labelled with its source and knows its channel', () => {

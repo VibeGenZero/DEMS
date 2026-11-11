@@ -122,7 +122,7 @@ function updateStatusHtml(status) {
     if (status.switchToLatest) {
         return `<p><span class="chip chip-sm chip-info">Update verfügbar</span></p>
             <p>Version <strong>${latest}</strong> ist das fertige Release. Diese Installation nutzt eine Vorabversion (${current}) aus dem Kanal „beta“.</p>
-            <p class="setup-hint">Setze in der .env <code>DEMS_TAG=latest</code> und führe dann <code>${escapeHtml(UPDATE_COMMAND)}</code> aus.</p>
+            <p class="setup-hint">Stelle das Image von beta auf latest um: <code>DEMS_TAG=latest</code> in der .env oder, wenn deine compose-Datei den Tag fest nennt, <code>image: moritakahashi/dems:latest</code>. Führe dann <code>${escapeHtml(UPDATE_COMMAND)}</code> aus.</p>
             ${releaseLink(status.releaseUrl)}`;
     }
     if (status.updateAvailable) {

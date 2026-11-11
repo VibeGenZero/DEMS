@@ -111,7 +111,7 @@ jobs:
           docker compose -f compose.yaml -f compose.build.yaml logs dems | grep -q 'Setup-PIN: [0-9]\{8\}'
 
   # Pushes the image to Docker Hub once tests and the image check are green.
-  # main -> edge + sha-<commit> (test environment only); tag X -> X + sha-<commit> +
+  # main -> edge + edge-<commit> (test environment only); tag X -> X + sha-<commit> +
   # latest (release) or beta (pre-release), plus the GitHub release from updates.json.
   publish:
     needs: [test, docker-build]
@@ -136,9 +136,10 @@ jobs:
             channel=$(node scripts/release.js channel "$version")
             tags="$IMAGE:$version,$IMAGE:sha-$short,$IMAGE:$channel"
           else
+            # Own commit tag: the tag run of the same commit pushes the release commit tag in parallel
             version=edge
             channel=edge
-            tags="$IMAGE:edge,$IMAGE:sha-$short"
+            tags="$IMAGE:edge,$IMAGE:edge-$short"
           fi
           {
             echo "version=$version"

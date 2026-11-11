@@ -157,6 +157,7 @@ docker compose logs -f dems   # zeigt beim ersten Start die Setup-PIN
 *   Update: `docker compose pull && docker compose up -d`. Admins sehen unter „System“, wenn es eine neuere Version gibt.
 *   Vorabversionen (Beta, Release Candidate): `DEMS_TAG=beta` in der `.env`, Standard ist `latest` (fertige Releases).
 *   Aus dem Quellcode bauen statt das Image zu ziehen (im geklonten Repo): `docker compose -f compose.yaml -f compose.build.yaml up -d --build`.
+*   Bisher aus dem Quellcode gebaut? `compose.yaml` zieht jetzt das veröffentlichte Image, `--build` allein baut nichts mehr. Wer weiter selbst baut, nimmt `git pull && docker compose -f compose.yaml -f compose.build.yaml up -d --build`.
 *   Compose startet drei Dienste: `db-secret` erzeugt beim ersten Start ein zufälliges Datenbank-Passwort (Volume `dems-secrets`), `postgres` hält die Daten (Volume `dems-pg`, kein Port nach außen), `dems` ist die App. Hochgeladene Banner liegen im Volume `dems-data`. Alles überlebt Rebuilds und Updates.
 *   Backup der Datenbank: `docker compose exec -T postgres pg_dump -U dems dems > dems-backup.sql`.
 *   Der Container hat einen Healthcheck auf `GET /healthz` (`docker compose ps` zeigt den Status).

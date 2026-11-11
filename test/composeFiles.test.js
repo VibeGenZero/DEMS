@@ -32,3 +32,14 @@ test('the README updates by pulling the image', () => {
     assert.match(readme, /docker compose pull && docker compose up -d/);
     assert.doesNotMatch(readme, /git pull && docker compose up -d --build/);
 });
+
+test('installs that built from source learn how to keep doing so', () => {
+    assert.match(read('README.md'), /Bisher aus dem Quellcode gebaut\?.*compose\.build\.yaml/);
+    assert.match(read('docs/wiki/ops/docker.md'), /built from source before.*compose\.build\.yaml/i);
+});
+
+test('the deployment example follows DEMS_TAG like compose.yaml', () => {
+    const deployment = read('docs/wiki/ops/deployment.md');
+    assert.match(deployment, /image: moritakahashi\/dems:\$\{DEMS_TAG:-latest\}/);
+    assert.doesNotMatch(deployment, /image: moritakahashi\/dems:latest/);
+});
