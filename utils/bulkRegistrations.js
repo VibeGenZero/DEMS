@@ -5,6 +5,7 @@
  */
 const { placesOf, countOccupiedPlaces, byCreatedAt } = require('./capacity');
 const { getSlots, countSlotOccupancy, pickSlot } = require('./slotService');
+const { hasAnyCheckin } = require('./participations');
 
 /** Statuses each action applies to; the frontend copy lives in public/js/admin/registration-bulk.js. */
 // An offered registration (B-15) is decided like a waitlisted one; the bench (B-17) holds no place
@@ -44,7 +45,8 @@ function planBulkAction({ action, ids, registrations, event }) {
             from: registration.status,
             to,
             slotId: hasSlots ? null : undefined,
-            clearCheckin: Boolean(registration.checkedIn)
+            // Also the check-ins of guests (#110)
+            clearCheckin: hasAnyCheckin(registration)
         }));
         return { changes, skipped, full: [] };
     }

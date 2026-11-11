@@ -52,6 +52,12 @@ test('a new admin role takes effect as well', async () => {
     assert.equal(user.isAdmin, true);
 });
 
+test('a Discord Administrator stays admin without the admin role', async () => {
+    const { run } = setup(() => ({ isMember: true, roleIds: [MEMBER_ROLE], isAdministrator: true }));
+    const user = await run({ id: 'u3', isAdmin: false, roles: [MEMBER_ROLE], rolesCheckedAt: LOGIN }, LOGIN + 6 * MINUTE);
+    assert.equal(user.isAdmin, true);
+});
+
 test('a member who left the server keeps no roles and no admin right', async () => {
     const { run } = setup(() => ({ isMember: false, roleIds: [] }));
     const user = await run(admin(), LOGIN + 6 * MINUTE);

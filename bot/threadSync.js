@@ -11,6 +11,7 @@ const {
     formatDiscordContent, findEventByThreadId, commentByDiscordMessageId, topLevelReplyTarget
 } = require('../utils/threadSync');
 const { client, state } = require('./client');
+const { hasAdministratorPermission, isDemsAdmin } = require('../utils/adminAccess');
 const { isGoneDiscordError } = require('./messages');
 
 const WEBHOOK_NAME = 'DEMS Kommentare';
@@ -268,14 +269,16 @@ async function handleThreadMessage(message) {
 
     const answered = await commentByDiscordMessageId(message.reference?.messageId);
     const member = message.member;
-    const adminRoleId = process.env.DISCORD_ADMIN_ROLE_ID;
     const comment = {
         eventId: found.id,
         userId: message.author.id,
         userName: member?.displayName || message.author.globalName || message.author.username,
         userAvatar: member?.displayAvatarURL?.() || message.author.displayAvatarURL?.() || '',
         text,
-        isAdmin: Boolean(adminRoleId && member?.roles?.cache?.has(adminRoleId)),
+        isAdmin: isDemsAdmin({
+            roleIds: member?.roles?.cache ? [...member.roles.cache.keys()] : [],
+            isAdministrator: hasAdministratorPermission(member?.permissions)
+        }),
         replyTo: answered ? topLevelReplyTarget({ id: answered.id, ...answered.data }) : null,
         createdAt: (message.createdAt || new Date()).toISOString(),
         source: 'discord',

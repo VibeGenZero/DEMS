@@ -12,7 +12,8 @@ const { debugLog } = require('../utils/debugLog');
 const { fitsIntoDiscordModal, getModalFieldLimit } = require('../utils/formFields');
 const { getSlots, buildRoster } = require('../utils/slotService');
 const { client } = require('./client');
-const { TIMEZONE } = require('./constants');
+
+const { getTimezone } = require('../utils/timezone');
 const { buildSlotButton } = require('./messages');
 const {
     resolveInteractionRoles, checkRegistrationConditions, handleEventRegisterButton, replyWithFailure
@@ -312,7 +313,7 @@ async function handleChatCommand(interaction) {
                     // Discord refuses an empty description; one event without a text broke the whole list
                     .setDescription((ev.description || 'Keine Beschreibung.').substring(0, 200))
                     .addFields(
-                        { name: '📅 Datum', value: ev.startDate ? new Date(ev.startDate).toLocaleString('de-DE', { timeZone: TIMEZONE }) : 'TBD', inline: true },
+                        { name: '📅 Datum', value: ev.startDate ? new Date(ev.startDate).toLocaleString('de-DE', { timeZone: getTimezone() }) : 'TBD', inline: true },
                         { name: '👥 Plätze', value: formatPlaces(summarizePlaces(registrationsByEvent[ev.id] || [], ev.maxParticipants)), inline: true },
                         { name: '🔗 Link', value: `[Zur Anmeldung](${buildEventUrl(ev.id)})`, inline: true }
                     );

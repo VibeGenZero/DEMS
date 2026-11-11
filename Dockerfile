@@ -38,13 +38,20 @@ FROM node:${NODE_VERSION}-bookworm-slim AS runtime
 WORKDIR /app
 
 ENV NODE_ENV=production \
-    PORT=3000 \
-    SQLITE_PATH=/app/data/dems.sqlite
+    PORT=3000
+
+# Set by the publish job (.github/workflows/ci.yml): edge | beta | latest and the
+# commit sha. On edge the update check is off (utils/updateCheck.js).
+ARG DEMS_CHANNEL=
+ARG DEMS_COMMIT=
+ENV DEMS_CHANNEL=$DEMS_CHANNEL \
+    DEMS_COMMIT=$DEMS_COMMIT
 
 COPY --from=deps --chown=node:node /app/node_modules ./node_modules
 COPY --chown=node:node . .
 
-# SQLite data lives on a volume so it survives container rebuilds
+# Uploaded banners live on a volume so they survive container rebuilds;
+# the data itself is in PostgreSQL (compose.yaml)
 RUN mkdir -p /app/data && chown node:node /app/data
 VOLUME ["/app/data"]
 

@@ -8,6 +8,7 @@ const {
 const { withEventLock } = require('./eventLock');
 const { notifyRegistrationsChanged } = require('./announcementRefresh');
 const { isEventOver } = require('./eventListing');
+const { participationsOf } = require('./participations');
 
 /**
  * Move waitlisted registrations up while places are free.
@@ -179,6 +180,23 @@ async function loadEventRegistrations(eventId) {
 }
 
 /**
+ * Everything a person took part in or asked for: own registrations and guest
+ * places on other members' registrations (#110), one participation each.
+ *
+ * @param {string} userId -> Discord user id.
+ * @returns {Promise<Array<Object>>} -> participationsOf() of utils/participations.js; guest places carry `asGuest: true`.
+ */
+async function loadUserParticipations(userId) {
+    const [own, asGuest] = await Promise.all([
+        getDocs(query(collection(db, 'registrations'), where('userId', '==', userId))),
+        getDocs(query(collection(db, 'registrations'), where('guests', 'array-contains', userId)))
+    ]);
+    const byId = new Map();
+    for (const docSnap of [...own.docs, ...asGuest.docs]) byId.set(docSnap.id, { id: docSnap.id, ...docSnap.data() });
+    return participationsOf([...byId.values()], userId);
+}
+
+/**
  * Find the registration of one user for an event.
  *
  * @param {string} eventId -> The event document ID.
@@ -264,6 +282,7 @@ module.exports = {
     toPublicEvent,
     isEventVisibleTo,
     loadEventRegistrations,
+    loadUserParticipations,
     findUserRegistration,
     loadEventRoster,
     saveEventWithSlots

@@ -15,8 +15,9 @@ const { buildEventUrl, buildSiteUrl } = require('../utils/eventUrl');
 const { DEMS_ACCENT } = require('./layout');
 const { formatDeadline } = require('./waitlistOffers');
 const {
-    TIMEZONE, MY_LEAVE_PREFIX, MY_LEAVE_CANCEL_PREFIX, MY_SWITCH_PREFIX, SLOT_LEAVE_PREFIX, SLOT_SWITCH_PREFIX
+    MY_LEAVE_PREFIX, MY_LEAVE_CANCEL_PREFIX, MY_SWITCH_PREFIX, SLOT_LEAVE_PREFIX, SLOT_SWITCH_PREFIX
 } = require('./constants');
+const { getTimezone } = require('../utils/timezone');
 
 // Entries listed in one overview -> 29 of Discord's 40 components
 const MY_EVENTS_MAX = 5;
@@ -107,7 +108,7 @@ function formatStatusWithSlot(entry) {
 function formatEntry({ entry, event }) {
     const start = parseDate(event.startDate);
     const lines = [`**${escapeMarkdown(String(event.title || ''))}**`];
-    if (start) lines.push(`📅 ${start.toLocaleString('de-DE', { timeZone: TIMEZONE })}`);
+    if (start) lines.push(`📅 ${start.toLocaleString('de-DE', { timeZone: getTimezone() })}`);
     lines.push(formatStatusWithSlot(entry));
     return lines.join('\n');
 }

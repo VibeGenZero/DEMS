@@ -16,8 +16,16 @@ const { startBot, whenBotSettled, startReminderScheduler, stopBot, getGuildName,
 const { startPollScheduler, stopPollScheduler } = require('./utils/pollStore');
 const { startArchiveScheduler, stopArchiveScheduler } = require('./utils/eventArchive');
 const { startOfferScheduler, stopOfferScheduler } = require('./utils/waitlistOffers');
+const { startUpdateCheck, stopUpdateCheck } = require('./utils/updateCheck');
 const { createCsrfToken, createRoleRefresh } = require('./middleware/auth');
 const { sharedSessionStore } = require('./utils/sessionStore');
+const store = require('./firebaseAdmin');
+const { runMigrations } = require('./db/migrate');
+const { loadSystemConfig } = require('./utils/systemConfig');
+const { initSetupState, isSetupRequired } = require('./utils/setupState');
+const { createSetupRouter } = require('./routes/setup');
+const { privacyGate } = require('./middleware/privacy');
+const { getPrivacyPolicy } = require('./utils/privacyPolicy');
 const { BANNER_FILE, bannerDir, sweepOrphanBanners } = require('./utils/bannerStore');
 
 // Production runs behind a TLS proxy (trust proxy below) -> cookies only over HTTPS
@@ -31,8 +39,10 @@ const PORT = process.env.PORT || 3000;
 app.set('trust proxy', 1);
 
 // ── Validate required env vars ──────────────────────────────────────────
-if (!process.env.SESSION_SECRET || process.env.SESSION_SECRET === 'your_random_session_secret_here') {
-    console.error('❌ SESSION_SECRET ist nicht gesetzt oder noch auf dem Standardwert. Bitte in .env setzen.');
+// A missing SESSION_SECRET is generated and stored at start (utils/systemConfig.js, #138);
+// the placeholder from old examples would sign every session with a known secret
+if (process.env.SESSION_SECRET === 'your_random_session_secret_here') {
+    console.error('❌ SESSION_SECRET steht noch auf dem Standardwert. Bitte in .env ändern oder die Zeile löschen (DEMS erzeugt dann selbst eins).');
     process.exit(1);
 }
 
@@ -68,7 +78,8 @@ app.use(helmet({
     crossOriginEmbedderPolicy: false
 }));
 app.use(cors({
-    origin: process.env.BASE_URL || 'http://localhost:3000',
+    // Read per request: BASE_URL can come from the setup wizard or the admin "System" view (#138)
+    origin: (origin, callback) => callback(null, process.env.BASE_URL || 'http://localhost:3000'),
     credentials: true
 }));
 
@@ -109,19 +120,25 @@ app.use((req, res, next) => {
     if (req.body === undefined) req.body = {};
     next();
 });
-app.use(session({
-    // Sessions in the database (SQLite/Firestore) -> logins survive restarts and deploys
-    store: sharedSessionStore(),
-    secret: process.env.SESSION_SECRET,
-    resave: false,
-    saveUninitialized: false,
-    cookie: {
-        secure: IS_PRODUCTION,
-        httpOnly: true,
-        sameSite: 'lax',
-        maxAge: 24 * 60 * 60 * 1000 // 24 hours
-    }
-}));
+// The secret may come from the database (#138), so the session middleware is
+// built in start() once the configuration is loaded; nothing listens before that
+let sessionMiddleware = null;
+function createSessionMiddleware() {
+    return session({
+        // Sessions in the database (PostgreSQL/SQLite) -> logins survive restarts and deploys
+        store: sharedSessionStore(),
+        secret: process.env.SESSION_SECRET,
+        resave: false,
+        saveUninitialized: false,
+        cookie: {
+            secure: IS_PRODUCTION,
+            httpOnly: true,
+            sameSite: 'lax',
+            maxAge: 24 * 60 * 60 * 1000 // 24 hours
+        }
+    });
+}
+app.use((req, res, next) => sessionMiddleware(req, res, next));
 
 // ── CSRF Protection (Double-Submit Cookie) ──────────────────────────────
 // Generate a CSRF token per session and validate on mutating requests
@@ -199,6 +216,21 @@ if (IS_DEBUG) {
     });
 }
 
+// ── Setup mode (#138) ───────────────────────────────────────────────────
+// A fresh installation answers only the setup wizard and the endpoints the
+// start page needs until the wizard is completed
+const SETUP_OPEN_PATHS = ['/api/csrf-token', '/api/server-info', '/api/maintenance/status', '/api/privacy', '/api/updates'];
+app.use((req, res, next) => {
+    if (!isSetupRequired()) return next();
+    const isApi = req.path.startsWith('/api/') || req.path.startsWith('/auth/');
+    if (!isApi || req.path.startsWith('/api/setup/') || SETUP_OPEN_PATHS.includes(req.path)) return next();
+    res.status(503).json({ error: 'DEMS ist noch nicht eingerichtet.', setupRequired: true });
+});
+app.use('/api/setup', createSetupRouter());
+
+// Members accept the current privacy policy before anything else (#138)
+app.use(privacyGate);
+
 // ── Routes ──────────────────────────────────────────────────────────────
 // Dev mock mode: persona login instead of Discord OAuth2 (see dev/devAuth.js)
 if (IS_MOCK_MODE) app.use('/auth', require('./dev/devAuth'));
@@ -265,6 +297,18 @@ app.get('/api/server-info', async (req, res) => {
     }
 });
 
+// Privacy policy of this installation (#138): public, linked from the login page
+app.get('/api/privacy', async (req, res) => {
+    try {
+        const policy = await getPrivacyPolicy();
+        if (!policy) return res.status(404).json({ error: 'Es gibt keine Datenschutzerklärung.' });
+        res.json({ markdown: policy.markdown, version: policy.version, updatedAt: policy.updatedAt });
+    } catch (err) {
+        console.error('Privacy policy error:', err);
+        res.status(500).json({ error: 'Die Datenschutzerklärung konnte nicht geladen werden.' });
+    }
+});
+
 // Updates endpoint
 app.get('/api/updates', (req, res) => {
     try {
@@ -282,43 +326,72 @@ app.get('/{*splat}', (req, res) => {
 });
 
 // ── Start server ────────────────────────────────────────────────────────
-const server = app.listen(PORT, (err) => {
-    // Express 5 hands listen errors (e.g. EADDRINUSE) to this callback instead
-    // of crashing -> exit so a supervisor like Docker can restart the process.
-    if (err) {
-        console.error(`❌ Server konnte nicht auf Port ${PORT} starten:`, err.message);
-        process.exit(1);
-    }
-    console.log(`\n🌐 DEMS Server running at http://localhost:${PORT}\n`);
-});
+// The database comes first: connect, run pending migrations, then open HTTP,
+// the bot and the schedulers -> no request ever meets a half-migrated store
+let server = null;
 
-// Start Discord bot
-startBot(process.env.DISCORD_BOT_TOKEN);
+async function start() {
+    await store.ready();
+    await runMigrations(store);
+    // Stored configuration (setup wizard, admin "System" view) fills what .env leaves empty
+    const loaded = await loadSystemConfig();
+    console.log(`⚙️ Konfiguration: ${loaded.fromDb} Werte aus der Datenbank, ${loaded.fromEnv} aus der Umgebung (.env).`);
+    sessionMiddleware = createSessionMiddleware();
+    // Setup mode: no Discord values yet -> the wizard runs, the PIN goes to the log
+    await initSetupState({ mockMode: IS_MOCK_MODE });
 
-// Start reminder scheduler (checks every 5 min)
-startReminderScheduler();
-startPollScheduler();
-// Archives events a day after their end; the first run catches up after a pause and
-// waits for the bot, so the Discord announcements of archived events get refreshed (W-01)
-startArchiveScheduler({ waitFor: whenBotSettled() });
-// Waitlist offers that were not confirmed in time go to the next member (B-15)
-startOfferScheduler({ waitFor: whenBotSettled() });
-// Uploaded banners no event uses and older than a day (wizard closed without saving, W-12)
-sweepOrphanBanners().then((count) => {
-    if (count > 0) console.log(`🧹 ${count} verwaiste Banner gelöscht.`);
+    server = app.listen(PORT, (err) => {
+        // Express 5 hands listen errors (e.g. EADDRINUSE) to this callback instead
+        // of crashing -> exit so a supervisor like Docker can restart the process.
+        if (err) {
+            console.error(`❌ Server konnte nicht auf Port ${PORT} starten:`, err.message);
+            process.exit(1);
+        }
+        console.log(`\n🌐 DEMS Server running at http://localhost:${PORT}\n`);
+    });
+
+    // Start Discord bot
+    startBot(process.env.DISCORD_BOT_TOKEN);
+
+    // Start reminder scheduler (checks every 5 min)
+    startReminderScheduler();
+    startPollScheduler();
+    // Archives events a day after their end; the first run catches up after a pause and
+    // waits for the bot, so the Discord announcements of archived events get refreshed (W-01)
+    startArchiveScheduler({ waitFor: whenBotSettled() });
+    // Waitlist offers that were not confirmed in time go to the next member (B-15)
+    startOfferScheduler({ waitFor: whenBotSettled() });
+    // Tells admins about a newer DEMS release (GitHub releases, every 12 h; off in mock mode)
+    startUpdateCheck({ mockMode: IS_MOCK_MODE });
+    // Uploaded banners no event uses and older than a day (wizard closed without saving, W-12)
+    sweepOrphanBanners().then((count) => {
+        if (count > 0) console.log(`🧹 ${count} verwaiste Banner gelöscht.`);
+    });
+}
+
+start().catch((err) => {
+    console.error(`❌ Start abgebrochen: ${err.message}`);
+    process.exit(1);
 });
 
 // ── Graceful Shutdown ───────────────────────────────────────────────────
 function gracefulShutdown(signal) {
     console.log(`\n⏹️ ${signal} empfangen. Server wird heruntergefahren...`);
-    server.close(() => {
-        console.log('✅ HTTP Server geschlossen.');
+    const finish = async () => {
         stopBot();
         stopPollScheduler();
         stopArchiveScheduler();
         stopOfferScheduler();
-        console.log('✅ Bot & Scheduler gestoppt. Auf Wiedersehen!');
+        stopUpdateCheck();
+        await store.close().catch((err) => console.error('⚠️ Datenbank konnte nicht sauber geschlossen werden:', err.message));
+        console.log('✅ Bot, Scheduler & Datenbank gestoppt. Auf Wiedersehen!');
         process.exit(0);
+    };
+    // A signal during startup: nothing listens yet
+    if (!server) return finish();
+    server.close(() => {
+        console.log('✅ HTTP Server geschlossen.');
+        finish();
     });
     // Force exit after 10 seconds
     setTimeout(() => {

@@ -15,8 +15,9 @@ const { fitText, MESSAGE_TEXT_MAX } = require('./layout');
 const { state } = require('./client');
 const { sendChannelMessage, editChannelMessage } = require('./messages');
 const {
-    TIMEZONE, APPROVAL_ACCEPT_PREFIX, APPROVAL_REJECT_PREFIX, APPROVAL_WAITLIST_PREFIX
+    APPROVAL_ACCEPT_PREFIX, APPROVAL_REJECT_PREFIX, APPROVAL_WAITLIST_PREFIX
 } = require('./constants');
+const { getTimezone } = require('../utils/timezone');
 
 const APPROVAL_OPEN_COLOR = 0xf59e0b;
 const APPROVAL_CLOSED_COLOR = 0x6b7280;
@@ -82,7 +83,7 @@ function formatAnswers(formAnswers) {
 function buildApprovalMessage(registration, event, closed = null) {
     const start = parseDate(event.startDate);
     const heading = `## 📋 Neue Anfrage: ${escapeMarkdown(String(event.title || ''))}`
-        + (start ? `\n📅 ${start.toLocaleString('de-DE', { timeZone: TIMEZONE })}` : '');
+        + (start ? `\n📅 ${start.toLocaleString('de-DE', { timeZone: getTimezone() })}` : '');
     const member = formatMember(registration, event);
     const answers = fitText(formatAnswers(registration.formAnswers), MESSAGE_TEXT_MAX - ANSWERS_RESERVED_LENGTH);
 
@@ -180,10 +181,8 @@ async function handleApprovalButton(interaction, action, registrationId) {
     // Acknowledge first -> DMs, roles and promotions can exceed Discord's 3 second limit
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-    const { resolveInteractionRoles } = require('./registration');
-    const adminRoleId = process.env.DISCORD_ADMIN_ROLE_ID;
-    const roleIds = await resolveInteractionRoles(interaction);
-    if (!adminRoleId || !roleIds.includes(adminRoleId)) {
+    const { hasAdminRole } = require('./adminCommands');
+    if (!(await hasAdminRole(interaction))) {
         return interaction.editReply({ content: '⛔ Nur Admins können Anmeldungen freigeben.' });
     }
 

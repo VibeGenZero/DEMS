@@ -12,7 +12,8 @@ const { toProfileEntry } = require('../utils/profileEvents');
 const { waitlistPositions } = require('../utils/capacity');
 const { buildPollUrl, buildSiteUrl } = require('../utils/eventUrl');
 const { isPollOpen, canVote } = require('../utils/pollService');
-const { POLL_VOTE_PREFIX, TIMEZONE } = require('./constants');
+const { POLL_VOTE_PREFIX } = require('./constants');
+const { getTimezone } = require('../utils/timezone');
 const { DEMS_ACCENT } = require('./layout');
 const { resolveInteractionRoles } = require('./registration');
 const { buildEventAnnouncement } = require('./messages');
@@ -26,7 +27,7 @@ const EVENT_NOT_FOUND = '❌ Event nicht gefunden.';
 
 /** Deadline in the server time zone, e.g. "Fr., 06.11., 18:00". */
 const formatDeadline = (iso) => new Date(iso).toLocaleString('de-DE', {
-    timeZone: TIMEZONE, weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'
+    timeZone: getTimezone(), weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'
 });
 
 /**

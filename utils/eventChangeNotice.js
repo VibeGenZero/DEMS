@@ -8,9 +8,9 @@ const { sendAutomaticDM } = require('./botSettings');
 const { buildEventUrl } = require('./eventUrl');
 const { filterByPreference } = require('./notificationPrefs');
 
-const TIMEZONE = process.env.TIMEZONE || 'Europe/Berlin';
+const { getTimezone } = require('./timezone');
 const NO_VALUE = 'nicht festgelegt';
-const DATE_FORMAT = { timeZone: TIMEZONE, weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' };
+const DATE_FORMAT = { get timeZone() { return getTimezone(); }, weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' };
 
 /**
  * Point in time of a stored date.

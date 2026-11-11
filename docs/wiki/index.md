@@ -59,7 +59,7 @@ sources: [scripts/wiki-graph.js, docs/wiki/graph.json, CLAUDE.md]
 | `server.js` | server, request-lifecycle, security |
 | `bot.js` | bot, discord-integration, reminders-presence, form-fields |
 | `bot/*.js` | bot (module table), plus the node of the area: discord-integration, reminders-presence, form-fields |
-| `firebaseAdmin.js`, `db/sqliteAdapter.js` | data-layer |
+| `firebaseAdmin.js`, `db/*.js`, `db/migrations/` | data-layer |
 | `routes/auth.js` | routes-auth, auth-session |
 | `routes/events.js` | routes-events, registration-flow, event-lifecycle |
 | `routes/admin.js` | routes-admin, event-lifecycle, maintenance-mode |
@@ -76,6 +76,14 @@ sources: [scripts/wiki-graph.js, docs/wiki/graph.json, CLAUDE.md]
 | `bot/tentative.js` | bot, discord-integration, registration-flow |
 | `utils/adminActions.js` | routes-admin, event-lifecycle, date-polls, discord-integration, utils |
 | `utils/localDateTime.js` | discord-integration, utils |
+| `utils/systemConfig.js` | configuration, utils, data-model |
+| `utils/setupState.js`, `routes/setup.js` | security, api-index, configuration |
+| `routes/adminSystem.js`, `utils/systemValues.js` | routes-admin, configuration |
+| `middleware/privacy.js`, `utils/privacyPolicy.js`, `public/js/pages/privacy.js` | auth-session, data-model |
+| `utils/timezone.js` | configuration, utils |
+| `utils/discordFetch.js` | routes-auth, utils |
+| `utils/participations.js` | utils, registration-flow, data-model |
+| `utils/adminAccess.js` | auth-session, routes-auth, middleware, discord-integration, utils |
 | `utils/threadSync.js` | discord-integration, routes-events, utils |
 | `utils/slotService.js`, `utils/capacity.js`, `utils/eventLock.js`, `utils/announcementRefresh.js` | role-slots, utils |
 | `utils/pollService.js`, `utils/pollStore.js` | date-polls, utils |
@@ -93,15 +101,20 @@ sources: [scripts/wiki-graph.js, docs/wiki/graph.json, CLAUDE.md]
 | `utils/botSettings.js` | utils, reminders-presence, discord-integration |
 | `utils/eventUtils.js`, `utils/eventListing.js`, `utils/profileEvents.js`, `utils/userProfile.js`, `utils/avatar.js`, `utils/botPermissions.js`, `utils/csv.js`, `utils/template.js`, `utils/sessionStore.js`, `utils/debugLog.js` | utils |
 | `utils/reminders.js` | utils, reminders-presence |
+| `utils/semver.js` | utils, deployment |
+| `utils/updateCheck.js` | utils, configuration, routes-admin |
 | `public/js/**`, `public/theme-boot.js` | frontend-app |
+| `public/js/pages/discord-guide.js` | frontend-app, deployment |
 | `public/index.html`, `public/css/tokens.css`, `public/css/components.css`, `public/css/style.css` | frontend-markup |
 | `dev/*` | dev-mock-mode |
 | `test/*` | testing |
 | `e2e/*`, `playwright.config.js` | testing |
 | `scripts/style-snapshot.js` | testing |
+| `scripts/release.js` | ci, deployment |
 | `Dockerfile`, `compose*.yaml` | docker, deployment |
 | `.github/workflows/*`, `.gitlab-ci.yml`, `ci/runner/*` | ci |
 | `.env.example` | configuration |
+| `SECURITY.md` | security |
 | `landing/*` | landing-page |
 
 ## Graph (main edges)

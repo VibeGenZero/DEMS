@@ -115,8 +115,8 @@ async function handleCheckinButton(interaction, eventId) {
 function inviteToCheckin(eventId, event, { now = new Date(), send = sendDM, startRecipients = new Set() } = {}) {
     return withEventLock(`checkin:${eventId}`, async () => {
         const invited = new Set();
-        for (const { id, userId } of await listCheckinInvitees(eventId)) {
-            await markInvited(id, now);
+        for (const { id, userId, guestId } of await listCheckinInvitees(eventId)) {
+            await markInvited(id, now, guestId);
             invited.add(userId);
             try {
                 await send(userId, buildCheckinInvitation(event, eventId, { startText: startRecipients.has(userId) }));

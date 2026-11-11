@@ -1,4 +1,4 @@
-# Dev mock mode: no Discord, no Firebase, dummy data, auto-reload.
+# Dev mock mode: no Discord, SQLite, dummy data, auto-reload.
 # Start: docker compose -f compose.dev.yaml up --build
 services:
   dems-dev:

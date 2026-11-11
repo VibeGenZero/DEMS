@@ -18,6 +18,7 @@ import './admin/members.js';
 import './admin/participant-message.js';
 import './admin/registration-bulk.js';
 import './admin/registrations.js';
+import './admin/system.js';
 import './admin/wizard-builders.js';
 import './admin/wizard-location.js';
 import './admin/wizard-banner.js';
@@ -36,6 +37,9 @@ import './events/registration-form.js';
 import './events/slots.js';
 import './pages/debug.js';
 import './pages/debug-components.js';
+import './pages/discord-guide.js';
+import './pages/setup.js';
+import './pages/privacy.js';
 import './pages/profile-view.js';
 import './pages/news-view.js';
 import './pages/news.js';
@@ -51,6 +55,7 @@ import { refreshStyleguideTokens } from './pages/debug.js';
 import { initCardFlight } from './events/card-flight.js';
 import { loadUpdates } from './core/updates.js';
 import { showUserData } from './pages/info.js';
+import { watchPrivacyAnswers } from './pages/privacy.js';
 
 initActions(document);
 // Dialogs and toasts only open once the page is there
@@ -61,6 +66,8 @@ document.addEventListener('DOMContentLoaded', () => {
     initDialogMotion(document);
     initCardFlight(document);
     initTabGlider(document);
+    // A new privacy policy during the visit reopens the consent dialog (#138)
+    watchPrivacyAnswers();
 });
 
 document.addEventListener('DOMContentLoaded', () => {

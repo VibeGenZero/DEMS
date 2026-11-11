@@ -3,7 +3,7 @@ id: routes-user
 title: routes/user.js — profile, badges, settings, account
 type: module
 tags: [api, user, profile, badges, settings, guests, gdpr]
-sources: [routes/user.js, utils/profileEvents.js, utils/notificationPrefs.js]
+sources: [routes/user.js, utils/profileEvents.js, utils/notificationPrefs.js, utils/userProfile.js]
 part_of: [architecture]
 depends_on: [middleware, data-layer]
 see_also: [api-index, data-model]
@@ -16,6 +16,7 @@ see_also: [api-index, data-model]
 
 | Method | Path | Behaviour |
 |---|---|---|
+| POST | `/privacy/accept` | #138: `{ version }` — the current privacy policy version only (409 with a German error and `version` otherwise, also without a policy); stores `privacyAcceptedVersion` + `privacyAcceptedAt` (`savePrivacyAcceptance` of `utils/userProfile.js`) and the version in the session → `{ success, version, acceptedAt }`; reachable while the consent gate is closed |
 | GET | `/registrations` | own registrations with embedded `event` (via `toPublicEvent`, no `checkinCode`), newest first |
 | GET | `/profile` | `{ user, upcoming, history, stats, badges, unlockedBadges, totalBadges }`; see "Profile lists" |
 | GET | `/search?q=` | ≥2 chars; users matching `displayName`/`username`, excluding self and users with `acceptInvitations === false`; max 10 |
@@ -25,7 +26,7 @@ see_also: [api-index, data-model]
 
 ## Profile lists (`utils/profileEvents.js`)
 
-`buildProfileEvents(registrations, eventsById, now)` splits the member's own registrations (every status, also `rejected`):
+`buildProfileEvents(registrations, eventsById, now)` splits the member's own registrations (every status, also `rejected`) and their guest places on other members' registrations (`loadUserParticipations` in `utils/eventUtils.js`; entries carry `asGuest`, the page shows a chip „Gast“, #110). Stats: `total`, Newcomer, Early Bird and Multitasker count own registrations only; `accepted` (Teilnahmen), `checkedIn` and the other badges count guest places too:
 
 | List | Contains | Order |
 |---|---|---|

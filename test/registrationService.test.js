@@ -399,3 +399,70 @@ test('switching the role on the bench changes the wanted role, never takes a pla
     // The healer place is still free for a binding registration
     assert.equal((await register(eventId, 'Xaver', { slotId: 'heal' })).slotId, 'heal');
 });
+
+// ── Guests come from stored profiles (pentest vuln-0008) ────────────────
+
+async function createGuestUser(name, fields = {}) {
+    const id = `svc-friend-${name}`;
+    await setDoc(doc(db, 'users', id), {
+        id, username: name.toLowerCase(), displayName: name, avatar: `${name}.png`, acceptInvitations: true, ...fields
+    });
+    return id;
+}
+
+test('guests are taken from the stored profiles, never from the request', async () => {
+    const eventId = await createEvent();
+    const friendId = await createGuestUser('Echt');
+
+    const result = await register(eventId, 'Gastgeber', {
+        guests: [{ id: friendId, displayName: 'Admin', avatar: 'https://evil.example/x.png' }, { id: friendId }]
+    });
+    assert.equal(result.ok, true, result.error);
+
+    const registration = await registrationOf(eventId, 'Gastgeber');
+    assert.deepEqual(registration.pendingGuests, [
+        { userId: friendId, displayName: 'Echt', avatar: 'Echt.png', status: 'pending' }
+    ]);
+});
+
+test('unknown guests, the member themself and guests who decline invitations are refused', async () => {
+    const eventId = await createEvent();
+    const declinerId = await createGuestUser('Nein', { acceptInvitations: false });
+    const failure = (result) => ({ code: result.code, error: result.error });
+
+    assert.deepEqual(failure(await register(eventId, 'A', { guests: [{ id: 'svc-nobody' }] })), {
+        code: 'invalid_guests', error: 'Ein eingeladener Gast ist nicht bei DEMS registriert.'
+    });
+    assert.deepEqual(failure(await register(eventId, 'B', { guests: [{ id: user('B').id }] })), {
+        code: 'invalid_guests', error: 'Du kannst dich nicht selbst als Gast einladen.'
+    });
+    assert.deepEqual(failure(await register(eventId, 'C', { guests: [{ id: declinerId }] })), {
+        code: 'invalid_guests', error: 'Nein nimmt keine Gast-Einladungen an.'
+    });
+    assert.equal((await loadEventRegistrations(eventId)).length, 0, 'no refused registration is stored');
+});
+
+test('a member brings at most 10 guests', async () => {
+    const eventId = await createEvent();
+    const ids = [];
+    for (let i = 1; i <= 11; i++) ids.push(await createGuestUser(`Viele${i}`));
+
+    const tooMany = await register(eventId, 'Gruppe', { guests: ids.map(id => ({ id })) });
+    assert.equal(tooMany.code, 'invalid_guests');
+    assert.equal(tooMany.error, 'Du kannst höchstens 10 Gäste einladen.');
+
+    const ten = await register(eventId, 'Gruppe', { guests: ids.slice(0, 10).map(id => ({ id })) });
+    assert.equal(ten.ok, true, ten.error);
+});
+
+test('a registration stores only answers to the event form (pentest vuln-0009)', async () => {
+    const formless = await createEvent();
+    assert.equal((await register(formless, 'Ohneform', { formAnswers: { isAdmin: true, x: 'y'.repeat(5000) } })).ok, true);
+    assert.deepEqual((await registrationOf(formless, 'Ohneform')).formAnswers, {});
+
+    const withForm = await createEvent({ formFields: [{ label: 'Charakter', type: 'text', required: true }] });
+    const missing = await register(withForm, 'Leer', { formAnswers: { Charakter: ['Thrall'] } });
+    assert.equal(missing.code, 'missing_fields');
+    assert.equal((await register(withForm, 'Voll', { formAnswers: { Charakter: 'Thrall', extra: 1 } })).ok, true);
+    assert.deepEqual((await registrationOf(withForm, 'Voll')).formAnswers, { Charakter: 'Thrall' });
+});

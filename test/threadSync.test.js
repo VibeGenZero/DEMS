@@ -1,6 +1,7 @@
 const { test, after } = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('path');
+const { PermissionsBitField, PermissionFlagsBits } = require('discord.js');
 const { createTempDir } = require('./helpers');
 
 // Mock mode with an own database; the empty cwd keeps a local .env out
@@ -284,7 +285,7 @@ let messageCounter = 0;
 function fakeMessage(fields = {}) {
     const {
         id = `17000000000000${String(++messageCounter).padStart(4, '0')}`, content = 'Hallo Thread',
-        authorId = '200000000000000005', displayName = 'Kira', roles = [], bot = false, webhookId = null,
+        authorId = '200000000000000005', displayName = 'Kira', roles = [], permissions = null, bot = false, webhookId = null,
         system = false, threadId = SYNC_THREAD, isThread = true, mentions = {}, attachments = [], replyTo = null
     } = fields;
     return {
@@ -292,7 +293,7 @@ function fakeMessage(fields = {}) {
         channelId: threadId,
         channel: { id: threadId, isThread: () => isThread },
         author: { id: authorId, bot, username: displayName.toLowerCase(), globalName: displayName, displayAvatarURL: () => `https://cdn.discordapp.com/avatars/${authorId}/a.png` },
-        member: { displayName, roles: { cache: new Map(roles.map(role => [role, { id: role }])) }, displayAvatarURL: () => `https://cdn.discordapp.com/guilds/1/users/${authorId}/avatars/m.png` },
+        member: { displayName, roles: { cache: new Map(roles.map(role => [role, { id: role }])) }, permissions, displayAvatarURL: () => `https://cdn.discordapp.com/guilds/1/users/${authorId}/avatars/m.png` },
         mentions: {
             users: new Map(Object.entries(mentions.users || {}).map(([userId, name]) => [userId, { id: userId, username: name, globalName: name }])),
             members: new Map(),
@@ -325,6 +326,9 @@ test('a member message in the thread becomes a comment with the Discord mark', a
 test('admins get the badge, mentions and attachments are converted', async () => {
     const adminComment = await commentOf(await handleThreadMessage(fakeMessage({ roles: [ADMIN_ROLE], displayName: 'Mori' })));
     assert.equal(adminComment.isAdmin, true);
+    const administrator = new PermissionsBitField(PermissionFlagsBits.Administrator);
+    const ownerComment = await commentOf(await handleThreadMessage(fakeMessage({ permissions: administrator, displayName: 'Owner' })));
+    assert.equal(ownerComment.isAdmin, true, 'Discord Administrator without the admin role');
 
     const converted = await commentOf(await handleThreadMessage(fakeMessage({
         content: '<@200000000000000002> schau mal',

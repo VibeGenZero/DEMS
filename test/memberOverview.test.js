@@ -174,3 +174,23 @@ test('a checked-in registration is no no-show', () => {
     assert.equal(row.checkedIn, true);
     assert.equal(row.noShow, false);
 });
+
+// ── Guests (#110) ───────────────────────────────────────────────────────
+
+test('a guest place counts as Teilnahme and Check-in, not as Anmeldung', () => {
+    const events = byId({ guestNight: event('Gäste-Abend', { checkinEnabled: true }) });
+    const host = registration('guestNight', {
+        userId: 'host', guests: ['u-guest'],
+        guestCheckins: { 'u-guest': { checkedIn: true, checkedInAt: at(-49), checkinInvitedAt: null } }
+    });
+    const [entry] = buildMemberList([{ id: 'u-guest', displayName: 'Greta' }], [host], events, NOW);
+    assert.deepEqual(entry.stats, { registrations: 0, attended: 1, checkedIn: 1, noShows: 0 });
+    assert.equal(entry.lastActiveAt, null, 'a guest place is no activity of the guest');
+
+    const { participationsOf } = require('../utils/participations');
+    const mine = participationsOf([host], 'u-guest');
+    const tracked = trackedEventIds(events, [host]);
+    assert.deepEqual(memberStats(mine, events, tracked, NOW), { registrations: 0, attended: 1, checkedIn: 1, noShows: 0 });
+    const [history] = buildMemberHistory(mine, events, tracked, NOW);
+    assert.deepEqual([history.asGuest, history.checkedIn, history.noShow], [true, true, false]);
+});

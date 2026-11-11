@@ -3,7 +3,7 @@ id: utils
 title: utils/ — domain helpers
 type: module
 tags: [utils, registration, form-fields, waitlist, audit-log, profile, debug, change-notice, banner]
-sources: [utils/registrationService.js, utils/registrationStatus.js, utils/approvalRequests.js, utils/checkin.js, utils/threadSync.js, utils/formFields.js, utils/eventUtils.js, utils/eventListing.js, utils/profileEvents.js, utils/eventUrl.js, utils/userProfile.js, utils/avatar.js, utils/botPermissions.js, utils/csv.js, utils/template.js, utils/sessionStore.js, utils/reminders.js, utils/debugLog.js, utils/capacity.js, utils/slotService.js, utils/eventLock.js, utils/announcementRefresh.js, utils/pollService.js, utils/pollStore.js, utils/eventPreview.js, utils/eventArchive.js, utils/eventCleanup.js, utils/adminActions.js, utils/localDateTime.js, utils/eventChangeNotice.js, utils/notificationPrefs.js, utils/memberOverview.js, utils/insights.js, utils/participantMessage.js, utils/bannerStore.js, utils/bulkRegistrations.js, utils/eventSeries.js, utils/eventTemplates.js, utils/botSettings.js, utils/waitlistOffers.js, utils/tentativeRegistration.js]
+sources: [utils/registrationService.js, utils/registrationStatus.js, utils/approvalRequests.js, utils/checkin.js, utils/threadSync.js, utils/formFields.js, utils/eventUtils.js, utils/eventListing.js, utils/profileEvents.js, utils/eventUrl.js, utils/userProfile.js, utils/avatar.js, utils/botPermissions.js, utils/csv.js, utils/template.js, utils/sessionStore.js, utils/reminders.js, utils/debugLog.js, utils/capacity.js, utils/slotService.js, utils/eventLock.js, utils/announcementRefresh.js, utils/pollService.js, utils/pollStore.js, utils/eventPreview.js, utils/eventArchive.js, utils/eventCleanup.js, utils/adminActions.js, utils/localDateTime.js, utils/eventChangeNotice.js, utils/notificationPrefs.js, utils/memberOverview.js, utils/insights.js, utils/participantMessage.js, utils/bannerStore.js, utils/bulkRegistrations.js, utils/eventSeries.js, utils/eventTemplates.js, utils/botSettings.js, utils/waitlistOffers.js, utils/tentativeRegistration.js, utils/systemConfig.js, utils/timezone.js, utils/discordFetch.js, utils/adminAccess.js, utils/participations.js, utils/semver.js, utils/updateCheck.js]
 part_of: [architecture]
 depends_on: [data-layer, bot]
 see_also: [registration-flow, form-fields, role-slots]
@@ -24,13 +24,13 @@ see_also: [registration-flow, form-fields, role-slots]
 | `buildTemplateVars({ user, eventId, event, slot })` | variables for `parseTemplate` incl. `slot.name`, `slot.emoji` |
 | `REGISTRATION_SOURCE` | `WEB: 'web'`, `DISCORD: 'discord'` |
 | `REGISTRATION_STATUS` | `PENDING`, `ACCEPTED`, `WAITLISTED` |
-| `REGISTRATION_ERROR` | `event_not_found` 404, `event_inactive` 400, `already_registered` 400, `missing_role` 403, `guests_not_allowed` 400, `missing_fields` 400, `invalid_slot` 400, `slot_full` 409, `not_registered` 404, `not_movable` 400, `registration_failed` 500 |
+| `REGISTRATION_ERROR` | `event_not_found` 404, `event_inactive` 400, `already_registered` 400, `missing_role` 403, `guests_not_allowed` 400, `invalid_guests` 400, `missing_fields` 400, `invalid_slot` 400, `slot_full` 409, `not_registered` 404, `not_movable` 400, `registration_failed` 500 |
 
 Used by `POST /api/events/:id/register` and by the Discord button/modal. Rules: [registration-flow](../concepts/registration-flow.md).
 
 ## utils/formFields.js
 
-Exports `FORM_FIELD_TYPE` (`text, textarea, dropdown, checkbox, user, role, channel, mentionable`), `FORM_FIELD_TYPES`, `ENTITY_FIELD_TYPES`, `MODAL_MAX_FIELDS = 5`, `getModalFieldLimit` (4 for slot events with more than one slot), `getFormFields`, `getFieldType`, `isEntityFieldType`, `formatEntityAnswer`, `fitsIntoDiscordModal`, `findMissingRequiredFields`. Details: [form-fields](../concepts/form-fields.md).
+Exports `FORM_FIELD_TYPE` (`text, textarea, dropdown, checkbox, user, role, channel, mentionable`), `FORM_FIELD_TYPES`, `ENTITY_FIELD_TYPES`, `MODAL_MAX_FIELDS = 5`, `getModalFieldLimit` (4 for slot events with more than one slot), `getFormFields`, `getFieldType`, `isEntityFieldType`, `formatEntityAnswer`, `fitsIntoDiscordModal`, `findMissingRequiredFields`, `sanitizeFormAnswers(formFields, formAnswers)` (answers safe to store, `FORM_ANSWER_MAX_LENGTH = 2000`). Details: [form-fields](../concepts/form-fields.md).
 
 ## utils/eventUtils.js
 
@@ -76,6 +76,26 @@ Shared by `routes/admin.js` and `bot/adminCommands.js`; bot helpers are required
 | `createPoll(input, adminId, { via })` / `announcePoll(pollId, adminId, { pings, via })` | open poll (`normalizePollInput`) + `CREATE_POLL`; poll post + record + `ANNOUNCE_POLL` |
 
 `via: 'discord'` appends „ in Discord“ to the audit detail.
+
+## utils/systemConfig.js (#138)
+
+Database-backed configuration in `systemSettings/config`: `MANAGED_KEYS` (`group`, `secret`, `applies`), `loadSystemConfig({ env })` (start: lock env keys, fill the rest from the database, generate `SESSION_SECRET`, mark a complete `.env` as set up), `saveSystemValues(values, { by, env })` (throws `SystemConfigError` with `code` `unknown_key`/`locked_key` and `key`; returns `{ changed, applies }`), `listSystemSettings({ env })` (secrets only as `isSet`), `isLocked`, `hasRequiredDiscordValues`, `isSetupCompleted`, `markSetupCompleted`, `forgetSystemConfig` (tests). Rules: [configuration](../ops/configuration.md).
+
+## utils/timezone.js (#138)
+
+`getTimezone()` → `process.env.TIMEZONE` or `Europe/Berlin`, read at every call, so a time zone stored by the setup wizard works without a restart. Every module formats and parses dates through it; no module keeps `TIMEZONE` in a constant (`test/timezone.test.js`).
+
+## utils/participations.js (pure, #110)
+
+One entry per person: `toParticipations(registrations)` gives each registration (`asGuest: false`) and then one entry per id in `guests`: `{ id: '<registrationId>#<guestId>', registrationId, eventId, status (of the inviting registration), createdAt, source, userId, userName / userAvatar (from `pendingGuests`, else id / ''), checkedIn, checkedInAt, asGuest: true, hostUserId }`. A person who appears more than once for one event (own registration and guest place, or two guest places — `registerUserForEvent` does not refuse a listed guest) keeps one entry: own accepted, else accepted guest place, else own, else the first guest place (the order `checkInMember` uses). `participationsOf(registrations, userId)` filters to one person. `isListedGuest(registration, userId)`, `guestCheckinOf(registration, guestId)` (`{ checkedIn, checkedInAt, checkinInvitedAt }` from `guestCheckins`, defaults for unlisted ids), `hasAnyCheckin(registration)` (member or a listed guest), `clearedCheckins(registration)` (update fields that take back every check-in and keep the invitation times).
+
+## utils/adminAccess.js (pure)
+
+One rule for who is a DEMS admin (admin = admin role `DISCORD_ADMIN_ROLE_ID` or the Discord permission „Administrator“ (the owner has every permission)), used by the OAuth login, `createRoleRefresh` and the bot (`hasAdminRole`, thread comments). `hasAdministratorPermission(permissions)` reads the bit from an OAuth decimal string, a bigint or a discord.js `PermissionsBitField` (missing/unreadable → false); `isGuildAdministrator(guild)` for an entry of `/users/@me/guilds` (`owner` or the bit); `isDemsAdmin({ roleIds, isAdministrator, adminRoleId = DISCORD_ADMIN_ROLE_ID })`.
+
+## utils/discordFetch.js (#138)
+
+`discordFetch(url, options, retries)` (fetch with two retries on transient socket errors, used by the OAuth2 login) and `checkClientCredentials(clientId, secret)` (OAuth2 `client_credentials` token request → `{ ok: true }` or `{ ok: false, error: 'invalid_client'|'unreachable' }`, used by the setup wizard).
 
 ## utils/localDateTime.js (B-13)
 
@@ -138,7 +158,7 @@ Shared by `routes/admin.js` and `bot/adminCommands.js`; bot helpers are required
 
 ## utils/memberOverview.js (pure, W-15)
 
-Rules of the admin member overview. **Over** = event exists, not `cancelled`, and `archived` or `isEventOver`. **Teilnahme** (`attended`) = accepted registration of an over event. **Tracked** event = `checkinEnabled` or at least one checked-in registration. **No-Show** = accepted, over, tracked, not checked in — an event nobody checked in for has no no-shows.
+Rules of the admin member overview. **Over** = event exists, not `cancelled`, and `archived` or `isEventOver`. **Teilnahme** (`attended`) = accepted registration of an over event. **Tracked** event = `checkinEnabled` or at least one checked-in registration or guest (`hasAnyCheckin`). **No-Show** = accepted, over, tracked, not checked in — an event nobody checked in for has no no-shows. Guests (#110): the numbers work on participations (`utils/participations.js`) — a guest place counts as Teilnahme, Check-in and No-Show of the guest, not as Anmeldung (`registrations` counts entries without `asGuest`) and not for `lastActiveAt`; `buildMemberList` expands the registrations itself, `memberStats`/`buildMemberHistory` take the person's participations.
 
 | Export | Behaviour |
 |---|---|
@@ -165,7 +185,7 @@ Recipients, text and sending loop of the participant message. `send` is injected
 
 ## utils/insights.js (pure, W-14)
 
-Evaluations over a time range, built on the rules of `memberOverview.js`. **Evaluated** event = `isOver` (so never cancelled) and start within `now - days … now`; range `all` takes every over event, also undated archived ones. Rates are whole percent (`Math.round`) or `null` without a base; totals are weighted (summed counts, not averages of rates).
+Evaluations over a time range, built on the rules of `memberOverview.js`. **Evaluated** event = `isOver` (so never cancelled) and start within `now - days … now`; range `all` takes every over event, also undated archived ones. Rates are whole percent (`Math.round`) or `null` without a base; totals are weighted (summed counts, not averages of rates). Persons, not registrations (#110): `accepted`, `checkedIn`, `noShows` and the rates count members and their listed guests, top members count a guest place for the guest; `placesTaken` and the category `registrations` stay on registrations.
 
 | Export | Behaviour |
 |---|---|
@@ -221,6 +241,14 @@ Data side of the Discord approval requests (B-06), without discord.js (so `dev/m
 
 `buildEventUrl(eventId)` → `<BASE_URL>/#event/<id>` (fallback `http://localhost:3000`). Every event link that leaves the server is built with it: announcement and its "Zum Event" button, `/events` command, event channel embed, DMs, guest invitation, `{event.url}`. `test/eventUrl.test.js` fails when server code builds `#events/<id>` links again. `buildPollUrl(pollId)` → `<BASE_URL>/#poll/<id>` for poll messages and DMs. `buildSiteUrl(page)` → `<BASE_URL>/#<page>` for pages without an ID (`profile`, `events`; used by `/my-events`).
 
+## utils/semver.js
+
+Version order for `package.json`, `updates.json`, git tags and GitHub releases: `parseVersion(v)` → `{ core: [major, minor, patch], pre: [...] }` or `null` (optional leading `v`), `compareVersions(a, b)` (negative/0/positive; a release is newer than its pre-releases, pre-release parts compare one by one, numbers numerically and before words; throws `TypeError` on a non-version), `isPrerelease(v)`. Used by the news history test, the release script and the update check.
+
+## utils/updateCheck.js
+
+Tells admins about a newer DEMS. `selectLatestRelease(releases, current)` → `{ version, url }` or `null`: the highest GitHub release above `current`, ignoring drafts and tags that are no version (leading `v` stripped); a final-release install skips pre-releases, a pre-release install counts them; `url` only if `html_url` starts with `https://github.com/`. `createUpdateChecker({ currentVersion, env, mockMode, fetchImpl, now, log })` → `{ start, stop, checkNow, getStatus }`: `GET https://api.github.com/repos/<UPDATE_CHECK_REPO>/releases?per_page=30` (headers `Accept: application/vnd.github+json`, `User-Agent: DEMS-update-check`, 5 s timeout), first run 30 s after `start()`, then every 12 h (timers `unref`'d). A failed check (status, network, JSON, no list) logs one warning and keeps the last good answer. Off — no request, no timer — with reason `mock` (dev mock mode), `disabled` (`UPDATE_CHECK=false`), `edge` (`DEMS_CHANNEL=edge`, set by the publish job) or `invalid-repo`. `getStatus()` → `{ enabled, reason, current, latest, updateAvailable, switchToLatest (pre-release install, final release out: switch the image tag from beta to latest), releaseUrl, checkedAt, channel, commit (7 chars) }`. The module singleton `startUpdateCheck({ mockMode })` / `stopUpdateCheck()` / `getUpdateStatus()` is used by `server.js` and `routes/adminSystem.js`.
+
 ## utils/avatar.js
 
 Pure, no database: `avatarUrlOf(user)` → `session.user.avatar` (already a complete URL), else Discord's first default avatar; `repairAvatarUrl(url)` → unwraps `https://cdn.discordapp.com/avatars/<id>/<complete URL>.png?size=64` (old comments), everything else unchanged.
@@ -243,7 +271,7 @@ Settings of the bot control center (`botSettings/config`). `DEFAULT_BOT_SETTINGS
 
 ## utils/sessionStore.js
 
-`PersistentSessionStore` (extends express-session `Store`, used by `server.js`): `get` / `set` / `destroy` on the collection `sessions` (`SESSION_COLLECTION`) through `firebaseAdmin.js`, document id = SHA-256 of the session id. Write-through cache in memory, database read only on a miss; expiry = cookie expiry (default 24 h), expired sessions are deleted on read; `pruneExpired()` runs every 6 h (`pruneIntervalMs`, 0 = off) and returns the number of deleted documents. No `touch` on purpose. `sharedSessionStore()` returns the one instance of the process (server and panic mode share its cache). `destroyAll({ keepAdmins })` deletes every session in cache and database, with `keepAdmins` all but those whose `user.isAdmin` is true; an unreadable record counts as non-admin and is deleted too, so one broken document cannot stop the panic lockdown.
+`PersistentSessionStore` (extends express-session `Store`, used by `server.js`): `get` / `set` / `destroy` on the collection `sessions` (`SESSION_COLLECTION`) through `firebaseAdmin.js`, document id = SHA-256 of the session id. Write-through cache in memory, database read only on a miss; expiry = cookie expiry (default 24 h); on read a session counts only if both the record's `expiresAt` and the stored `cookie.expires` lie in the future and its JSON parses — otherwise the record is deleted and the request has no session; `pruneExpired()` runs every 6 h (`pruneIntervalMs`, 0 = off) and returns the number of deleted documents. No `touch` on purpose. `sharedSessionStore()` returns the one instance of the process (server and panic mode share its cache). `destroyAll({ keepAdmins })` deletes every session in cache and database, with `keepAdmins` all but those whose `user.isAdmin` is true; an unreadable record counts as non-admin and is deleted too, so one broken document cannot stop the panic lockdown.
 
 ## utils/reminders.js
 

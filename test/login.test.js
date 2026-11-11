@@ -9,6 +9,7 @@ const serverEnv = (name, env = {}) => ({
     SESSION_SECRET: 'login-test-secret',
     SQLITE_PATH: path.join(createTempDir(name), 'db.sqlite'),
     DISCORD_CLIENT_ID: '123',
+    DISCORD_CLIENT_SECRET: 'login-test-client-secret',
     DISCORD_GUILD_ID: '999',
     BASE_URL: 'http://127.0.0.1',
     ...env
@@ -84,6 +85,24 @@ test('a successful login starts a new session and uses the state up', async () =
     assert.equal(replay.headers.get('location'), '/?error=invalid_state');
 });
 
+test('a member without the admin role and without Discord Administrator is no admin', async () => {
+    assert.equal((await currentUser(await loggedInClient())).isAdmin, false);
+});
+
+// Setup wizard: "Keine (nur Discord-Administratoren)" -> no DISCORD_ADMIN_ROLE_ID at all
+test('a Discord Administrator is admin even without an admin role', async () => {
+    const adminServer = await startServer(FIXTURE, serverEnv('login-administrator', { FAKE_DISCORD_PERMISSIONS: '8' }));
+    try {
+        const client = createClient(adminServer.baseUrl);
+        const state = await startLogin(client);
+        const res = await client.request(`/auth/discord/callback?code=abc&state=${state}`);
+        assert.equal(res.headers.get('location'), '/#events');
+        assert.equal((await currentUser(client)).isAdmin, true);
+    } finally {
+        await adminServer.stop();
+    }
+});
+
 test('logging out needs a POST with the CSRF token', async () => {
     const client = await loggedInClient();
 
@@ -99,12 +118,13 @@ test('logging out needs a POST with the CSRF token', async () => {
     assert.equal(await currentUser(client), null);
 });
 
-test('session and CSRF cookies are Secure in production only', async () => {
+// Production needs PostgreSQL (firebaseAdmin.js refuses SQLite there) -> runs where TEST_DATABASE_URL is set, e.g. in CI
+test('session and CSRF cookies are Secure in production only', { skip: !process.env.TEST_DATABASE_URL && 'TEST_DATABASE_URL nicht gesetzt' }, async () => {
     // GET /api/csrf-token creates the session and the CSRF token -> both cookies
     const development = await fetch(`${server.baseUrl}/api/csrf-token`);
     assert.doesNotMatch(sessionCookieOf(development), /;\s*Secure/i);
 
-    const production = await startServer(FIXTURE, serverEnv('login-production', { NODE_ENV: 'production' }));
+    const production = await startServer(FIXTURE, serverEnv('login-production', { NODE_ENV: 'production', DATABASE_URL: process.env.TEST_DATABASE_URL }));
     try {
         // Production runs behind a TLS proxy (trust proxy 1) that sets X-Forwarded-Proto
         const res = await fetch(`${production.baseUrl}/api/csrf-token`, { headers: { 'X-Forwarded-Proto': 'https' } });

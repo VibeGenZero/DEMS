@@ -14,6 +14,8 @@ const ICON_CLASS = /^bi-[a-z0-9-]+$/;
 // Chip of a history row per registration status; cancelled events and check-ins come first (historyChip)
 const HISTORY_LABELS = { accepted: 'Teilgenommen', rejected: 'Abgelehnt', waitlisted: 'Warteliste', pending: 'Nicht bestätigt', tentative: 'Vielleicht' };
 const CHECKED_IN = { tone: 'success', icon: 'qr-code-scan' };
+// A place as guest on someone else's registration (#110)
+const GUEST_CHIP = '<span class="chip chip-sm"><i class="bi bi-person-plus"></i>Gast</span>';
 
 /**
  * A small chip.
@@ -90,7 +92,7 @@ export function renderUpcomingRow(entry, now, canOpen) {
     const inner = renderDateTile(event, now)
         + `<div class="profile-event-body"><h4 class="profile-event-title">${escapeHtml(String(event.title ?? ''))}</h4>`
         + renderEventWhen(event, now, event.location)
-        + `<div class="profile-event-facts">${status}${rejected ? '' : slotChip(entry.slot)}</div></div>`
+        + `<div class="profile-event-facts">${status}${entry.asGuest ? GUEST_CHIP : ''}${rejected ? '' : slotChip(entry.slot)}</div></div>`
         + action;
     const classes = `glass-card profile-event${rejected ? ' is-muted' : ''}`;
     return canOpen
@@ -133,7 +135,7 @@ export function renderHistoryRow(entry, canOpen) {
         ? escapeHtml(String(entry.event.title ?? ''))
         : '<span class="text-muted">Gelöschtes Event</span>';
     const inner = `<span class="profile-history-date">${historyDay(entry)}</span>`
-        + `<span class="profile-history-title">${title}</span>${historyChip(entry)}`;
+        + `<span class="profile-history-title">${title}</span>${historyChip(entry)}${entry.asGuest ? GUEST_CHIP : ''}`;
     return canOpen && entry.event
         ? `<a class="profile-history-row" href="#event/${escapeHtml(String(entry.event.id ?? ''))}">${inner}</a>`
         : `<div class="profile-history-row">${inner}</div>`;

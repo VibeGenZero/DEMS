@@ -15,7 +15,8 @@ const { sendDM } = require('./messages');
 const { inviteToCheckin } = require('./checkin');
 const { setScheduledEventStatus } = require('./scheduledEvents');
 const { state } = require('./client');
-const { TIMEZONE, MY_LEAVE_PREFIX } = require('./constants');
+const { MY_LEAVE_PREFIX } = require('./constants');
+const { getTimezone } = require('../utils/timezone');
 
 /**
  * Reminder scheduler — every 5 min: DM accepted participants when a reminder
@@ -64,7 +65,7 @@ async function syncScheduledEventStatus(eventId, event, now, scheduledStatus) {
  * @returns {{ content: string, components: ActionRowBuilder[] }} -> Classic message payload.
  */
 function buildReminderMessage(event, eventId, now = new Date()) {
-    const timeStr = new Date(event.startDate).toLocaleString('de-DE', { timeZone: TIMEZONE });
+    const timeStr = new Date(event.startDate).toLocaleString('de-DE', { timeZone: getTimezone() });
     const row = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setLabel('Zum Event').setStyle(ButtonStyle.Link).setURL(buildEventUrl(eventId))
     );

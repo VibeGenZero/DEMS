@@ -18,7 +18,8 @@ see_also: [discord-integration, routes-events, event-lifecycle, role-slots]
 3. No registration with same `eventId` + `userId` → else `already_registered`.
 4. `accessMode === 'role-required'` → user must have one of `requiredRoles` (`missing_role`, 403). Web: roles from the session; Discord: live member roles.
 5. Guests sent but `allowGuests === false` → `guests_not_allowed`.
-6. `findMissingRequiredFields(formFields, formAnswers)` → `missing_fields` (checkbox must be `true`, others non-empty).
+6. `sanitizeFormAnswers(formFields, formAnswers)` keeps only answers to the event form (labels of its fields, form order; checkbox strict `true`/`false`, other answers strings of at most 2000 characters, a dropdown only with one of its options; no form → `{}`), then `findMissingRequiredFields` → `missing_fields` (checkbox must be `true`, others non-empty).
+6a. `loadValidGuests(guests, user.id)`: only the guest **ids** of the request count; each must be a stored user (`users/<id>`) with `acceptInvitations !== false` and not the member themself, at most `MAX_GUESTS` = 10, duplicates once → else `invalid_guests` (400) with a German reason; name and avatar come from the stored profile.
 7. Slot events: `slotId` must be a slot of the event (`invalid_slot`, 400) and guests are refused (`guests_not_allowed`); `pickSlot` gives the main role, else the first free fallback (`altSlotIds`, slot order), else `waitlisted` — see [role-slots](role-slots.md).
 8. Events without slots, capacity (only if `maxParticipants > 0`): occupied = `countOccupiedPlaces` (`utils/capacity.js`: 1 + guests + open guest invitations per pending/accepted registration); if `occupied + 1 + newGuests > max` → `waitlisted`. The same count is what members see: `summarizePlaces`/`formatPlaces` build the sentence "5 von 20 Plätzen belegt (inkl. 1 Gast, 1 Anfrage offen)" for the event page, the overview cards and Discord.
 9. Otherwise `approvalMode === 'instant'` → `accepted`, else `pending`.
@@ -116,10 +117,11 @@ Pending registrations can also be decided in the approval channel of the bot cen
 
 ## Guests
 
-- Inviting: the registrant picks users via `GET /api/user/search` (only users with `acceptInvitations !== false`); they are stored in `pendingGuests` with `status: 'pending'` and receive a DM with `guest_accept` / `guest_decline` buttons.
-- Accept → `pendingGuests[i].status = 'accepted'` and user id pushed to `guests`; decline → removed from `pendingGuests` and the waitlist may move up (the invitation no longer reserves a place). Only the invited user can press the buttons.
+- Inviting: the registrant picks users via `GET /api/user/search` (only users with `acceptInvitations !== false`, 60 searches per minute and member); the server checks them again (step 6a) and stores them in `pendingGuests` with `status: 'pending'` and the name/avatar of their profile and receive a DM with `guest_accept` / `guest_decline` buttons.
+- Accept → `pendingGuests[i].status = 'accepted'` and user id pushed to `guests`; decline → removed from `pendingGuests` and the waitlist may move up (the invitation no longer reserves a place). Only the invited user can press the buttons. `handleGuestButton` (`bot/guests.js`) re-reads and writes the registration inside `withEventLock`, so two guests answering at once both count; DMs and the waitlist step run after the lock.
 - Pending invitations already reserve a slot.
-- An accepted guest has no registration of their own: `GET /api/events/:id/my-registration` answers `{ registered: true, asGuest: true, id, status }` with the id and status of the inviting registration and nothing else from it.
+- When the inviting registration leaves `accepted` (single change, bulk action), the check-ins of its guests are taken back with its own (`clearedCheckins` in `utils/participations.js`; invitation times stay).
+- An accepted guest has no registration of their own: `GET /api/events/:id/my-registration` answers `{ registered: true, asGuest: true, id, status, checkedIn, checkedInAt }`: id and status of the inviting registration, the guest's own check-in, nothing else from it. A guest of an accepted registration checks in with the code or the Discord button like a participant (#110); admins tick guests off in the registrations dialog, and the CSV export has a column „Gäste eingecheckt“.
 
 ## Message templates
 

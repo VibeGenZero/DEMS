@@ -2,14 +2,14 @@
 id: data-model
 title: Data model — collections and document shapes
 type: concept
-tags: [data-model, schema, collections, events, registrations, users, firestore]
+tags: [data-model, schema, collections, events, registrations, users, postgresql]
 sources: [routes/admin.js, utils/registrationService.js, utils/userProfile.js, utils/sessionStore.js, routes/events.js, utils/eventUtils.js, bot/registration.js, utils/checkin.js, bot/threadSync.js, dev/seedData.js, utils/eventTemplates.js, utils/botSettings.js]
 depends_on: [data-layer]
 see_also: [registration-flow, event-lifecycle, maintenance-mode, glossary]
 ---
 # Data model — collections and document shapes
 
-> TL;DR: Twelve schemaless collections. `events`, `registrations`, `comments`, `auditLogs`, `polls`, `eventTemplates` use auto ids; `pollVotes` uses `<pollId>_<userId>`; `users` uses the Discord user id; `botMessages/templates`, `botSettings/config`, `maintenanceSettings/config` are singleton documents; `devMeta/seed` exists only in dev mock mode. All dates are ISO-8601 strings. Shapes are defined by the code that writes them (no schema file) — the producers are listed per collection.
+> TL;DR: Fourteen schemaless collections. `events`, `registrations`, `comments`, `auditLogs`, `polls`, `eventTemplates` use auto ids; `pollVotes` uses `<pollId>_<userId>`; `users` uses the Discord user id; `botMessages/templates`, `botSettings/config`, `maintenanceSettings/config`, `systemSettings/config`, `privacyPolicy/current` are singleton documents; `devMeta/seed` exists only in dev mock mode. All dates are ISO-8601 strings. Shapes are defined by the code that writes them (no schema file) — the producers are listed per collection.
 
 ```mermaid
 erDiagram
@@ -61,7 +61,7 @@ erDiagram
 
 ## registrations (auto id) — written by `utils/registrationService.js`
 
-`{ eventId, userId, userName, status: pending|accepted|waitlisted|offered|tentative|rejected (offered = waitlist offer, B-15; tentative = „Vielleicht“, on the bench without a place, B-17), offer?: { offeredAt, expiresAt } (only while offered, null after a decision), tentativeAt? (time of the „Vielleicht“ answer; kept when the registration leaves the bench, which resets `createdAt`), formAnswers: { [fieldLabel]: string|boolean }, guests: userId[], pendingGuests: [{ userId, displayName, avatar, status: pending|accepted }], source: web|discord|admin (admin = entered by an admin, W-06), createdAt, checkedIn?, checkedInAt? (code, admin or Discord check-in; only `accepted` registrations carry one, cleared to `false`/`null`), slotId?, preferredSlotId?, altSlotIds? }`
+`{ eventId, userId, userName, status: pending|accepted|waitlisted|offered|tentative|rejected (offered = waitlist offer, B-15; tentative = „Vielleicht“, on the bench without a place, B-17), offer?: { offeredAt, expiresAt } (only while offered, null after a decision), tentativeAt? (time of the „Vielleicht“ answer; kept when the registration leaves the bench, which resets `createdAt`), formAnswers: { [fieldLabel]: string|boolean }, guests: userId[], pendingGuests: [{ userId, displayName, avatar, status: pending|accepted }], source: web|discord|admin (admin = entered by an admin, W-06), createdAt, checkedIn?, checkedInAt? (code, admin or Discord check-in; only `accepted` registrations carry one, cleared to `false`/`null`), guestCheckins?: { [guestUserId]: { checkedIn, checkedInAt, checkinInvitedAt } } (check-in of each listed guest, #110; only ids in `guests` count), slotId?, preferredSlotId?, altSlotIds? }`
 
 `checkinInvitedAt?` (B-07, ISO string) = when the Discord check-in invitation was sent (written before the DM; at most one per registration, kept when a new code is generated); never contains the code.
 
@@ -71,7 +71,7 @@ Slot fields exist only on slot events: `slotId` = the slot actually taken (`null
 
 ## users (id = Discord user id) — written by `utils/userProfile.js`, `bot/registration.js#ensureUserProfile`
 
-`{ id, username, displayName, avatar (URL), acceptInvitations (bool), notifications?: { reminders, changes, waitlist } (bool each, W-16; missing field or key = on), welcomeSentAt? (ISO, B-02: the bot center welcome message was sent; written by `utils/botSettings.js#sendWelcomeOnce`), createdAt, updatedAt }`
+`{ id, username, displayName, avatar (URL), acceptInvitations (bool), notifications?: { reminders, changes, waitlist } (bool each, W-16; missing field or key = on), welcomeSentAt? (ISO, B-02: the bot center welcome message was sent; written by `utils/botSettings.js#sendWelcomeOnce`), privacyAcceptedVersion? (int, #138: accepted privacy policy version; `utils/userProfile.js#savePrivacyAcceptance`), privacyAcceptedAt? (ISO), createdAt, updatedAt }`
 
 Read in full by the admin member overview (W-15, `GET /api/admin/members`, `utils/memberOverview.js`): `createdAt` shows as "Dabei seit", `updatedAt` (login or settings save) and the registration times give "Letzte Aktivität".
 
@@ -81,7 +81,7 @@ Read in full by the admin member overview (W-15, `GET /api/admin/members`, `util
 
 ## auditLogs (auto id) — `utils/eventUtils.js#addAuditLog`
 
-`{ action, adminId, details, targetId, timestamp }`. Actions: `CREATE_EVENT`, `UPDATE_EVENT`, `NOTIFY_EVENT_CHANGE`, `UPDATE_EVENT_STATUS`, `CANCEL_EVENT`, `START_EVENT`, `END_EVENT`, `DELETE_EVENT`, `DELETE_SERIES`, `DUPLICATE_EVENT`, `GENERATE_CHECKIN`, `EXPORT_REGISTRATIONS`, `MESSAGE_PARTICIPANTS` (W-09), `UPDATE_REGISTRATION_STATUS`, `MOVE_REGISTRATION_SLOT`, `CREATE_POLL`, `UPDATE_POLL`, `CLOSE_POLL`, `ANNOUNCE_POLL`, `DELETE_POLL`, `DECIDE_POLL`, `ANNOUNCE_EVENT`, `SYNC_DISCORD_EVENT`, `UPDATE_TEMPLATES` (bot messages), `CREATE_EVENT_TEMPLATE`, `UPDATE_EVENT_TEMPLATE`, `DELETE_EVENT_TEMPLATE` (W-10), `UPDATE_BOT_SETTINGS`, `UPDATE_MAINTENANCE`, `PANIC_MODE_ACTIVATED`, `PANIC_MODE_DEACTIVATED`.
+`{ action, adminId, details, targetId, timestamp }`. Actions: `CREATE_EVENT`, `UPDATE_EVENT`, `NOTIFY_EVENT_CHANGE`, `UPDATE_EVENT_STATUS`, `CANCEL_EVENT`, `START_EVENT`, `END_EVENT`, `DELETE_EVENT`, `DELETE_SERIES`, `DUPLICATE_EVENT`, `GENERATE_CHECKIN`, `EXPORT_REGISTRATIONS`, `MESSAGE_PARTICIPANTS` (W-09), `UPDATE_REGISTRATION_STATUS`, `MOVE_REGISTRATION_SLOT`, `CREATE_POLL`, `UPDATE_POLL`, `CLOSE_POLL`, `ANNOUNCE_POLL`, `DELETE_POLL`, `DECIDE_POLL`, `ANNOUNCE_EVENT`, `SYNC_DISCORD_EVENT`, `UPDATE_TEMPLATES` (bot messages), `CREATE_EVENT_TEMPLATE`, `UPDATE_EVENT_TEMPLATE`, `DELETE_EVENT_TEMPLATE` (W-10), `UPDATE_BOT_SETTINGS`, `UPDATE_SYSTEM_SETTINGS` (#138, details `{ keys }`), `UPDATE_PRIVACY_POLICY` (#138, details `{ version }`), `UPDATE_MAINTENANCE`, `PANIC_MODE_ACTIVATED`, `PANIC_MODE_DEACTIVATED`.
 
 ## polls (auto id) — written by `routes/admin.js` and `utils/pollStore.js`
 
@@ -106,6 +106,8 @@ Read in full by the admin member overview (W-15, `GET /api/admin/members`, `util
 | `botMessages/templates` | `registration`, `accepted`, `rejected` (template strings, ≤2000) |
 | `botSettings/config` | `statusType`, `activityType`, `activityText`, `dmNotifications`, `reminderEnabled`, `eventStartNotifications`, `autoChannelCreation`, `announcementThreads` (B-14), `autoUpdatePresence`, `autoStatusCalendarEvents`, `announceChannel`, `welcomeMessage`, `waitlistConfirmation` (B-15, default true), `waitlistConfirmHours` (B-15, whole hours 1–72, default 12), `updatedAt` |
 | `maintenanceSettings/config` | `warningEnabled`, `warningText`, `loginDisabled`, `registrationDisabled`, `plannedMaintenance`, `plannedMaintenanceStart/End/Text`, `panicMode`, `panicActivatedAt`, `panicActivatedBy`, `updatedAt`, `updatedBy` |
+| `systemSettings/config` | `values` (`{ KEY: string }`: the database-backed configuration of `utils/systemConfig.js#MANAGED_KEYS` plus the generated `SESSION_SECRET`; secrets in plain text, never returned by the API), `setupCompletedAt` (ISO or missing), `setupSource` (`wizard` \| `env`), `updatedAt`, `updatedBy` — see [configuration](../ops/configuration.md) (#138) |
+| `privacyPolicy/current` | `markdown` (≤ 50000; `''` = no policy), `version` (int, +1 per changed text, kept when removed, so a later policy is new for everyone), `updatedAt`, `updatedBy` — `utils/privacyPolicy.js` (#138) |
 | `devMeta/seed` (mock only) | `seededAt` |
 
 ## Gotchas

@@ -8,7 +8,7 @@
 // even when bot.js is required without server.js (e.g. in tests)
 const { IS_MOCK_MODE } = require('./dev/mockMode');
 const { parseTemplate } = require('./utils/template');
-const { wireClient, startBot, whenBotSettled, stopBot } = require('./bot/lifecycle');
+const { wireClient, startBot, restartBot, whenBotSettled, stopBot } = require('./bot/lifecycle');
 const { client } = require('./bot/client');
 const {
     sendDM, sendChannelMessage, buildEventAnnouncement, canRegisterViaDiscord,
@@ -18,7 +18,8 @@ const { buildPollMessage, buildPollVoteReply, refreshPollMessages, markPollMessa
 const { buildSlotModal, buildRegisteredSlotReply } = require('./bot/registrationModal');
 const {
     assignRole, removeRole, removeRoleFromMembers, getUserRoles, fetchMemberRoleIds, searchGuildMembers, fetchGuildMember,
-    isGuildMember, getGuildName, getGuildIconUrl, getGuildRoles, getGuildChannels, getPublicGuildChannels
+    isGuildMember, getGuildName, getGuildIconUrl, getGuildRoles, getGuildChannels, getPublicGuildChannels,
+    getGuildCategories
 } = require('./bot/guild');
 const {
     createEventChannels, addParticipantToEventChannels, removeParticipantFromEventChannels, deleteEventChannels
@@ -42,6 +43,7 @@ wireClient();
 module.exports = {
     client,
     startBot,
+    restartBot,
     whenBotSettled,
     stopBot,
     sendDM,
@@ -67,6 +69,7 @@ module.exports = {
     getGuildRoles,
     getGuildChannels,
     getPublicGuildChannels,
+    getGuildCategories,
     getGuildScheduledEvents,
     parseTemplate,
     startReminderScheduler,

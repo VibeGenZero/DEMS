@@ -2,11 +2,11 @@
  * Pure helpers for editing a series of events together (W-11): which dates
  * follow the edited one, how they take its start time, the rhythm of the
  * series and which dates an extension creates. No database or bot access.
- * Times are ISO strings in UTC; days and clock times count in TIMEZONE.
+ * Times are ISO strings in UTC; days and clock times count in the server time zone (utils/timezone.js).
  */
 const { parseDate, isEventOver } = require('./eventListing');
 
-const DEFAULT_TIMEZONE = process.env.TIMEZONE || 'Europe/Berlin';
+const { getTimezone } = require('./timezone');
 const DAY_MS = 24 * 60 * 60 * 1000;
 const SHORTEN_SERIES_MESSAGE = '„Wiederholen bis“ kann nur verlängert werden. Einzelne Termine löschst du in der Terminliste.';
 // Statuses of dates that "this and all following dates" still changes
@@ -66,7 +66,7 @@ function fromZonedParts(parts, timeZone) {
  * @param {string} [timeZone] -> IANA time zone.
  * @returns {string} -> `YYYY-MM-DD` in the time zone, or '' without a valid date.
  */
-function localDay(iso, timeZone = DEFAULT_TIMEZONE) {
+function localDay(iso, timeZone = getTimezone()) {
     const date = parseDate(iso);
     if (!date) return '';
     const p = zonedParts(date, timeZone);
@@ -101,7 +101,7 @@ function followingDates(seriesEvents, edited, now = new Date()) {
  * @param {string} [timeZone] -> IANA time zone.
  * @returns {Object|null} -> `{ startDate, endDate, registrationDeadline, unregisterDeadline }`, or null without both starts.
  */
-function transferTime(targetStart, source, timeZone = DEFAULT_TIMEZONE) {
+function transferTime(targetStart, source, timeZone = getTimezone()) {
     const sourceStart = parseDate(source.startDate);
     const target = parseDate(targetStart);
     if (!sourceStart || !target) return null;
@@ -128,7 +128,7 @@ function transferTime(targetStart, source, timeZone = DEFAULT_TIMEZONE) {
  * @param {string} [timeZone] -> IANA time zone.
  * @returns {string} -> ISO start of the next date.
  */
-function nextSeriesStart(start, interval, timeZone = DEFAULT_TIMEZONE) {
+function nextSeriesStart(start, interval, timeZone = getTimezone()) {
     const p = zonedParts(parseDate(start), timeZone);
     if (interval === 'weekly') return fromZonedParts({ ...p, day: p.day + 7 }, timeZone).toISOString();
     if (interval === 'biweekly') return fromZonedParts({ ...p, day: p.day + 14 }, timeZone).toISOString();
@@ -144,7 +144,7 @@ function nextSeriesStart(start, interval, timeZone = DEFAULT_TIMEZONE) {
  * @param {Object} params -> `{ seriesEvents, interval, oldUntil, newUntil, timeZone }`; until values as `YYYY-MM-DD`.
  * @returns {Object} -> `{ starts: string[] }` after the last date up to and including `newUntil`, or `{ error }` for an earlier end.
  */
-function planExtension({ seriesEvents, interval, oldUntil, newUntil, timeZone = DEFAULT_TIMEZONE }) {
+function planExtension({ seriesEvents, interval, oldUntil, newUntil, timeZone = getTimezone() }) {
     if (!newUntil || newUntil === oldUntil) return { starts: [] };
     if (oldUntil && newUntil < oldUntil) return { error: SHORTEN_SERIES_MESSAGE };
     const last = seriesEvents

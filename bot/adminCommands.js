@@ -1,8 +1,8 @@
 /**
  * Admin slash commands (B-13): `/event erstellen` and `/abstimmung erstellen`
  * open a modal; the event becomes a draft that can be published or announced
- * from the answer, the poll is posted at once. Only members with the DEMS
- * admin role (DISCORD_ADMIN_ROLE_ID) pass; every entry point checks it.
+ * from the answer, the poll is posted at once. Only DEMS admins pass (admin
+ * role DISCORD_ADMIN_ROLE_ID or Discord "Administrator"); every entry point checks it.
  *
  * Saving and posting go through utils/adminActions.js (shared with the
  * website), loaded inside the handlers so mock mode gets its twins.
@@ -16,10 +16,12 @@ const { buildEventUrl } = require('../utils/eventUrl');
 const { DATE_FORMAT_HINT, parseLocalDateTime, parseEndInput, parsePollLines } = require('../utils/localDateTime');
 const { normalizeSlots } = require('../utils/slotService');
 const { resolveInteractionRoles } = require('./registration');
+const { hasAdministratorPermission, isDemsAdmin } = require('../utils/adminAccess');
 const {
-    TIMEZONE, ADMIN_EVENT_MODAL_PREFIX, ADMIN_POLL_MODAL_PREFIX, ADMIN_EVENT_PUBLISH_PREFIX,
+    ADMIN_EVENT_MODAL_PREFIX, ADMIN_POLL_MODAL_PREFIX, ADMIN_EVENT_PUBLISH_PREFIX,
     ADMIN_EVENT_ACTIVATE_PREFIX, ADMIN_RETRY_PREFIX
 } = require('./constants');
+const { getTimezone } = require('../utils/timezone');
 
 const NOT_ADMIN = '⛔ Nur Admins können Events und Abstimmungen erstellen.';
 const TEMPLATE_GONE = 'Diese Vorlage gibt es nicht mehr.';
@@ -65,16 +67,16 @@ const corrections = {
 };
 
 /**
- * Whether the member of an interaction holds the DEMS admin role.
+ * Whether the member of an interaction is a DEMS admin: the admin role or the
+ * Discord permission "Administrator" (utils/adminAccess.js).
  *
  * @param {Object} interaction -> Any interaction from a guild.
- * @returns {Promise<boolean>} -> False without a configured admin role.
+ * @returns {Promise<boolean>}
  */
 async function hasAdminRole(interaction) {
-    const adminRoleId = process.env.DISCORD_ADMIN_ROLE_ID;
-    if (!adminRoleId) return false;
-    const roleIds = await resolveInteractionRoles(interaction);
-    return roleIds.includes(adminRoleId);
+    if (hasAdministratorPermission(interaction.memberPermissions)) return true;
+    if (!process.env.DISCORD_ADMIN_ROLE_ID) return false;
+    return isDemsAdmin({ roleIds: await resolveInteractionRoles(interaction) });
 }
 
 /**
@@ -313,7 +315,7 @@ function readValues(interaction, ids) {
 
 /** Start in the server time zone, e.g. "Do., 24.12.2026, 19:30". */
 const formatStart = (iso) => new Date(iso).toLocaleString('de-DE', {
-    timeZone: TIMEZONE, weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
+    timeZone: getTimezone(), weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
 });
 
 /**
@@ -327,10 +329,10 @@ const formatStart = (iso) => new Date(iso).toLocaleString('de-DE', {
 function readEventInput(values, withPlaces, now) {
     const title = values.title.trim();
     if (!title) return { error: 'Titel ist erforderlich.' };
-    const start = parseLocalDateTime(values.start, TIMEZONE);
+    const start = parseLocalDateTime(values.start, getTimezone());
     if (!start) return { error: `Beginn: bitte als ${DATE_FORMAT_HINT} angeben.` };
     if (start <= now) return { error: 'Der Beginn muss in der Zukunft liegen.' };
-    const end = parseEndInput(values.end, start, TIMEZONE);
+    const end = parseEndInput(values.end, start, getTimezone());
     if (end === undefined) return { error: `Ende: bitte als Uhrzeit (22:00) oder als ${DATE_FORMAT_HINT} angeben.` };
     if (end && end <= start) return { error: 'Das Ende muss nach dem Beginn liegen.' };
     const fields = { title, description: values.description.trim(), startDate: start.toISOString(), endDate: end ? end.toISOString() : '' };
@@ -408,7 +410,7 @@ async function handleAdminPollModal(interaction) {
     const retry = { kind: 'poll', values };
     const title = values.title.trim();
     if (!title) return refuseInput(interaction, 'Titel ist erforderlich.', retry);
-    const lines = parsePollLines(values.dates, TIMEZONE);
+    const lines = parsePollLines(values.dates, getTimezone());
     if (lines.error) return refuseInput(interaction, lines.error, retry);
 
     const { createPoll, announcePoll } = require('../utils/adminActions');

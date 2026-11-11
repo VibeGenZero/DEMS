@@ -14,7 +14,7 @@ const { db, collection, doc, getDoc, getDocs, writeBatch } = require('../firebas
 
 // Defense in depth: never seed or wipe anything but the local SQLite file
 if (db.__type !== 'sqlite-db') {
-    throw new Error('dev/seed.js darf nur die lokale SQLite-Datenbank befüllen, nicht Firebase.');
+    throw new Error('dev/seed.js darf nur die lokale SQLite-Datenbank befüllen, nicht PostgreSQL.');
 }
 const { buildSeedData } = require('./seedData');
 

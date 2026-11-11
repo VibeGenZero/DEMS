@@ -1,7 +1,7 @@
 /**
  * Switch of the dev mock mode.
  *
- * With DEV_MOCK=true DEMS runs without Discord, OAuth and Firebase: a local
+ * With DEV_MOCK=true DEMS runs without Discord, OAuth and PostgreSQL: a local
  * SQLite file, a simulated Discord server and a persona login. Loading this
  * module forces the environment into that state -> it has to be required
  * before firebaseAdmin.js and bot.js read the environment.
@@ -18,13 +18,15 @@ const IS_MOCK_MODE = process.env.DEV_MOCK === 'true';
 const DEFAULT_DEV_DB = path.join(__dirname, '..', 'data', 'dems.dev.sqlite');
 // Own folder for uploaded banners, so mock uploads never mix with real ones
 const DEFAULT_DEV_UPLOADS = path.join(__dirname, '..', 'data', 'dev-uploads');
-const FIREBASE_KEYS = [
-    'FIREBASE_API_KEY',
-    'FIREBASE_AUTH_DOMAIN',
-    'FIREBASE_PROJECT_ID',
-    'FIREBASE_STORAGE_BUCKET',
-    'FIREBASE_MESSAGING_SENDER_ID',
-    'FIREBASE_APP_ID'
+// Blanked so firebaseAdmin.js always picks SQLite in mock mode
+const POSTGRES_KEYS = [
+    'DATABASE_URL',
+    'PGHOST',
+    'PGPORT',
+    'PGDATABASE',
+    'PGUSER',
+    'PGPASSWORD',
+    'PGPASSWORD_FILE'
 ];
 
 /**
@@ -40,7 +42,7 @@ function applyMockEnvironment() {
 
     env.SQLITE_PATH = env.DEV_SQLITE_PATH || DEFAULT_DEV_DB;
     env.UPLOAD_DIR = env.DEV_UPLOAD_DIR || DEFAULT_DEV_UPLOADS;
-    FIREBASE_KEYS.forEach(key => { env[key] = ''; });
+    POSTGRES_KEYS.forEach(key => { env[key] = ''; });
     env.DISCORD_BOT_TOKEN = '';
     env.DISCORD_GUILD_ID = MOCK_GUILD.GUILD.id;
     env.DISCORD_ADMIN_ROLE_ID = MOCK_GUILD.ROLE_ID.ADMIN;
@@ -53,7 +55,7 @@ function applyMockEnvironment() {
     if (!env.SESSION_SECRET) env.SESSION_SECRET = 'dems-dev-mock-secret';
     if (!env.ADMIN_RESET_PASSWORD) env.ADMIN_RESET_PASSWORD = 'dev';
 
-    console.log(`🧪 DEV-MOCK-MODUS aktiv — kein Discord, kein Firebase, DB: ${env.SQLITE_PATH}`);
+    console.log(`🧪 DEV-MOCK-MODUS aktiv — kein Discord, SQLite: ${env.SQLITE_PATH}`);
 }
 
 if (IS_MOCK_MODE) applyMockEnvironment();

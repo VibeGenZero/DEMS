@@ -1,6 +1,6 @@
 ---
 id: dev-mock-mode
-title: Dev mock mode (dev/) — run without Discord and Firebase
+title: Dev mock mode (dev/) — run without Discord and PostgreSQL
 type: module
 tags: [dev, mock, seed, personas, local-development, testing]
 sources: [dev/mockMode.js, dev/mockGuild.js, dev/mockBot.js, dev/devAuth.js, dev/dev-login.css, dev/seed.js, dev/seedData.js, dev/banners, dev/start.js, dev/reset.js, compose.dev.yaml]
@@ -8,7 +8,7 @@ part_of: [architecture]
 depends_on: [bot, data-layer, routes-auth]
 see_also: [run-and-debug, testing, docker]
 ---
-# Dev mock mode (dev/) — run without Discord and Firebase
+# Dev mock mode (dev/) — run without Discord and PostgreSQL
 
 > TL;DR: `npm run dev:mock` (or `docker compose -f compose.dev.yaml up --build`) starts DEMS with `DEV_MOCK=true`: a separate SQLite file with seeded dummy data, a persona login instead of Discord OAuth, and a simulated Discord server whose actions are logged as `[MOCK-DISCORD]`. It refuses to start with `NODE_ENV=production`.
 
@@ -16,7 +16,7 @@ see_also: [run-and-debug, testing, docker]
 
 | File | Role |
 |---|---|
-| `dev/mockMode.js` | switch `IS_MOCK_MODE`; production guard (exit 1); forces env: `SQLITE_PATH` = `DEV_SQLITE_PATH` or `data/dems.dev.sqlite`, `UPLOAD_DIR` = `DEV_UPLOAD_DIR` or `data/dev-uploads` (uploaded banners, W-12), blank `FIREBASE_*` + bot token, mock guild/admin role/announce channel ids, `BASE_URL=http://localhost:<PORT>`; defaults `SESSION_SECRET=dems-dev-mock-secret`, `ADMIN_RESET_PASSWORD=dev` |
+| `dev/mockMode.js` | switch `IS_MOCK_MODE`; production guard (exit 1); forces env: `SQLITE_PATH` = `DEV_SQLITE_PATH` or `data/dems.dev.sqlite`, `UPLOAD_DIR` = `DEV_UPLOAD_DIR` or `data/dev-uploads` (uploaded banners, W-12), blank `DATABASE_URL`/`PG*` (always SQLite) + bot token, mock guild/admin role/announce channel ids, `BASE_URL=http://localhost:<PORT>`; defaults `SESSION_SECRET=dems-dev-mock-secret`, `ADMIN_RESET_PASSWORD=dev` |
 | `dev/mockGuild.js` | static mock server "DEMS Dev Server": roles (Admin, Moderator, Raid-Team, VIP, Event-Teilnehmer, Mitglied, managed "DEMS Bot"), channels (incl. non-public `#mod-intern`), 2 scheduled events, 4 personas, 9 members, `findMember`, `defaultAvatar` |
 | `dev/mockBot.js` | replaces the Discord-facing exports of `bot.js` (merged at the end of `bot.js`; calls between the `bot/` modules keep the real functions); `sendChannelMessage` logs the V2 component JSON and returns fake `{ channelId, messageId, guildId }`, `ensureAnnouncementThread` keeps a stored thread or logs `Diskussions-Thread "…" … eröffnet` with a fake id of the mock server, `refreshEventAnnouncements` logs `Ankündigung von "…" aktualisiert` + the payload, `refreshPollMessages` logs `Abstimmung "…" aktualisiert` + the payload, `markPollMessagesDeleted` logs the delete notice |
 | `dev/devAuth.js` | `/auth/discord` and `/auth/discord/callback` → `/auth/dev-login` (persona page; its look is `dev/dev-login.css`, served as `/auth/dev-login.css`, because the CSP allows no style element) → `/auth/dev-login/:personaId` starts the session like the real login (`startUserSession`: new session id + CSRF token) |
@@ -36,6 +36,7 @@ see_also: [run-and-debug, testing, docker]
 ## Behaviour differences to production
 
 - Rate limiters are skipped (`skip: () => IS_MOCK_MODE` in `server.js`).
+- Setup mode (#138) never applies: the forced values count as set by `.env`, so on `#system` guild, admin role, announcement channel, `BASE_URL`, thread sync and the reset password `dev` show as „aus .env“. `restartBot` logs `Bot simuliert neu angemeldet`. A privacy policy saved on `#system` gates every persona until they accept it (consent dialog); remove it again with an empty text, or `npm run dev:reset`.
 - Reminder DMs from `checkReminders` call the real (not ready) `sendDM` → only "Bot not ready" warnings.
 - Dates are relative to the first seed; after a few days the sample events are in the past (and a day after their end the archive scheduler moves them into the archive tab) → `npm run dev:reset` (a dev database seeded before D-04 also needs it once for the banners).
 - Check-in invitations (B-07): the scheduler does not send them (bot not ready, internal call). `sendCheckinInvitations` logs `Check-in-Einladung an <member> ("<event>") mit Button „Einchecken“` and sets `checkinInvitedAt`. Seed: in the running event Jonas is already invited, Tom is not — generate a new check-in code as Mori to see Tom's invitation. The button itself is covered by `test/discordCheckin.test.js`.

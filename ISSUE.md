@@ -54,12 +54,6 @@ req.session.user = { ..., isAdmin: ... };
 The [requireAdmin](file:///c:/Users/lyone/Documents/dems/middleware/auth.js#11-30) middleware checks this session value. If an administrator is removed from the Discord role, they will retain admin access to the DEMS application until their session expires or they log out.
 **Recommendation:** Implement a strategy to re-validate the admin role against the Discord API periodically (e.g., every 15 minutes) or on critical actions, rather than trusting the session indefinitely.
 
-### [P4] Missing `firebase-admin` Dependency
-**Location:** [package.json](file:///c:/Users/lyone/Documents/dems/package.json) vs [firebaseAdmin.js](file:///c:/Users/lyone/Documents/dems/firebaseAdmin.js)
-**Description:** [firebaseAdmin.js](file:///c:/Users/lyone/Documents/dems/firebaseAdmin.js) attempts to import from `firebase-admin`, but this package is not listed in [package.json](file:///c:/Users/lyone/Documents/dems/package.json) (only `firebase` is).
-**Risk:** This may cause the application to crash in a fresh environment where `firebase-admin` is not implicitly available.
-**Recommendation:** Run `npm install firebase-admin --save`.
-
 ### [Positive Findings]
 *   **XSS Mitigation:** [app.js](file:///c:/Users/lyone/Documents/dems/public/js/app.js) consistently uses [renderMarkdownSafe](file:///c:/Users/lyone/Documents/dems/public/js/app.js#2165-2178) which leverages `DOMPurify` to sanitize user content.
 *   **CSRF Protection:** Double-submit cookie pattern is implemented and verified on mutating API requests.

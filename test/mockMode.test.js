@@ -8,7 +8,7 @@ const { GUILD, ROLE_ID, CHANNEL_ID } = require('../dev/mockGuild');
 // Prints IS_MOCK_MODE and the variables mockMode.js is responsible for
 const PRINT_ENV = `
     const { IS_MOCK_MODE } = require(${repoPath('dev/mockMode')});
-    const keys = ['SQLITE_PATH', 'FIREBASE_API_KEY', 'FIREBASE_APP_ID', 'DISCORD_BOT_TOKEN',
+    const keys = ['SQLITE_PATH', 'DATABASE_URL', 'PGHOST', 'PGPASSWORD_FILE', 'DISCORD_BOT_TOKEN',
         'DISCORD_GUILD_ID', 'DISCORD_ADMIN_ROLE_ID', 'DISCORD_ANNOUNCE_CHANNEL_ID',
         'DISCORD_EVENT_CATEGORY_ID', 'BASE_URL', 'SESSION_SECRET', 'ADMIN_RESET_PASSWORD', 'UPLOAD_DIR'];
     console.log(JSON.stringify({ IS_MOCK_MODE, env: Object.fromEntries(keys.map(k => [k, process.env[k]])) }));
@@ -24,8 +24,9 @@ test('forces the mock environment and ignores real credentials', () => {
     const result = runNode(PRINT_ENV, {
         DEV_MOCK: 'true',
         PORT: '4321',
-        FIREBASE_API_KEY: 'real-key',
-        FIREBASE_APP_ID: 'real-app',
+        DATABASE_URL: 'postgres://real@db/dems',
+        PGHOST: 'db',
+        PGPASSWORD_FILE: '/run/secret',
         DISCORD_BOT_TOKEN: 'real-token',
         DISCORD_GUILD_ID: '999',
         DISCORD_EVENT_CATEGORY_ID: '888'
@@ -38,8 +39,9 @@ test('forces the mock environment and ignores real credentials', () => {
     assert.ok(env.SQLITE_PATH.endsWith(path.join('data', 'dems.dev.sqlite')));
     assert.ok(path.isAbsolute(env.UPLOAD_DIR));
     assert.ok(env.UPLOAD_DIR.endsWith(path.join('data', 'dev-uploads')), env.UPLOAD_DIR);
-    assert.equal(env.FIREBASE_API_KEY, '');
-    assert.equal(env.FIREBASE_APP_ID, '');
+    assert.equal(env.DATABASE_URL, '');
+    assert.equal(env.PGHOST, '');
+    assert.equal(env.PGPASSWORD_FILE, '');
     assert.equal(env.DISCORD_BOT_TOKEN, '');
     assert.equal(env.DISCORD_GUILD_ID, GUILD.id);
     assert.equal(env.DISCORD_ADMIN_ROLE_ID, ROLE_ID.ADMIN);
@@ -70,15 +72,25 @@ test('keeps an own session secret, reset password, dev database path and upload 
 });
 
 test('changes nothing without DEV_MOCK', () => {
-    const result = runNode(PRINT_ENV, { FIREBASE_API_KEY: 'real-key', DISCORD_GUILD_ID: '999' });
+    const result = runNode(PRINT_ENV, { DATABASE_URL: 'postgres://real@db/dems', DISCORD_GUILD_ID: '999' });
     assert.equal(result.status, 0, result.stderr);
 
     const { IS_MOCK_MODE, env } = parseLastLine(result.stdout);
     assert.equal(IS_MOCK_MODE, false);
-    assert.equal(env.FIREBASE_API_KEY, 'real-key');
+    assert.equal(env.DATABASE_URL, 'postgres://real@db/dems');
     assert.equal(env.DISCORD_GUILD_ID, '999');
     assert.equal(env.SQLITE_PATH, undefined);
     assert.equal(env.UPLOAD_DIR, undefined);
+});
+
+test('mock mode uses SQLite even with DATABASE_URL set', () => {
+    const result = runNode(`require(${repoPath('dev/mockMode')}); console.log(JSON.stringify(require(${repoPath('firebaseAdmin')}).storeName))`, {
+        DEV_MOCK: 'true',
+        DEV_SQLITE_PATH: path.join(os.tmpdir(), `dems-mock-store-${process.pid}.sqlite`),
+        DATABASE_URL: 'postgres://x@127.0.0.1:1/x'
+    });
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(parseLastLine(result.stdout), 'sqlite');
 });
 
 test('dev/start.js refuses to start in production', () => {

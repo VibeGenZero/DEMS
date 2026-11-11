@@ -5,34 +5,33 @@ const { getLoginBlockReason } = require('../middleware/maintenance');
 const { startUserSession } = require('../middleware/auth');
 const { saveUserProfile } = require('../utils/userProfile');
 const { debugLog } = require('../utils/debugLog');
-
-const DISCORD_API = 'https://discord.com/api/v10';
-
-// Transient network errors that are safe to retry
-const RETRYABLE_CODES = new Set([
-    'ERR_STREAM_PREMATURE_CLOSE',
-    'ECONNRESET',
-    'ETIMEDOUT',
-    'EPIPE',
-    'UND_ERR_SOCKET'
-]);
+const { DISCORD_API, discordFetch } = require('../utils/discordFetch');
+const { privacyStateOf } = require('../middleware/privacy');
+const { isDemsAdmin, isGuildAdministrator } = require('../utils/adminAccess');
 
 /**
- * fetch with a small retry for transient connection errors
- * (e.g. Discord/Cloudflare closing the connection mid-response).
+ * Whether the logged-in user is owner or "Administrator" of the guild, read from
+ * the OAuth guild list (scope `guilds`). An error only costs this path: the admin
+ * role still counts, and the role check repeats it every five minutes.
+ *
+ * @param {string} accessToken -> OAuth access token of the user.
+ * @param {string} guildId -> DISCORD_GUILD_ID.
+ * @returns {Promise<boolean>}
  */
-async function discordFetch(url, options = {}, retries = 2) {
-    for (let attempt = 0; ; attempt++) {
-        try {
-            return await fetch(url, options);
-        } catch (err) {
-            const code = err.code || err.errno || (err.cause && err.cause.code);
-            if (attempt >= retries || !RETRYABLE_CODES.has(code)) {
-                throw err;
-            }
-            console.warn(`Discord API request failed (${code}), retrying (${attempt + 1}/${retries})...`);
-            await new Promise((resolve) => setTimeout(resolve, 300 * (attempt + 1)));
+async function isAdministratorOnGuild(accessToken, guildId) {
+    try {
+        const res = await discordFetch(`${DISCORD_API}/users/@me/guilds`, {
+            headers: { Authorization: `Bearer ${accessToken}` }
+        });
+        if (!res.ok) {
+            console.error('Guild list for the admin check failed:', res.status);
+            return false;
         }
+        const guilds = await res.json();
+        return Array.isArray(guilds) && isGuildAdministrator(guilds.find(guild => guild && guild.id === guildId));
+    } catch (err) {
+        console.error('Guild list for the admin check failed:', err.message);
+        return false;
     }
 }
 
@@ -105,11 +104,11 @@ router.get('/discord/callback', async (req, res) => {
 
         const memberData = await memberRes.json();
 
-        // Check if user has admin role
-        const adminRoleId = process.env.DISCORD_ADMIN_ROLE_ID;
-        const isAdmin = adminRoleId
-            ? (memberData.roles || []).includes(adminRoleId)
-            : false;
+        // Admin: the admin role or the Discord permission "Administrator" (the owner has every permission)
+        const isAdmin = isDemsAdmin({
+            roleIds: memberData.roles || [],
+            isAdministrator: await isAdministratorOnGuild(tokenData.access_token, guildId)
+        });
 
         // Maintenance mode: panic mode and "login disabled" block non-admin logins
         const blockReason = await getLoginBlockReason(isAdmin);
@@ -131,7 +130,7 @@ router.get('/discord/callback', async (req, res) => {
                 avatar: avatarUrl
             });
         } catch (err) {
-            console.error('Failed to save user to Firestore:', err.message);
+            console.error('Failed to save user to the database:', err.message);
         }
 
         await startUserSession(req, {
@@ -155,16 +154,24 @@ router.get('/discord/callback', async (req, res) => {
 /**
  * GET /auth/me — Get current user
  */
-router.get('/me', (req, res) => {
-    if (!req.session || !req.session.user) {
-        return res.status(200).json(null);
+router.get('/me', async (req, res) => {
+    try {
+        if (!req.session || !req.session.user) {
+            return res.status(200).json(null);
+        }
+        // Consent to the privacy policy (#138): the SPA shows only the dialog while required
+        const privacy = await privacyStateOf(req);
+        const { privacyAcceptedVersion, ...user } = req.session.user;
+        void privacyAcceptedVersion;
+        // Clear isNewUser flag after first read so it only shows once
+        if (req.session.user.isNewUser) {
+            req.session.user.isNewUser = false;
+        }
+        res.json({ ...user, privacyRequired: privacy.required, privacyVersion: privacy.version });
+    } catch (err) {
+        console.error('Auth me error:', err);
+        res.status(500).json({ error: 'Anmeldestatus konnte nicht geladen werden.' });
     }
-    const user = { ...req.session.user };
-    // Clear isNewUser flag after first read so it only shows once
-    if (req.session.user.isNewUser) {
-        req.session.user.isNewUser = false;
-    }
-    res.json(user);
 });
 
 /**

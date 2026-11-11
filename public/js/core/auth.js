@@ -28,15 +28,10 @@ export async function checkAuth() {
             const data = await res.json();
             // Stricter check: must have at least an ID
             if (data && data.id) {
-                const isNewUser = data.isNewUser;
                 state.currentUser = data;
                 showLoggedIn();
-                // News popup once per version, never for a new member (D-13)
-                showNewsAfterLogin({ isNewUser });
-                // Show first-login modal after a short delay so the UI renders first
-                if (isNewUser) {
-                    setTimeout(showFirstLoginModal, 800);
-                }
+                // With a privacy policy to accept, the popups wait for the consent (#138, pages/privacy.js)
+                if (!data.privacyRequired) showLoginPopups(data.isNewUser);
             } else {
                 state.currentUser = null;
                 showLoggedOut();
@@ -48,6 +43,20 @@ export async function checkAuth() {
     } catch {
         state.currentUser = null;
         showLoggedOut();
+    }
+}
+
+/**
+ * Popups after a login: the news once per version (D-13), never for a new
+ * member, and the first-login dialog for a new member.
+ *
+ * @param {boolean} isNewUser -> First login of this member.
+ */
+export function showLoginPopups(isNewUser) {
+    showNewsAfterLogin({ isNewUser });
+    // Show first-login modal after a short delay so the UI renders first
+    if (isNewUser) {
+        setTimeout(showFirstLoginModal, 800);
     }
 }
 

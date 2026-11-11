@@ -72,7 +72,7 @@ Visibility: `GET /api/events` returns only `active` (admins may pass `?status=`)
 ## Check-in
 
 1. Admin: `POST /api/admin/events/:id/generate-checkin` → `checkinCode` (6 digits) + `checkinEnabled: true`; `GET .../checkin-stats` shows `{ total, checkedIn, code }`.
-2. Member with an `accepted` registration: event page → `POST /api/events/:id/checkin { code }` → `checkedIn: true`, `checkedInAt`; optional `checkinMessage` shown.
+2. Member with an `accepted` registration: event page → `POST /api/events/:id/checkin { code }` → `checkedIn: true`, `checkedInAt`; optional `checkinMessage` shown. A listed guest of an accepted registration checks in the same way (#110); the check-in is stored on the inviting registration in `guestCheckins[<guestId>]` (under the event lock, status checked again there).
 3. Admin (W-07): registrations dialog, column "Check-in" → `PUT /api/admin/registrations/:id/checkin { checkedIn }` ticks an `accepted` registration off or takes it back — at any time (also after the end and for archived events), without a code; audit log `CHECKIN_REGISTRATION` / `UNDO_CHECKIN_REGISTRATION`. It writes the same fields as the code check-in.
 4. Discord (B-07): while an event with check-in runs, every accepted participant gets one DM with „Einchecken“ (scheduler, or right away when the code is generated during the event); the click checks in until the event is over. Rules shared with the code route in `utils/checkin.js`; details in [discord-integration](discord-integration.md).
 5. Check-ins (code, admin or Discord) feed the profile number "Check-ins", the badge `perfect-attendance`, the "Eingecheckt" chips and `checkin-stats`.

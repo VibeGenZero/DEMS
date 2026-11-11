@@ -8,7 +8,8 @@ const { loadBotSettings, rememberBotSettings } = require('../utils/botSettings')
 const { isEventOver } = require('../utils/eventListing');
 const { client, state } = require('./client');
 const { isReminderSchedulerRunning } = require('./scheduler');
-const { TIMEZONE } = require('./constants');
+
+const { getTimezone } = require('../utils/timezone');
 
 let presenceUpdateInterval = null;
 
@@ -44,7 +45,7 @@ async function getBotSettings() {
 }
 
 /**
- * Save bot settings to Firestore and apply them
+ * Save bot settings to the database and apply them
  */
 async function saveBotSettings(settings) {
     try {
@@ -109,8 +110,8 @@ async function buildActivityVariables() {
 
             if (next.startDate) {
                 const d = new Date(next.startDate);
-                vars['events.next.date'] = d.toLocaleDateString('de-DE', { day: '2-digit', month: 'short', timeZone: TIMEZONE });
-                vars['events.next.time'] = d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit', timeZone: TIMEZONE });
+                vars['events.next.date'] = d.toLocaleDateString('de-DE', { day: '2-digit', month: 'short', timeZone: getTimezone() });
+                vars['events.next.time'] = d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit', timeZone: getTimezone() });
             } else {
                 vars['events.next.date'] = 'TBD';
                 vars['events.next.time'] = 'TBD';
@@ -123,7 +124,7 @@ async function buildActivityVariables() {
             vars['events.list'] = listEvents.map(e => e.title).join(', ');
             vars['events.list.details'] = listEvents.map(e => {
                 const dateStr = e.startDate
-                    ? new Date(e.startDate).toLocaleDateString('de-DE', { day: '2-digit', month: 'short', timeZone: TIMEZONE })
+                    ? new Date(e.startDate).toLocaleDateString('de-DE', { day: '2-digit', month: 'short', timeZone: getTimezone() })
                     : 'TBD';
                 return `${e.title} (${dateStr})`;
             }).join(' | ');

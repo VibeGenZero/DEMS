@@ -7,15 +7,17 @@ const { db, doc, getDoc, updateDoc } = require('../firebaseAdmin');
 const { sendAutomaticDM } = require('../utils/botSettings');
 const { buildEventUrl } = require('../utils/eventUrl');
 const { parseTemplate } = require('../utils/template');
+const { withEventLock } = require('../utils/eventLock');
 const { client, state } = require('./client');
-const { TIMEZONE } = require('./constants');
+
+const { getTimezone } = require('../utils/timezone');
 
 /**
  * Send a guest invitation DM with Accept/Decline buttons
  * @param {string} guestUserId - Discord ID of the invited guest
  * @param {Object} registrant - {id, displayName} of the person sending the invite
  * @param {Object} event - event object with title and id
- * @param {string} registrationId - Firestore registration document ID
+ * @param {string} registrationId - registration document ID
  */
 async function sendGuestInvitation(guestUserId, registrant, event, registrationId) {
     if (!state.isReady) return false;
@@ -28,7 +30,7 @@ async function sendGuestInvitation(guestUserId, registrant, event, registrationI
             .setDescription(
                 `**${registrant.displayName}** hat dich als Gast zum Event eingeladen.\n\n` +
                 `**Event:** ${event.title}\n` +
-                (event.startDate ? `**Datum:** ${new Date(event.startDate).toLocaleString('de-DE', { timeZone: TIMEZONE })}\n` : '') +
+                (event.startDate ? `**Datum:** ${new Date(event.startDate).toLocaleString('de-DE', { timeZone: getTimezone() })}\n` : '') +
                 `\nMöchtest du die Einladung annehmen?`
             )
             .addFields({ name: '🔗 Event', value: `[Zur Event-Seite](${buildEventUrl(event.id)})` })
@@ -77,24 +79,40 @@ async function handleGuestButton(interaction, action, registrationId, guestId) {
         if (!regSnap.exists()) {
             return interaction.update({ content: '❌ Registrierung nicht mehr vorhanden.', components: [] });
         }
-        const reg = regSnap.data();
 
-        // Find this guest in pendingGuests
-        const pendingGuests = reg.pendingGuests || [];
-        const guestIndex = pendingGuests.findIndex(g => g.userId === guestId);
-        if (guestIndex === -1) {
+        // Read and write the guest lists under the event lock: two guests answering
+        // at the same time must not overwrite each other's answer
+        const outcome = await withEventLock(regSnap.data().eventId, async () => {
+            const fresh = await getDoc(regRef);
+            if (!fresh.exists()) return { missing: true };
+            const reg = fresh.data();
+            const pendingGuests = reg.pendingGuests || [];
+            const guestIndex = pendingGuests.findIndex(g => g.userId === guestId);
+            if (guestIndex === -1) return { handled: true };
+
+            if (action === 'guest_accept') {
+                // Move from pendingGuests to guests
+                pendingGuests[guestIndex].status = 'accepted';
+                const guests = reg.guests || [];
+                if (!guests.includes(guestId)) guests.push(guestId);
+                await updateDoc(regRef, { pendingGuests, guests });
+                return { reg, invitee: pendingGuests[guestIndex] };
+            }
+            const [invitee] = pendingGuests.splice(guestIndex, 1);
+            await updateDoc(regRef, { pendingGuests });
+            return { reg, invitee };
+        });
+        if (outcome.missing) {
+            return interaction.update({ content: '❌ Registrierung nicht mehr vorhanden.', components: [] });
+        }
+        if (outcome.handled) {
             return interaction.update({ content: '⚠️ Einladung bereits bearbeitet.', components: [] });
         }
+        const { reg, invitee } = outcome;
 
         if (action === 'guest_accept') {
-            // Move from pendingGuests to guests
-            pendingGuests[guestIndex].status = 'accepted';
-            const guests = reg.guests || [];
-            if (!guests.includes(guestId)) guests.push(guestId);
-            await updateDoc(regRef, { pendingGuests, guests });
-
             // Notify registrant
-            const inviteeName = pendingGuests[guestIndex].displayName || guestId;
+            const inviteeName = invitee.displayName || guestId;
             await sendAutomaticDM(reg.userId, `✅ **${inviteeName}** hat deine Gäste-Einladung für das Event angenommen!`);
 
             // Send configured acceptance message to the guest
@@ -132,9 +150,6 @@ async function handleGuestButton(interaction, action, registrationId, guestId) {
                 components: []
             });
         } else {
-            // Remove from pendingGuests
-            pendingGuests.splice(guestIndex, 1);
-            await updateDoc(regRef, { pendingGuests });
             // The open invitation no longer reserves a place
             require('../utils/announcementRefresh').notifyRegistrationsChanged(reg.eventId);
 

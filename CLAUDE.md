@@ -1,6 +1,6 @@
 # CLAUDE.md — DEMS (Dein Event-Management-System)
 
-DEMS lets a Discord community plan events: members log in with Discord, register on the website or directly in Discord (button + modal), admins manage events, registrations, announcements, bot settings and maintenance mode. One Node.js process runs an Express 5 REST API + static SPA and a discord.js bot; data lives in Firestore or a local SQLite file behind the same Firestore-style API.
+DEMS lets a Discord community plan events: members log in with Discord, register on the website or directly in Discord (button + modal), admins manage events, registrations, announcements, bot settings and maintenance mode. One Node.js process runs an Express 5 REST API + static SPA and a discord.js bot; data lives in PostgreSQL (production, set up by `compose.yaml`) or a local SQLite file (dev mock mode, tests) behind the same Firestore-style API.
 
 ## Start here: the wiki
 
@@ -24,7 +24,7 @@ The project knowledge graph is in **`docs/wiki/`**. Entry point: **`docs/wiki/in
 
 ```bash
 npm install
-npm run dev:mock     # no Discord/Firebase needed: personas + dummy data on http://localhost:3000
+npm run dev:mock     # no Discord/PostgreSQL needed: personas + dummy data on http://localhost:3000
 npm run dev:reset    # reset the dev mock database
 npm run dev          # real Discord (needs .env), nodemon
 npm start            # production-like
@@ -46,7 +46,7 @@ Node ≥ 22. No build step, no TypeScript, no linter config.
 
 ## Rules
 
-- **Data access only through `firebaseAdmin.js`** (Firestore modular API: `collection`, `doc`, `getDoc`, `getDocs`, `addDoc`, `setDoc`, `updateDoc`, `deleteDoc`, `query`, `where`, `orderBy`, `writeBatch`). Never import `better-sqlite3` or `firebase/firestore` directly. Dates are ISO strings. Filter/sort in memory instead of composite indexes; no `limit`.
+- **Data access only through `firebaseAdmin.js`** (Firestore-style API: `collection`, `doc`, `getDoc`, `getDocs`, `addDoc`, `setDoc`, `updateDoc`, `deleteDoc`, `query`, `where`, `orderBy`, `writeBatch`; the name is historical, Firestore is gone). Never import `pg`, `better-sqlite3` or a `db/*Storage.js` directly. Reshaping stored data for a release → a step in `db/migrations/`. Dates are ISO strings. Filter/sort in memory instead of composite indexes; no `limit`.
 - **Language:** everything users see (UI, API `{ error }` messages, Discord messages) in German; code, comments, commits and the wiki in English.
 - **Routes:** each handler has its own `try/catch` and answers `res.status(x).json({ error: '<German>' })`. Admin routes live in `routes/admin.js` (already guarded). Static paths go above `/:id`. Admin mutations call `addAuditLog(...)`.
 - **Express 5:** named wildcards (`/{*splat}`), `req.body` defaults to `{}` via a shim, never assign to `req.query`.

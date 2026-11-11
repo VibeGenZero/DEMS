@@ -1,6 +1,7 @@
 const { test, after } = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('path');
+const { PermissionsBitField, PermissionFlagsBits } = require('discord.js');
 const { createTempDir } = require('./helpers');
 
 // Mock mode with an own database; the empty cwd keeps a local .env out
@@ -68,6 +69,22 @@ test('a request that is no longer pending stays as it is', async () => {
     assert.equal(result.registration.status, 'accepted');
     assert.equal(await statusOf('svc-decided-reg'), 'accepted');
     assert.equal((await auditLogsFor('svc-decided-reg')).length, 0);
+});
+
+test('changeRegistrationStatus to waitlisted clears own and guest check-ins (#110)', async () => {
+    await seedEvent('svc-checkins');
+    const invitedAt = inHours(-2);
+    await seedRegistration('svc-checkins-reg', 'svc-checkins', 'svc-user', {
+        status: 'accepted', guests: ['svc-guest'], checkedIn: true, checkedInAt: inHours(-1),
+        guestCheckins: { 'svc-guest': { checkedIn: true, checkedInAt: inHours(-1), checkinInvitedAt: invitedAt } }
+    });
+
+    const result = await changeRegistrationStatus({ registrationId: 'svc-checkins-reg', status: 'waitlisted', actor: ADMIN });
+
+    assert.equal(result.ok, true);
+    const stored = (await getDoc(doc(db, 'registrations', 'svc-checkins-reg'))).data();
+    assert.deepEqual([stored.checkedIn, stored.checkedInAt], [false, null]);
+    assert.deepEqual(stored.guestCheckins['svc-guest'], { checkedIn: false, checkedInAt: null, checkinInvitedAt: invitedAt });
 });
 
 test('an unknown registration is reported as not found', async () => {
@@ -248,8 +265,8 @@ const { createFakeInteraction, dispatchInteraction } = require('./helpers');
 
 /** Click a decision button and wait for the private answer after the defer. */
 // Mock mode sets DISCORD_ADMIN_ROLE_ID to the admin role of the mock server
-async function click(action, registrationId, { userId = 'admin-1', roles = [process.env.DISCORD_ADMIN_ROLE_ID] } = {}) {
-    const interaction = createFakeInteraction({ kind: 'button', customId: `${action}:${registrationId}`, userId, roles });
+async function click(action, registrationId, { userId = 'admin-1', roles = [process.env.DISCORD_ADMIN_ROLE_ID], permissions = null } = {}) {
+    const interaction = createFakeInteraction({ kind: 'button', customId: `${action}:${registrationId}`, userId, roles, permissions });
     const lines = await captureLog(async () => {
         await dispatchInteraction(bot.client, interaction);
         const start = Date.now();
@@ -267,6 +284,16 @@ test('members without the admin role cannot decide', async () => {
 
     assert.equal(answer, '⛔ Nur Admins können Anmeldungen freigeben.');
     assert.equal(await statusOf('btn-guard-reg'), 'pending');
+});
+
+test('a Discord Administrator decides without the admin role', async () => {
+    await seedEvent('btn-administrator');
+    await seedRegistration('btn-administrator-reg', 'btn-administrator', 'btn-user');
+
+    const permissions = new PermissionsBitField(PermissionFlagsBits.Administrator);
+    await click('approval_reject', 'btn-administrator-reg', { userId: 'btn-owner', roles: ['role-member'], permissions });
+
+    assert.equal(await statusOf('btn-administrator-reg'), 'rejected');
 });
 
 test('"Annehmen" accepts, sends the DM and logs the admin', async () => {

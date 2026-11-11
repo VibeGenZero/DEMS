@@ -12,7 +12,8 @@ const { formatPlaces } = require('../utils/capacity');
 const { fitsIntoDiscordModal } = require('../utils/formFields');
 const { hasSlots, formatSlotLabel, buildRoster } = require('../utils/slotService');
 const { client, state } = require('./client');
-const { TIMEZONE, REGISTER_BUTTON_PREFIX, TENTATIVE_BUTTON_PREFIX, SLOT_BUTTON_PREFIX, ROSTER_NAMES_MAX } = require('./constants');
+const { REGISTER_BUTTON_PREFIX, TENTATIVE_BUTTON_PREFIX, SLOT_BUTTON_PREFIX, ROSTER_NAMES_MAX } = require('./constants');
+const { getTimezone } = require('../utils/timezone');
 const { toAccentColor, fitText, MESSAGE_TEXT_MAX } = require('./layout');
 
 /**
@@ -136,7 +137,7 @@ function buildEventAnnouncement(event, eventId, roster, intro = '') {
 function formatDiscordDate(value) {
     if (!value) return '';
     const date = new Date(value);
-    return Number.isNaN(date.getTime()) ? '' : date.toLocaleString('de-DE', { timeZone: TIMEZONE });
+    return Number.isNaN(date.getTime()) ? '' : date.toLocaleString('de-DE', { timeZone: getTimezone() });
 }
 
 /**

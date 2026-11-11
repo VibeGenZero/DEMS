@@ -1,63 +1,27 @@
-const { initializeApp } = require('firebase/app');
-const {
-  getFirestore,
-  collection,
-  doc,
-  getDoc,
-  getDocs,
-  addDoc,
-  setDoc,
-  updateDoc,
-  deleteDoc,
-  query,
-  where,
-  orderBy,
-  writeBatch
-} = require('firebase/firestore');
+/**
+ * The one entry point to the data store.
+ *
+ * The name is historical: DEMS once ran on Firebase Firestore. Today this
+ * file only picks the store and re-exports its Firestore-style API (see
+ * db/documentStore.js): PostgreSQL in production, SQLite for dev mock mode
+ * and tests (rules in db/config.js). Callers only ever require this file.
+ */
+const { postgresConfigFromEnv, selectStoreKind, describeStore } = require('./db/config');
 
-// Firebase configuration from environment variables
-const firebaseConfig = {
-  apiKey: process.env.FIREBASE_API_KEY,
-  authDomain: process.env.FIREBASE_AUTH_DOMAIN,
-  projectId: process.env.FIREBASE_PROJECT_ID,
-  storageBucket: process.env.FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID,
-  appId: process.env.FIREBASE_APP_ID
-};
+const kind = selectStoreKind(process.env);
 
-// Prüfen, welche Firebase-Werte gesetzt sind
-const providedKeys = Object.entries(firebaseConfig).filter(([, v]) => v).map(([k]) => k);
-const missingKeys = Object.entries(firebaseConfig).filter(([, v]) => !v).map(([k]) => k);
-
-if (providedKeys.length === 0) {
-  // Keine Firebase-Konfiguration hinterlegt → lokale SQLite-Datenbank als Fallback.
-  console.log('ℹ️ Keine Firebase-Konfiguration gefunden — nutze lokale SQLite-Datenbank (SQLITE_PATH).');
-  module.exports = require('./db/sqliteAdapter');
-} else if (missingKeys.length > 0) {
-  // Teilweise gesetzt → vermutlich ein Konfigurationsfehler, nicht stillschweigend
-  // auf SQLite ausweichen.
-  console.error(`❌ Unvollständige Firebase-Konfiguration in .env: ${missingKeys.join(', ')}`);
-  console.error('   Entweder alle FIREBASE_*-Werte setzen oder alle leer lassen (dann wird SQLite genutzt).');
+if (kind === 'refuse') {
+  console.error('❌ Keine PostgreSQL-Verbindung konfiguriert. In Produktion braucht DEMS PostgreSQL: '
+    + 'DATABASE_URL oder PGHOST setzen (compose.yaml macht das automatisch).');
   process.exit(1);
-} else {
-  // Vollständige Firebase-Konfiguration → Firestore wie bisher.
-  console.log('✅ Datenspeicher: Firebase Firestore');
-  const app = initializeApp(firebaseConfig);
-  const db = getFirestore(app);
+}
 
-  module.exports = {
-    db,
-    collection,
-    doc,
-    getDoc,
-    getDocs,
-    addDoc,
-    setDoc,
-    updateDoc,
-    deleteDoc,
-    query,
-    where,
-    orderBy,
-    writeBatch
-  };
+console.log(`✅ Datenspeicher: ${describeStore(process.env)}`);
+
+if (kind === 'postgres') {
+  const { createDocumentStore } = require('./db/documentStore');
+  const { createPostgresStorage } = require('./db/postgresStorage');
+  module.exports = createDocumentStore(createPostgresStorage(postgresConfigFromEnv(process.env)));
+} else {
+  module.exports = require('./db/sqliteAdapter');
 }

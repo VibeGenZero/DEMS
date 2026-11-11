@@ -383,3 +383,23 @@ test('a guest button pressed by somebody else is refused', async () => {
     await dispatchInteraction(bot.client, interaction);
     assert.equal(interaction.calls[0][1].content, '❌ Diese Einladung ist nicht für dich.');
 });
+
+test('two guests accepting at the same time are both added', async () => {
+    await setDoc(doc(db, 'events', 'int-guest-both'), { title: 'Doppel-Abend', status: 'active', approvalMode: 'instant', maxParticipants: 6 });
+    await seedRegistration('int-guest-both-host', 'int-guest-both', 'int-host-3', {
+        status: 'accepted',
+        pendingGuests: [
+            { userId: 'int-guest-a', displayName: 'Gast A', avatar: '', status: 'pending' },
+            { userId: 'int-guest-b', displayName: 'Gast B', avatar: '', status: 'pending' }
+        ]
+    });
+
+    const accept = (guestId) => dispatchInteraction(bot.client, createFakeInteraction({
+        kind: 'button', customId: `guest_accept:int-guest-both-host:${guestId}`, userId: guestId
+    }));
+    await Promise.all([accept('int-guest-a'), accept('int-guest-b')]);
+
+    const registration = (await getDoc(doc(db, 'registrations', 'int-guest-both-host'))).data();
+    assert.deepEqual([...registration.guests].sort(), ['int-guest-a', 'int-guest-b']);
+    assert.deepEqual(registration.pendingGuests.map(guest => guest.status), ['accepted', 'accepted']);
+});

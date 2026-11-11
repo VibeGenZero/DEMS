@@ -8,7 +8,8 @@
  */
 const crypto = require('crypto');
 const { db, doc, getDoc, updateDoc } = require('../firebaseAdmin');
-const { GUILD, ROLES, CHANNELS, PERSONAS, MEMBERS, buildScheduledEvents, findMember } = require('./mockGuild');
+const { GUILD, ROLES, CHANNELS, CATEGORIES, PERSONAS, MEMBERS, buildScheduledEvents, findMember } = require('./mockGuild');
+const { getTimezone } = require('../utils/timezone');
 
 const LOG_PREFIX = '\x1b[35m[MOCK-DISCORD]\x1b[0m';
 const startedAt = new Date();
@@ -86,6 +87,12 @@ async function startBot() {
     return true;
 }
 
+// A new token or guild (#138): the simulated bot is back at once
+async function restartBot() {
+    mockLog(`Bot simuliert neu angemeldet — verbunden mit "${GUILD.name}"`);
+    return { ok: true, guildName: GUILD.name };
+}
+
 // The simulated bot is ready at once
 async function whenBotSettled() {
     return true;
@@ -114,6 +121,10 @@ async function getPublicGuildChannels() {
     return listChannels(channel => channel.isPublic);
 }
 
+async function getGuildCategories() {
+    return CATEGORIES.map(({ id, name }) => ({ id, name }));
+}
+
 async function getGuildScheduledEvents() {
     return buildScheduledEvents(new Date());
 }
@@ -128,7 +139,8 @@ async function getUserRoles(userId) {
 
 async function fetchMemberRoleIds(userId) {
     const member = findMember(userId);
-    return member ? { isMember: true, roleIds: [...member.roles] } : { isMember: false, roleIds: [] };
+    // The personas are no Discord Administrators: admin rights come from the admin role
+    return member ? { isMember: true, roleIds: [...member.roles], isAdministrator: false } : { isMember: false, roleIds: [], isAdministrator: false };
 }
 
 async function isGuildMember(userId) {
@@ -282,8 +294,8 @@ async function sendCheckinInvitations(eventId) {
     const event = eventSnap.data();
     return withEventLock(`checkin:${eventId}`, async () => {
         const invitees = await listCheckinInvitees(eventId);
-        for (const { id, userId } of invitees) {
-            await markInvited(id);
+        for (const { id, userId, guestId } of invitees) {
+            await markInvited(id, new Date(), guestId);
             mockLog(`Check-in-Einladung an ${describeUser(userId)} ("${event.title}") mit Button „Einchecken“`);
         }
         return invitees.length;
@@ -336,7 +348,7 @@ async function sendWaitlistOffer(registrationId) {
     const registration = regSnap.data();
     const eventSnap = await getDoc(doc(db, 'events', registration.eventId));
     if (!eventSnap.exists() || !registration.offer) return false;
-    const until = new Date(registration.offer.expiresAt).toLocaleString('de-DE', { timeZone: process.env.TIMEZONE || 'Europe/Berlin' });
+    const until = new Date(registration.offer.expiresAt).toLocaleString('de-DE', { timeZone: getTimezone() });
     mockLog(`Platz angeboten: ${describeUser(registration.userId)} für "${eventSnap.data().title}" bis ${until}`,
         { buttons: [`offer_confirm:${registrationId}`, `offer_decline:${registrationId}`, 'Zum Event'] });
     dmsSent++;
@@ -420,12 +432,14 @@ async function setScheduledEventStatus(event, target) {
 
 module.exports = {
     startBot,
+    restartBot,
     whenBotSettled,
     getGuildName,
     getGuildIconUrl,
     getGuildRoles,
     getGuildChannels,
     getPublicGuildChannels,
+    getGuildCategories,
     getGuildScheduledEvents,
     getUserRoles,
     fetchMemberRoleIds,

@@ -20,7 +20,7 @@ see_also: [security, frontend-app, bot, reminders-presence]
 
 | # | Pitfall | Where to read |
 |---|---|---|
-| 12 | plain-HTTP access from a non-localhost host hangs the SPA (CSP `upgrade-insecure-requests`) | [security](../concepts/security.md) |
+| 12 | plain-HTTP access from a non-localhost host hangs the SPA (CSP `upgrade-insecure-requests`); the setup wizard of a fresh installation (#138) needs HTTPS in production even on localhost (Secure session cookie; the PIN step warns) | [security](../concepts/security.md) |
 | 15 | `formAnswers` keyed by field label | [form-fields](../concepts/form-fields.md) |
 | 16 | Express route order: static paths must come before `/:id` | [routes-events](../modules/routes-events.md) |
 | 17 | `GET /api/events/:id` ignores `?status=` (frontend sends `?status=all`) | routes/events.js |

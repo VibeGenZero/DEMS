@@ -8,6 +8,7 @@
 const { parseDate } = require('./eventListing');
 const { placesOf } = require('./capacity');
 const { isOver, trackedEventIds } = require('./memberOverview');
+const { toParticipations } = require('./participations');
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -69,15 +70,18 @@ function evaluatedEvents(eventsById, range, now = new Date()) {
  *
  * @param {string} id -> Event id.
  * @param {Object} event -> Event data.
- * @param {Array<Object>} registrations -> Its registrations.
+ * @param {Array<Object>} registrations -> Its registrations (for the places).
+ * @param {Array<Object>} people -> Its participations: members and listed guests (#110).
  * @param {boolean} tracked -> Whether attendance was recorded.
- * @returns {Object} -> Row of the event table; nothing secret.
+ * @returns {Object} -> Row of the event table; nothing secret. `accepted`, `checkedIn` and `noShows` count persons.
  */
-function eventRow(id, event, registrations, tracked) {
-    const accepted = registrations.filter(registration => registration.status === 'accepted');
-    const checkedIn = accepted.filter(registration => registration.checkedIn === true).length;
+function eventRow(id, event, registrations, people, tracked) {
+    const accepted = people.filter(person => person.status === 'accepted');
+    const checkedIn = accepted.filter(person => person.checkedIn === true).length;
     const placesOffered = Number(event.maxParticipants) > 0 ? Number(event.maxParticipants) : 0;
-    const placesTaken = accepted.reduce((sum, registration) => sum + placesOf(registration), 0);
+    const placesTaken = registrations
+        .filter(registration => registration.status === 'accepted')
+        .reduce((sum, registration) => sum + placesOf(registration), 0);
     return {
         id,
         title: String(event.title || ''),
@@ -94,13 +98,13 @@ function eventRow(id, event, registrations, tracked) {
 }
 
 /**
- * Members with the most Teilnahmen.
+ * Members with the most Teilnahmen; a guest place counts for the guest (#110).
  */
-function topMembers(rows, registrationsByEvent, users) {
+function topMembers(rows, peopleByEvent, users) {
     const profiles = new Map(users.map(user => [user.id, user]));
     const counts = new Map();
     for (const row of rows) {
-        for (const registration of registrationsByEvent.get(row.id) || []) {
+        for (const registration of peopleByEvent.get(row.id) || []) {
             if (registration.status !== 'accepted' || !registration.userId) continue;
             const entry = counts.get(registration.userId) || { attended: 0, checkedIn: 0, fallbackName: registration.userName };
             entry.attended += 1;
@@ -159,14 +163,19 @@ function categoryList(rows, registrationsByEvent, tracked) {
  */
 function buildInsights({ users = [], registrations = [], eventsById, range = DEFAULT_RANGE, now = new Date() }) {
     const tracked = trackedEventIds(eventsById, registrations);
-    const registrationsByEvent = new Map();
-    for (const registration of registrations) {
-        if (!registrationsByEvent.has(registration.eventId)) registrationsByEvent.set(registration.eventId, []);
-        registrationsByEvent.get(registration.eventId).push(registration);
-    }
+    const groupByEvent = (entries) => {
+        const groups = new Map();
+        for (const entry of entries) {
+            if (!groups.has(entry.eventId)) groups.set(entry.eventId, []);
+            groups.get(entry.eventId).push(entry);
+        }
+        return groups;
+    };
+    const registrationsByEvent = groupByEvent(registrations);
+    const peopleByEvent = groupByEvent(toParticipations(registrations));
 
     const rows = evaluatedEvents(eventsById, range, now)
-        .map(([id, event]) => eventRow(id, event, registrationsByEvent.get(id) || [], tracked.has(id)));
+        .map(([id, event]) => eventRow(id, event, registrationsByEvent.get(id) || [], peopleByEvent.get(id) || [], tracked.has(id)));
 
     const trackedRows = rows.filter(row => tracked.has(row.id));
     const trackedAccepted = trackedRows.reduce((sum, row) => sum + row.accepted, 0);
@@ -189,7 +198,7 @@ function buildInsights({ users = [], registrations = [], eventsById, range = DEF
             placesOffered,
             occupancyRate: rate(placesTaken, placesOffered)
         },
-        members: topMembers(rows, registrationsByEvent, users),
+        members: topMembers(rows, peopleByEvent, users),
         categories: categoryList(rows, registrationsByEvent, tracked),
         events: rows
     };

@@ -1,21 +1,73 @@
 services:
+  # One-shot: creates the database password on the first start and keeps it afterwards
+  db-secret:
+    image: postgres:18-alpine
+    restart: "no"
+    volumes:
+      - dems-secrets:/secrets
+    command:
+      - sh
+      - -c
+      - |
+        if [ ! -s /secrets/db_password ]; then
+          head -c 32 /dev/urandom | base64 | tr '+/' '-_' | tr -d '=\n' > /secrets/db_password
+          echo "Neues Datenbank-Passwort erzeugt."
+        fi
+        chmod 0444 /secrets/db_password
+
+  postgres:
+    image: postgres:18-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: dems
+      POSTGRES_USER: dems
+      POSTGRES_PASSWORD_FILE: /run/dems-secrets/db_password
+    volumes:
+      # PostgreSQL 18 images keep their data below /var/lib/postgresql/18
+      - dems-pg:/var/lib/postgresql
+      - dems-secrets:/run/dems-secrets:ro
+    # No ports: PostgreSQL is only reachable inside the compose network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dems -d dems"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    depends_on:
+      db-secret:
+        condition: service_completed_successfully
+
   dems:
-    build:
-      context: .
-      target: runtime
-    image: dems:latest
+    # Published image (Docker Hub): latest = releases, beta = pre-releases (DEMS_TAG in .env).
+    # Update: docker compose pull && docker compose up -d
+    # Build from source instead: docker compose -f compose.yaml -f compose.build.yaml up -d --build
+    image: moritakahashi/dems:${DEMS_TAG:-latest}
     init: true
     restart: unless-stopped
-    env_file: .env
+    # Optional (#138): without .env DEMS starts its setup wizard and keeps the
+    # values in PostgreSQL; a value set in .env always wins
+    env_file:
+      - path: .env
+        required: false
     environment:
       # Fixed inside the container; change the host port via DEMS_PORT instead
       NODE_ENV: production
       PORT: 3000
-      SQLITE_PATH: /app/data/dems.sqlite
+      PGHOST: postgres
+      PGPORT: 5432
+      PGDATABASE: dems
+      PGUSER: dems
+      PGPASSWORD_FILE: /run/dems-secrets/db_password
     ports:
       - "${DEMS_PORT:-3000}:3000"
     volumes:
+      # Uploaded banners
       - dems-data:/app/data
+      - dems-secrets:/run/dems-secrets:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
 
 volumes:
   dems-data:
+  dems-pg:
+  dems-secrets:
