@@ -120,6 +120,8 @@ docker run --rm -v dems_dems-data:/data -v $PWD:/backup alpine tar czf /backup/d
 
 The version is one SemVer string in three places: `package.json`, `package-lock.json` and `updates.json` (the news dialog shows it). Bump it with `npm version <version> --no-git-tag-version`, then write the matching release entry in `updates.json`. The git tag of a release carries the same text without a leading `v` (e.g. `3.0.0-beta.3`); a build number is not part of the version — an image's commit sha tag identifies the build (a `+build` suffix is no valid image tag).
 
+Release process: bump the version and write the `updates.json` entry on the release branch → merge to `main` (CI pushes `edge`) → `git tag <version> && git push origin <version>` → the `publish` job checks the tag against the version files, pushes `<version>`, `sha-<7>` and `latest` (or `beta` for a pre-release) and creates the GitHub release from the `updates.json` news ([ci](ci.md)). Installations see the new version in the admin "System" view within 12 hours (`utils/updateCheck.js`); a pre-release install told about a final release is asked to set `DEMS_TAG=latest`.
+
 Pre-releases are the beta series towards 3.0 (`3.0.0-beta.1`, `3.0.0-beta.2`, …) and the release candidate (`3.0.0-rc.1`). They run on the test environment only; the live system receives the final releases (prioplan decision 6).
 
 Published image: the public Docker Hub repository `moritakahashi/dems` (no `docker login` needed). `latest` is the live release; a pre-release image gets its version tag and the moving tag `beta`, never `latest`; every image also carries `sha-<7-char commit>`; `edge` follows `main` and is meant for the test environment only. A compose file picks the channel with `DEMS_TAG` (default `latest`).
