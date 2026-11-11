@@ -124,6 +124,8 @@ Release process: bump the version and write the `updates.json` entry on the rele
 
 Pre-releases are the beta series towards 3.0 (`3.0.0-beta.1`, `3.0.0-beta.2`, …) and the release candidate (`3.0.0-rc.1`). They run on the test environment only; the live system receives the final releases (prioplan decision 6).
 
+3.0.0 (2026-11-11) is the first release published by the `publish` job: its news entry sums up the whole 3.0 series for members coming from 2.6.0, because the live system skipped the pre-releases.
+
 Published image: the public Docker Hub repository `moritakahashi/dems` (no `docker login` needed). `latest` is the live release; a pre-release image gets its version tag and the moving tag `beta`, never `latest`; a release image also carries `sha-<7-char commit>`; `edge` (+ `edge-<7>`) follows `main` and is meant for the test environment only. A compose file picks the channel with `DEMS_TAG` (default `latest`).
 
 Ordering note: `test/updatesData.test.js` orders the history like SemVer: a release is newer than its pre-releases, and pre-release parts compare one by one (numbers as numbers, words alphabetically), so `3.0.0-rc.1` > `3.0.0-beta.3` and `3.0.0-beta.10` > `3.0.0-beta.9`. The history keeps every published pre-release.
