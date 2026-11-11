@@ -3,7 +3,7 @@ id: ci
 title: CI — GitHub Actions, GitLab pipeline and runner
 type: ops
 tags: [ci, github-actions, gitlab, pipeline, runner, docker-in-docker, auto-devops]
-sources: [.github/workflows/ci.yml, .gitlab-ci.yml, ci/runner/compose.yaml, ci/runner/config.toml.example]
+sources: [.github/workflows/ci.yml, scripts/release.js, .gitlab-ci.yml, ci/runner/compose.yaml, ci/runner/config.toml.example]
 depends_on: [testing, docker]
 see_also: [deployment]
 ---

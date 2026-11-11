@@ -109,6 +109,7 @@ sources: [scripts/wiki-graph.js, docs/wiki/graph.json, CLAUDE.md]
 | `test/*` | testing |
 | `e2e/*`, `playwright.config.js` | testing |
 | `scripts/style-snapshot.js` | testing |
+| `scripts/release.js` | ci, deployment |
 | `Dockerfile`, `compose*.yaml` | docker, deployment |
 | `.github/workflows/*`, `.gitlab-ci.yml`, `ci/runner/*` | ci |
 | `.env.example` | configuration |
