@@ -134,6 +134,12 @@ test('a fork can point the check at its own releases', async () => {
     assert.equal(stub.calls[0].url, 'https://api.github.com/repos/someone/fork/releases?per_page=30');
 });
 
+test('servers started by the test helpers never ask GitHub unless a test says so', () => {
+    const { cleanEnv } = require('./helpers');
+    assert.equal(cleanEnv().UPDATE_CHECK, 'false');
+    assert.equal(cleanEnv({ UPDATE_CHECK: 'true' }).UPDATE_CHECK, 'true');
+});
+
 test('start schedules the first check and stop clears it', async (t) => {
     t.mock.timers.enable({ apis: ['setTimeout', 'setInterval'] });
     const stub = fakeFetch([release('3.0.1')]);

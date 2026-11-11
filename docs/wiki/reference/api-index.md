@@ -88,7 +88,7 @@ Only in setup mode (afterwards 409 `Die Einrichtung ist bereits abgeschlossen.`)
 | Method | Path |
 |---|---|
 | GET | `/api/admin/roles`, `/channels`, `/stats`, `/all-events`, `/import/discord-events` |
-| GET | `/api/admin/system/settings`, `/system/invite-url` (#138) |
+| GET | `/api/admin/system/settings`, `/system/invite-url` (#138), `/system/update-status` (newest GitHub release vs. running version) |
 | PUT | `/api/admin/system/settings` (#138, needs `password` = admin reset password), `/api/admin/privacy` (#138, `{ markdown }`) |
 | POST | `/api/admin/events`, `/events/preview` |
 | POST | `/api/admin/uploads/banner` (W-12, raw image body ≤ 5 MB) |

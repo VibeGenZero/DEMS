@@ -40,6 +40,13 @@ WORKDIR /app
 ENV NODE_ENV=production \
     PORT=3000
 
+# Set by the publish job (.github/workflows/ci.yml): edge | beta | latest and the
+# commit sha. On edge the update check is off (utils/updateCheck.js).
+ARG DEMS_CHANNEL=
+ARG DEMS_COMMIT=
+ENV DEMS_CHANNEL=$DEMS_CHANNEL \
+    DEMS_COMMIT=$DEMS_COMMIT
+
 COPY --from=deps --chown=node:node /app/node_modules ./node_modules
 COPY --chown=node:node . .
 

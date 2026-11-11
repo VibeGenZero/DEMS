@@ -10,6 +10,7 @@ const { buildBotInviteUrl } = require('../utils/botPermissions');
 const systemConfig = require('../utils/systemConfig');
 const { SNOWFLAKE, normalizeSystemValue, botLoginError } = require('../utils/systemValues');
 const { savePrivacyPolicy } = require('../utils/privacyPolicy');
+const { getUpdateStatus } = require('../utils/updateCheck');
 
 const router = express.Router();
 
@@ -98,6 +99,19 @@ router.get('/system/invite-url', (req, res) => {
     } catch (err) {
         console.error('System invite URL error:', err);
         res.status(500).json({ error: 'Der Einladungslink konnte nicht erstellt werden.' });
+    }
+});
+
+/**
+ * GET /api/admin/system/update-status — newest DEMS release vs. the running
+ * version (utils/updateCheck.js); answers from memory, never waits for GitHub
+ */
+router.get('/system/update-status', (req, res) => {
+    try {
+        res.json(getUpdateStatus());
+    } catch (err) {
+        console.error('Update status error:', err);
+        res.status(500).json({ error: 'Versionsinfo konnte nicht geladen werden.' });
     }
 });
 

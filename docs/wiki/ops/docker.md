@@ -18,7 +18,7 @@ see_also: [deployment, dev-mock-mode]
 | `build-base` | node:24-bookworm-slim | python3/make/g++ (fallback build of better-sqlite3), `package*.json` |
 | `deps` | build-base | `npm ci --omit=dev` |
 | `dev` | build-base | `npm ci` (incl. nodemon), `COPY . .`, `NODE_ENV=development`, `CMD npx nodemon --legacy-watch dev/start.js` |
-| `runtime` (last = default) | node:24-bookworm-slim | prod `node_modules` from `deps`, app files, `USER node`, `VOLUME /app/data`, `HEALTHCHECK` on `/healthz`, `CMD node server.js` |
+| `runtime` (last = default) | node:24-bookworm-slim | prod `node_modules` from `deps`, app files, `USER node`, `VOLUME /app/data`, `HEALTHCHECK` on `/healthz`, build args `DEMS_CHANNEL`, `DEMS_COMMIT` → env of the same name (set by the publish job; `edge` turns the update check off), `CMD node server.js` |
 
 `runtime` must stay the LAST stage (default target); `compose.yaml` additionally pins `target: runtime`.
 

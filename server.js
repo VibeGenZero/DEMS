@@ -16,6 +16,7 @@ const { startBot, whenBotSettled, startReminderScheduler, stopBot, getGuildName,
 const { startPollScheduler, stopPollScheduler } = require('./utils/pollStore');
 const { startArchiveScheduler, stopArchiveScheduler } = require('./utils/eventArchive');
 const { startOfferScheduler, stopOfferScheduler } = require('./utils/waitlistOffers');
+const { startUpdateCheck, stopUpdateCheck } = require('./utils/updateCheck');
 const { createCsrfToken, createRoleRefresh } = require('./middleware/auth');
 const { sharedSessionStore } = require('./utils/sessionStore');
 const store = require('./firebaseAdmin');
@@ -360,6 +361,8 @@ async function start() {
     startArchiveScheduler({ waitFor: whenBotSettled() });
     // Waitlist offers that were not confirmed in time go to the next member (B-15)
     startOfferScheduler({ waitFor: whenBotSettled() });
+    // Tells admins about a newer DEMS release (GitHub releases, every 12 h; off in mock mode)
+    startUpdateCheck({ mockMode: IS_MOCK_MODE });
     // Uploaded banners no event uses and older than a day (wizard closed without saving, W-12)
     sweepOrphanBanners().then((count) => {
         if (count > 0) console.log(`🧹 ${count} verwaiste Banner gelöscht.`);
@@ -379,6 +382,7 @@ function gracefulShutdown(signal) {
         stopPollScheduler();
         stopArchiveScheduler();
         stopOfferScheduler();
+        stopUpdateCheck();
         await store.close().catch((err) => console.error('⚠️ Datenbank konnte nicht sauber geschlossen werden:', err.message));
         console.log('✅ Bot, Scheduler & Datenbank gestoppt. Auf Wiedersehen!');
         process.exit(0);
