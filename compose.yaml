@@ -37,10 +37,10 @@ services:
         condition: service_completed_successfully
 
   dems:
-    build:
-      context: .
-      target: runtime
-    image: dems:latest
+    # Published image (Docker Hub): latest = releases, beta = pre-releases (DEMS_TAG in .env).
+    # Update: docker compose pull && docker compose up -d
+    # Build from source instead: docker compose -f compose.yaml -f compose.build.yaml up -d --build
+    image: moritakahashi/dems:${DEMS_TAG:-latest}
     init: true
     restart: unless-stopped
     # Optional (#138): without .env DEMS starts its setup wizard and keeps the

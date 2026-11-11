@@ -3,13 +3,13 @@ id: deployment
 title: Deployment — VPS with Docker (Hostinger + Traefik example)
 type: ops
 tags: [deployment, vps, hostinger, traefik, https, docker-hub, production]
-sources: [compose.yaml, Dockerfile, server.js, public/js/pages/discord-guide.js]
+sources: [compose.yaml, compose.build.yaml, Dockerfile, server.js, public/js/pages/discord-guide.js]
 depends_on: [docker, configuration]
 see_also: [security, known-issues]
 ---
 # Deployment — VPS with Docker (Hostinger + Traefik example)
 
-> TL;DR: Run the private image `moritakahashi/dems` (or build from source) with a compose file that passes an optional `.env` into the container (`env_file`; without one DEMS starts its setup wizard, #138), runs PostgreSQL next to DEMS (password generated on the first start) and sits behind a TLS reverse proxy. On a Hostinger VPS the Docker Manager stores projects under `/docker/<project>/` and Traefik routes `*.hstgr.cloud` hosts via container labels. One SemVer version lives in package, news and git tag; pre-release images carry the moving tag `beta`, live releases `latest`.
+> TL;DR: Run the public image `moritakahashi/dems` (or build from source with `compose.build.yaml`) with a compose file that passes an optional `.env` into the container (`env_file`; without one DEMS starts its setup wizard, #138), runs PostgreSQL next to DEMS (password generated on the first start) and sits behind a TLS reverse proxy. On a Hostinger VPS the Docker Manager stores projects under `/docker/<project>/` and Traefik routes `*.hstgr.cloud` hosts via container labels. One SemVer version lives in package, news and git tag; pre-release images carry the moving tag `beta`, live releases `latest`.
 
 ## Requirements
 
@@ -104,12 +104,12 @@ volumes:
 
 Traefik labels go on `dems` only; `postgres` publishes no port. Switching an existing 2.x/rc install over: replace the old file with this one, remove `FIREBASE_*` from `.env`, `docker compose up -d` — the database starts empty (3.0 has no Firestore import).
 
-Hostinger's own templates use `${COMPOSE_PROJECT_NAME}.${TRAEFIK_HOST}` for the host rule; a fixed host works as well. Pulling the private image needs `docker login` on the VPS (read-only access token).
+Hostinger's own templates use `${COMPOSE_PROJECT_NAME}.${TRAEFIK_HOST}` for the host rule; a fixed host works as well.
 
 ## Update / operate
 
 ```bash
-cd /docker/dems && docker compose pull && docker compose up -d --force-recreate
+cd /docker/dems && docker compose pull && docker compose up -d --force-recreate   # the admin "System" view shows when a newer release exists
 docker compose logs -f
 docker inspect dems --format '{{range .Config.Env}}{{println .}}{{end}}' | cut -d= -f1   # which variables arrived (names only)
 docker compose exec -T postgres pg_dump -U dems dems > dems-db-backup.sql                                    # database backup
@@ -122,7 +122,7 @@ The version is one SemVer string in three places: `package.json`, `package-lock.
 
 Pre-releases are the beta series towards 3.0 (`3.0.0-beta.1`, `3.0.0-beta.2`, …) and the release candidate (`3.0.0-rc.1`). They run on the test environment only; the live system receives the final releases (prioplan decision 6).
 
-Published image: the private Docker Hub repository `moritakahashi/dems`. `latest` is the live release; a pre-release image gets its version tag and the moving tag `beta`, never `latest`; every image also carries its commit sha.
+Published image: the public Docker Hub repository `moritakahashi/dems` (no `docker login` needed). `latest` is the live release; a pre-release image gets its version tag and the moving tag `beta`, never `latest`; every image also carries `sha-<7-char commit>`; `edge` follows `main` and is meant for the test environment only. A compose file picks the channel with `DEMS_TAG` (default `latest`).
 
 Ordering note: `test/updatesData.test.js` orders the history like SemVer: a release is newer than its pre-releases, and pre-release parts compare one by one (numbers as numbers, words alphabetically), so `3.0.0-rc.1` > `3.0.0-beta.3` and `3.0.0-beta.10` > `3.0.0-beta.9`. The history keeps every published pre-release.
 

@@ -143,27 +143,30 @@ Tests: `npm test`
 
 ## 🐳 Docker
 
-Voraussetzung ist nur Docker (inkl. Compose). Die Konfiguration kommt wie oben aus der `.env`.
+Voraussetzung ist nur Docker (inkl. Compose). Den Quellcode brauchst du nicht: Compose holt das fertige Image `moritakahashi/dems` von Docker Hub.
 
 ```bash
-cp .env.example .env   # ausfüllen, mindestens SESSION_SECRET
-docker compose up -d --build
-docker compose logs -f dems
+mkdir dems && cd dems
+curl -O https://raw.githubusercontent.com/VibeGenZero/DEMS/main/compose.yaml
+docker compose up -d
+docker compose logs -f dems   # zeigt beim ersten Start die Setup-PIN
 ```
 
+*   Ohne `.env` startet DEMS den Einrichtungsassistenten im Browser (Setup-PIN aus dem Log). Eine `.env` nach dem Muster von [`.env.example`](.env.example) ist optional; ein dort gesetzter Wert hat Vorrang.
 *   Die App läuft unter `http://localhost:3000`. Einen anderen Host-Port setzt du über `DEMS_PORT` in der `.env`.
+*   Update: `docker compose pull && docker compose up -d`. Admins sehen unter „System“, wenn es eine neuere Version gibt.
+*   Vorabversionen (Beta, Release Candidate): `DEMS_TAG=beta` in der `.env`, Standard ist `latest` (fertige Releases).
+*   Aus dem Quellcode bauen statt das Image zu ziehen (im geklonten Repo): `docker compose -f compose.yaml -f compose.build.yaml up -d --build`.
 *   Compose startet drei Dienste: `db-secret` erzeugt beim ersten Start ein zufälliges Datenbank-Passwort (Volume `dems-secrets`), `postgres` hält die Daten (Volume `dems-pg`, kein Port nach außen), `dems` ist die App. Hochgeladene Banner liegen im Volume `dems-data`. Alles überlebt Rebuilds und Updates.
 *   Backup der Datenbank: `docker compose exec -T postgres pg_dump -U dems dems > dems-backup.sql`.
 *   Der Container hat einen Healthcheck auf `GET /healthz` (`docker compose ps` zeigt den Status).
 *   Stoppen mit `docker compose down` – die Daten bleiben erhalten. `docker compose down -v` löscht auch das Volume.
-*   Update: `git pull && docker compose up -d --build`.
 
 Ohne Compose braucht der Container einen eigenen PostgreSQL-Server:
 
 ```bash
-docker build -t dems .
 docker run -d --init --env-file .env -e PORT=3000 -e DATABASE_URL=postgres://dems:passwort@host:5432/dems \
-  -p 3000:3000 -v dems-data:/app/data --name dems dems
+  -p 3000:3000 -v dems-data:/app/data --name dems moritakahashi/dems:latest
 ```
 
 ## 🤝 Mitwirken

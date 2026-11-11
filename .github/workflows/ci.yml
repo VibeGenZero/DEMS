@@ -86,8 +86,8 @@ jobs:
         if: steps.scope.outputs.run == 'true'
         run: |
           rm -f .env
-          docker compose -f compose.yaml up --detach --build
-          container=$(docker compose -f compose.yaml ps -q dems)
+          docker compose -f compose.yaml -f compose.build.yaml up --detach --build
+          container=$(docker compose -f compose.yaml -f compose.build.yaml ps -q dems)
           for i in $(seq 1 40); do
             status=$(docker inspect --format '{{.State.Health.Status}}' "$container")
             echo "health: $status"
@@ -95,7 +95,7 @@ jobs:
             if [ "$status" = unhealthy ]; then break; fi
             sleep 3
           done
-          docker compose -f compose.yaml logs
+          docker compose -f compose.yaml -f compose.build.yaml logs
           exit 1
       # A fresh installation answers in setup mode and prints its setup PIN (#138)
       - name: Check the setup mode of a fresh installation
@@ -104,4 +104,4 @@ jobs:
           status=$(curl --silent --show-error http://localhost:3000/api/setup/status)
           echo "$status"
           echo "$status" | grep -q '"required":true'
-          docker compose -f compose.yaml logs dems | grep -q 'Setup-PIN: [0-9]\{8\}'
+          docker compose -f compose.yaml -f compose.build.yaml logs dems | grep -q 'Setup-PIN: [0-9]\{8\}'

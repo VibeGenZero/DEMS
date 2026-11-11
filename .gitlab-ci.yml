@@ -75,9 +75,9 @@ docker-build:
     # Start compose.yaml (password init, PostgreSQL, DEMS) and wait for the DEMS
     # HEALTHCHECK (GET /healthz); production refuses to run without PostgreSQL.
     - printf 'SESSION_SECRET=ci-only-secret\n' > .env
-    - docker compose -f compose.yaml up --detach --build
+    - docker compose -f compose.yaml -f compose.build.yaml up --detach --build
     - |
-      container=$(docker compose -f compose.yaml ps -q dems)
+      container=$(docker compose -f compose.yaml -f compose.build.yaml ps -q dems)
       for i in $(seq 1 40); do
         status=$(docker inspect --format '{{.State.Health.Status}}' "$container")
         echo "health: $status"
@@ -85,5 +85,5 @@ docker-build:
         if [ "$status" = unhealthy ]; then break; fi
         sleep 3
       done
-      docker compose -f compose.yaml logs
+      docker compose -f compose.yaml -f compose.build.yaml logs
       exit 1
