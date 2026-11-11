@@ -1,180 +1,126 @@
 # DEMS – Dein Event-Management-System
 
-Ein professionelles und benutzerfreundliches System zur Planung und Verwaltung von Community-Events mit nahtloser Discord-Integration.
+DEMS plant die Events deiner Discord-Community: Mitglieder melden sich mit Discord an und tragen sich auf der Website oder direkt in Discord ein, der Bot kündigt Events an, erinnert und räumt hinterher auf. Du hostest DEMS selbst – kostenlos und Open Source (MIT).
 
-Dieses Projekt wurde entwickelt, um Communities die Organisation von Veranstaltungen zu erleichtern – von der Erstellung über die Anmeldung bis hin zur automatisierten Kommunikation via Discord-Bot.
+![Event-Übersicht von DEMS](docs/images/events.png)
 
 > DEMS ist ein unabhängiges Projekt und steht in keiner Verbindung zu Discord Inc. „Discord“ ist eine Marke von Discord Inc.
 
 ## 🚀 Funktionen
 
-*   **Discord Integration**: Einfacher Login via Discord OAuth2 und automatische Synchronisation.
-*   **Event-Management**: Administratoren können Events erstellen, bearbeiten und verwalten.
-*   **Anmeldesystem**: Benutzer können sich mit wenigen Klicks für Events an- und abmelden.
-*   **Benutzerprofile**: Persönliche Übersicht über teilgenommene Events und Statistiken.
-*   **Automatisierung**: Der integrierte Discord-Bot sendet Benachrichtigungen und verwaltet Rollen.
-*   **Modernes Design**: Ansprechende Benutzeroberfläche im Glassmorphism-Stil.
+**Für Mitglieder**
 
-## 📣 Anmeldung direkt aus Discord
+*   Login mit dem Discord-Konto, kein eigenes Passwort.
+*   Anmelden auf der Website oder direkt in Discord – per Button in der Ankündigung oder mit `/anmelden`. Events mit Formular öffnen in Discord ein Popup mit denselben Feldern.
+*   Warteliste mit Nachrücken: Wird ein Platz frei, bekommt ihn der Nächste per DM angeboten und bestätigt mit einem Klick.
+*   „Vielleicht“ sagen, ohne einen Platz zu belegen, und Gäste mitbringen.
+*   Check-in per Code auf der Event-Seite oder per Button in Discord.
+*   Profil mit kommenden Events, Verlauf und Statistik; Erinnerungs-DMs, die jeder selbst ein- und ausschalten kann.
+*   Terminabstimmungen, Kommentare zu jedem Event (auf Wunsch gespiegelt in einen Discord-Thread) und ein Neuigkeiten-Dialog nach jedem Update.
 
-Jede Event-Ankündigung im Discord-Channel enthält zwei Buttons:
+**Für Admins**
 
-| Button | Verhalten |
-| --- | --- |
-| **Anmelden** | Prüft alle Bedingungen (Event aktiv, Wartungsmodus, keine Doppelanmeldung, Rollen-Requirement) und meldet direkt an. Freie Plätze entscheiden über sofortige Aufnahme, Bestätigungspflicht oder Warteliste. |
-| **Zum Event** | Link zur Event-Seite im Web-Interface — immer vorhanden. |
+*   Events mit Banner, Plätzen, Rollen-Slots, Rollen-Voraussetzungen, Anmeldeschluss und eigenem Formular; Serien, Vorlagen und Entwürfe.
+*   Anmeldungen annehmen, ablehnen oder auf die Warteliste setzen – einzeln, gesammelt oder in einem Freigabe-Kanal in Discord.
+*   Mitgliederübersicht, Auswertungen, CSV-Export und Audit-Log.
+*   Bot-Zentrale für alle Nachrichten und Schalter, Wartungs- und Panic-Modus.
+*   Einrichtung und Systemeinstellungen im Browser, ohne Konfigurationsdateien.
 
-**Events mit Formular:** Der Anmelden-Button öffnet ein Discord-Popup (Modal) mit den Formularfeldern des Events.
-Jeder Feldtyp wird auf die passende Discord-Komponente abgebildet, die Eingaben werden übernommen und wie eine
-Anmeldung über die Website gespeichert:
+**In Discord**
 
-| Feldtyp | Web-Formular | Discord-Modal |
-| --- | --- | --- |
-| Text | Eingabefeld | Text Input (kurz) |
-| Mehrzeiliger Text | Textarea | Text Input (Absatz) |
-| Dropdown | Auswahlliste | String Select mit den konfigurierten Optionen |
-| Checkbox | Checkbox | String Select mit Ja/Nein |
-| Discord-Mitglied | Mitgliedersuche | User Select |
-| Discord-Rolle | Rollenliste | Role Select |
-| Discord-Channel | Channelliste | Channel Select |
-| Mitglied oder Rolle | Kombinierte Suche | Mentionable Select |
+*   Ankündigungen mit Buttons „Anmelden“ und „Zum Event“, eigener Diskussions-Thread pro Event.
+*   Slash-Commands: `/anmelden`, `/abmelden`, `/meine-events`, `/events`, `/event info`, `/abstimmungen`; für Admins `/event erstellen` und `/abstimmung erstellen`.
+*   Erinnerungen per DM, private Event-Kanäle und Event-Rollen, Discord-Server-Events, die mit DEMS synchron bleiben.
+*   Nach dem Event entfernt der Bot Kanäle und Rollen wieder.
 
-Jedes Feld steht im Modal in einer Label-Komponente, sodass der Feldname und ein optionaler Hinweistext angezeigt
-werden. Über dem Formular steht eine Text-Display-Komponente mit Titel, Termin und Teilnehmerzahl des Events.
-Ausgewählte Mitglieder, Rollen und Channels werden als `@Name (ID)` bzw. `#Name (ID)` gespeichert — in Discord und
-im Web identisch.
+## 🐳 Selbst hosten
 
-Discord erlaubt maximal fünf Felder pro Popup. Hat ein Event mehr Felder, entfällt der Anmelden-Button und
-die Ankündigung verweist über den Link-Button auf die Website. Im Ankündigungs-Dialog der Admin-Oberfläche wird
-vorab angezeigt, welche Buttons das Event bekommt.
+### Was du brauchst
 
-Jede Anmeldung aus Discord erscheint sofort in der Web-Oberfläche. In der Anmeldungs-Übersicht und im CSV-Export
-ist erkennbar, ob sie über Discord oder die Website erstellt wurde.
+*   Einen Server mit [Docker](https://docs.docker.com/get-docker/) (inkl. Compose), z. B. einen kleinen VPS. Das Image läuft auf `amd64` und `arm64`.
+*   Eine Domain mit **HTTPS** davor, z. B. über Caddy, Traefik oder den Proxy deines Hosters. Ohne HTTPS funktionieren Login und Einrichtung nicht.
+*   Eine Discord-Anwendung im [Developer Portal](https://discord.com/developers/applications) und Rechte zum Verwalten deines Discord-Servers. Wie du sie anlegst, zeigt dir der Einrichtungsassistent Schritt für Schritt.
 
-## 🛠️ Technologien
-
-Das Projekt basiert auf einem modernen Tech-Stack:
-
-*   **Backend**: Node.js, Express
-*   **Datenbank**: PostgreSQL (Produktion, per Docker Compose automatisch eingerichtet), SQLite für Entwicklung und Tests
-*   **Bot-Integration**: Discord.js
-*   **Frontend**: HTML5, CSS3, JavaScript (EJS Templating)
-
-### 🗄️ Datenbank: PostgreSQL oder SQLite
-
-Seit 3.0 nutzt DEMS kein Firebase mehr. Beim Start entscheidet die App:
-
-*   **PostgreSQL** – wird genutzt, wenn `DATABASE_URL` oder `PGHOST` gesetzt ist. `docker compose up` startet PostgreSQL mit und richtet Datenbank, Nutzer und Passwort beim ersten Start selbst ein. In Produktion (`NODE_ENV=production`) startet DEMS ohne PostgreSQL nicht.
-*   **Lokale SQLite-Datenbank** – wird für Entwicklung und Tests genutzt, wenn keine PostgreSQL-Werte gesetzt sind. Es ist keine externe Datenbank nötig; die Daten liegen in einer Datei (Standard: `./data/dems.sqlite`, konfigurierbar über `SQLITE_PATH`).
-
-> **Hinweis:** Auf Plattformen mit flüchtigem Dateisystem (z. B. Heroku, Railway ohne persistentes Volume) gehen SQLite-Daten bei einem Neustart verloren. Für den Betrieb deshalb PostgreSQL verwenden.
-
-## 📦 Installation & Einrichtung
-
-Folge diesen Schritten, um das Projekt lokal einzurichten:
-
-### 1. Voraussetzungen
-Stelle sicher, dass du folgende Tools installiert hast:
-*   [Node.js](https://nodejs.org/) (Version 22 oder höher) – oder nur [Docker](https://docs.docker.com/get-docker/), siehe unten
-*   Eine Discord-Applikation im [Developer Portal](https://discord.com/developers/applications)
-
-### 2. Installation
-Klonen das Repository und installiere die Abhängigkeiten:
-
-```bash
-git clone https://github.com/DEIN-USERNAME/DEMS.git
-cd DEMS
-npm install
-```
-
-### 3. Konfiguration
-Erstelle eine `.env` Datei im Hauptverzeichnis und fülle sie mit deinen Daten:
-
-```env
-# Discord Konfiguration
-DISCORD_CLIENT_ID=deine_client_id
-DISCORD_CLIENT_SECRET=dein_client_secret
-DISCORD_BOT_TOKEN=dein_bot_token
-DISCORD_REDIRECT_URI=http://localhost:3000/auth/discord/callback
-
-# Datenbank: lokal ohne Eintrag SQLite, mit Docker Compose automatisch PostgreSQL
-...
-```
-
-### 4. Starten
-Starte den Server im Entwicklungsmodus:
-
-```bash
-npm run dev
-```
-
-Der Server läuft nun unter `http://localhost:3000`.
-
-## 🧪 Dev-Modus mit Dummy-Daten
-
-Zum Entwickeln und Ausprobieren ohne Discord-Token, OAuth und PostgreSQL:
-
-```bash
-npm install
-npm run dev:mock
-```
-
-*   Öffne `http://localhost:3000` und klicke auf „Mit Discord anmelden“. Statt Discord erscheint eine Auswahl von Test-Personas: **Admin**, **Mitglied mit Rolle „Raid-Team“**, **Mitglied ohne Rollen** und ein **Neuling** (erster Login).
-*   Die Daten liegen in `data/dems.dev.sqlite`, getrennt von der normalen Datenbank. Beim ersten Start wird sie mit Beispiel-Events (Formular, Warteliste, Rollen-Event, laufendes Event, Serie, Entwurf, Archiv), Anmeldungen, Kommentaren, Audit-Log und Einstellungen gefüllt. Eigene Änderungen bleiben über Neustarts erhalten.
-*   `npm run dev:reset` setzt die Dev-Datenbank auf den Ausgangszustand zurück (geht auch bei laufendem Server).
-*   Alle Termine sind relativ zum Zeitpunkt des ersten Seedens. Nach ein paar Tagen liegen die Beispiel-Events in der Vergangenheit und das „laufende“ Event (Check-in `DEMO42`) läuft nur ca. 2,5 Stunden lang — `npm run dev:reset` setzt alle Termine wieder relativ zu jetzt.
-*   Discord ist simuliert: Rollen, Channels und Scheduled Events kommen von einem Fake-Server, DMs, Ankündigungen und Rollenvergaben erscheinen als `[MOCK-DISCORD]` in der Konsole.
-*   Check-in-Code des laufenden Beispiel-Events: `DEMO42`. Admin-Reset-Passwort (Panic-Mode, System-Reset): `dev`, sofern in der `.env` nichts anderes steht.
-*   Eine `.env` ist nicht nötig. Vorhandene Discord- und PostgreSQL-Werte werden im Dev-Modus ignoriert.
-*   Der Dev-Modus lässt sich nicht in Produktion aktivieren: mit `NODE_ENV=production` bricht der Start ab.
-
-### Dev-Modus mit Docker
-
-```bash
-docker compose -f compose.dev.yaml up --build
-```
-
-*   Der Code wird in den Container gemountet, Änderungen starten den Server automatisch neu (Frontend-Dateien unter `public/` brauchen nur einen Browser-Reload).
-*   Die Dev-Datenbank liegt im Volume `dems-dev-data`. Zurücksetzen: `docker compose -f compose.dev.yaml exec dems-dev npm run dev:reset`.
-*   Nach Änderungen an den Abhängigkeiten: `docker compose -f compose.dev.yaml up --build -V` (erneuert `node_modules` im Container).
-*   Anderer Host-Port: `DEMS_DEV_PORT` in der `.env`.
-
-Tests: `npm test`
-
-## 🐳 Docker
-
-Voraussetzung ist nur Docker (inkl. Compose). Den Quellcode brauchst du nicht: Compose holt das fertige Image `moritakahashi/dems` von Docker Hub.
+### Installieren
 
 ```bash
 mkdir dems && cd dems
 curl -O https://raw.githubusercontent.com/VibeGenZero/DEMS/main/compose.yaml
 docker compose up -d
-docker compose logs -f dems   # zeigt beim ersten Start die Setup-PIN
+docker compose logs dems | grep Setup-PIN   # nach ein paar Sekunden
 ```
 
-*   Ohne `.env` startet DEMS den Einrichtungsassistenten im Browser (Setup-PIN aus dem Log). Eine `.env` nach dem Muster von [`.env.example`](.env.example) ist optional; ein dort gesetzter Wert hat Vorrang.
-*   Die App läuft unter `http://localhost:3000`. Einen anderen Host-Port setzt du über `DEMS_PORT` in der `.env`.
-*   Update: `docker compose pull && docker compose up -d`. Admins sehen unter „System“, wenn es eine neuere Version gibt.
-*   Vorabversionen (Beta, Release Candidate): `DEMS_TAG=beta` in der `.env`, Standard ist `latest` (fertige Releases).
-*   Aus dem Quellcode bauen statt das Image zu ziehen (im geklonten Repo): `docker compose -f compose.yaml -f compose.build.yaml up -d --build`.
-*   Bisher aus dem Quellcode gebaut? `compose.yaml` zieht jetzt das veröffentlichte Image, `--build` allein baut nichts mehr. Wer weiter selbst baut, nimmt `git pull && docker compose -f compose.yaml -f compose.build.yaml up -d --build`.
-*   Compose startet drei Dienste: `db-secret` erzeugt beim ersten Start ein zufälliges Datenbank-Passwort (Volume `dems-secrets`), `postgres` hält die Daten (Volume `dems-pg`, kein Port nach außen), `dems` ist die App. Hochgeladene Banner liegen im Volume `dems-data`. Alles überlebt Rebuilds und Updates.
-*   Backup der Datenbank: `docker compose exec -T postgres pg_dump -U dems dems > dems-backup.sql`.
-*   Der Container hat einen Healthcheck auf `GET /healthz` (`docker compose ps` zeigt den Status).
-*   Stoppen mit `docker compose down` – die Daten bleiben erhalten. `docker compose down -v` löscht auch das Volume.
+1.  Compose startet drei Dienste: die Datenbank (PostgreSQL, Passwort wird beim ersten Start zufällig erzeugt), einen kleinen Helfer dafür und DEMS selbst auf Port 3000.
+2.  Leite deine Domain per HTTPS-Proxy auf Port 3000 weiter. Ein vollständiges Beispiel mit Traefik steht in [`docs/wiki/ops/deployment.md`](docs/wiki/ops/deployment.md).
+3.  Öffne `https://<deine-domain>`, gib die Setup-PIN aus dem Log ein und folge dem Assistenten: Discord-Anwendung, Bot einladen, Server-ID, Adresse, Admin-Rolle. Die Werte speichert DEMS in der Datenbank.
 
-Ohne Compose braucht der Container einen eigenen PostgreSQL-Server:
+Danach meldest du dich mit Discord an. Wer auf deinem Discord-Server „Administrator“ ist oder die gewählte Admin-Rolle hat, ist in DEMS Admin.
+
+### Aktualisieren
 
 ```bash
-docker run -d --init --env-file .env -e PORT=3000 -e DATABASE_URL=postgres://dems:passwort@host:5432/dems \
-  -p 3000:3000 -v dems-data:/app/data --name dems moritakahashi/dems:latest
+docker compose pull && docker compose up -d
 ```
 
-## 🤝 Mitwirken
+*   Admins sehen unter **Admin › System**, wenn es eine neuere Version gibt. Dafür fragt DEMS zweimal am Tag die öffentlichen GitHub-Releases ab, ohne Daten über deine Installation. Abschalten mit `UPDATE_CHECK=false` in der `.env`.
+*   Was sich geändert hat, steht in den [Releases](https://github.com/VibeGenZero/DEMS/releases) und nach dem Update im Neuigkeiten-Dialog der App.
+*   Vorabversionen (Beta, Release Candidate) bekommst du mit `DEMS_TAG=beta` in der `.env`; Standard ist `latest`, die fertigen Releases.
 
-Beiträge sind willkommen! Fühle dich frei, Issues zu eröffnen oder Pull Requests einzureichen, um das Projekt zu verbessern.
+### Sichern
+
+```bash
+docker compose exec -T postgres pg_dump -U dems dems > dems-backup.sql                                       # Datenbank
+docker run --rm -v dems_dems-data:/data -v $PWD:/backup alpine tar czf /backup/dems-uploads.tgz -C /data .  # hochgeladene Banner
+```
+
+Die Daten liegen in den Volumes `dems-pg` (Datenbank), `dems-data` (Banner) und `dems-secrets` (Datenbank-Passwort). Sie überleben Neustarts und Updates; `docker compose down -v` löscht sie.
+
+### Konfiguration
+
+Alles Nötige stellst du im Einrichtungsassistenten und später unter **Admin › System** ein. Wer lieber mit Dateien arbeitet, legt neben `compose.yaml` eine `.env` an: Ein dort gesetzter Wert hat Vorrang und ist in der Oberfläche gesperrt. Alle Variablen mit Erklärung stehen in [`.env.example`](.env.example), zum Beispiel `DEMS_PORT` (anderer Host-Port), `TIMEZONE` oder `DISCORD_THREAD_SYNC` (Kommentare mit Discord-Threads spiegeln).
+
+### Aus dem Quellcode bauen
+
+Statt das fertige Image zu ziehen, kannst du es im geklonten Repo selbst bauen:
+
+```bash
+git clone https://github.com/VibeGenZero/DEMS.git && cd DEMS
+docker compose -f compose.yaml -f compose.build.yaml up -d --build
+```
+
+Bisher aus dem Quellcode gebaut? `compose.yaml` zieht jetzt das veröffentlichte Image, `--build` allein baut nichts mehr. Wer weiter selbst baut, nimmt `git pull && docker compose -f compose.yaml -f compose.build.yaml up -d --build`.
+
+### Probleme
+
+| Problem | Lösung |
+| --- | --- |
+| Die Seite bleibt beim Laden hängen | DEMS über `https://<domain>` öffnen, nicht über `http://<ip>:3000`. |
+| Nach dem Discord-Login wieder auf der Login-Seite | Der Proxy muss HTTPS sprechen und `X-Forwarded-Proto` setzen. |
+| Discord lehnt den Bot ab („Used disallowed intents“) | Im Developer Portal unter „Bot“ den „Server Members Intent“ einschalten. |
+| Werte aus der `.env` kommen nicht an | Die `.env` muss neben `compose.yaml` liegen; danach `docker compose up -d --force-recreate`. |
+
+Mehr Hilfe im [Deployment-Wiki](docs/wiki/ops/deployment.md#troubleshooting).
+
+## 🔒 Sicherheit
+
+Sicherheitslücken bitte nicht als öffentliches Issue melden, sondern privat über GitHub – wie das geht, steht in der [Security Policy](SECURITY.md).
+
+## 🧪 Entwicklung
+
+DEMS ist ein Node.js-Prozess (Express-API, statisches Frontend ohne Build-Schritt, discord.js-Bot) mit PostgreSQL in Produktion und SQLite für Entwicklung und Tests. Zum Ausprobieren ohne Discord und ohne Datenbank:
+
+```bash
+git clone https://github.com/VibeGenZero/DEMS.git && cd DEMS
+npm install
+npm run dev:mock     # http://localhost:3000 mit Test-Personas und Beispiel-Events
+npm test             # alle Tests
+```
+
+Node.js 22 oder neuer. Der Mock-Modus simuliert Discord, `npm run dev:reset` setzt die Beispieldaten zurück, `docker compose -f compose.dev.yaml up --build` startet ihn im Container. Aufbau, Regeln und Anleitungen stehen im Wiki unter [`docs/wiki/index.md`](docs/wiki/index.md), die Projektregeln in [`CLAUDE.md`](CLAUDE.md).
+
+Beiträge sind willkommen: Issues und Pull Requests gern auf Deutsch.
 
 ## 📝 Lizenz & Credits
 
 Entwickelt von **Mori Takahashi** (Lyonel Berzen).
-Dieses Projekt ist unter der MIT Lizenz veröffentlicht.
+Dieses Projekt ist unter der [MIT Lizenz](LICENSE) veröffentlicht.

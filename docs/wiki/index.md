@@ -114,6 +114,7 @@ sources: [scripts/wiki-graph.js, docs/wiki/graph.json, CLAUDE.md]
 | `Dockerfile`, `compose*.yaml` | docker, deployment |
 | `.github/workflows/*`, `.gitlab-ci.yml`, `ci/runner/*` | ci |
 | `.env.example` | configuration |
+| `SECURITY.md` | security |
 | `landing/*` | landing-page |
 
 ## Graph (main edges)
