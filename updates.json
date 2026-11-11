@@ -1,6 +1,47 @@
 {
-    "version": "3.0.0-rc.1",
+    "version": "3.0.0",
     "releases": [
+        {
+            "version": "3.0.0",
+            "date": "2026-11-11",
+            "news": [
+                {
+                    "title": "🎉 DEMS 3.0 ist da",
+                    "content": "Die größte Version bisher: Fast alles, was du auf der Website machst, geht jetzt auch direkt in Discord, freie Plätze werden fair weitergegeben, und Events räumen hinterher von selbst auf. Die komplette Liste aller Neuerungen findest du unter „Was ist neu“ im Info-Bereich."
+                },
+                {
+                    "title": "💬 Alles direkt in Discord",
+                    "content": "Melde dich mit /anmelden direkt in Discord an, sieh mit /meine-events deine Anmeldungen, finde mit /abstimmungen die offenen Abstimmungen und hol dir mit /event info alle Details zu einem Event. Bei laufenden Events checkst du per Button ein.",
+                    "highlight": true
+                },
+                {
+                    "title": "✅ Nachrücken mit Bestätigung",
+                    "content": "Wird ein Platz frei, bekommst du ihn von der Warteliste aus angeboten – per DM mit „Platz annehmen“ oder „Doch nicht“ oder auf der Event-Seite. Antwortest du nicht rechtzeitig, geht der Platz an den Nächsten auf der Warteliste.",
+                    "highlight": true
+                },
+                {
+                    "title": "🤔 „Vielleicht“ und Gäste",
+                    "content": "Bei Events, die es erlauben, kannst du unverbindlich „Vielleicht“ sagen – auf der Website oder per Button in Discord. Du belegst damit keinen Platz, aber die Planer sehen, wer einspringen könnte. Bringst du Gäste mit, sehen sie den echten Stand ihrer Einladung und checken beim Event selbst ein.",
+                    "highlight": true
+                },
+                {
+                    "title": "📣 Neue Ankündigungen mit Diskussion",
+                    "content": "Ankündigungen in Discord sind neu gestaltet und bekommen pro Event einen eigenen Diskussions-Thread; Kommentare auf der Website und im Thread werden gespiegelt. Die Erinnerungs-DM enthält jetzt den Link zum Event und einen Button zum Abmelden, und das Discord-Server-Event bleibt bei Änderungen aktuell."
+                },
+                {
+                    "title": "🔒 Datenschutz auf einen Blick",
+                    "content": "Hat dein Server eine Datenschutzerklärung hinterlegt, bestätigst du sie einmal beim nächsten Besuch. Ändert sie sich, fragt DEMS dich erneut."
+                },
+                {
+                    "title": "🛠️ Mehr Werkzeuge für Admins",
+                    "content": "Admins bekommen Auswertungen zu vergangenen Events, eine Mitgliederübersicht mit Teilnahmeverlauf und können allen Teilnehmern eines Events eine DM schreiben. Anmeldungen lassen sich gesammelt oder in einem Freigabe-Kanal in Discord entscheiden, Events und Abstimmungen direkt in Discord erstellen, Vorlagen speichern, Serien bearbeiten und Banner hochladen. Wer auf dem Discord-Server „Administrator“ ist, ist in DEMS immer Admin."
+                },
+                {
+                    "title": "🧹 Aufräumen nach dem Event",
+                    "content": "Ist ein Event vorbei, abgesagt oder gelöscht, entfernt der Bot die Event-Kanäle und nimmt die Event-Rolle wieder weg. Außerdem wirken jetzt alle Schalter im Bot-Center."
+                }
+            ]
+        },
         {
             "version": "3.0.0-rc.1",
             "date": "2026-11-03",
