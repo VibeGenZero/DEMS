@@ -102,6 +102,7 @@ sources: [scripts/wiki-graph.js, docs/wiki/graph.json, CLAUDE.md]
 | `utils/eventUtils.js`, `utils/eventListing.js`, `utils/profileEvents.js`, `utils/userProfile.js`, `utils/avatar.js`, `utils/botPermissions.js`, `utils/csv.js`, `utils/template.js`, `utils/sessionStore.js`, `utils/debugLog.js` | utils |
 | `utils/reminders.js` | utils, reminders-presence |
 | `utils/semver.js` | utils, deployment |
+| `utils/updateCheck.js` | utils, configuration, routes-admin |
 | `public/js/**`, `public/theme-boot.js` | frontend-app |
 | `public/js/pages/discord-guide.js` | frontend-app, deployment |
 | `public/index.html`, `public/css/tokens.css`, `public/css/components.css`, `public/css/style.css` | frontend-markup |
