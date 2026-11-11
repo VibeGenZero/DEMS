@@ -2,6 +2,7 @@
  * Admin page "System" (#system, #138): the database-backed configuration
  * (Discord, Server, Sicherheit). A value from .env is read-only; secrets show
  * only whether they are set. Saving asks for the admin reset password.
+ * First card "Version": the update status (GET /api/admin/system/update-status).
  * Below: the editor of the privacy policy (no reset password, every change
  * is a new version everybody accepts again).
  */
@@ -97,7 +98,60 @@ export async function showSystemSection() {
     } catch (err) {
         showToast(err.message || 'Systemeinstellungen konnten nicht geladen werden.', 'danger');
     }
-    await loadPrivacyEditor();
+    await Promise.all([loadUpdateStatus(), loadPrivacyEditor()]);
+}
+
+const UPDATE_COMMAND = 'docker compose pull && docker compose up -d';
+
+function releaseLink(url) {
+    if (!url) return '';
+    return `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">Was ist neu?<i class="bi bi-box-arrow-up-right ms-1" aria-hidden="true"></i></a>`;
+}
+
+const commandLine = () => `<p class="setup-hint">Aktualisieren: <code>${escapeHtml(UPDATE_COMMAND)}</code></p>`;
+
+/**
+ * Body of the "Version" card for a status of GET /api/admin/system/update-status.
+ *
+ * @param {Object} status -> UpdateStatus of utils/updateCheck.js.
+ * @returns {string} -> HTML.
+ */
+function updateStatusHtml(status) {
+    const current = escapeHtml(status.current || '');
+    const latest = escapeHtml(status.latest || '');
+    if (status.switchToLatest) {
+        return `<p><span class="chip chip-sm chip-info">Update verfügbar</span></p>
+            <p>Version <strong>${latest}</strong> ist das fertige Release. Diese Installation nutzt eine Vorabversion (${current}) aus dem Kanal „beta“.</p>
+            <p class="setup-hint">Stelle das Image von beta auf latest um: <code>DEMS_TAG=latest</code> in der .env oder, wenn deine compose-Datei den Tag fest nennt, <code>image: moritakahashi/dems:latest</code>. Führe dann <code>${escapeHtml(UPDATE_COMMAND)}</code> aus.</p>
+            ${releaseLink(status.releaseUrl)}`;
+    }
+    if (status.updateAvailable) {
+        return `<p><span class="chip chip-sm chip-info">Update verfügbar</span></p>
+            <p>Neue Version <strong>${latest}</strong> verfügbar (installiert: ${current}).</p>
+            ${commandLine()}
+            ${releaseLink(status.releaseUrl)}`;
+    }
+    const neutral = {
+        disabled: `DEMS ${current}. Die Update-Prüfung ist ausgeschaltet (UPDATE_CHECK=false).`,
+        edge: `Entwicklungsstand (edge, Commit ${escapeHtml(status.commit || '?')}). Keine Update-Prüfung.`,
+        mock: `DEMS ${current} im Dev-Mock-Modus. Keine Update-Prüfung.`,
+        'invalid-repo': `DEMS ${current}. UPDATE_CHECK_REPO ist ungültig, die Update-Prüfung ist aus.`
+    };
+    if (neutral[status.reason]) return `<p class="text-secondary mb-0">${neutral[status.reason]}</p>`;
+    if (!status.checkedAt) return `<p class="text-secondary mb-0">DEMS ${current}. Noch keine Antwort von GitHub.</p>`;
+    const checked = new Date(status.checkedAt).toLocaleString('de-DE', { dateStyle: 'medium', timeStyle: 'short' });
+    return `<p class="mb-0">DEMS ${current} ist aktuell. Zuletzt geprüft: ${escapeHtml(checked)}.</p>`;
+}
+
+async function loadUpdateStatus() {
+    const body = document.getElementById('system-update-body');
+    try {
+        const res = await fetch('/api/admin/system/update-status');
+        if (!res.ok) throw new Error('Laden fehlgeschlagen');
+        body.innerHTML = updateStatusHtml(await res.json());
+    } catch {
+        body.innerHTML = '<p class="text-secondary mb-0">Versionsinfo konnte nicht geladen werden.</p>';
+    }
 }
 
 async function loadPrivacyEditor() {

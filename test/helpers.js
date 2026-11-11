@@ -49,7 +49,8 @@ function repoPath(relativePath) {
 function cleanEnv(env = {}) {
     const base = Object.fromEntries(Object.entries(process.env).filter(([key]) =>
         !LEAKING_KEYS.includes(key) && !LEAKING_PREFIXES.some(prefix => key.startsWith(prefix))));
-    return { ...base, ...env };
+    // The update check (utils/updateCheck.js) would ask GitHub; a test switches it on itself
+    return { ...base, UPDATE_CHECK: 'false', ...env };
 }
 
 /**

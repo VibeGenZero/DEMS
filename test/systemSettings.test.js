@@ -121,3 +121,18 @@ test('the invite link of the current client id is offered to admins', async () =
     assert.equal(res.status, 200);
     assert.match((await res.json()).url, /client_id=123456789012345678&permissions=\d+&scope=bot%20applications\.commands/);
 });
+
+test('admins read the update status, members do not', async () => {
+    const admin = await loginAs('admin');
+    const res = await admin.request('/api/admin/system/update-status');
+    assert.equal(res.status, 200);
+    const status = await res.json();
+    // Dev mock mode never asks GitHub
+    assert.equal(status.enabled, false);
+    assert.equal(status.reason, 'mock');
+    assert.equal(status.current, require('../package.json').version);
+    assert.equal(status.updateAvailable, false);
+
+    const member = await loginAs('member');
+    assert.equal((await member.request('/api/admin/system/update-status')).status, 403);
+});

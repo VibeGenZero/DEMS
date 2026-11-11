@@ -3,13 +3,13 @@ id: docker
 title: Docker — image, stages, compose files
 type: ops
 tags: [docker, compose, container, image, healthcheck, volume]
-sources: [Dockerfile, compose.yaml, compose.dev.yaml, .dockerignore]
+sources: [Dockerfile, compose.yaml, compose.build.yaml, compose.dev.yaml, .dockerignore]
 depends_on: [configuration]
 see_also: [deployment, dev-mock-mode]
 ---
 # Docker — image, stages, compose files
 
-> TL;DR: Multi-stage `Dockerfile` on `node:24-bookworm-slim`: `runtime` (default, production: non-root `node` user, `NODE_ENV=production`, uploaded banners (`/app/data/uploads`, W-12) on volume `/app/data`, healthcheck `GET /healthz`) and `dev` (all deps, nodemon polling, used by `compose.dev.yaml`). `compose.yaml` runs production from `.env` together with PostgreSQL and a generated database password; `compose.dev.yaml` runs the dev mock mode with the source bind-mounted.
+> TL;DR: Multi-stage `Dockerfile` on `node:24-bookworm-slim`: `runtime` (default, production: non-root `node` user, `NODE_ENV=production`, uploaded banners (`/app/data/uploads`, W-12) on volume `/app/data`, healthcheck `GET /healthz`) and `dev` (all deps, nodemon polling, used by `compose.dev.yaml`). `compose.yaml` runs the published image `moritakahashi/dems:${DEMS_TAG:-latest}` with an optional `.env` together with PostgreSQL and a generated database password; `compose.build.yaml` is an override that builds the `runtime` stage from the checkout (CI uses it); `compose.dev.yaml` runs the dev mock mode with the source bind-mounted.
 
 ## Dockerfile stages
 
@@ -18,34 +18,38 @@ see_also: [deployment, dev-mock-mode]
 | `build-base` | node:24-bookworm-slim | python3/make/g++ (fallback build of better-sqlite3), `package*.json` |
 | `deps` | build-base | `npm ci --omit=dev` |
 | `dev` | build-base | `npm ci` (incl. nodemon), `COPY . .`, `NODE_ENV=development`, `CMD npx nodemon --legacy-watch dev/start.js` |
-| `runtime` (last = default) | node:24-bookworm-slim | prod `node_modules` from `deps`, app files, `USER node`, `VOLUME /app/data`, `HEALTHCHECK` on `/healthz`, `CMD node server.js` |
+| `runtime` (last = default) | node:24-bookworm-slim | prod `node_modules` from `deps`, app files, `USER node`, `VOLUME /app/data`, `HEALTHCHECK` on `/healthz`, build args `DEMS_CHANNEL`, `DEMS_COMMIT` → env of the same name (set by the publish job; `edge` turns the update check off), `CMD node server.js` |
 
-`runtime` must stay the LAST stage (default target); `compose.yaml` additionally pins `target: runtime`.
+`runtime` must stay the LAST stage (default target); `compose.build.yaml` additionally pins `target: runtime`.
 
 ## Compose files
 
 | File | Use | Key settings |
 |---|---|---|
-| `compose.yaml` | production build + run | three services: `db-secret` (one-shot `postgres:18-alpine`: writes a random password to `db_password` in volume `dems-secrets` if missing, `chmod 0444`), `postgres` (`postgres:18-alpine`, db/user `dems`, `POSTGRES_PASSWORD_FILE`, data in volume `dems-pg` at `/var/lib/postgresql`, healthcheck `pg_isready`, **no ports**), `dems` (`env_file` `.env` with `required: false` (#138: without `.env` DEMS starts its setup wizard); a value in `.env` wins over the stored configuration; pinned `NODE_ENV=production`, `PORT=3000`, `PGHOST=postgres`, `PGPORT`, `PGDATABASE`, `PGUSER`, `PGPASSWORD_FILE=/run/dems-secrets/db_password`; port `${DEMS_PORT:-3000}:3000`; volumes `dems-data` + `dems-secrets` read-only; `depends_on` postgres healthy; `init: true`; `restart: unless-stopped`) |
+| `compose.yaml` | production run from the published image | `dems` uses `image: moritakahashi/dems:${DEMS_TAG:-latest}` (no build; `DEMS_TAG=beta` in `.env` for pre-releases); three services: `db-secret` (one-shot `postgres:18-alpine`: writes a random password to `db_password` in volume `dems-secrets` if missing, `chmod 0444`), `postgres` (`postgres:18-alpine`, db/user `dems`, `POSTGRES_PASSWORD_FILE`, data in volume `dems-pg` at `/var/lib/postgresql`, healthcheck `pg_isready`, **no ports**), `dems` (`env_file` `.env` with `required: false` (#138: without `.env` DEMS starts its setup wizard); a value in `.env` wins over the stored configuration; pinned `NODE_ENV=production`, `PORT=3000`, `PGHOST=postgres`, `PGPORT`, `PGDATABASE`, `PGUSER`, `PGPASSWORD_FILE=/run/dems-secrets/db_password`; port `${DEMS_PORT:-3000}:3000`; volumes `dems-data` + `dems-secrets` read-only; `depends_on` postgres healthy; `init: true`; `restart: unless-stopped`) |
+| `compose.build.yaml` | override: build from source | `dems`: `build: { context: ., target: runtime }`, `image: dems:local`, `pull_policy: build`; use as `docker compose -f compose.yaml -f compose.build.yaml up -d --build` |
 | `compose.dev.yaml` | dev mock mode | target `dev`; optional `.env`; `127.0.0.1:${DEMS_DEV_PORT:-3000}:3000`; bind mount `.:/app` + anonymous `/app/node_modules` + volume `dems-dev-data` |
 
 ## First start without .env (#138)
 
-`docker compose up -d --build` with no `.env` brings up PostgreSQL (password generated) and DEMS in setup mode. The setup PIN is in the log: `docker compose logs dems | grep Setup-PIN` (a new PIN on every start until the setup is done). Open DEMS via HTTPS (behind the TLS proxy; the production image keeps the session only over HTTPS, so plain `http://localhost:<DEMS_PORT>` shows a warning instead), enter the PIN and complete the wizard; its values live in PostgreSQL (volume `dems-pg`), so a restart or an image update keeps them. A `.env` can still set any value; it then shows as locked („aus .env“). See [security](../concepts/security.md#first-run-setup-138).
+`docker compose up -d` with no `.env` brings up PostgreSQL (password generated) and DEMS in setup mode. The setup PIN is in the log: `docker compose logs dems | grep Setup-PIN` (a new PIN on every start until the setup is done). Open DEMS via HTTPS (behind the TLS proxy; the production image keeps the session only over HTTPS, so plain `http://localhost:<DEMS_PORT>` shows a warning instead), enter the PIN and complete the wizard; its values live in PostgreSQL (volume `dems-pg`), so a restart or an image update keeps them. A `.env` can still set any value; it then shows as locked („aus .env“). See [security](../concepts/security.md#first-run-setup-138).
 
 ## Commands
 
 ```bash
-docker compose up -d --build                          # production
+docker compose up -d                                  # production (published image)
 docker compose -f compose.dev.yaml up --build         # dev mock mode
 docker compose -f compose.dev.yaml up --build -V      # after dependency changes (fresh node_modules volume)
 docker compose -f compose.dev.yaml exec dems-dev npm run dev:reset
-docker build -t <user>/dems:latest . && docker push <user>/dems:latest
+docker compose pull && docker compose up -d                              # update to the newest published image
+docker compose -f compose.yaml -f compose.build.yaml up -d --build    # build from this checkout instead
 ```
 
-Published image: private Docker Hub repository `moritakahashi/dems` (tags `latest` + commit sha); see [deployment](deployment.md).
+Published image: public Docker Hub repository `moritakahashi/dems`, pushed by the `publish` job of the CI: `edge` + `edge-<7>` (every push to `main`), the version + `sha-<7>` + `latest` (releases) or `beta` (pre-releases) on a git tag; edge and release builds never share a tag, because the `main` run and the tag run of one commit run in parallel. See [ci](ci.md) and [deployment](deployment.md).
 
-CI builds both targets, starts `compose.yaml` with a dummy `.env` and waits for the HEALTHCHECK of `dems` in the `docker-build` job, without pushing; see [ci](ci.md). The runtime image alone does not start (production needs PostgreSQL).
+Installs built from source before: `compose.yaml` now pulls the published image and `--build` alone builds nothing; keep building with `docker compose -f compose.yaml -f compose.build.yaml up -d --build`.
+
+CI builds both targets, starts `compose.yaml` + `compose.build.yaml` (so it tests the image built from the branch, not the published one) without any `.env` and waits for the HEALTHCHECK of `dems` in the `docker-build` job, without pushing; see [ci](ci.md). The runtime image alone does not start (production needs PostgreSQL).
 
 ## .dockerignore
 

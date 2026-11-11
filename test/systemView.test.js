@@ -134,3 +134,64 @@ test('saving the policy reports the new version and that everybody accepts again
     assert.deepEqual(JSON.parse(put.body), { markdown: '# Datenschutz' });
     assert.deepEqual(toasts, ['Datenschutzerklärung gespeichert (Fassung 1). Alle Mitglieder stimmen beim nächsten Besuch neu zu.']);
 });
+
+// Version card: GET /api/admin/system/update-status (utils/updateCheck.js)
+const STATUS = {
+    enabled: true, reason: null, current: '3.0.0', latest: null, updateAvailable: false, switchToLatest: false,
+    releaseUrl: null, checkedAt: '2026-11-11T10:00:00.000Z', channel: null, commit: null
+};
+const versionCard = async (status) => {
+    const { element, toasts } = await openSystem({ '/api/admin/system/update-status': status });
+    return { body: element('system-update-body').innerHTML, toasts };
+};
+
+test('a newer version shows the release link and the update command', async () => {
+    const { body } = await versionCard({ ...STATUS, latest: '3.0.1', updateAvailable: true, releaseUrl: 'https://github.com/VibeGenZero/DEMS/releases/tag/3.0.1' });
+    assert.match(body, /Update verfügbar/);
+    assert.match(body, /Neue Version <strong>3\.0\.1<\/strong> verfügbar \(installiert: 3\.0\.0\)/);
+    assert.match(body, /href="https:\/\/github\.com\/VibeGenZero\/DEMS\/releases\/tag\/3\.0\.1"[^>]*target="_blank"[^>]*rel="noopener noreferrer"/);
+    assert.match(body, /Was ist neu\?/);
+    assert.match(body, /docker compose pull &amp;&amp; docker compose up -d/);
+});
+
+test('without a release link the card shows no link', async () => {
+    const { body } = await versionCard({ ...STATUS, latest: '3.0.1', updateAvailable: true });
+    assert.match(body, /Neue Version/);
+    assert.doesNotMatch(body, /<a /);
+});
+
+test('a pre-release install is told to switch to latest for a final release', async () => {
+    const { body } = await versionCard({ ...STATUS, current: '3.0.0-rc.1', latest: '3.0.0', updateAvailable: true, switchToLatest: true });
+    assert.match(body, /fertige Release/);
+    assert.match(body, /DEMS_TAG=latest/);
+    // A compose file with a fixed tag (deployment example) changes the image line instead
+    assert.match(body, /image: moritakahashi\/dems:latest/);
+    assert.doesNotMatch(body, /Neue Version/);
+});
+
+test('up to date, not yet answered, switched off, edge, mock mode and an invalid repo each say so', async () => {
+    assert.match((await versionCard(STATUS)).body, /DEMS 3\.0\.0 ist aktuell\. Zuletzt geprüft: /);
+    assert.match((await versionCard({ ...STATUS, checkedAt: null })).body, /Noch keine Antwort von GitHub/);
+    assert.match((await versionCard({ ...STATUS, enabled: false, reason: 'disabled', checkedAt: null })).body, /ausgeschaltet \(UPDATE_CHECK=false\)/);
+    const edge = (await versionCard({ ...STATUS, enabled: false, reason: 'edge', channel: 'edge', commit: 'abcdef1', checkedAt: null })).body;
+    assert.match(edge, /Entwicklungsstand \(edge, Commit abcdef1\)/);
+    assert.match((await versionCard({ ...STATUS, enabled: false, reason: 'mock', checkedAt: null })).body, /Dev-Mock-Modus/);
+    assert.match((await versionCard({ ...STATUS, enabled: false, reason: 'invalid-repo', checkedAt: null })).body, /UPDATE_CHECK_REPO ist ungültig/);
+});
+
+test('values in the version card are escaped', async () => {
+    const { body } = await versionCard({ ...STATUS, current: '<b>x', latest: '<img src=x>', updateAvailable: true });
+    assert.match(body, /&lt;img src=x&gt;/);
+    assert.doesNotMatch(body, /<img|<b>/);
+});
+
+test('a failed status request says so in the card, without a toast', async () => {
+    const { body, toasts } = await versionCard(httpAnswer(500, { error: 'x' }));
+    assert.match(body, /Versionsinfo konnte nicht geladen werden/);
+    assert.deepEqual(toasts, []);
+});
+
+test('the version card is the first card of the System page', () => {
+    assert.match(HTML, /<div class="system-grid">\s*<div class="glass-card system-card" id="system-update-card">/);
+    assert.match(HTML, /<div id="system-update-body"><\/div>/);
+});

@@ -3,43 +3,12 @@ const assert = require('node:assert/strict');
 const fs = require('fs');
 const path = require('path');
 const { REPO_ROOT } = require('./helpers');
+const { compareVersions } = require('../utils/semver');
 
 // Read fresh, so the test sees the file and not a cached require
 const data = JSON.parse(fs.readFileSync(path.join(REPO_ROOT, 'updates.json'), 'utf8'));
-// SemVer order: major.minor.patch first; a release is newer than its pre-releases;
-// pre-release parts compare one by one, numbers as numbers ("beta.10" > "beta.9"),
-// words alphabetically ("rc" > "beta").
-const split = (version) => {
-    const [core, ...suffix] = version.split('-');
-    return { core: core.split('.').map(Number), pre: suffix.length ? suffix.join('-').split('.') : [] };
-};
-const compareParts = (x, y) => {
-    const [numX, numY] = [/^\d+$/.test(x), /^\d+$/.test(y)];
-    if (numX && numY) return Number(x) - Number(y);
-    if (numX !== numY) return numX ? -1 : 1;
-    return x < y ? -1 : x > y ? 1 : 0;
-};
-const newer = (a, b) => {
-    const [x, y] = [split(a), split(b)];
-    for (let i = 0; i < 3; i++) if (x.core[i] !== y.core[i]) return x.core[i] > y.core[i];
-    if (!x.pre.length || !y.pre.length) return !x.pre.length && y.pre.length > 0;
-    for (let i = 0; i < Math.max(x.pre.length, y.pre.length); i++) {
-        if (x.pre[i] === undefined) return false;
-        if (y.pre[i] === undefined) return true;
-        const diff = compareParts(x.pre[i], y.pre[i]);
-        if (diff) return diff > 0;
-    }
-    return false;
-};
-
-test('versions order like SemVer, pre-releases included', () => {
-    assert.ok(newer('3.0.0-rc.1', '3.0.0-beta.3'));
-    assert.ok(newer('3.0.0-beta.10', '3.0.0-beta.9'));
-    assert.ok(newer('3.0.0', '3.0.0-rc.1'));
-    assert.ok(newer('3.0.0-beta.1', '2.6.0'));
-    assert.ok(!newer('3.0.0-beta.3', '3.0.0-rc.1'));
-    assert.ok(!newer('3.0.0-rc.1', '3.0.0-rc.1'));
-});
+// SemVer order (utils/semver.js, tested in test/semver.test.js)
+const newer = (a, b) => compareVersions(a, b) > 0;
 
 test('the release notes are a list of releases, newest first', () => {
     assert.ok(Array.isArray(data.releases) && data.releases.length > 0, 'releases list');

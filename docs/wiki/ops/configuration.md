@@ -35,6 +35,10 @@ see_also: [docker, deployment, dev-mock-mode]
 | `ADMIN_RESET_PASSWORD` | no | — | system reset and panic-mode deactivation; empty → both impossible |
 | `NODE_ENV` | no | `production` in the Docker image | blocks `DEV_MOCK`; makes session and `XSRF-TOKEN` cookies `Secure` → DEMS must be reached via HTTPS (TLS proxy sending `X-Forwarded-Proto: https`), otherwise the login does not stick |
 | `DEMS_PORT` | no | `3000` | host port in `compose.yaml` |
+| `DEMS_TAG` | no | `latest` | image tag `compose.yaml` pulls (`moritakahashi/dems:${DEMS_TAG}`): `latest` = releases, `beta` = pre-releases; read by Compose, not by DEMS |
+| `DEMS_CHANNEL`, `DEMS_COMMIT` | no (image) | empty | baked into published images by the publish job (`edge`/`beta`/`latest`, commit sha); shown in the admin "System" view, `edge` switches the update check off; not meant for `.env` |
+| `UPDATE_CHECK` | no | on | `false` → no update check; otherwise DEMS asks `GET https://api.github.com/repos/<UPDATE_CHECK_REPO>/releases` 30 s after start and every 12 h (anonymous, generic `User-Agent`, nothing about the installation) and shows a newer version in the admin "System" view (`utils/updateCheck.js`); always off in dev mock mode, in the test helpers and on `edge` images |
+| `UPDATE_CHECK_REPO` | no | `VibeGenZero/DEMS` | `owner/repo` whose GitHub releases the update check reads (forks); anything else turns the check off |
 | `DEV_MOCK` | no | — | dev mock mode (set automatically by `npm run dev:mock`) |
 | `DEV_SQLITE_PATH` | no | `data/dems.dev.sqlite` | database of the dev mock mode |
 | `DEV_UPLOAD_DIR` | no | `data/dev-uploads` | banner folder of the dev mock mode (becomes `UPLOAD_DIR`) |
