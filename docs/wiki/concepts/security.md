@@ -3,13 +3,17 @@ id: security
 title: Security model and open audit findings
 type: concept
 tags: [security, csp, helmet, csrf, xss, rate-limit, audit, https]
-sources: [server.js, routes/setup.js, utils/setupState.js, docs/security/SECURITY_AUDIT_2026-04-22.md, ISSUE.md, routes/events.js, routes/user.js, utils/eventUtils.js, bot/threadSync.js, public/js/core/ui.js, public/js/core/actions.js]
+sources: [server.js, SECURITY.md, routes/setup.js, utils/setupState.js, docs/security/SECURITY_AUDIT_2026-04-22.md, ISSUE.md, routes/events.js, routes/user.js, utils/eventUtils.js, bot/threadSync.js, public/js/core/ui.js, public/js/core/actions.js]
 depends_on: [server]
 see_also: [auth-session, known-issues, deployment]
 ---
 # Security model and open audit findings
 
 > TL;DR: Defenses: helmet CSP (scripts, styles and fonts only from `'self'`; no inline scripts, event handlers or styles), CORS to `BASE_URL`, rate limits, double-submit CSRF on `/api` and `/auth`, httpOnly session cookie, server-side admin guards, `escapeHtml` + DOMPurify in the SPA. The 2026-04-22 audit (28 findings) and the 2026-10-25 pentest are tracked in the tables below — check them before touching auth, events or exports. Serve DEMS over HTTPS: helmet's default `upgrade-insecure-requests` breaks plain-HTTP access from anything but localhost.
+
+## Reporting vulnerabilities
+
+`SECURITY.md` is the public policy: reports only via GitHub private vulnerability reporting (Security › Report a vulnerability), first answer within 7 days, fixes only for the newest release (`latest`) and the newest pre-release (`beta`), then a GitHub Security Advisory. It also lists what is in and out of scope and the hardening hints for operators; keep it in step when a defense below changes.
 
 ## Defenses in place
 
