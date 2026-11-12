@@ -887,55 +887,58 @@
     <!-- ── ADMIN SECTION ── -->
     <section id="admin-section" class="app-section is-hidden">
       <div class="container section-container">
-        <div class="section-header d-flex justify-content-between align-items-center flex-wrap gap-3">
+        <div class="section-header admin-header">
           <div>
-            <h2><i class="bi bi-gear me-2"></i>Admin Dashboard</h2>
+            <h2><i class="bi bi-gear me-2"></i>Admin-Dashboard</h2>
             <p class="text-secondary mb-0">Erstelle und verwalte Events.</p>
           </div>
-          <div class="d-flex gap-2">
-            <button class="btn btn-outline-light" data-click="showImportDiscordEventsModal">
+          <div class="admin-header-actions">
+            <button class="btn btn-secondary" data-click="showImportDiscordEventsModal">
               <i class="bi bi-discord me-1"></i>Import aus Discord
             </button>
             <button class="btn btn-accent" data-click="showCreateEventModal">
               <i class="bi bi-plus-circle me-1"></i>Neues Event
             </button>
-            <a class="btn btn-outline-light" href="#polls">
-              <i class="bi bi-ui-checks-grid me-1"></i>Abstimmungen
-            </a>
-            <a class="btn btn-outline-light" href="#members">
-              <i class="bi bi-people me-1"></i>Mitglieder
-            </a>
-            <a class="btn btn-outline-light" href="#insights">
-              <i class="bi bi-graph-up me-1"></i>Auswertungen
-            </a>
-            <a class="btn btn-outline-light" href="#system">
-              <i class="bi bi-sliders me-1"></i>System
-            </a>
-            <button class="btn btn-outline-light" data-click="showBotMessagesModal">
-              <i class="bi bi-chat-dots me-1"></i>Bot-Nachrichten
-            </button>
-            <button class="btn btn-outline-light" data-click="loadAuditLog">
-              <i class="bi bi-journal-text me-1"></i>Audit-Log
-            </button>
-            <div class="dropdown ms-2">
-              <button class="btn btn-danger dropdown-toggle" type="button" data-bs-toggle="dropdown">
-                <i class="bi bi-exclamation-triangle-fill me-1"></i>Danger Zone
-              </button>
-              <ul class="dropdown-menu dropdown-menu-end">
-                <li><a class="dropdown-item" href="#" data-click="showMaintenanceModal">
-                  <i class="bi bi-tools me-2"></i>Wartungsmodus
-                </a></li>
-                <li><a class="dropdown-item" href="#" data-click="showResetModal">
-                  <i class="bi bi-trash3 me-2"></i>System Reset
-                </a></li>
-                <li><hr class="dropdown-divider"></li>
-                <li><a class="dropdown-item is-danger" href="#" data-click="activatePanicMode">
-                  <i class="bi bi-shield-exclamation me-2"></i>PANIC BUTTON
-                </a></li>
-              </ul>
-            </div>
           </div>
         </div>
+
+        <nav class="admin-toolbar" aria-label="Verwaltung">
+          <a class="btn btn-ghost btn-sm" href="#polls">
+            <i class="bi bi-ui-checks-grid me-1"></i>Abstimmungen
+          </a>
+          <a class="btn btn-ghost btn-sm" href="#members">
+            <i class="bi bi-people me-1"></i>Mitglieder
+          </a>
+          <a class="btn btn-ghost btn-sm" href="#insights">
+            <i class="bi bi-graph-up me-1"></i>Auswertungen
+          </a>
+          <a class="btn btn-ghost btn-sm" href="#system">
+            <i class="bi bi-sliders me-1"></i>System
+          </a>
+          <button class="btn btn-ghost btn-sm" data-click="showBotMessagesModal">
+            <i class="bi bi-chat-dots me-1"></i>Bot-Nachrichten
+          </button>
+          <button class="btn btn-ghost btn-sm" data-click="loadAuditLog">
+            <i class="bi bi-journal-text me-1"></i>Audit-Log
+          </button>
+          <div class="dropdown admin-toolbar-danger">
+            <button class="btn btn-danger-soft btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown">
+              <i class="bi bi-exclamation-triangle-fill me-1"></i>Danger Zone
+            </button>
+            <ul class="dropdown-menu dropdown-menu-end">
+              <li><a class="dropdown-item" href="#" data-click="showMaintenanceModal">
+                <i class="bi bi-tools me-2"></i>Wartungsmodus
+              </a></li>
+              <li><a class="dropdown-item" href="#" data-click="showResetModal">
+                <i class="bi bi-trash3 me-2"></i>System Reset
+              </a></li>
+              <li><hr class="dropdown-divider"></li>
+              <li><a class="dropdown-item is-danger" href="#" data-click="activatePanicMode">
+                <i class="bi bi-shield-exclamation me-2"></i>PANIC BUTTON
+              </a></li>
+            </ul>
+          </div>
+        </nav>
 
         <!-- Stats Dashboard -->
         <div class="stats-grid" id="admin-stats">

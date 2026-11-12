@@ -147,9 +147,11 @@ function renderLegacy() {
       <div class="row g-3 mb-4">
         <div class="col-md-4">
           <div class="stat-card">
-            <div class="stat-icon"><i class="bi bi-star text-accent"></i></div>
-            <div class="stat-value">42</div>
-            <div class="stat-label">stat-card</div>
+            <div class="stat-icon"><i class="bi bi-star" aria-hidden="true"></i></div>
+            <div class="stat-body">
+              <div class="stat-value">42</div>
+              <div class="stat-label">stat-card (.is-warning | -success | -info | -muted)</div>
+            </div>
           </div>
         </div>
         <div class="col-md-4">

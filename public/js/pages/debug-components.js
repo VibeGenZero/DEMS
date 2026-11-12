@@ -25,8 +25,8 @@ const block = (id, title, classes, body) => `
 const row = (label, content) => `<div class="sg-row"><div class="sg-label">${label}</div><div class="sg-samples">${content}</div></div>`;
 
 function buttonBlock() {
-    const variants = ['btn-primary', 'btn-secondary', 'btn-ghost', 'btn-danger', 'btn-discord'];
-    return block('button', 'Button', '.btn + .btn-primary | -secondary | -ghost | -danger | -discord', [
+    const variants = ['btn-primary', 'btn-secondary', 'btn-ghost', 'btn-danger', 'btn-danger-soft', 'btn-discord'];
+    return block('button', 'Button', '.btn + .btn-primary | -secondary | -ghost | -danger | -danger-soft | -discord', [
         row('Varianten', variants.map(variant => `<button type="button" class="btn ${variant}">${variant}</button>`).join('')),
         row('Größen', `
             <button type="button" class="btn btn-primary btn-sm">btn-sm · 32</button>

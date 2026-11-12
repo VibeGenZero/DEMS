@@ -217,6 +217,22 @@ a {
   --bs-btn-disabled-border-color: var(--danger-fill);
 }
 
+/* Danger, quiet: a dangerous menu or action that should not shout (e.g. "Danger Zone") */
+.btn-danger-soft {
+  --bs-btn-color: var(--danger);
+  --bs-btn-bg: var(--danger-bg);
+  --bs-btn-border-color: var(--danger-border);
+  --bs-btn-hover-color: var(--on-danger);
+  --bs-btn-hover-bg: var(--danger-fill);
+  --bs-btn-hover-border-color: var(--danger-fill);
+  --bs-btn-active-color: var(--on-danger);
+  --bs-btn-active-bg: var(--danger-fill-hover);
+  --bs-btn-active-border-color: var(--danger-fill-hover);
+  --bs-btn-disabled-color: var(--danger);
+  --bs-btn-disabled-bg: var(--danger-bg);
+  --bs-btn-disabled-border-color: var(--danger-border);
+}
+
 .btn-discord {
   --bs-btn-color: var(--on-discord);
   --bs-btn-bg: var(--discord);

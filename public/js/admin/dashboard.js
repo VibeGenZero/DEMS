@@ -42,49 +42,52 @@ export async function showAdminSection() {
     await Promise.all([loadAdminStats(), loadAdminEvents()]);
 }
 
+/**
+ * Tiles of the admin stats, in display order. `tone` colours the icon of a
+ * registration status like its badges (empty = accent).
+ *
+ * @param {Object} stats -> Answer of GET /api/admin/stats.
+ * @returns {{ icon: string, value: number, label: string, tone: string }[]}
+ */
+export function adminStatTiles(stats) {
+    const events = stats.events || {};
+    const registrations = stats.registrations || {};
+    return [
+        { icon: 'calendar-event', value: events.total, label: 'Events gesamt', tone: '' },
+        { icon: 'play-circle', value: events.active, label: 'Aktive Events', tone: '' },
+        { icon: 'people', value: registrations.total, label: 'Registrierungen', tone: '' },
+        { icon: 'hourglass-split', value: registrations.pending, label: 'Ausstehend', tone: 'warning' },
+        { icon: 'check-circle', value: registrations.accepted, label: 'Angenommen', tone: 'success' },
+        { icon: 'list-nested', value: registrations.waitlisted, label: 'Warteliste', tone: 'info' },
+        { icon: 'question-circle', value: registrations.tentative, label: 'Ersatzbank', tone: 'muted' }
+    ].map(tile => ({ ...tile, value: Number(tile.value) || 0 }));
+}
+
+/**
+ * One compact stat tile: icon on the left, value and label next to it.
+ *
+ * @param {{ icon: string, value: number, label: string, tone: string }} tile
+ * @returns {string} -> Markup.
+ */
+function statTile({ icon, value, label, tone }) {
+    const toneClass = tone ? ` is-${tone}` : '';
+    return `
+      <div class="stat-card${toneClass}">
+        <div class="stat-icon"><i class="bi bi-${icon}" aria-hidden="true"></i></div>
+        <div class="stat-body">
+          <div class="stat-value">${value}</div>
+          <div class="stat-label">${escapeHtml(label)}</div>
+        </div>
+      </div>`;
+}
+
 export async function loadAdminStats() {
     const container = document.getElementById('admin-stats');
     try {
         const res = await fetch('/api/admin/stats');
         const stats = await res.json();
 
-        container.innerHTML = `
-      <div class="stat-card">
-        <div class="stat-icon"><i class="bi bi-calendar-event"></i></div>
-        <div class="stat-value">${stats.events.total}</div>
-        <div class="stat-label">Events Gesamt</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-icon"><i class="bi bi-play-circle"></i></div>
-        <div class="stat-value">${stats.events.active}</div>
-        <div class="stat-label">Aktive Events</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-icon"><i class="bi bi-people"></i></div>
-        <div class="stat-value">${stats.registrations.total}</div>
-        <div class="stat-label">Registrierungen</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-icon"><i class="bi bi-hourglass-split"></i></div>
-        <div class="stat-value">${stats.registrations.pending}</div>
-        <div class="stat-label">Ausstehend</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-icon"><i class="bi bi-check-circle"></i></div>
-        <div class="stat-value">${stats.registrations.accepted}</div>
-        <div class="stat-label">Angenommen</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-icon"><i class="bi bi-list-nested"></i></div>
-        <div class="stat-value">${stats.registrations.waitlisted}</div>
-        <div class="stat-label">Warteliste</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-icon"><i class="bi bi-question-circle"></i></div>
-        <div class="stat-value">${stats.registrations.tentative || 0}</div>
-        <div class="stat-label">Ersatzbank</div>
-      </div>
-    `;
+        container.innerHTML = adminStatTiles(stats).map(statTile).join('');
 
         animateFromTo('.stat-card', { y: 20, opacity: 0 }, { y: 0, opacity: 1, duration: 0.3, stagger: 0.05, ease: 'power3.out' });
         countUpAll(container.querySelectorAll('.stat-value'));
