@@ -39,5 +39,10 @@
       "landing/**",
       "test/**"
     ]
+  },
+  "overrides": {
+    "nodemon": {
+      "minimatch": "^11.0.8"
+    }
   }
 }
