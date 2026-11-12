@@ -25,6 +25,8 @@ see_also: [docker, testing, known-issues]
 
 Nodemon ignores `data/`, `public/`, `docs/`, `landing/`, `test/` — frontend edits need only a browser reload.
 
+`package.json` `overrides` lifts nodemon's `minimatch` to `^11.0.8` (Dependabot alert 1, GHSA-g3hv-75wg-m249: every 10.x is affected, nodemon 3.1.14 still asks for `^10.2.1`). nodemon only calls `minimatch(file, pattern, { dot, nocase, windowsPathsNoEscape })`, which 11 keeps. Drop the override once a nodemon release depends on minimatch 11.
+
 ## Useful data in mock mode
 
 Personas `admin`, `raider`, `member`, `newbie` (`/auth/dev-login/<id>`); check-in code of the running event `DEMO42`; admin reset/panic password `dev`; event ids `dev-event-*` (see `EVENT_ID` in `dev/seedData.js`).

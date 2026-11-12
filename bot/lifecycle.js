@@ -5,7 +5,7 @@
 const { Events } = require('discord.js');
 const { debugLog } = require('../utils/debugLog');
 const { buildBotInviteUrl } = require('../utils/botPermissions');
-const { client, state } = require('./client');
+const { client, state, applyGatewayOptions } = require('./client');
 const { registerSlashCommands } = require('./commands');
 const { applyBotSettings, stopPresenceUpdates } = require('./settings');
 const { handleInteraction } = require('./interactions');
@@ -86,6 +86,7 @@ async function startBot(token) {
         return false;
     }
     try {
+        applyGatewayOptions();
         await client.login(token);
         return true;
     } catch (err) {
@@ -137,6 +138,8 @@ async function restartBot(token, { timeoutMs = RESTART_TIMEOUT_MS } = {}) {
             timer = setTimeout(() => resolve(false), timeoutMs);
             if (typeof timer.unref === 'function') timer.unref();
         });
+        // Takes effect on a first login (setup wizard); an existing gateway keeps its intents
+        applyGatewayOptions();
         await client.login(token);
         if (!(await Promise.race([ready, timeout]))) return { ok: false, error: 'timeout' };
 

@@ -110,7 +110,7 @@ export function renderInsightRanges(active) {
 }
 
 function statCard(icon, value, label) {
-    return `<div class="stat-card"><div class="stat-icon"><i class="bi bi-${icon}" aria-hidden="true"></i></div><div class="stat-value">${value}</div><div class="stat-label">${label}</div></div>`;
+    return `<div class="stat-card"><div class="stat-icon"><i class="bi bi-${icon}" aria-hidden="true"></i></div><div class="stat-body"><div class="stat-value">${value}</div><div class="stat-label">${label}</div></div></div>`;
 }
 
 /**

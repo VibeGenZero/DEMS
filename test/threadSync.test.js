@@ -123,11 +123,12 @@ test('a comment is found by its Discord message', async () => {
 
 const { runNode, parseLastLine, repoPath } = require('./helpers');
 
-/** Intents and partials of a freshly loaded client in a child process. */
+/** Intents and partials a freshly loaded client logs in with (startBot applies them first, #146), in a child process. */
 function clientOptions(env, { mock = false } = {}) {
     const code = `
         ${mock ? `require(${repoPath('dev/mockMode.js')});` : ''}
-        const { client } = require(${repoPath('bot/client.js')});
+        const { client, applyGatewayOptions } = require(${repoPath('bot/client.js')});
+        applyGatewayOptions();
         const { GatewayIntentBits, Partials } = require(${JSON.stringify(require.resolve('discord.js'))});
         console.log(JSON.stringify({
             content: client.options.intents.has(GatewayIntentBits.MessageContent),

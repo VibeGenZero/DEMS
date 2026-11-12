@@ -52,7 +52,7 @@ see_also: [reminders-presence, add-api-endpoint]
 ## Rules
 
 - User-facing text in German; templates through `parseTemplate(template, vars)`.
-- Need another gateway intent? Add it to the `Client` options in `bot/client.js` AND enable it in the developer portal if privileged.
+- Need another gateway intent? Add it to `BASE_INTENTS` (or, when it depends on a setting, to `applyGatewayOptions`) in `bot/client.js` AND enable it in the developer portal if privileged.
 - Modules in `bot/` require each other, never `../bot` (the facade); code outside the bot requires only `bot.js`. Both are checked by `test/botModules.test.js`.
 - Calls between bot modules bypass the mock — keep logic that should be simulated in exported helpers.
 - Keep requires of `utils/registrationService`, `utils/eventUtils`, `utils/pollStore` and `utils/announcementRefresh` inside functions: those utils require `bot.js` at load time.

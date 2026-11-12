@@ -136,3 +136,41 @@ test('login errors are mapped to the codes the setup names (#138)', () => {
     assert.equal(classifyLoginError(new Error('socket hang up')), 'unknown');
     assert.equal(classifyLoginError(null), 'unknown');
 });
+
+test('startBot requests the thread sync intents when the value arrives after loading the bot (#146)', async () => {
+    const { GatewayIntentBits, Partials } = require('discord.js');
+    const originalLogin = bot.client.login;
+    let atLogin = null;
+    // Like a value from the setup wizard: loadSystemConfig fills process.env after require('./bot')
+    process.env.DISCORD_THREAD_SYNC = 'true';
+    bot.client.login = async () => {
+        atLogin = {
+            messageContent: bot.client.options.intents.has(GatewayIntentBits.MessageContent),
+            partials: [...bot.client.options.partials]
+        };
+        return 'token';
+    };
+    try {
+        assert.equal(await bot.startBot('token'), true);
+        assert.equal(atLogin.messageContent, true, 'Message Content intent requested at login');
+        assert.ok(atLogin.partials.includes(Partials.Message) && atLogin.partials.includes(Partials.Channel));
+        assert.ok(bot.client.options.intents.has(GatewayIntentBits.GuildMembers), 'base intents kept');
+    } finally {
+        bot.client.login = originalLogin;
+        delete process.env.DISCORD_THREAD_SYNC;
+    }
+});
+
+test('without the thread sync the bot asks for no Message Content intent (#146)', async () => {
+    const { GatewayIntentBits } = require('discord.js');
+    const originalLogin = bot.client.login;
+    let messageContent = null;
+    bot.client.login = async () => { messageContent = bot.client.options.intents.has(GatewayIntentBits.MessageContent); };
+    try {
+        await bot.startBot('token');
+        assert.equal(messageContent, false);
+        assert.deepEqual(bot.client.options.partials, []);
+    } finally {
+        bot.client.login = originalLogin;
+    }
+});
