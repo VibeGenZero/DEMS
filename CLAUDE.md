@@ -1,6 +1,6 @@
 # CLAUDE.md — DEMS (Dein Event-Management-System)
 
-DEMS lets a Discord community plan events: members log in with Discord, register on the website or directly in Discord (button + modal), admins manage events, registrations, announcements, bot settings and maintenance mode. One Node.js process runs an Express 5 REST API + static SPA and a discord.js bot; data lives in PostgreSQL (production, set up by `compose.yaml`) or a local SQLite file (dev mock mode, tests) behind the same Firestore-style API.
+DEMS lets a Discord community plan events: members log in with Discord, register on the website or directly in Discord (button + modal), admins manage events, registrations, announcements, bot settings and maintenance mode. One Node.js process runs an Express 5 REST API + static SPA and a discord.js bot; data lives in PostgreSQL (production, set up by `compose.yaml`) or a local SQLite file (a single container without PostgreSQL, dev mock mode, tests) behind the same Firestore-style API.
 
 ## Start here: the wiki
 

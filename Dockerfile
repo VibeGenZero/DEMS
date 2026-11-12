@@ -50,8 +50,9 @@ ENV DEMS_CHANNEL=$DEMS_CHANNEL \
 COPY --from=deps --chown=node:node /app/node_modules ./node_modules
 COPY --chown=node:node . .
 
-# Uploaded banners live on a volume so they survive container rebuilds;
-# the data itself is in PostgreSQL (compose.yaml)
+# Uploaded banners live on a volume so they survive container rebuilds.
+# The data itself is in PostgreSQL (compose.yaml) or, for a single container
+# without PostgreSQL, in the SQLite file /app/data/dems.sqlite on this volume.
 RUN mkdir -p /app/data && chown node:node /app/data
 VOLUME ["/app/data"]
 

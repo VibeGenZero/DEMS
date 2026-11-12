@@ -1,6 +1,17 @@
 {
-    "version": "3.1.0",
+    "version": "3.1.1",
     "releases": [
+        {
+            "version": "3.1.1",
+            "date": "2026-11-12",
+            "news": [
+                {
+                    "title": "🐳 Start mit einem einzigen Container",
+                    "content": "Für alle, die DEMS selbst hosten: Das Docker-Image läuft jetzt auch allein. Ohne PostgreSQL-Verbindung bricht DEMS nicht mehr ab, sondern legt eine eingebaute Datenbank im Datenordner an – „docker run“ mit einem Volume auf /app/data genügt. Wer die compose.yaml nutzt, bleibt unverändert bei PostgreSQL.",
+                    "highlight": true
+                }
+            ]
+        },
         {
             "version": "3.1.0",
             "date": "2026-11-12",

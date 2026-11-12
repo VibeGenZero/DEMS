@@ -16,8 +16,7 @@ see_also: [data-model, conventions, add-collection]
 | Environment | Result |
 |---|---|
 | `DATABASE_URL` or `PGHOST` set (`DATABASE_URL` wins) | PostgreSQL; `PGPASSWORD_FILE` (file content, trimmed) or `PGPASSWORD` |
-| neither, `NODE_ENV=production` | `process.exit(1)`: "Keine PostgreSQL-Verbindung konfiguriert …" |
-| neither, otherwise | SQLite at `SQLITE_PATH` (default `./data/dems.sqlite`) |
+| neither | SQLite at `SQLITE_PATH` (default `./data/dems.sqlite`, in the image `/app/data/dems.sqlite` on the volume). With `NODE_ENV=production` (a single container started with `docker run`, since 3.1.1) the log adds a hint that names the volume (`ℹ️ Keine PostgreSQL-Verbindung konfiguriert: DEMS nutzt die eingebaute Datenbank …`) |
 | `DEV_MOCK=true` | always SQLite: `dev/mockMode.js` blanks `DATABASE_URL` and `PG*` |
 
 Empty values count as unset. The startup log names the store without the password (`✅ Datenspeicher: PostgreSQL (postgres:5432/dems)`). `compose.yaml` sets `PGHOST` & co. itself — see [docker](../ops/docker.md).

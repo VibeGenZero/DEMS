@@ -2,8 +2,9 @@
  * Which store DEMS uses, read from the environment.
  *
  * PostgreSQL when DATABASE_URL or PGHOST is set (DATABASE_URL wins);
- * otherwise SQLite outside production; production without PostgreSQL
- * refuses to start, so it never writes into a file by accident.
+ * otherwise the SQLite file. That also holds in production, so the image
+ * runs on its own (`docker run`) without a database container;
+ * compose.yaml pins PGHOST and therefore always gets PostgreSQL.
  */
 const fs = require('fs');
 const path = require('path');
@@ -43,11 +44,10 @@ function postgresConfigFromEnv(env) {
 
 /**
  * @param {Object} env -> Usually process.env.
- * @returns {'postgres'|'sqlite'|'refuse'}
+ * @returns {'postgres'|'sqlite'}
  */
 function selectStoreKind(env) {
-  if (valueOf(env, 'DATABASE_URL') || valueOf(env, 'PGHOST')) return 'postgres';
-  return env.NODE_ENV === 'production' ? 'refuse' : 'sqlite';
+  return (valueOf(env, 'DATABASE_URL') || valueOf(env, 'PGHOST')) ? 'postgres' : 'sqlite';
 }
 
 /**

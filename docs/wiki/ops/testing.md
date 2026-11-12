@@ -16,7 +16,7 @@ see_also: [dev-mock-mode, conventions]
 |---|---|
 | `sqliteAdapter.test.js` | `doc(collectionRef, id)` support of the SQLite adapter |
 | `documentStore.sqlite.test.js`, `documentStore.postgres.test.js` | the shared contract `documentStore.contract.js` (CRUD, every `where` operator, `orderBy`, id order, key order, batch rollback, concurrent updates) on SQLite, and on PostgreSQL when `TEST_DATABASE_URL` is set (else reported as skipped); plus the PostgreSQL connect retry |
-| `storeSelection.test.js` | `db/config.js`: `DATABASE_URL` vs `PGHOST`, `PGPASSWORD_FILE` trimmed, production without PostgreSQL exits 1, no password in the log line |
+| `storeSelection.test.js` | `db/config.js`: `DATABASE_URL` vs `PGHOST`, `PGPASSWORD_FILE` trimmed, production without PostgreSQL uses SQLite and logs the volume hint, no password in the log line |
 | `migrate.test.js` | `db/migrate.js`: order, once only, stop at a failing step, continue after the fix, id check; `server.js` listens only after the migrations (fixture `slowMigrationServer.js`) |
 | `backupDocs.test.js` | every documented `pg_dump` backup (README, deployment) uses `docker compose exec -T`, so the dump gets no TTY line ends |
 | `mockMode.test.js` | production guard, forced environment, `dev/start.js` refusing production |

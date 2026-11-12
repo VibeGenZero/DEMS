@@ -13,7 +13,7 @@ const newer = (a, b) => compareVersions(a, b) > 0;
 test('the release notes are a list of releases, newest first', () => {
     assert.ok(Array.isArray(data.releases) && data.releases.length > 0, 'releases list');
     assert.equal(data.version, data.releases[0].version, 'top-level version is the newest release');
-    assert.equal(data.releases[0].version, '3.1.0', 'newest release is 3.1.0');
+    assert.equal(data.releases[0].version, '3.1.1', 'newest release is 3.1.1');
     for (let i = 1; i < data.releases.length; i++) {
         assert.ok(newer(data.releases[i - 1].version, data.releases[i].version),
             `${data.releases[i - 1].version} must be newer than ${data.releases[i].version}`);

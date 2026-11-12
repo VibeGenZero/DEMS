@@ -14,7 +14,7 @@ see_also: [security, known-issues]
 ## Requirements
 
 - HTTPS in front of DEMS (Traefik, Caddy, PaaS) — plain `http://<ip>:3000` breaks the SPA (CSP `upgrade-insecure-requests`, see [security](../concepts/security.md)).
-- Persistent storage: PostgreSQL with its data on a volume (production refuses to start without it), plus `/app/data` on a volume for uploaded banners (`UPLOAD_DIR`, default `/app/data/uploads`).
+- Persistent storage: PostgreSQL with its data on a volume, plus `/app/data` on a volume for uploaded banners (`UPLOAD_DIR`, default `/app/data/uploads`). Without a PostgreSQL connection (single container: `docker run -d -p 3000:3000 -v dems-data:/app/data moritakahashi/dems`) DEMS uses the SQLite file `/app/data/dems.sqlite` on that volume (since 3.1.1); there is no automatic move from SQLite to PostgreSQL, so compose with PostgreSQL stays the recommended setup.
 - Discord developer portal: redirect `https://<host>/auth/discord/callback`, Server Members Intent enabled.
 - Bot invited with the URL it logs on startup ("Bot Invite URL"); a bot invited before 2.7 lacks Connect and CreateEvents — re-invite or add them to the bot role.
 - Either a `.env` with `BASE_URL=https://<host>` and the Discord values ([configuration](configuration.md)), or no Discord values at all: DEMS then starts in setup mode (#138). Open `https://<host>`, enter the setup PIN from the log (`docker compose logs dems`, line `Setup-PIN: …`) and fill in the wizard; it stores the values in the database ([security](../concepts/security.md#first-run-setup-138)). The wizard needs HTTPS like the login (Secure session cookie in production): set up the TLS proxy first.

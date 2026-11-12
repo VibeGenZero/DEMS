@@ -25,7 +25,7 @@ see_also: [docker, deployment, dev-mock-mode]
 | `DATABASE_URL` | production: this or `PGHOST` | — | PostgreSQL connection URL (`postgres://user:pass@host:5432/db`); wins over `PG*`. Not needed with `compose.yaml` |
 | `PGHOST`, `PGPORT`, `PGDATABASE`, `PGUSER` | production: `PGHOST` or `DATABASE_URL` | —, `5432`, `dems`, `dems` | PostgreSQL as single values; `compose.yaml` sets them to its `postgres` service |
 | `PGPASSWORD` / `PGPASSWORD_FILE` | with `PGHOST` | — | password, or a file holding only the password (trimmed; wins over `PGPASSWORD`). Compose: `/run/dems-secrets/db_password`, generated on the first start |
-| `SQLITE_PATH` | no | `./data/dems.sqlite` | SQLite file for dev and tests; used only without PostgreSQL values and outside production |
+| `SQLITE_PATH` | no | `./data/dems.sqlite` | SQLite file, used whenever no PostgreSQL value is set: dev, tests and a single production container without PostgreSQL (`docker run`; in the image `/app/data/dems.sqlite`) |
 | `TEST_DATABASE_URL` | no | — | tests only: PostgreSQL for the contract tests and the production cookie test ([testing](testing.md)) |
 | `UPLOAD_DIR` | no | `./data/uploads` | folder of uploaded banners (`banners/` below it, W-12); in Docker `/app/data/uploads` on the data volume. The files always live on the local disk, not in the database, so a host without a persistent disk loses them on redeploy |
 | `SETUP_PIN` | no | generated per start | PIN that unlocks the setup wizard while DEMS is not set up (#138); empty → a random 8-digit PIN is printed in the log at every start (`🔑 … Setup-PIN: …`); ignored once the setup is done ([first-run setup](../concepts/security.md#first-run-setup-138)) |
