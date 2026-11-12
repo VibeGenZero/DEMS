@@ -13,7 +13,7 @@ const newer = (a, b) => compareVersions(a, b) > 0;
 test('the release notes are a list of releases, newest first', () => {
     assert.ok(Array.isArray(data.releases) && data.releases.length > 0, 'releases list');
     assert.equal(data.version, data.releases[0].version, 'top-level version is the newest release');
-    assert.equal(data.releases[0].version, '3.0.0', 'newest release is 3.0.0');
+    assert.equal(data.releases[0].version, '3.1.0', 'newest release is 3.1.0');
     for (let i = 1; i < data.releases.length; i++) {
         assert.ok(newer(data.releases[i - 1].version, data.releases[i].version),
             `${data.releases[i - 1].version} must be newer than ${data.releases[i].version}`);
@@ -36,9 +36,9 @@ test('every release has a version, a date and entries with title and text', () =
     }
 });
 
-test('the history from 1.1.0 to 3.0.0-rc.1 is kept; the folded 2.7.0 is not', () => {
+test('the history from 1.1.0 to 3.0.0 is kept; the folded 2.7.0 is not', () => {
     const versions = data.releases.map(release => release.version);
-    for (const version of ['3.0.0-rc.1', '3.0.0-beta.3', '2.6.0', '2.5.1', '2.5.0', '2.4.0', '2.3.1', '2.3.0', '2.2.0', '2.1.0', '2.0.1', '2.0.0', '1.1.0']) {
+    for (const version of ['3.0.0', '3.0.0-rc.1', '3.0.0-beta.3', '2.6.0', '2.5.1', '2.5.0', '2.4.0', '2.3.1', '2.3.0', '2.2.0', '2.1.0', '2.0.1', '2.0.0', '1.1.0']) {
         assert.ok(versions.includes(version), `missing ${version}`);
     }
     assert.ok(!versions.includes('2.7.0'));

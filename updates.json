@@ -1,6 +1,26 @@
 {
-    "version": "3.0.0",
+    "version": "3.1.0",
     "releases": [
+        {
+            "version": "3.1.0",
+            "date": "2026-11-12",
+            "news": [
+                {
+                    "title": "💬 Kommentare aus Discord kommen wieder an",
+                    "content": "Was du im Diskussions-Thread eines Events in Discord schreibst, erscheint wieder als Kommentar auf der Event-Seite – auch wenn der Kommentar-Sync im Einrichtungsassistenten oder unter „System“ eingeschaltet wurde. Bisher kam nur die Richtung Website → Discord an.",
+                    "highlight": true
+                },
+                {
+                    "title": "🛠️ Aufgeräumtes Admin-Dashboard",
+                    "content": "Für Admins: Die Kennzahlen sind jetzt kompakte Kacheln in einer Reihe, und Ausstehend, Angenommen, Warteliste und Ersatzbank haben ihre Statusfarbe. Neben dem Titel stehen nur noch „Neues Event“ und „Import aus Discord“; alle anderen Bereiche findest du in der Leiste darunter, die Danger Zone an ihrem Ende.",
+                    "highlight": true
+                },
+                {
+                    "title": "🔒 Sicherheitsupdate",
+                    "content": "Eine Abhängigkeit der Entwicklungswerkzeuge wurde auf eine abgesicherte Version gehoben. Das Docker-Image war davon nicht betroffen."
+                }
+            ]
+        },
         {
             "version": "3.0.0",
             "date": "2026-11-11",
