@@ -1,5 +1,9 @@
 # DEMS – Dein Event-Management-System
 
+[![Docker Hub](https://img.shields.io/badge/Docker%20Hub-moritakahashi%2Fdems-2496ED?logo=docker&logoColor=white)](https://hub.docker.com/r/moritakahashi/dems)
+[![Docker-Image-Version](https://img.shields.io/docker/v/moritakahashi/dems?sort=semver&logo=docker&logoColor=white&label=Image)](https://hub.docker.com/r/moritakahashi/dems/tags)
+[![Docker Pulls](https://img.shields.io/docker/pulls/moritakahashi/dems?logo=docker&logoColor=white)](https://hub.docker.com/r/moritakahashi/dems)
+
 DEMS plant die Events deiner Discord-Community: Mitglieder melden sich mit Discord an und tragen sich auf der Website oder direkt in Discord ein, der Bot kündigt Events an, erinnert und räumt hinterher auf. Du hostest DEMS selbst – kostenlos und Open Source (MIT).
 
 ![Event-Übersicht von DEMS](docs/images/events.png)
@@ -37,7 +41,7 @@ DEMS plant die Events deiner Discord-Community: Mitglieder melden sich mit Disco
 
 ### Was du brauchst
 
-*   Einen Server mit [Docker](https://docs.docker.com/get-docker/) (inkl. Compose), z. B. einen kleinen VPS. Das Image läuft auf `amd64` und `arm64`.
+*   Einen Server mit [Docker](https://docs.docker.com/get-docker/) (inkl. Compose), z. B. einen kleinen VPS. Das Image [`moritakahashi/dems`](https://hub.docker.com/r/moritakahashi/dems) liegt öffentlich auf Docker Hub und läuft auf `amd64` und `arm64`.
 *   Eine Domain mit **HTTPS** davor, z. B. über Caddy, Traefik oder den Proxy deines Hosters. Ohne HTTPS funktionieren Login und Einrichtung nicht.
 *   Eine Discord-Anwendung im [Developer Portal](https://discord.com/developers/applications) und Rechte zum Verwalten deines Discord-Servers. Wie du sie anlegst, zeigt dir der Einrichtungsassistent Schritt für Schritt.
 
