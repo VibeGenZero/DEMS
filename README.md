@@ -56,6 +56,21 @@ docker compose logs dems | grep Setup-PIN   # nach ein paar Sekunden
 
 Danach meldest du dich mit Discord an. Wer auf deinem Discord-Server „Administrator“ ist oder die gewählte Admin-Rolle hat, ist in DEMS Admin.
 
+### Schnellstart mit einem einzigen Container
+
+Zum Ausprobieren oder für eine kleine Community läuft das Image auch allein, ohne `compose.yaml` und ohne PostgreSQL:
+
+```bash
+docker run -d --name dems -p 3000:3000 -v dems-data:/app/data --restart unless-stopped moritakahashi/dems
+docker logs dems | grep Setup-PIN   # nach ein paar Sekunden
+```
+
+DEMS legt dann eine eingebaute Datenbank (SQLite) im Volume `dems-data` an. Auf dem eigenen Rechner öffnest du `http://localhost:3000`, auf einem Server brauchst du wie oben HTTPS davor.
+
+*   **Das Volume ist Pflicht:** Ohne `-v dems-data:/app/data` gehen die Daten verloren, sobald der Container gelöscht wird.
+*   Für den Dauerbetrieb und größere Communities empfehlen wir den Weg mit `compose.yaml` und PostgreSQL. Einen automatischen Umzug von der eingebauten Datenbank zu PostgreSQL gibt es nicht.
+*   Aktualisieren: `docker pull moritakahashi/dems`, dann `docker rm -f dems` und den `docker run`-Befehl erneut ausführen. Sichern: Container stoppen und das Volume `dems-data` sichern, darin liegen Datenbank und Banner.
+
 ### Aktualisieren
 
 ```bash

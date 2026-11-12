@@ -32,14 +32,25 @@ test('empty values count as unset', () => {
     const env = { DATABASE_URL: '', PGHOST: '' };
     assert.equal(postgresConfigFromEnv(env), null);
     assert.equal(selectStoreKind(env), 'sqlite');
-    assert.equal(selectStoreKind({ ...env, NODE_ENV: 'production' }), 'refuse');
+    assert.equal(selectStoreKind({ ...env, NODE_ENV: 'production' }), 'sqlite');
     assert.equal(selectStoreKind({ PGHOST: 'postgres', NODE_ENV: 'production' }), 'postgres');
 });
 
-test('production without PostgreSQL refuses to start', () => {
-    const result = runNode(`require(${repoPath('firebaseAdmin')})`, { NODE_ENV: 'production' });
-    assert.equal(result.status, 1);
-    assert.match(result.stderr, /Keine PostgreSQL-Verbindung konfiguriert/);
+test('production without PostgreSQL uses the built-in SQLite file and says so', () => {
+    const file = path.join(createTempDir('standalone'), 'dems.sqlite');
+    const result = runNode(PRINT_STORE, { NODE_ENV: 'production', SQLITE_PATH: file });
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(parseLastLine(result.stdout), 'sqlite');
+    assert.ok(fs.existsSync(file), 'database file created');
+    // The hint names the volume, so a deleted container does not take the data along
+    assert.match(result.stdout, /eingebaute Datenbank/);
+    assert.match(result.stdout, /\/app\/data/);
+});
+
+test('the built-in database hint only shows in production', () => {
+    const result = runNode(PRINT_STORE, { SQLITE_PATH: path.join(createTempDir('devhint'), 'db.sqlite') });
+    assert.equal(result.status, 0, result.stderr);
+    assert.doesNotMatch(result.stdout, /eingebaute Datenbank/);
 });
 
 test('production with DATABASE_URL uses PostgreSQL', () => {

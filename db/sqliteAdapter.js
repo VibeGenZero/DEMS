@@ -1,9 +1,9 @@
 /**
- * SQLite store for dev mock mode and tests.
+ * SQLite store: a single container without PostgreSQL, dev mock mode and tests.
  *
  * The Firestore-style API from db/documentStore.js on a SQLite file
  * (SQLITE_PATH, default ./data/dems.sqlite). firebaseAdmin.js loads this
- * module when no PostgreSQL connection is configured outside production.
+ * module when no PostgreSQL connection is configured.
  */
 const path = require('path');
 const { createDocumentStore } = require('./documentStore');

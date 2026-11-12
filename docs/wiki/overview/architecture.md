@@ -8,7 +8,7 @@ see_also: [directory-map, request-lifecycle, data-model]
 ---
 # System architecture
 
-> TL;DR: DEMS is ONE Node.js process: an Express 5 server (REST API + static single-page app) and a discord.js bot that share one data layer with a Firestore-style API — PostgreSQL in production, a local SQLite file in dev mock mode and tests. The browser SPA (vanilla JS, Bootstrap, no build step) only talks to the REST API; Discord users only talk to the bot.
+> TL;DR: DEMS is ONE Node.js process: an Express 5 server (REST API + static single-page app) and a discord.js bot that share one data layer with a Firestore-style API — PostgreSQL in production with compose, a local SQLite file for a single container without PostgreSQL, dev mock mode and tests. The browser SPA (vanilla JS, Bootstrap, no build step) only talks to the REST API; Discord users only talk to the bot.
 
 ## Components
 
@@ -34,7 +34,7 @@ flowchart LR
   Server --> Data
   Bot["discord.js bot (bot.js)"] --> Data
   Data{{"firebaseAdmin.js"}} -->|"DATABASE_URL or PGHOST"| Postgres[("PostgreSQL: db/postgresStorage.js")]
-  Data -->|"dev mock mode, tests"| SQLite[("SQLite: db/sqliteStorage.js")]
+  Data -->|"single container, dev mock mode, tests"| SQLite[("SQLite: db/sqliteStorage.js")]
 ```
 
 ## Design decisions that shape every change
