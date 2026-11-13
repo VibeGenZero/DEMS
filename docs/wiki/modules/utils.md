@@ -3,7 +3,7 @@ id: utils
 title: utils/ — domain helpers
 type: module
 tags: [utils, registration, form-fields, waitlist, audit-log, profile, debug, change-notice, banner]
-sources: [utils/registrationService.js, utils/registrationStatus.js, utils/approvalRequests.js, utils/checkin.js, utils/threadSync.js, utils/formFields.js, utils/eventUtils.js, utils/eventListing.js, utils/profileEvents.js, utils/eventUrl.js, utils/userProfile.js, utils/avatar.js, utils/botPermissions.js, utils/csv.js, utils/template.js, utils/sessionStore.js, utils/reminders.js, utils/debugLog.js, utils/capacity.js, utils/slotService.js, utils/eventLock.js, utils/announcementRefresh.js, utils/pollService.js, utils/pollStore.js, utils/eventPreview.js, utils/eventArchive.js, utils/eventCleanup.js, utils/adminActions.js, utils/localDateTime.js, utils/eventChangeNotice.js, utils/notificationPrefs.js, utils/memberOverview.js, utils/insights.js, utils/participantMessage.js, utils/bannerStore.js, utils/bulkRegistrations.js, utils/eventSeries.js, utils/eventTemplates.js, utils/botSettings.js, utils/waitlistOffers.js, utils/tentativeRegistration.js, utils/systemConfig.js, utils/timezone.js, utils/discordFetch.js, utils/adminAccess.js, utils/participations.js, utils/semver.js, utils/updateCheck.js]
+sources: [utils/registrationService.js, utils/registrationStatus.js, utils/approvalRequests.js, utils/checkin.js, utils/threadSync.js, utils/formFields.js, utils/eventUtils.js, utils/eventListing.js, utils/profileEvents.js, utils/eventUrl.js, utils/userProfile.js, utils/avatar.js, utils/botPermissions.js, utils/csv.js, utils/template.js, utils/sessionStore.js, utils/reminders.js, utils/debugLog.js, utils/capacity.js, utils/slotService.js, utils/eventLock.js, utils/announcementRefresh.js, utils/pollService.js, utils/pollStore.js, utils/eventPreview.js, utils/eventArchive.js, utils/eventCleanup.js, utils/adminActions.js, utils/localDateTime.js, utils/eventChangeNotice.js, utils/notificationPrefs.js, utils/memberOverview.js, utils/insights.js, utils/participantMessage.js, utils/bannerStore.js, utils/bulkRegistrations.js, utils/eventSeries.js, utils/eventTemplates.js, utils/botSettings.js, utils/waitlistOffers.js, utils/tentativeRegistration.js, utils/systemConfig.js, utils/timezone.js, utils/discordFetch.js, utils/adminAccess.js, utils/participations.js, utils/semver.js, utils/updateCheck.js, utils/askRefresh.js]
 part_of: [architecture]
 depends_on: [data-layer, bot]
 see_also: [registration-flow, form-fields, role-slots]
@@ -296,6 +296,10 @@ Uploaded event banners as files in `<UPLOAD_DIR>/banners/` (default `data/upload
 | `bannerForDiscord(bannerUrl)` | `{}`, `{ url }` (external) or `{ url: BASE_URL + path, file }` (upload whose file exists) |
 | `releaseBanners(values)` | deletes each upload path no stored event and no event template (`settings.bannerUrl`, W-10) uses anymore (`usedBanners` reads all events and templates once; the startup sweep uses the same set); ignores external URLs; never throws |
 | `sweepOrphanBanners({ maxAgeMs, now })` | startup clean-up: deletes unused files older than `maxAgeMs` (24 h) → count |
+
+## utils/askRefresh.js
+
+`refreshAskIfSwitched(wasOn, { bot })`: when `isFeatureOn('memberDiscord')` differs from `wasOn` (taken before a settings save), it starts `refreshAskFeature()` of `bot.js` in the background and returns `true` at once; a rejection or throw is logged as one line with the error code or name only. Never awaited, so a slow Discord (one edit per announcement, rate limits) never delays or fails the save. Used by `PUT /api/admin/ai/settings` and `PUT /api/admin/system/settings`; `bot.js` is required inside (it loads modules that load the routes). Test: `test/askRefresh.test.js`.
 
 ## utils/debugLog.js
 

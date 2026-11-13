@@ -79,6 +79,7 @@ sources: [scripts/wiki-graph.js, docs/wiki/graph.json, CLAUDE.md]
 | `utils/systemConfig.js` | configuration, utils, data-model |
 | `utils/setupState.js`, `routes/setup.js` | security, api-index, configuration |
 | `routes/adminSystem.js`, `routes/adminAi.js`, `utils/systemValues.js` | routes-admin, configuration |
+| `utils/askRefresh.js` | utils, routes-admin, bot |
 | `middleware/privacy.js`, `utils/privacyPolicy.js`, `public/js/pages/privacy.js` | auth-session, data-model |
 | `utils/timezone.js` | configuration, utils |
 | `utils/discordFetch.js` | routes-auth, utils |

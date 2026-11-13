@@ -110,29 +110,51 @@ test('no answer contains the stored API key', async () => {
 });
 
 const ASK_REFRESHED = 'Befehle und Ankündigungen aktualisiert (Event-Assistent)';
-const askRefreshes = () => server.output().split(ASK_REFRESHED).length - 1;
-/** Wait until the server printed the refresh line `count` times (stdout may lag behind the answer). */
-async function waitForRefreshes(count) {
-    for (let i = 0; i < 40 && askRefreshes() < count; i++) await new Promise(resolve => setTimeout(resolve, 50));
-    return askRefreshes();
+/** How often a server printed the refresh line of the mock bot. */
+const askRefreshes = (target = server) => target.output().split(ASK_REFRESHED).length - 1;
+/** Wait until the server printed the refresh line `count` times (it runs after the answer). */
+async function waitForRefreshes(count, target = server) {
+    for (let i = 0; i < 40 && askRefreshes(target) < count; i++) await new Promise(resolve => setTimeout(resolve, 50));
+    return askRefreshes(target);
 }
 
-test('the Discord switch and a changed AI_* key refresh the /ask command and the announcements', async () => {
+test('only a flip of the Discord feature refreshes /ask and the announcements, once', async () => {
     const admin = await loginAs('admin');
     const start = askRefreshes();
-    assert.equal((await admin.send('PUT', '/api/admin/ai/settings', { teaserText: 'Frag ruhig.' })).status, 200);
-    assert.equal((await admin.send('PUT', '/api/admin/system/settings', { password: 'dev', values: { SERVER_NAME: 'Fragerunde' } })).status, 200);
-    assert.equal(await waitForRefreshes(start + 1), start, 'other values leave Discord alone');
+    for (const body of [{ teaserText: 'Frag ruhig.' }, { assistantName: 'Fragefuchs' }, { memberQuestionsPerHour: 30 }]) {
+        assert.equal((await admin.send('PUT', '/api/admin/ai/settings', body)).status, 200);
+    }
+    for (const values of [{ SERVER_NAME: 'Fragerunde' }, { AI_MODEL_ADMIN: 'mock-admin' }]) {
+        const saved = await admin.send('PUT', '/api/admin/system/settings', { password: 'dev', values });
+        assert.equal(saved.status, 200);
+        assert.deepEqual((await saved.json()).changed, Object.keys(values));
+    }
+    assert.equal(await waitForRefreshes(start + 1), start, 'values that cannot flip the feature leave Discord alone');
 
     assert.equal((await admin.send('PUT', '/api/admin/ai/settings', { memberDiscord: false })).status, 200);
-    assert.equal(await waitForRefreshes(start + 1), start + 1);
+    assert.equal(await waitForRefreshes(start + 2), start + 1);
     assert.equal((await admin.send('PUT', '/api/admin/ai/settings', { memberDiscord: true })).status, 200);
-    assert.equal(await waitForRefreshes(start + 2), start + 2);
+    assert.equal(await waitForRefreshes(start + 3), start + 2);
+});
 
-    const saved = await admin.send('PUT', '/api/admin/system/settings', { password: 'dev', values: { AI_MODEL_ADMIN: 'mock-admin' } });
-    assert.equal(saved.status, 200);
-    assert.deepEqual((await saved.json()).changed, ['AI_MODEL_ADMIN']);
-    assert.equal(await waitForRefreshes(start + 3), start + 3);
+test('a system settings save that configures the AI flips the feature and refreshes once', async () => {
+    // A provider that needs a key and none set: the AI is not configured until the key is saved
+    const other = await startServer('dev/start.js', {
+        DEV_SQLITE_PATH: path.join(createTempDir('ai-admin-key'), 'dev.sqlite'), AI_PROVIDER: 'openai', AI_MODEL: 'gpt-test'
+    });
+    try {
+        const admin = createClient(other.baseUrl);
+        assert.equal((await admin.request('/auth/dev-login/admin')).status, 302);
+        assert.equal((await admin.send('PUT', '/api/admin/ai/settings', { memberDiscord: false })).status, 200);
+        assert.equal((await admin.send('PUT', '/api/admin/ai/settings', { memberDiscord: true })).status, 200);
+        assert.equal(await waitForRefreshes(1, other), 0, 'the switch cannot flip an unconfigured AI');
+
+        const saved = await admin.send('PUT', '/api/admin/system/settings', { password: 'dev', values: { AI_API_KEY: 'neuer-key-123' } });
+        assert.equal(saved.status, 200);
+        assert.equal(await waitForRefreshes(2, other), 1);
+    } finally {
+        await other.stop();
+    }
 });
 
 test('a typed foreign base URL never receives the stored API key', async () => {

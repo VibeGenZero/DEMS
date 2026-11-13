@@ -13,6 +13,8 @@ const { savePrivacyPolicy } = require('../utils/privacyPolicy');
 const { getUpdateStatus } = require('../utils/updateCheck');
 const { selectStoreKind } = require('../db/config');
 const { PROVIDERS, isAiConfigured } = require('../ai/client');
+const { isFeatureOn } = require('../ai/settings');
+const { refreshAskIfSwitched } = require('../utils/askRefresh');
 
 const router = express.Router();
 
@@ -101,20 +103,14 @@ router.put('/system/settings', async (req, res) => {
             }
         }
 
+        const askWasOn = isFeatureOn('memberDiscord');
         const saved = await systemConfig.saveSystemValues(changes, { by: req.session.user.id });
         if (saved.changed.length > 0) {
             // Key names only: values of secrets never reach the audit log
             await addAuditLog('UPDATE_SYSTEM_SETTINGS', req.session.user.id, { keys: saved.changed });
         }
-        // A changed AI connection can switch /ask and „Frage stellen“ on or off; Discord trouble never fails the save
-        if (saved.changed.some(key => key.startsWith('AI_'))) {
-            try {
-                const { refreshAskFeature } = require('../bot');
-                await refreshAskFeature();
-            } catch (err) {
-                console.error('Discord refresh after an AI change failed:', err.message);
-            }
-        }
+        // A changed AI connection can switch /ask and „Frage stellen“ on or off: refreshed in the background
+        refreshAskIfSwitched(askWasOn);
         res.json({ success: true, changed: saved.changed, restartRequired: saved.applies.has('restart'), bot });
     } catch (err) {
         console.error('System settings save error:', err);

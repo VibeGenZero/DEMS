@@ -9,7 +9,8 @@ const express = require('express');
 const { addAuditLog } = require('../utils/eventUtils');
 const { AiError, AI_ERROR_MESSAGES } = require('../ai/errors');
 const { PROVIDERS, isAiConfigured, getAiClient, testConnection } = require('../ai/client');
-const { loadAiSettings, saveAiSettings } = require('../ai/settings');
+const { loadAiSettings, saveAiSettings, isFeatureOn } = require('../ai/settings');
+const { refreshAskIfSwitched } = require('../utils/askRefresh');
 const { readUsage } = require('../ai/usage');
 
 const router = express.Router();
@@ -39,15 +40,13 @@ router.get('/ai/settings', async (req, res) => {
 router.put('/ai/settings', async (req, res) => {
     try {
         const before = await loadAiSettings();
+        const askWasOn = isFeatureOn('memberDiscord');
         const { settings } = await saveAiSettings(req.body);
         const body = req.body && typeof req.body === 'object' ? req.body : {};
         const keys = Object.keys(settings).filter(key => key in body && body[key] !== before[key]);
         await addAuditLog('UPDATE_AI_SETTINGS', req.session.user.id, { keys });
-        if (keys.includes('memberDiscord')) {
-            // Required here: bot.js loads modules that load the routes; the export arrives with the Discord command
-            const bot = require('../bot');
-            if (typeof bot.refreshAskFeature === 'function') await bot.refreshAskFeature();
-        }
+        // /ask and „Frage stellen“ follow the switch in the background
+        refreshAskIfSwitched(askWasOn);
         res.json({ success: true, settings });
     } catch (err) {
         if (err && err.status === 400) return res.status(400).json({ error: err.error });
