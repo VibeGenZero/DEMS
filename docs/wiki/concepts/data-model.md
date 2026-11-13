@@ -3,7 +3,7 @@ id: data-model
 title: Data model — collections and document shapes
 type: concept
 tags: [data-model, schema, collections, events, registrations, users, postgresql]
-sources: [routes/admin.js, utils/registrationService.js, utils/userProfile.js, utils/sessionStore.js, routes/events.js, utils/eventUtils.js, bot/registration.js, utils/checkin.js, bot/threadSync.js, dev/seedData.js, utils/eventTemplates.js, utils/botSettings.js]
+sources: [routes/admin.js, utils/registrationService.js, utils/userProfile.js, utils/sessionStore.js, routes/events.js, utils/eventUtils.js, bot/registration.js, utils/checkin.js, bot/threadSync.js, dev/seedData.js, utils/eventTemplates.js, utils/botSettings.js, ai/settings.js, ai/usage.js]
 depends_on: [data-layer]
 see_also: [registration-flow, event-lifecycle, maintenance-mode, glossary]
 ---
@@ -99,12 +99,17 @@ Read in full by the admin member overview (W-15, `GET /api/admin/members`, `util
 
 `{ name (unique ignoring case, ≤ 80), settings, createdAt, createdBy, updatedAt, updatedBy }` — shared by all admins, at most 50. `settings` holds only `TEMPLATE_FIELDS` of `utils/eventTemplates.js` with event shapes (see the events table): `title`, `description`, `bannerUrl`, `accentColor`, `category`, `location`, `maxParticipants`, `accessMode`, `requiredRoles`, `approvalMode`, `allowGuests`, `allowTentative`, `slots`, `assignRoleId`, `formFields`, `reminderHours` (`[{ hours }]`, no `sent`), `checkinMessage`, `autoCreateChannels`, `channelConfig`, `customBotMessages`. Never dates, deadlines, status, series fields, Discord ids, announcements or the check-in code. Applying a template in the wizard copies the settings once; events keep no link to it. An uploaded banner in `settings.bannerUrl` counts as used for the banner clean-up. Not wiped by the admin system reset.
 
+## aiUsage (id = local day `YYYY-MM-DD` in `TIMEZONE`) — written by `ai/usage.js`
+
+`{ memberQuestions, adminRequests, inputTokens, outputTokens, errors }` — counters only, never question or answer text. `pruneUsage` deletes documents older than 90 days (at start and every 6 h); `questionsToday` feeds the daily limit of `ai/limits.js`.
+
 ## Singletons
 
 | Document | Fields |
 |---|---|
 | `botMessages/templates` | `registration`, `accepted`, `rejected` (template strings, ≤2000) |
 | `botSettings/config` | `statusType`, `activityType`, `activityText`, `dmNotifications`, `reminderEnabled`, `eventStartNotifications`, `autoChannelCreation`, `announcementThreads` (B-14), `autoUpdatePresence`, `autoStatusCalendarEvents`, `announceChannel`, `welcomeMessage`, `waitlistConfirmation` (B-15, default true), `waitlistConfirmHours` (B-15, whole hours 1–72, default 12), `updatedAt` |
+| `aiSettings/config` | `memberWeb`, `memberDiscord`, `adminAssistant`, `teaserEnabled` (bool, default true), `teaserText` (1–120), `assistantName` (1–40), `extraInstructions` (≤1000), `memberQuestionsPerHour` (1–200, default 20), `dailyQuestionLimit` (0–100000, default 500, 0 = no limit), `updatedAt` — `ai/settings.js` (defaults for missing keys, cached until the next save); the connection itself (provider, key, model) lives in `systemSettings/config` |
 | `maintenanceSettings/config` | `warningEnabled`, `warningText`, `loginDisabled`, `registrationDisabled`, `plannedMaintenance`, `plannedMaintenanceStart/End/Text`, `panicMode`, `panicActivatedAt`, `panicActivatedBy`, `updatedAt`, `updatedBy` |
 | `systemSettings/config` | `values` (`{ KEY: string }`: the database-backed configuration of `utils/systemConfig.js#MANAGED_KEYS` plus the generated `SESSION_SECRET`; secrets in plain text, never returned by the API), `setupCompletedAt` (ISO or missing), `setupSource` (`wizard` \| `env`), `updatedAt`, `updatedBy` — see [configuration](../ops/configuration.md) (#138) |
 | `privacyPolicy/current` | `markdown` (≤ 50000; `''` = no policy), `version` (int, +1 per changed text, kept when removed, so a later policy is new for everyone), `updatedAt`, `updatedBy` — `utils/privacyPolicy.js` (#138) |

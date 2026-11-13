@@ -22,6 +22,8 @@ const { sharedSessionStore } = require('./utils/sessionStore');
 const store = require('./firebaseAdmin');
 const { runMigrations } = require('./db/migrate');
 const { loadSystemConfig } = require('./utils/systemConfig');
+const { loadAiSettings } = require('./ai/settings');
+const { pruneUsage } = require('./ai/usage');
 const { initSetupState, isSetupRequired } = require('./utils/setupState');
 const { createSetupRouter } = require('./routes/setup');
 const { privacyGate } = require('./middleware/privacy');
@@ -336,6 +338,7 @@ async function start() {
     // Stored configuration (setup wizard, admin "System" view) fills what .env leaves empty
     const loaded = await loadSystemConfig();
     console.log(`⚙️ Konfiguration: ${loaded.fromDb} Werte aus der Datenbank, ${loaded.fromEnv} aus der Umgebung (.env).`);
+    await loadAiSettings();
     sessionMiddleware = createSessionMiddleware();
     // Setup mode: no Discord values yet -> the wizard runs, the PIN goes to the log
     await initSetupState({ mockMode: IS_MOCK_MODE });
@@ -363,6 +366,10 @@ async function start() {
     startOfferScheduler({ waitFor: whenBotSettled() });
     // Tells admins about a newer DEMS release (GitHub releases, every 12 h; off in mock mode)
     startUpdateCheck({ mockMode: IS_MOCK_MODE });
+    // AI usage counters are kept 90 days: prune at start, then every 6 h like expired sessions
+    const pruneAiUsage = () => pruneUsage().catch((err) => console.error('KI-Nutzung konnte nicht bereinigt werden:', err.message));
+    pruneAiUsage();
+    setInterval(pruneAiUsage, 6 * 60 * 60 * 1000).unref();
     // Uploaded banners no event uses and older than a day (wizard closed without saving, W-12)
     sweepOrphanBanners().then((count) => {
         if (count > 0) console.log(`🧹 ${count} verwaiste Banner gelöscht.`);
