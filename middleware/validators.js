@@ -21,6 +21,13 @@ function isHttpUrl(value) {
     }
 }
 
+// Limits and choices of an event; also read by the admin assistant's field description (ai/draftFields.js)
+const TITLE_MAX = 200;
+const DESCRIPTION_MAX = 5000;
+const AI_NOTES_MAX = 4000;
+const ACCESS_MODES = ['open', 'role-required'];
+const APPROVAL_MODES = ['manual', 'instant'];
+
 /**
  * Check the fields of an event body. Templates (W-10) store no dates or status
  * and may have no title, so those rules are skipped for them.
@@ -29,8 +36,6 @@ function isHttpUrl(value) {
  * @param {Object} [options] -> `{ template }` for the settings of an event template.
  * @returns {Promise<string[]>} -> German error sentences, empty when everything is fine.
  */
-const AI_NOTES_MAX = 4000;
-
 async function checkEventFields(body, { template = false } = {}) {
     const { title, maxParticipants, accessMode, status, approvalMode } = body;
 
@@ -41,8 +46,8 @@ async function checkEventFields(body, { template = false } = {}) {
         errors.push('Titel ist erforderlich.');
     } else if (!template && (!title || title.trim().length === 0)) {
         errors.push('Titel ist erforderlich.');
-    } else if (title && title.trim().length > 200) {
-        errors.push('Titel darf maximal 200 Zeichen lang sein.');
+    } else if (title && title.trim().length > TITLE_MAX) {
+        errors.push(`Titel darf maximal ${TITLE_MAX} Zeichen lang sein.`);
     }
 
     // maxParticipants must be a valid number >= 0
@@ -54,15 +59,13 @@ async function checkEventFields(body, { template = false } = {}) {
     }
 
     // accessMode must be valid enum
-    const validAccessModes = ['open', 'role-required'];
-    if (accessMode && !validAccessModes.includes(accessMode)) {
-        errors.push(`Zugangsmodus muss einer der folgenden sein: ${validAccessModes.join(', ')}`);
+    if (accessMode && !ACCESS_MODES.includes(accessMode)) {
+        errors.push(`Zugangsmodus muss einer der folgenden sein: ${ACCESS_MODES.join(', ')}`);
     }
 
     // approvalMode must be valid enum
-    const validApprovalModes = ['manual', 'instant'];
-    if (approvalMode && !validApprovalModes.includes(approvalMode)) {
-        errors.push(`Genehmigungsmodus muss einer der folgenden sein: ${validApprovalModes.join(', ')}`);
+    if (approvalMode && !APPROVAL_MODES.includes(approvalMode)) {
+        errors.push(`Genehmigungsmodus muss einer der folgenden sein: ${APPROVAL_MODES.join(', ')}`);
     }
 
     // Own announcement channel of the event or template, '' = default (B-11)
@@ -119,8 +122,8 @@ async function checkEventFields(body, { template = false } = {}) {
  */
 async function checkContentFields(body, errors) {
     // Description length check
-    if (body.description && typeof body.description === 'string' && body.description.length > 5000) {
-        errors.push('Beschreibung darf maximal 5000 Zeichen lang sein.');
+    if (body.description && typeof body.description === 'string' && body.description.length > DESCRIPTION_MAX) {
+        errors.push(`Beschreibung darf maximal ${DESCRIPTION_MAX} Zeichen lang sein.`);
     }
 
     // Banner and colour end up in <img src> and inline CSS -> only http(s) URLs,
@@ -181,4 +184,7 @@ function validateBotMessages(req, res, next) {
     next();
 }
 
-module.exports = { checkEventFields, validateEvent, validateRegStatus, validateBotMessages };
+module.exports = {
+    checkEventFields, validateEvent, validateRegStatus, validateBotMessages,
+    TITLE_MAX, DESCRIPTION_MAX, AI_NOTES_MAX, ACCESS_MODES, APPROVAL_MODES
+};

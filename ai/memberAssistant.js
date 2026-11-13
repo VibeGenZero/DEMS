@@ -53,6 +53,7 @@ function buildSystemPrompt(extraInstructions, context) {
     return [SYSTEM_RULES, extra, `Event-Daten:\n${context}`].filter(Boolean).join('\n\n');
 }
 
+/** Chat turns a request may carry: user/assistant text only, the last six, each cut to 1000 characters (the admin assistant uses it too). */
 function cleanHistory(history) {
     return (Array.isArray(history) ? history : [])
         .filter(turn => turn && (turn.role === 'user' || turn.role === 'assistant') && typeof turn.text === 'string' && turn.text.trim())
@@ -206,4 +207,4 @@ async function answerEventQuestion({ signal, onToken, ...params }) {
     return prepared.run({ signal, onToken });
 }
 
-module.exports = { answerEventQuestion, prepareEventQuestion, AskRefusal, buildSystemPrompt };
+module.exports = { answerEventQuestion, prepareEventQuestion, AskRefusal, buildSystemPrompt, cleanHistory };

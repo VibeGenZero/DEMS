@@ -3,6 +3,8 @@
  * (requireAuth + requireAdmin already applied there): behaviour settings, the
  * connection test, the model list and the usage counters. The connection
  * itself (provider, key, model) is saved through PUT /system/settings.
+ * The editor assistant (event-draft, text) only answers suggestions for the
+ * form: nothing is saved, so nothing is audited.
  * No answer ever contains the stored API key.
  */
 const express = require('express');
@@ -12,6 +14,7 @@ const { PROVIDERS, isAiConfigured, getAiClient, testConnection } = require('../a
 const { loadAiSettings, saveAiSettings, isFeatureOn } = require('../ai/settings');
 const { refreshAskIfSwitched } = require('../utils/askRefresh');
 const { readUsage } = require('../ai/usage');
+const { draftEvent, rewriteText, AdminAiRefusal } = require('../ai/eventDraft');
 
 const router = express.Router();
 
@@ -88,6 +91,37 @@ router.get('/ai/usage', async (req, res) => {
     } catch (err) {
         console.error('AI usage read error:', err.message);
         res.status(500).json({ error: 'Nutzung konnte nicht geladen werden.' });
+    }
+});
+
+const ADMIN_AI_OFF = 'Die KI für Admins ist ausgeschaltet.';
+
+/** Answer an editor assistant failure: a refusal with its sentence, anything else as 500 (logged by code or name only). */
+function answerAssistantError(res, err) {
+    if (err instanceof AdminAiRefusal) return res.status(err.status).json({ error: err.error });
+    console.error('AI admin assistant error:', (err && (err.code || err.name)) || 'error');
+    return res.status(500).json({ error: 'Die KI-Anfrage konnte nicht verarbeitet werden.' });
+}
+
+/** POST /api/admin/ai/event-draft — `{ message, draft, history }` -> `{ patch, reply, questions }` for the editor form */
+router.post('/ai/event-draft', async (req, res) => {
+    try {
+        if (!isFeatureOn('adminAssistant')) return res.status(404).json({ error: ADMIN_AI_OFF });
+        const { message, draft, history } = req.body;
+        res.json(await draftEvent({ message, draft, history, adminId: req.session.user.id }));
+    } catch (err) {
+        answerAssistantError(res, err);
+    }
+});
+
+/** POST /api/admin/ai/text — `{ kind, draft }` -> `{ text }` (improved description or suggested aiNotes) */
+router.post('/ai/text', async (req, res) => {
+    try {
+        if (!isFeatureOn('adminAssistant')) return res.status(404).json({ error: ADMIN_AI_OFF });
+        const { kind, draft } = req.body;
+        res.json(await rewriteText({ kind, draft, adminId: req.session.user.id }));
+    } catch (err) {
+        answerAssistantError(res, err);
     }
 });
 

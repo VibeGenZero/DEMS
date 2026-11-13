@@ -178,3 +178,51 @@ test('a typed foreign base URL never receives the stored API key', async () => {
         foreign.close();
     }
 });
+
+const ADMIN_OFF = { error: 'Die KI für Admins ist ausgeschaltet.' };
+
+test('routes: member 403; feature off 404; mock mode answers a patch with the title', async () => {
+    const member = await loginAs('member');
+    assert.equal((await member.send('POST', '/api/admin/ai/event-draft', { message: 'Raid' })).status, 403);
+    assert.equal((await member.send('POST', '/api/admin/ai/text', { kind: 'improve-description', draft: { description: 'x' } })).status, 403);
+
+    const admin = await loginAs('admin');
+    const auditBefore = (await (await admin.request('/api/admin/audit-log?limit=500')).json()).data.length;
+    const drafted = await admin.send('POST', '/api/admin/ai/event-draft', { message: 'Raidabend am Samstag', draft: { title: '', status: 'active' }, history: [] });
+    assert.equal(drafted.status, 200);
+    assert.deepEqual(await drafted.json(), { patch: { title: 'Raidabend am Samstag' }, reply: 'Entwurf ist im Formular.', questions: [] });
+
+    const empty = await admin.send('POST', '/api/admin/ai/event-draft', { message: '' });
+    assert.equal(empty.status, 400);
+    assert.deepEqual(await empty.json(), { error: 'Bitte beschreibe kurz, was du brauchst (höchstens 2000 Zeichen).' });
+
+    const improved = await admin.send('POST', '/api/admin/ai/text', { kind: 'improve-description', draft: { title: 'Raid', description: 'Wir raiden.' } });
+    assert.equal(improved.status, 200);
+    const { text } = await improved.json();
+    assert.equal(typeof text, 'string');
+    assert.ok(text.length > 0);
+    const unknown = await admin.send('POST', '/api/admin/ai/text', { kind: 'translate', draft: {} });
+    assert.equal(unknown.status, 400);
+    assert.deepEqual(await unknown.json(), { error: 'Unbekannte KI-Aktion.' });
+    const noText = await admin.send('POST', '/api/admin/ai/text', { kind: 'improve-description' });
+    assert.equal(noText.status, 400);
+    assert.deepEqual(await noText.json(), { error: 'Es gibt noch keine Beschreibung zum Verbessern.' });
+
+    // Nothing is saved, so nothing is audited; the requests are counted
+    assert.equal((await (await admin.request('/api/admin/audit-log?limit=500')).json()).data.length, auditBefore);
+    const usage = await (await admin.request('/api/admin/ai/usage')).json();
+    assert.equal(usage.today.adminRequests, 2);
+
+    assert.equal((await admin.send('PUT', '/api/admin/ai/settings', { adminAssistant: false })).status, 200);
+    try {
+        const off = await admin.send('POST', '/api/admin/ai/event-draft', { message: 'Raid' });
+        assert.equal(off.status, 404);
+        assert.deepEqual(await off.json(), ADMIN_OFF);
+        const offText = await admin.send('POST', '/api/admin/ai/text', { kind: 'suggest-ai-notes', draft: {} });
+        assert.equal(offText.status, 404);
+        assert.deepEqual(await offText.json(), ADMIN_OFF);
+    } finally {
+        assert.equal((await admin.send('PUT', '/api/admin/ai/settings', { adminAssistant: true })).status, 200);
+    }
+    assert.equal((await admin.send('POST', '/api/admin/ai/event-draft', { message: 'Wieder da' })).status, 200);
+});

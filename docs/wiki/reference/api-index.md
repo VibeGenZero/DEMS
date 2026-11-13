@@ -92,6 +92,7 @@ Only in setup mode (afterwards 409 `Die Einrichtung ist bereits abgeschlossen.`)
 | GET | `/api/admin/ai/settings`, `/api/admin/ai/usage` (AI integration), `/api/admin/system/settings`, `/system/invite-url` (#138), `/system/update-status` (newest GitHub release vs. running version) |
 | PUT | `/api/admin/ai/settings` (behaviour settings, no password), `/api/admin/system/settings` (#138, needs `password` = admin reset password), `/api/admin/privacy` (#138, `{ markdown }`) |
 | POST | `/api/admin/ai/test`, `/api/admin/ai/models` (typed, unsaved connection values; test always answers 200) |
+| POST | `/api/admin/ai/event-draft` (`{ message, draft, history }` → `{ patch, reply, questions }`), `/api/admin/ai/text` (`{ kind, draft }` → `{ text }`) — editor assistant, 404 while `adminAssistant` is off, nothing saved |
 | POST | `/api/admin/events`, `/events/preview` |
 | POST | `/api/admin/uploads/banner` (W-12, raw image body ≤ 5 MB) |
 | PUT | `/api/admin/events/:id` (series dates: optional `applyTo: 'following'`, a later `recurringUntil` extends the series, answer adds `updatedDates` and `createdDates`, W-11), `/events/:id/status`, `/events/:id/cancel` |
