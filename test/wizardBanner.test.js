@@ -12,7 +12,7 @@ async function openWizard(routes = {}) {
     const frontend = await loadFrontendApp({ '/api/admin/roles': [], ...routes });
     frontend.state.currentUser = ADMIN;
     frontend.state.csrfToken = 'csrf-123';
-    await frontend.app.showCreateEventModal();
+    await frontend.app.openEventEditor();
     return frontend;
 }
 

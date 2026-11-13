@@ -15,8 +15,17 @@ body {
   background: var(--bg-primary);
   color: var(--text-primary);
   font-family: var(--font-body);
-  overflow-x: hidden;
   min-height: 100vh;
+}
+
+/* Nothing scrolls sideways. Only the page (html) is the scroller: "hidden" on body too would make
+   body a scroll container that never scrolls, and position: sticky inside it would never stick. */
+html {
+  overflow-x: hidden;
+}
+
+body {
+  overflow-x: clip;
 }
 
 ::selection {
@@ -3424,6 +3433,154 @@ a.info-version-badge:focus-visible {
 
 .wizard-preview-card {
   max-width: 22rem;
+}
+
+/* ═══════════════════════════════════════════ */
+/* EVENT EDITOR PAGE                           */
+/* admin/editor-page.js: top bar, the wizard   */
+/* in a form column, the preview beside it     */
+/* from 1200 px (EDITOR_WIDE_QUERY)            */
+/* ═══════════════════════════════════════════ */
+/* Sticky parts sit right below the fixed navbar (--navbar-height, tokens.css) */
+.editor-page {
+  --editor-sticky-top: var(--navbar-height);
+}
+
+/* Room between the step row (with the mode tabs on small screens) and the form */
+.editor-page .wizard-head {
+  margin-bottom: var(--space-16);
+}
+
+/* Stays below the fixed navbar while the form scrolls */
+.editor-topbar {
+  position: sticky;
+  top: var(--editor-sticky-top);
+  z-index: var(--z-sticky);
+  display: flex;
+  align-items: center;
+  gap: var(--space-12);
+  margin-bottom: var(--space-16);
+  padding: var(--space-12) 0;
+  background: var(--bg-primary);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.editor-title {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  font-size: var(--font-size-xl);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.editor-topbar-actions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-8);
+}
+
+/* Further buttons of the top bar (AI assistant) sit in the same row */
+.editor-topbar-extra {
+  display: contents;
+}
+
+.editor-saved {
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.editor-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-24);
+  align-items: start;
+}
+
+.editor-form {
+  min-width: 0;
+  padding: var(--space-24);
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius);
+}
+
+/* Unsaved input of an earlier visit is back in the form */
+.editor-restored {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-8);
+  margin-bottom: var(--space-16);
+  padding: var(--space-8) var(--space-12);
+  color: var(--info);
+  background: var(--info-bg);
+  border: 1px solid var(--info-border);
+  border-radius: var(--radius-sm);
+}
+
+.editor-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-12);
+  margin-top: var(--space-24);
+  padding-top: var(--space-16);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.editor-preview-column,
+.editor-assist {
+  min-width: 0;
+}
+
+@media (min-width: 1200px) {
+  /* Form, preview, and the assistant column once it is shown */
+  .editor-body {
+    grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr) auto;
+  }
+
+  .editor-preview-column {
+    position: sticky;
+    top: calc(var(--editor-sticky-top) + var(--space-64) + var(--space-8));
+    max-height: calc(100vh - var(--editor-sticky-top) - var(--space-64) - var(--space-24));
+    padding: var(--space-24);
+    overflow-y: auto;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius);
+  }
+
+  /* The preview has its own column: nothing to switch */
+  .editor-page .wizard-mode {
+    display: none;
+  }
+}
+
+@media (max-width: 575.98px) {
+  .editor-form {
+    padding: var(--space-16);
+  }
+
+  /* Icons only; the buttons keep their names for screen readers */
+  .editor-topbar-label {
+    display: none;
+  }
+
+  /* All five steps stay reachable in one scrolling row */
+  .editor-page .wizard-head .wizard-nav {
+    flex: 1 1 100%;
+    overflow-x: auto;
+  }
+
+  .editor-page .wizard-step-item {
+    flex: none;
+  }
 }
 
 /* ═══════════════════════════════════════════ */

@@ -19,8 +19,8 @@ const adminSection = html.slice(html.indexOf('<section id="admin-section"'), htm
 test('the admin header holds only the two main actions', () => {
     const header = adminSection.slice(0, adminSection.indexOf('</div>\n        </div>'));
     const actions = header.match(/data-click="[^"]+"/g);
-    assert.deepEqual(actions, ['data-click="showImportDiscordEventsModal"', 'data-click="showCreateEventModal"']);
-    assert.match(header, /class="btn btn-accent"[^>]*data-click="showCreateEventModal"/);
+    assert.deepEqual(actions, ['data-click="showImportDiscordEventsModal"', 'data-click="showCreateEvent"']);
+    assert.match(header, /class="btn btn-accent"[^>]*data-click="showCreateEvent"/);
 });
 
 test('the admin areas sit in a toolbar of quiet buttons that do not wrap their labels', () => {

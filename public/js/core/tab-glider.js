@@ -94,6 +94,17 @@ export function glideTabs(container) {
 }
 
 /**
+ * Tell the stylesheets how tall the fixed navbar is (`--navbar-height` on <html>):
+ * sticky bars sit right below it, and it wraps to two rows on medium screens.
+ *
+ * @returns {void}
+ */
+export function syncNavbarHeight() {
+    const height = document.getElementById('main-navbar')?.offsetHeight;
+    if (height > 0) document.documentElement.style.setProperty?.('--navbar-height', `${height}px`);
+}
+
+/**
  * Glide the tabs Bootstrap switches itself (data-bs-toggle="pill") and keep
  * the navbar marker under its link when the window changes size.
  *
@@ -106,7 +117,12 @@ export function initTabGlider(root) {
     root.addEventListener('shown.bs.modal', (event) => {
         for (const tabs of event.target?.querySelectorAll?.('.nav-pills') || []) glideTabs(tabs);
     });
-    window.addEventListener('resize', () => placeNavMarker(false));
+    const navChanged = () => {
+        placeNavMarker(false);
+        syncNavbarHeight();
+    };
+    window.addEventListener('resize', navChanged);
     // A font that arrives late changes the width of the links
-    if (root.fonts && typeof root.fonts.addEventListener === 'function') root.fonts.addEventListener('loadingdone', () => placeNavMarker(false));
+    if (root.fonts && typeof root.fonts.addEventListener === 'function') root.fonts.addEventListener('loadingdone', navChanged);
+    syncNavbarHeight();
 }

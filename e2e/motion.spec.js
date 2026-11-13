@@ -485,8 +485,8 @@ test('the wizard opens with the glider under its active tab', async ({ page }, t
     const errors = watchErrors(page);
     await loginAs(page, 'admin');
     await navigate(page, 'admin');
-    await page.locator('[data-click="showCreateEventModal"]').click();
-    await waitForDialog(page, '#eventModal');
+    await page.locator('[data-click="showCreateEvent"]').click();
+    await expect(page.locator('#event-editor-section')).toBeVisible();
     const tabs = page.locator('#wizard-mode');
     const active = tabs.locator('.nav-link.active');
     await expect(active).toContainText('Bearbeiten');

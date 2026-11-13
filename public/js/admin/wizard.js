@@ -1,12 +1,14 @@
 /**
- * Event wizard: steps with their checks, create/edit/save, roles.
+ * Event wizard: steps with their checks, reset/load/collect/save, roles.
+ * Opening and closing the page it lives on: editor-page.js.
  * Location field: wizard-location.js; rules: wizard-checks.js; marks: wizard-marks.js;
  * switch "Teilnehmer benachrichtigen": wizard-notify.js; banner upload: wizard-banner.js;
- * series dates (scope choice, locked repeat fields, toast): wizard-series.js.
+ * series dates (scope choice, locked repeat fields, toast): wizard-series.js;
+ * date pickers: wizard-dates.js; role choices: wizard-roles.js.
  */
 import { state } from '../core/state.js';
 import { glideTabs } from '../core/tab-glider.js';
-import { loadAdminEvents, loadAdminStats } from './dashboard.js';
+import { closeEventEditor, isWideEditor } from './editor-page.js';
 import { addFormField, getFormFieldsFromBuilder, getSlotsFromEditor, renderSlotEditor } from './wizard-builders.js';
 import { checkWizardStep } from './wizard-checks.js';
 import { clearAllMarks, showStepErrors } from './wizard-marks.js';
@@ -16,20 +18,25 @@ import { cancelWizardPreview, renderWizardPreview } from './wizard-preview.js';
 import { updateBannerPreview } from './wizard-banner.js';
 import { renderTemplateChooser, startTemplateChoice } from './wizard-templates.js';
 import { loadWizardBotSettings } from './wizard-bot.js';
+import { DEADLINE_PICKERS, deadlineValue, ensureDatePickers } from './wizard-dates.js';
+import { getSelectedRoles, loadRoles } from './wizard-roles.js';
 import { renderAnnounceChannelSelect } from './wizard-announce.js';
-import { navigateTo } from '../core/router.js';
 import { registerActions } from '../core/actions.js';
-import { applyStyleData, escapeHtml, hexColor, showElement, showToast, toggleElement } from '../core/ui.js';
-import { showPollDetail } from '../polls/polls.js';
+import { showElement, showToast, toggleElement } from '../core/ui.js';
 
 export let currentWizardStep = 1;
 
 export const WIZARD_TOTAL_STEPS = 5;
 
-// Preview area and the two switch buttons; leaving the preview drops a pending answer
+// Colour input of an event without its own accent
+const DEFAULT_ACCENT_COLOR = '#8b5cf6';
+
+// Preview area and the two switch buttons; leaving the preview drops a pending answer.
+// On a wide screen the preview has its own column and stays, whatever the mode.
 function showPreviewArea(visible) {
-    if (!visible) cancelWizardPreview();
-    toggleElement(document.getElementById('wizard-preview'), visible);
+    const wide = isWideEditor();
+    if (!visible && !wide) cancelWizardPreview();
+    toggleElement(document.getElementById('wizard-preview'), visible || wide);
     for (const mode of ['edit', 'preview']) {
         const button = document.getElementById(`wizard-mode-${mode}`);
         const active = (mode === 'preview') === visible;
@@ -46,7 +53,8 @@ function showPreviewArea(visible) {
  * @returns {Promise<void>} -> Resolves when the preview is drawn (at once for "edit").
  */
 export function setWizardMode(mode) {
-    const preview = mode === 'preview';
+    // The column of a wide screen shows the preview beside the step; there is nothing to switch
+    const preview = mode === 'preview' && !isWideEditor();
     showPreviewArea(preview);
     toggleElement(document.getElementById(`wizard-page-${currentWizardStep}`), !preview);
     if (!preview) return Promise.resolve();
@@ -85,51 +93,8 @@ export function wizardGoTo(step) {
         setTimeout(() => state.descriptionEditor.codemirror.refresh(), 50);
     }
 
-    // Init Flatpickr on step 2 (needs visible DOM)
-    if (step === 2) {
-        if (!state.startDatePicker) {
-            state.startDatePicker = flatpickr('#event-start-date', {
-                enableTime: true, dateFormat: 'Y-m-d H:i', time_24hr: true, locale: 'de'
-            });
-        }
-        if (!state.endDatePicker) {
-            state.endDatePicker = flatpickr('#event-end-date', {
-                enableTime: true, dateFormat: 'Y-m-d H:i', time_24hr: true, locale: 'de'
-            });
-        }
-        DEADLINE_PICKERS.forEach(({ key, selector }) => ensureDeadlinePicker(key, selector));
-    }
-}
-
-// Optional deadlines of step 2 (W-03): state key of the picker and its input
-const DEADLINE_PICKERS = [
-    { key: 'registrationDeadlinePicker', field: 'registrationDeadline', selector: '#event-registration-deadline' },
-    { key: 'unregisterDeadlinePicker', field: 'unregisterDeadline', selector: '#event-unregister-deadline' }
-];
-
-/**
- * Create a deadline picker once.
- *
- * @param {string} key -> State key of the picker.
- * @param {string} selector -> Its input.
- * @returns {Object} -> The flatpickr instance.
- */
-function ensureDeadlinePicker(key, selector) {
-    if (!state[key]) {
-        state[key] = flatpickr(selector, { enableTime: true, dateFormat: 'Y-m-d H:i', time_24hr: true, locale: 'de' });
-    }
-    return state[key];
-}
-
-/**
- * ISO value of a deadline picker.
- *
- * @param {string} key -> State key of the picker.
- * @returns {string} -> ISO date, '' when empty or not created yet.
- */
-function deadlineValue(key) {
-    const picker = state[key];
-    return picker && picker.selectedDates[0] ? picker.selectedDates[0].toISOString() : '';
+    // The date pickers are created when their step is first shown
+    if (step === 2) ensureDatePickers();
 }
 
 export function wizardNext() {
@@ -167,11 +132,15 @@ export function reminderHoursOf(value) {
     return [...new Set(raw.map(hours => Number.parseFloat(hours)).filter(hours => Number.isFinite(hours) && hours > 0))];
 }
 
-export async function showCreateEventModal() {
+/**
+ * Empty every field for a new event and show step 1.
+ *
+ * @returns {Promise<void>} -> Resolves when roles, templates and bot switches are loaded.
+ */
+export async function resetWizard() {
     state.pendingPollDecision = null;
     rememberLoadedEvent(null);
     await rememberSeries(null);
-    document.getElementById('eventModalTitle').textContent = 'Neues Event erstellen';
     document.getElementById('event-edit-id').value = '';
     document.getElementById('event-title').value = '';
     document.getElementById('event-description').value = '';
@@ -185,6 +154,14 @@ export async function showCreateEventModal() {
     document.getElementById('event-status').value = 'active';
     document.getElementById('event-reminder').value = '';
     document.getElementById('event-assign-role').value = '';
+    // Everything collectEventDraft() reads starts empty: nothing of the last event stays behind
+    document.getElementById('event-checkin-message').value = '';
+    document.getElementById('event-accent-color').value = DEFAULT_ACCENT_COLOR;
+    for (const id of ['event-location-text', 'event-location-channel-id', 'event-location-channel-type']) document.getElementById(id).value = '';
+    document.getElementById('event-recurring').checked = false;
+    document.getElementById('recurring-options').style.display = 'none';
+    document.getElementById('event-recurring-interval').value = 'weekly';
+    document.getElementById('event-recurring-until').value = '';
     ['event-auto-create-channels', 'event-allow-tentative'].forEach(id => { document.getElementById(id).checked = false; });
     document.getElementById('channel-config-options').style.display = 'none';
     document.getElementById('event-channel-type').value = 'voice';
@@ -227,14 +204,6 @@ export async function showCreateEventModal() {
     // Reset wizard to step 1
     wizardGoTo(1);
 
-    const modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('eventModal'));
-    modal.show();
-
-    // Fix for EasyMDE rendering in modal
-    setTimeout(() => {
-        state.descriptionEditor.codemirror.refresh();
-    }, 200);
-
     document.getElementById('event-access').onchange = function () {
         document.getElementById('role-requirement-area').style.display = this.value === 'role-required' ? 'block' : 'none';
     };
@@ -249,6 +218,8 @@ function ensureDescriptionEditor() {
         status: false,
         maxHeight: "200px",
         autoDownloadFontAwesome: false,
+        // Without "fullscreen" and "side-by-side": both draw the editor under the fixed navbar of the page
+        toolbar: ['bold', 'italic', 'heading', '|', 'quote', 'unordered-list', 'ordered-list', '|', 'link', 'image', '|', 'preview', '|', 'guide'],
     });
 }
 
@@ -267,7 +238,7 @@ export async function fillWizard(fields) {
 
     document.getElementById('event-banner-url').value = event.bannerUrl || '';
     const accentEl = document.getElementById('event-accent-color');
-    if (accentEl) accentEl.value = event.accentColor || '#8b5cf6';
+    if (accentEl) accentEl.value = event.accentColor || DEFAULT_ACCENT_COLOR;
 
     const locationTextEl = document.getElementById('event-location-text');
     const locationChanId = document.getElementById('event-location-channel-id');
@@ -318,25 +289,51 @@ export async function fillWizard(fields) {
     (event.formFields || []).forEach(field => addFormField(field));
 }
 
-export async function editEvent(eventId) {
+/**
+ * Put collected input back into the wizard: everything collectEventDraft() reads,
+ * including dates, status and the repeat fields that fillWizard() leaves alone.
+ *
+ * @param {Object} draft -> Result of collectEventDraft() (e.g. kept by editor-draft.js).
+ * @returns {Promise<void>}
+ */
+export async function applyDraft(draft) {
+    ensureDatePickers();
+    state.startDatePicker.setDate(draft.startDate || null);
+    state.endDatePicker.setDate(draft.endDate || null);
+    DEADLINE_PICKERS.forEach(({ key, field }) => state[key].setDate(draft[field] || null));
+    document.getElementById('event-status').value = draft.status || 'active';
+    document.getElementById('event-recurring').checked = !!draft.recurring;
+    toggleElement(document.getElementById('recurring-options'), !!draft.recurring);
+    document.getElementById('event-recurring-interval').value = draft.recurringInterval || 'weekly';
+    document.getElementById('event-recurring-until').value = draft.recurringUntil || '';
+    if (draft.fromPoll) state.pendingPollDecision = draft.fromPoll;
+    await fillWizard(draft);
+    updateStartRequired();
+}
+
+/**
+ * Load an event into the wizard and show step 1.
+ *
+ * @param {string} eventId -> The event document ID.
+ * @param {Object} [options]
+ * @param {Function} [options.isWanted] -> Asked when the event arrives: false = another editor was opened meanwhile, nothing is filled.
+ * @returns {Promise<Object|null>} -> The loaded event; null when it does not exist, cannot be loaded or is no longer wanted (nothing is shown then).
+ */
+export async function loadEventIntoWizard(eventId, { isWanted = () => true } = {}) {
     state.pendingPollDecision = null;
     try {
-        const res = await fetch(`/api/events/${eventId}?status=all`);
+        const res = await fetch(`/api/events/${encodeURIComponent(eventId)}?status=all`);
+        if (!res.ok) return null;
         const event = await res.json();
+        if (!isWanted()) return null;
 
-        document.getElementById('eventModalTitle').textContent = 'Event bearbeiten';
         rememberLoadedEvent(event);
         document.getElementById('event-edit-id').value = eventId;
 
-        // Store dates to apply once Flatpickr is initialized (lazy init on step 2)
-        const _startDate = event.startDate || null;
-        const _endDate = event.endDate || null;
-        // Init if already exists, otherwise they'll be created when user visits step 2
-        if (state.startDatePicker) state.startDatePicker.setDate(_startDate);
-        else { state.startDatePicker = flatpickr("#event-start-date", { enableTime: true, dateFormat: "Y-m-d H:i", time_24hr: true, locale: "de" }); state.startDatePicker.setDate(_startDate); }
-        if (state.endDatePicker) state.endDatePicker.setDate(_endDate);
-        else { state.endDatePicker = flatpickr("#event-end-date", { enableTime: true, dateFormat: "Y-m-d H:i", time_24hr: true, locale: "de" }); state.endDatePicker.setDate(_endDate); }
-        DEADLINE_PICKERS.forEach(({ key, field, selector }) => ensureDeadlinePicker(key, selector).setDate(event[field] || null));
+        ensureDatePickers();
+        state.startDatePicker.setDate(event.startDate || null);
+        state.endDatePicker.setDate(event.endDate || null);
+        DEADLINE_PICKERS.forEach(({ key, field }) => state[key].setDate(event[field] || null));
 
         document.getElementById('event-status').value = event.status || 'active';
 
@@ -361,15 +358,9 @@ export async function editEvent(eventId) {
 
         // Reset wizard to step 1
         wizardGoTo(1);
-
-        const modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('eventModal'));
-        modal.show();
-
-        setTimeout(() => {
-            state.descriptionEditor.codemirror.refresh();
-        }, 200);
+        return event;
     } catch {
-        showToast('Fehler beim Laden des Events.', 'danger');
+        return null;
     }
 }
 
@@ -478,20 +469,15 @@ export async function saveEvent() {
 
         if (res.ok) {
             const answer = await res.json();
-            bootstrap.Modal.getOrCreateInstance(document.getElementById('eventModal')).hide();
             showToast(editId ? savedEventToast(answer) : 'Event erstellt!', 'success');
-            loadAdminEvents();
-            loadAdminStats();
             if (!editId && state.pendingPollDecision) {
                 const decidedPollId = state.pendingPollDecision.pollId;
                 state.pendingPollDecision = null;
                 showToast('Abstimmung entschieden – alle Abstimmenden bekommen eine DM.', 'success');
-                // Usually started from the poll page -> the same hash does not fire hashchange
-                if (window.location.hash === `#poll/${decidedPollId}`) {
-                    showPollDetail(decidedPollId);
-                } else {
-                    navigateTo(`poll/${decidedPollId}`);
-                }
+                closeEventEditor({ saved: true, to: `poll/${decidedPollId}` });
+            } else {
+                // The page the admin came from loads the saved event itself
+                closeEventEditor({ saved: true });
             }
         } else {
             const err = await res.json();
@@ -502,44 +488,7 @@ export async function saveEvent() {
     }
 }
 
-export async function loadRoles() {
-    if (state.cachedRoles.length) {
-        populateRoles(state.cachedRoles);
-        return;
-    }
-    try {
-        const res = await fetch('/api/admin/roles');
-        state.cachedRoles = await res.json();
-        populateRoles(state.cachedRoles);
-    } catch {
-        console.warn('Could not load roles');
-    }
-}
-
-export function populateRoles(roles) {
-    const container = document.getElementById('role-checkboxes');
-    container.innerHTML = roles.map(r => `
-    <label class="badge-pill role-chip" data-style-border-color="${hexColor(r.color)}">
-      <input type="checkbox" class="me-1" value="${r.id}"> ${escapeHtml(r.name)}
-    </label>
-  `).join('');
-    applyStyleData(container);
-
-    const select = document.getElementById('event-assign-role');
-    const currentVal = select.value;
-    select.innerHTML = '<option value="">Keine Rolle zuweisen</option>' +
-        roles.map(r => `<option value="${r.id}">${escapeHtml(r.name)}</option>`).join('');
-    select.value = currentVal;
-}
-
-export function getSelectedRoles() {
-    const checkboxes = document.querySelectorAll('#role-checkboxes input:checked');
-    return Array.from(checkboxes).map(cb => cb.value);
-}
-
 registerActions({
-    editEvent: (el) => editEvent(el.dataset.eventId),
-    showCreateEventModal: () => showCreateEventModal(),
     wizardGoTo: (el) => wizardGoTo(Number(el.dataset.step)),
     wizardNext: () => wizardNext(),
     wizardBack: () => wizardBack(),

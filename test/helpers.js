@@ -384,10 +384,12 @@ async function loadFrontendModules(entryFile, context) {
  * @param {boolean|string} [options.confirm] -> Answer of the confirm dialog: true (default) confirms, false dismisses, 'too-early' clicks the confirm button while the dialog still fades in and dismisses it afterwards.
  * @param {boolean} [options.reducedMotion] -> true answers matchMedia('(prefers-reduced-motion: reduce)') with a match.
  * @param {boolean} [options.prefersLight] -> true answers matchMedia('(prefers-color-scheme: light)') with a match.
+ * @param {boolean} [options.wide] -> true answers matchMedia('(min-width: 1200px)') with a match (event editor with the preview column).
+ * @param {boolean} [options.timers] -> true keeps setTimeout callbacks and runs them with `advance(ms)` of the result; by default timeouts never fire.
  * @param {boolean} [options.animationFrames] -> true runs requestAnimationFrame callbacks at once; by default they never run.
  * @returns {Promise<Object>} -> `{ app, state, element, toasts, dialogs, requests, location, fire, root, setSystemLight }`: app holds every export of every module, state is core/state.js (`state.currentUser = persona` logs a user in), element(id) returns the fake element or null, toasts lists the shown messages, dialogs lists the confirm dialogs shown (`{ text, label, danger }`; the dialog answers at once), requests the fetch calls `{ url, method, headers, body }`, location is window.location, fire(type) runs the recorded document listeners, root is document.documentElement, setSystemLight(bool) changes the system colour scheme and tells the matchMedia listeners.
  */
-async function loadFrontendApp(routes, { storage = {}, confirm = true, reducedMotion = false, prefersLight = false, animationFrames = false } = {}) {
+async function loadFrontendApp(routes, { storage = {}, confirm = true, reducedMotion = false, prefersLight = false, animationFrames = false, wide = false, timers = false } = {}) {
     const registry = new Map();
     registerHtmlIds(registry, fs.readFileSync(path.join(REPO_ROOT, 'public', 'index.html'), 'utf8'));
     const toasts = [];
@@ -433,6 +435,7 @@ async function loadFrontendApp(routes, { storage = {}, confirm = true, reducedMo
     const mediaListeners = [];
     const matchMedia = (query) => {
         const answer = () => (/prefers-reduced-motion:\s*reduce/.test(query) && reducedMotion)
+            || (/min-width:\s*1200px/.test(query) && wide)
             || (/prefers-color-scheme:\s*light/.test(query) && systemLight)
             || (/prefers-color-scheme:\s*dark/.test(query) && !systemLight);
         return {
@@ -441,6 +444,26 @@ async function loadFrontendApp(routes, { storage = {}, confirm = true, reducedMo
             addEventListener: (type, listener) => mediaListeners.push({ query, type, listener }),
             removeEventListener: noop
         };
+    };
+    // Timeouts that wait for advance(); only with the option `timers`
+    let clock = 0;
+    let timerId = 0;
+    const waiting = new Map();
+    const setTimer = (callback, delay = 0) => {
+        if (!timers) return 0;
+        waiting.set(++timerId, { callback, at: clock + Number(delay || 0) });
+        return timerId;
+    };
+    const clearTimer = (id) => { waiting.delete(id); };
+    /** Let `ms` milliseconds pass: due timeouts run in order, promises they start are awaited. */
+    const advance = async (ms) => {
+        clock += ms;
+        for (;;) {
+            const due = [...waiting.entries()].filter(([, entry]) => entry.at <= clock).sort((a, b) => a[1].at - b[1].at)[0];
+            if (!due) break;
+            waiting.delete(due[0]);
+            await due[1].callback();
+        }
     };
     const setSystemLight = (light) => {
         systemLight = light;
@@ -466,7 +489,7 @@ async function loadFrontendApp(routes, { storage = {}, confirm = true, reducedMo
         sessionStorage: createStorage({}),
         // isValidBannerUrl() parses with URL, as the browser does
         URL, URLSearchParams, AbortController,
-        setTimeout: noop, clearTimeout: noop, setInterval: () => 0, clearInterval: noop,
+        setTimeout: setTimer, clearTimeout: clearTimer, setInterval: () => 0, clearInterval: noop,
         matchMedia,
         getComputedStyle: () => ({ getPropertyValue: () => '' }),
         requestAnimationFrame: (callback) => { if (animationFrames) callback(0); return 0; },
@@ -519,7 +542,15 @@ async function loadFrontendApp(routes, { storage = {}, confirm = true, reducedMo
             constructor() { this.text = ''; this.codemirror = { refresh: noop }; }
             value(text) { if (text === undefined) return this.text; this.text = text; }
         },
-        flatpickr: () => ({ setDate: noop, clear: noop, selectedDates: [] })
+        // Keeps the date it is given, like the real picker; no calendar, no onChange
+        flatpickr: () => {
+            const picker = {
+                selectedDates: [],
+                setDate(value) { picker.selectedDates = value ? [new Date(value)] : []; },
+                clear() { picker.selectedDates = []; }
+            };
+            return picker;
+        }
     });
     context.window = context;
     const app = {};
@@ -530,7 +561,7 @@ async function loadFrontendApp(routes, { storage = {}, confirm = true, reducedMo
         }
     }
     const fire = (type) => listeners.filter(entry => entry.type === type).forEach(entry => entry.listener({ type }));
-    return { app, state: app.state, element: (id) => registry.get(id) || null, toasts, dialogs, requests, historyCalls, animations, location: context.location, localStorage: context.localStorage, fire, root, setSystemLight };
+    return { app, state: app.state, element: (id) => registry.get(id) || null, toasts, dialogs, requests, historyCalls, advance, animations, location: context.location, localStorage: context.localStorage, fire, root, setSystemLight };
 }
 
 /** Answer of a loadFrontendApp() route with its own status, e.g. an API error. */

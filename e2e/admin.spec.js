@@ -5,7 +5,7 @@
  * something create their own event.
  */
 const { test, expect } = require('@playwright/test');
-const { watchErrors, loginAs, navigate, waitForDialog } = require('./helpers');
+const { watchErrors, loginAs, navigate, waitForDialog, closeEditor } = require('./helpers');
 
 const rows = (page) => page.locator('#admin-events-table .data-table tbody tr');
 const row = (page, title) => rows(page).filter({ hasText: title });
@@ -479,12 +479,12 @@ test('admins choose the announcement channel and lock channel creation in the bo
 
         // The wizard shows the locked channel option
         await navigate(page, 'admin');
-        await page.locator('[data-click="showCreateEventModal"]').first().click();
-        await waitForDialog(page, '#eventModal');
-        await page.locator('#eventModal [data-click="wizardGoTo"][data-step="5"]').click();
+        await page.locator('[data-click="showCreateEvent"]').first().click();
+        await expect(page.locator('#event-editor-section')).toBeVisible();
+        await page.locator('#event-editor-section [data-click="wizardGoTo"][data-step="5"]').click();
         await expect(page.locator('#event-auto-create-channels')).toBeDisabled();
         await expect(page.locator('#event-channels-locked')).toHaveText('In der Bot-Zentrale ausgeschaltet.');
-        await page.locator('#eventModal .btn-close').click();
+        await closeEditor(page);
         expect(errors).toEqual([]);
     } finally {
         await adminRequest(page, 'PUT', '/api/admin/bot/settings', before);

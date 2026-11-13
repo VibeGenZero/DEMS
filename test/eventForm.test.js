@@ -23,7 +23,7 @@ async function editEventWith(reminderHours) {
         '/api/admin/roles': []
     });
     frontend.state.currentUser = ADMIN;
-    await frontend.app.editEvent('evt-raid');
+    await frontend.app.openEventEditor({ eventId: 'evt-raid' });
     return frontend;
 }
 

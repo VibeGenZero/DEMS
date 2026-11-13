@@ -31,7 +31,7 @@ async function openWizard(routes = {}) {
     const frontend = await loadFrontendApp({ '/api/admin/roles': [], '/api/admin/event-templates': [], ...routes });
     frontend.state.currentUser = { id: 'u-admin', username: 'mori', roles: [], isAdmin: true };
     frontend.state.csrfToken = 'test-token';
-    await frontend.app.showCreateEventModal();
+    await frontend.app.openEventEditor();
     return frontend;
 }
 
@@ -91,7 +91,7 @@ test('editing an event still fills the wizard through the same function', async 
     const event = { id: 'e1', status: 'draft', startDate: '', endDate: '', recurring: false, ...RAID_SETTINGS, title: 'Alter Raid' };
     const frontend = await loadFrontendApp({ '/api/events/e1?status=all': event, '/api/admin/roles': [], '/api/admin/event-templates': [] });
     frontend.state.currentUser = { id: 'u-admin', username: 'mori', roles: [], isAdmin: true };
-    await frontend.app.editEvent('e1');
+    await frontend.app.openEventEditor({ eventId: 'e1' });
     assert.equal(frontend.element('event-edit-id').value, 'e1');
     assert.equal(frontend.element('event-title').value, 'Alter Raid');
     assert.equal(frontend.element('event-checkin-message').value, 'Willkommen im Raid!');
@@ -127,7 +127,7 @@ async function wizardWithTemplates(templates, answers = {}) {
     frontend = await loadFrontendApp(routes);
     frontend.state.currentUser = { id: 'u-admin', username: 'mori', roles: [], isAdmin: true };
     frontend.state.csrfToken = 'test-token';
-    await frontend.app.showCreateEventModal();
+    await frontend.app.openEventEditor();
     return frontend;
 }
 
@@ -146,9 +146,9 @@ test('the template chooser shows only for a new event and only with templates', 
     const event = { id: 'e1', status: 'draft', startDate: '', ...RAID_SETTINGS };
     const editing = await loadFrontendApp({ '/api/events/e1?status=all': event, '/api/admin/roles': [], '/api/admin/event-templates': [RAID] });
     editing.state.currentUser = { id: 'u-admin', username: 'mori', roles: [], isAdmin: true };
-    await editing.app.showCreateEventModal();
+    await editing.app.openEventEditor();
     assert.equal(isHidden(editing.element('wizard-template-area')), false);
-    await editing.app.editEvent('e1');
+    await editing.app.openEventEditor({ eventId: 'e1' });
     assert.ok(isHidden(editing.element('wizard-template-area')));
 });
 
