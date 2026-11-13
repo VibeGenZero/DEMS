@@ -7,6 +7,7 @@ import './admin/bot-messages.js';
 import './admin/dashboard.js';
 import './admin/discord-import.js';
 import './admin/editor-draft.js';
+import './admin/editor-page.js';
 import './admin/event-actions.js';
 import './admin/event-rows.js';
 import './admin/event-table.js';

@@ -9,7 +9,7 @@ async function openWizard(settings) {
     const frontend = await loadFrontendApp(routes);
     frontend.state.currentUser = { id: 'u-admin', username: 'mori', roles: [], isAdmin: true };
     frontend.state.csrfToken = 'test-token';
-    await frontend.app.showCreateEventModal();
+    await frontend.app.openEventEditor();
     return frontend;
 }
 
@@ -42,7 +42,7 @@ test('editing an event applies the lock too', async () => {
         '/api/admin/bot/settings': { autoChannelCreation: false, dmNotifications: true }
     });
     frontend.state.currentUser = { id: 'u-admin', username: 'mori', roles: [], isAdmin: true };
-    await frontend.app.editEvent('e1');
+    await frontend.app.openEventEditor({ eventId: 'e1' });
     assert.equal(frontend.element('event-auto-create-channels').disabled, true);
     assert.equal(frontend.element('event-auto-create-channels').checked, true, 'the event keeps its option');
 });
@@ -55,7 +55,7 @@ test('with DM notifications off the wizard does not offer "Teilnehmer benachrich
             '/api/admin/bot/settings': { dmNotifications, autoChannelCreation: true }
         });
         frontend.state.currentUser = { id: 'u-admin', username: 'mori', roles: [], isAdmin: true };
-        await frontend.app.editEvent('e2');
+        await frontend.app.openEventEditor({ eventId: 'e2' });
         frontend.app.updateNotifySwitch({ ...event, startDate: '2099-03-07T19:00:00.000Z' });
         assert.equal(isHidden(frontend.element('wizard-notify')), !shown, `dmNotifications ${dmNotifications}`);
     }

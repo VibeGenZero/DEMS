@@ -2,7 +2,7 @@
  * Import of Discord scheduled events into the wizard.
  */
 import { state } from '../core/state.js';
-import { showCreateEventModal } from './wizard.js';
+import { openEventEditor } from './editor-page.js';
 import { updateBannerPreview } from './wizard-banner.js';
 import { registerActions } from '../core/actions.js';
 import { escapeHtml, markdownPreview, showToast } from '../core/ui.js';
@@ -52,8 +52,8 @@ export function selectDiscordEvent(el) {
     const importModal = bootstrap.Modal.getInstance(importModalEl);
     importModal.hide();
 
-    // Open create modal
-    showCreateEventModal().then(() => {
+    // Open the editor for a new event
+    openEventEditor().then(() => {
         // Fill form
         document.getElementById('event-title').value = eventData.name || '';
         if (state.descriptionEditor) {

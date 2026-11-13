@@ -2,7 +2,8 @@
  * Date polls for admins: editor, announce, close, delete, decide.
  */
 import { state } from '../core/state.js';
-import { showCreateEventModal, wizardGoTo } from '../admin/wizard.js';
+import { openEventEditor } from '../admin/editor-page.js';
+import { wizardGoTo } from '../admin/wizard.js';
 import { navigateTo } from '../core/router.js';
 import { registerActions } from '../core/actions.js';
 import { applyStyleData, escapeHtml, hexColor, showConfirmDialog, showToast } from '../core/ui.js';
@@ -253,7 +254,7 @@ export async function startEventFromPoll() {
     const option = poll.options.find(candidate => candidate.id === selected.value);
     bootstrap.Modal.getInstance(document.getElementById('pollDecideModal')).hide();
 
-    await showCreateEventModal();
+    await openEventEditor();
     document.getElementById('event-title').value = poll.title;
     // Voters are notified with the event link -> the event is created active
     document.getElementById('event-status').value = 'active';
