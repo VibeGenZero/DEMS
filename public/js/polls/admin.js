@@ -254,7 +254,7 @@ export async function startEventFromPoll() {
     const option = poll.options.find(candidate => candidate.id === selected.value);
     bootstrap.Modal.getInstance(document.getElementById('pollDecideModal')).hide();
 
-    await openEventEditor();
+    await openEventEditor({ fresh: true });
     document.getElementById('event-title').value = poll.title;
     // Voters are notified with the event link -> the event is created active
     document.getElementById('event-status').value = 'active';

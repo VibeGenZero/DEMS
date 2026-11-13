@@ -15,8 +15,17 @@ body {
   background: var(--bg-primary);
   color: var(--text-primary);
   font-family: var(--font-body);
-  overflow-x: hidden;
   min-height: 100vh;
+}
+
+/* Nothing scrolls sideways. Only the page (html) is the scroller: "hidden" on body too would make
+   body a scroll container that never scrolls, and position: sticky inside it would never stick. */
+html {
+  overflow-x: hidden;
+}
+
+body {
+  overflow-x: clip;
 }
 
 ::selection {
@@ -3432,8 +3441,9 @@ a.info-version-badge:focus-visible {
 /* in a form column, the preview beside it     */
 /* from 1200 px (EDITOR_WIDE_QUERY)            */
 /* ═══════════════════════════════════════════ */
+/* Sticky parts sit right below the fixed navbar (--navbar-height, tokens.css) */
 .editor-page {
-  --editor-sticky-top: calc(var(--space-64) + var(--space-16));
+  --editor-sticky-top: var(--navbar-height);
 }
 
 /* Room between the step row (with the mode tabs on small screens) and the form */

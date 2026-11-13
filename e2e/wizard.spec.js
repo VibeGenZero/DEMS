@@ -27,6 +27,18 @@ test('an admin builds a raid step by step, checks the preview and saves from it'
     await expect(page.locator('#wstep-1')).toHaveClass(/has-error/);
     await page.locator('#event-title').fill('E2E-Raidnacht');
     await expect(page.locator('#event-title')).not.toHaveClass(/is-invalid/);
+
+    // While the form scrolls, the top bar stays right below the navbar and the preview column below the top bar
+    await page.evaluate(() => window.scrollTo(0, 400));
+    await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(200);
+    const stuck = await page.evaluate(() => {
+        const box = (selector) => document.querySelector(selector).getBoundingClientRect();
+        return { navBottom: box('#main-navbar').bottom, barTop: box('.editor-topbar').top, barBottom: box('.editor-topbar').bottom, previewTop: box('.editor-preview-column').top };
+    });
+    expect(Math.abs(stuck.barTop - stuck.navBottom)).toBeLessThanOrEqual(2);
+    expect(stuck.previewTop).toBeGreaterThanOrEqual(stuck.barBottom - 1);
+    expect(stuck.previewTop).toBeLessThan(400);
+    await page.evaluate(() => window.scrollTo(0, 0));
     await page.locator('#wizard-btn-next').click();
 
     // Step 2: an active event needs a start date
@@ -42,6 +54,7 @@ test('an admin builds a raid step by step, checks the preview and saves from it'
     await page.locator('#event-use-slots').check();
     await page.locator('[data-click="applySlotPreset"]').click();
 
+    await expect(page.locator('#event-editor-section .editor-toolbar .fullscreen, #event-editor-section .editor-toolbar .side-by-side')).toHaveCount(0);
     // The preview beside the form follows the unsaved input; there is nothing to switch
     await expect(page.locator('#wizard-mode')).toBeHidden();
     await expect(page.locator('#wizard-page-3')).toBeVisible();

@@ -28,6 +28,9 @@ export let currentWizardStep = 1;
 
 export const WIZARD_TOTAL_STEPS = 5;
 
+// Colour input of an event without its own accent
+const DEFAULT_ACCENT_COLOR = '#8b5cf6';
+
 // Preview area and the two switch buttons; leaving the preview drops a pending answer.
 // On a wide screen the preview has its own column and stays, whatever the mode.
 function showPreviewArea(visible) {
@@ -151,6 +154,14 @@ export async function resetWizard() {
     document.getElementById('event-status').value = 'active';
     document.getElementById('event-reminder').value = '';
     document.getElementById('event-assign-role').value = '';
+    // Everything collectEventDraft() reads starts empty: nothing of the last event stays behind
+    document.getElementById('event-checkin-message').value = '';
+    document.getElementById('event-accent-color').value = DEFAULT_ACCENT_COLOR;
+    for (const id of ['event-location-text', 'event-location-channel-id', 'event-location-channel-type']) document.getElementById(id).value = '';
+    document.getElementById('event-recurring').checked = false;
+    document.getElementById('recurring-options').style.display = 'none';
+    document.getElementById('event-recurring-interval').value = 'weekly';
+    document.getElementById('event-recurring-until').value = '';
     ['event-auto-create-channels', 'event-allow-tentative'].forEach(id => { document.getElementById(id).checked = false; });
     document.getElementById('channel-config-options').style.display = 'none';
     document.getElementById('event-channel-type').value = 'voice';
@@ -207,6 +218,8 @@ function ensureDescriptionEditor() {
         status: false,
         maxHeight: "200px",
         autoDownloadFontAwesome: false,
+        // Without "fullscreen" and "side-by-side": both draw the editor under the fixed navbar of the page
+        toolbar: ['bold', 'italic', 'heading', '|', 'quote', 'unordered-list', 'ordered-list', '|', 'link', 'image', '|', 'preview', '|', 'guide'],
     });
 }
 
@@ -225,7 +238,7 @@ export async function fillWizard(fields) {
 
     document.getElementById('event-banner-url').value = event.bannerUrl || '';
     const accentEl = document.getElementById('event-accent-color');
-    if (accentEl) accentEl.value = event.accentColor || '#8b5cf6';
+    if (accentEl) accentEl.value = event.accentColor || DEFAULT_ACCENT_COLOR;
 
     const locationTextEl = document.getElementById('event-location-text');
     const locationChanId = document.getElementById('event-location-channel-id');
@@ -302,14 +315,17 @@ export async function applyDraft(draft) {
  * Load an event into the wizard and show step 1.
  *
  * @param {string} eventId -> The event document ID.
- * @returns {Promise<Object|null>} -> The loaded event; null when it does not exist or cannot be loaded (nothing is shown then).
+ * @param {Object} [options]
+ * @param {Function} [options.isWanted] -> Asked when the event arrives: false = another editor was opened meanwhile, nothing is filled.
+ * @returns {Promise<Object|null>} -> The loaded event; null when it does not exist, cannot be loaded or is no longer wanted (nothing is shown then).
  */
-export async function loadEventIntoWizard(eventId) {
+export async function loadEventIntoWizard(eventId, { isWanted = () => true } = {}) {
     state.pendingPollDecision = null;
     try {
         const res = await fetch(`/api/events/${encodeURIComponent(eventId)}?status=all`);
         if (!res.ok) return null;
         const event = await res.json();
+        if (!isWanted()) return null;
 
         rememberLoadedEvent(event);
         document.getElementById('event-edit-id').value = eventId;

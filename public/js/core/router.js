@@ -3,7 +3,7 @@
  */
 import { registerActions } from './actions.js';
 import { state } from './state.js';
-import { placeNavMarker } from './tab-glider.js';
+import { placeNavMarker, syncNavbarHeight } from './tab-glider.js';
 import { showBotControlSection } from '../admin/bot-control.js';
 import { showAdminSection } from '../admin/dashboard.js';
 import { showEventEditor } from '../admin/editor-page.js';
@@ -178,6 +178,8 @@ export function handleRoute() {
         }
     });
     placeNavMarker();
+    // The links of the navbar depend on who is logged in
+    syncNavbarHeight();
 
     // Info, the release notes and the privacy policy are public
     if (!state.currentUser && route !== 'login' && route !== 'info' && route !== 'news' && route !== 'privacy') {

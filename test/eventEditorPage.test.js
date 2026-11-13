@@ -461,3 +461,169 @@ test('the layout uses no class name of the Markdown editor inside it', () => {
     assert.ok(used.size >= 8);
     assert.deepEqual([...used].filter(name => taken.has(name)), []);
 });
+
+// ─── Findings of the branch review ───
+
+const CSS = fs.readFileSync(path.join(REPO_ROOT, 'public', 'css', 'style.css'), 'utf8').replace(/\r\n/g, '\n');
+const COMPONENTS_CSS = fs.readFileSync(path.join(REPO_ROOT, 'public', 'css', 'components.css'), 'utf8').replace(/\r\n/g, '\n');
+const WIZARD_SOURCE = fs.readFileSync(path.join(REPO_ROOT, 'public', 'js', 'admin', 'wizard.js'), 'utf8');
+
+/** A route that answers only when `open()` is called: the editor stays in its loading phase until then. */
+function gate(answer) {
+    let open;
+    const waiting = new Promise(resolve => { open = () => resolve(answer); });
+    return { route: () => waiting, open };
+}
+
+test('sticky parts can stick: the page itself scrolls, and they sit below the measured navbar', () => {
+    // overflow-x: hidden on body would make it a scroll container that never scrolls
+    assert.match(CSS, /\nhtml \{[^}]*overflow-x: hidden;[^}]*\}/);
+    assert.match(CSS, /\nbody \{[^}]*overflow-x: clip;[^}]*\}/);
+    assert.doesNotMatch(CSS, /\nhtml,\nbody \{[^}]*overflow-x/);
+    assert.match(CSS, /--editor-sticky-top: var\(--navbar-height\);/);
+    assert.match(COMPONENTS_CSS, /\.settings-nav \{[^}]*top: calc\(var\(--navbar-height\) \+/);
+    const tokens = fs.readFileSync(path.join(REPO_ROOT, 'public', 'css', 'tokens.css'), 'utf8');
+    assert.match(tokens, /--navbar-height: calc\(var\(--space-64\) \+ var\(--space-16\)\);/);
+});
+
+test('the navbar height is measured into --navbar-height', async () => {
+    const harness = await openApp();
+    const set = [];
+    harness.root.style.setProperty = (name, value) => set.push([name, value]);
+    harness.element('main-navbar').offsetHeight = 105;
+    harness.app.syncNavbarHeight();
+    assert.deepEqual(set, [['--navbar-height', '105px']]);
+});
+
+test('changes while the editor still loads are not kept and do not overwrite a kept draft', async () => {
+    const roles = gate([]);
+    const harness = await openApp({ '/api/admin/roles': roles.route }, { timers: true, storage: { [NEW_KEY]: stored({ title: 'ALTER ENTWURF', status: 'draft' }) } });
+    const opening = go(harness, 'event-editor/new');
+    // The description editor reports a change while the form is being emptied
+    harness.app.editorChanged();
+    await harness.advance(800);
+    assert.equal(JSON.parse(harness.localStorage.getItem(NEW_KEY)).draft.title, 'ALTER ENTWURF');
+    roles.open();
+    await opening;
+    assert.equal(harness.element('event-title').value, 'ALTER ENTWURF');
+    assert.equal(isHidden(harness.element('event-editor-restored')), false);
+});
+
+test('leaving while the editor still loads does not ask', async () => {
+    const roles = gate([]);
+    const harness = await openApp({ '/api/admin/roles': roles.route });
+    const opening = go(harness, 'event-editor/new');
+    await go(harness, 'admin');
+    assert.equal(harness.dialogs.length, 0);
+    assert.equal(harness.location.hash, '#admin');
+    roles.open();
+    await opening;
+});
+
+test('a slow load that finishes after another editor was opened changes nothing', async () => {
+    const slow = gate(EVENT);
+    const harness = await openApp({ '/api/events/e1?status=all': slow.route });
+    const first = go(harness, 'event-editor/e1');
+    await go(harness, 'event-editor/new');
+    assert.equal(harness.element('event-editor-title').textContent, 'Neues Event');
+    slow.open();
+    await first;
+    assert.equal(harness.element('event-editor-title').textContent, 'Neues Event');
+    assert.equal(harness.element('event-edit-id').value, '');
+    assert.equal(harness.element('event-title').value, '');
+});
+
+test('an event that turns out missing after the admin left does not pull them back', async () => {
+    const slow = gate(httpAnswer(404, { error: 'Event nicht gefunden' }));
+    const harness = await openApp({ '/api/events/weg?status=all': slow.route });
+    const first = go(harness, 'event-editor/weg');
+    await go(harness, 'info');
+    slow.open();
+    await first;
+    assert.equal(harness.location.hash, '#info');
+    assert.deepEqual(harness.toasts, []);
+});
+
+test('resetWizard empties every field the wizard collects', async () => {
+    const harness = await openApp();
+    await go(harness, 'event-editor/new');
+    const set = (id, value) => { harness.element(id).value = value; };
+    set('event-accent-color', '#8b5cf6');
+    const pristine = JSON.stringify(harness.app.collectEventDraft());
+    set('event-title', 'Raid');
+    set('event-location-text', 'Geheimer Ort');
+    set('event-location-channel-id', '123456789012345678');
+    set('event-location-channel-type', 'voice');
+    set('event-checkin-message', 'Server-Passwort 1234');
+    set('event-accent-color', '#22c55e');
+    harness.element('event-recurring').checked = true;
+    set('event-recurring-interval', 'biweekly');
+    set('event-recurring-until', '2027-01-31');
+    harness.element('event-allow-tentative').checked = true;
+    await harness.app.resetWizard();
+    assert.equal(JSON.stringify(harness.app.collectEventDraft()), pristine);
+    assert.equal(isHidden(harness.element('recurring-options')), true);
+});
+
+test('a poll decision or an import starts fresh: a kept draft is dropped, not restored under it', async () => {
+    const harness = await openApp({}, { storage: { [NEW_KEY]: stored({ title: 'Gesichert', maxParticipants: '7', checkinMessage: 'Alt' }) } });
+    await harness.app.openEventEditor({ fresh: true });
+    assert.equal(harness.element('event-title').value, '');
+    assert.equal(harness.element('event-max').value, '0');
+    assert.equal(harness.localStorage.getItem(NEW_KEY), null);
+    assert.equal(isHidden(harness.element('event-editor-restored')), true);
+    for (const file of [['polls', 'admin.js'], ['admin', 'discord-import.js']]) {
+        const source = fs.readFileSync(path.join(REPO_ROOT, 'public', 'js', ...file), 'utf8');
+        assert.match(source, /openEventEditor\(\{ fresh: true \}\)/, file.join('/'));
+    }
+});
+
+test('the preview is not requested again while the input is unchanged', async () => {
+    const harness = await openApp(previewRoutes(), { wide: true, timers: true });
+    await go(harness, 'event-editor/new');
+    assert.equal(previews(harness), 1);
+    for (let click = 0; click < 5; click++) {
+        harness.app.editorChanged();
+        await harness.advance(600);
+    }
+    assert.equal(previews(harness), 1);
+    harness.element('event-title').value = 'Raid';
+    harness.app.editorChanged();
+    await harness.advance(600);
+    assert.equal(previews(harness), 2);
+});
+
+test('a redraw keeps the Discord preview until the new one arrives, the first draw shows the skeleton', async () => {
+    const answers = [gate(PREVIEW), gate(PREVIEW)];
+    let call = 0;
+    const harness = await openApp({ '/api/admin/events/preview': () => answers[call++].route() }, { wide: true, timers: true });
+    const discord = () => harness.element('wizard-preview-discord').innerHTML;
+    const tick = () => new Promise(resolve => setImmediate(resolve));
+    const opening = go(harness, 'event-editor/new');
+    while (call === 0) await tick();
+    assert.match(discord(), /skeleton/);
+    answers[0].open();
+    await opening;
+    assert.doesNotMatch(discord(), /skeleton/);
+    const drawn = discord();
+
+    harness.element('event-title').value = 'Raid';
+    harness.app.editorChanged();
+    const redraw = harness.advance(600);
+    while (call === 1) await tick();
+    // The answer is still on its way: what was drawn stays, no skeleton flickers in
+    assert.equal(discord(), drawn);
+    answers[1].open();
+    await redraw;
+    assert.doesNotMatch(discord(), /skeleton/);
+});
+
+test('the description editor offers no fullscreen and no side-by-side view', () => {
+    // Both draw the editor under the fixed navbar of the page, where the way back cannot be clicked
+    const toolbar = (WIZARD_SOURCE.match(/toolbar: \[([^\]]*)\]/) || [])[1];
+    assert.ok(toolbar, 'the toolbar is listed');
+    assert.doesNotMatch(toolbar, /fullscreen|side-by-side/);
+    for (const name of ['bold', 'italic', 'heading', 'quote', 'unordered-list', 'ordered-list', 'link', 'image', 'preview', 'guide']) {
+        assert.match(toolbar, new RegExp(`'${name}'`), name);
+    }
+});

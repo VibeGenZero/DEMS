@@ -27,10 +27,12 @@ const STORE_DELAY_MS = 800;
 // From this width the preview has its own column and is always visible (same value in style.css)
 export const EDITOR_WIDE_QUERY = '(min-width: 1200px)';
 
-// run: the editor that is open (`{ key, promise }`); returnTo: route shown after closing; prefill: fields for a new event
+// run: the editor that is open (`{ key, promise, loading }`; loading until the wizard is filled and the baseline taken);
+// returnTo: route shown after closing; prefill: fields for a new event; fresh: start without the kept input;
+// previewDrawn: the input (JSON) the preview shows
 // baseline: the collected input as loaded (JSON), everything else is unsaved; baseUpdatedAt: `updatedAt` of the loaded event;
 // saved: the event was just saved, nothing is left to ask about
-const page = { run: null, returnTo: DEFAULT_RETURN, prefill: null, previewTimer: null, storeTimer: null, wired: false, baseline: '', baseUpdatedAt: '', saved: false };
+const page = { run: null, returnTo: DEFAULT_RETURN, prefill: null, fresh: false, previewDrawn: null, previewTimer: null, storeTimer: null, wired: false, baseline: '', baseUpdatedAt: '', saved: false };
 
 const currentRoute = () => window.location.hash.replace('#', '');
 const keyOf = (param) => param || NEW_KEY;
@@ -58,13 +60,20 @@ const hide = (id) => { document.getElementById(id).style.display = 'none'; };
 
 // Whether the wizard holds input that differs from what was loaded
 function isDirty() {
-    return !!page.run && JSON.stringify(collectEventDraft()) !== page.baseline;
+    return !!page.run && !page.run.loading && JSON.stringify(collectEventDraft()) !== page.baseline;
+}
+
+function stopTimers() {
+    clearTimeout(page.previewTimer);
+    clearTimeout(page.storeTimer);
+    page.previewTimer = null;
+    page.storeTimer = null;
 }
 
 // Keep the unsaved input in the browser; input that is back at the loaded state needs no copy
 function storeNow() {
     page.storeTimer = null;
-    if (!page.run || page.saved) return;
+    if (!page.run || page.run.loading || page.saved) return;
     if (!isDirty()) {
         clearDraft(editId());
         hide('event-editor-saved');
@@ -97,7 +106,8 @@ async function restoreDraft(event) {
 
 // Leave guard of the router: answers at once unless there is unsaved input to ask about
 function mayLeaveEditor(next) {
-    if (!page.run || page.saved) return true;
+    // Nothing can be unsaved while the editor still loads
+    if (!page.run || page.run.loading || page.saved) return true;
     if (next.route === ROUTE && keyOf(next.param) === page.run.key) return true;
     if (!isDirty()) return true;
     return showConfirmDialog('Ungespeicherte Änderungen verwerfen?', 'Verwerfen');
@@ -113,10 +123,17 @@ function beforeUnload(event) {
 }
 
 // Draw the preview of the current input, if anybody can see it
+// Draw the preview of the current input, if anybody can see it and it is not what is shown already
+// (a click that changed nothing must not cost a request: /api/ is rate-limited in production)
 function drawPreview() {
     page.previewTimer = null;
-    if (!page.run || !isPreviewVisible()) return undefined;
-    return renderWizardPreview(collectEventDraft(), document.getElementById('event-edit-id').value);
+    if (!page.run || page.run.loading || !isPreviewVisible()) return undefined;
+    const draft = collectEventDraft();
+    const input = JSON.stringify(draft);
+    if (input === page.previewDrawn) return undefined;
+    const redraw = page.previewDrawn !== null;
+    page.previewDrawn = input;
+    return renderWizardPreview(draft, editId(), new Date(), { keep: redraw });
 }
 
 /**
@@ -126,7 +143,8 @@ function drawPreview() {
  * @returns {void}
  */
 export function editorChanged() {
-    if (!page.run) return;
+    // Filling the wizard changes fields too (the description editor reports it); that is loading, not input
+    if (!page.run || page.run.loading) return;
     clearTimeout(page.previewTimer);
     page.previewTimer = setTimeout(drawPreview, PREVIEW_DELAY_MS);
     clearTimeout(page.storeTimer);
@@ -144,24 +162,33 @@ function wireEditor() {
     state.descriptionEditor?.codemirror.on?.('change', editorChanged);
     // Crossing the breakpoint: back to the form, the column shows or hides the preview
     window.matchMedia(EDITOR_WIDE_QUERY).addEventListener('change', () => {
-        if (!page.run) return;
+        if (!page.run || page.run.loading) return;
         setWizardMode('edit');
+        page.previewDrawn = null;
         if (isWideEditor()) drawPreview();
     });
 }
 
-// Fill the wizard for one key; resolves when the editor is ready
-async function startEditor(key) {
+// Fill the wizard for one run; resolves when the editor is ready. Every step after a wait
+// checks that this run is still the open one: the admin may have left or opened another event.
+async function startEditor(run) {
+    const { key } = run;
+    const current = () => page.run === run;
     const title = document.getElementById('event-editor-title');
     page.saved = false;
+    page.previewDrawn = null;
+    stopTimers();
+    cancelWizardPreview();
     hide('event-editor-restored');
     hide('event-editor-saved');
     let event = null;
     if (key === NEW_KEY) {
         title.textContent = 'Neues Event';
         await resetWizard();
+        if (!current()) return;
     } else {
-        event = await loadEventIntoWizard(key);
+        event = await loadEventIntoWizard(key, { isWanted: current });
+        if (!current()) return;
         if (!event) {
             page.run = null;
             showToast('Event nicht gefunden.', 'danger');
@@ -173,41 +200,46 @@ async function startEditor(key) {
     // What is loaded now is the saved state; a prefill, restored input and typing are unsaved
     page.baseline = JSON.stringify(collectEventDraft());
     page.baseUpdatedAt = (event && event.updatedAt) || '';
-    if (page.prefill) {
-        // A template, a poll or an import starts the event: an older kept input does not come back over it
+    const { prefill, fresh } = page;
+    page.prefill = null;
+    page.fresh = false;
+    if (prefill || fresh) {
+        // A template, a poll or an import starts the event: an older kept input does not come back under it
         clearDraft(editId());
-        await fillWizard(page.prefill);
-        page.prefill = null;
+        if (prefill) await fillWizard(prefill);
     } else {
         await restoreDraft(event);
     }
+    if (!current()) return;
     setTimeout(() => state.descriptionEditor?.codemirror.refresh(), EDITOR_REFRESH_DELAY_MS);
     wireEditor();
-    // Still this editor (the admin may have left while it loaded): show the column's preview at once
-    if (page.run && page.run.key === key && isWideEditor()) await drawPreview();
+    // Changes reported while the wizard was filled were not input
+    stopTimers();
+    run.loading = false;
+    // The column of a wide screen shows the preview at once
+    if (isWideEditor()) await drawPreview();
 }
 
 // The editor of a key: the one that is open, else a fresh one
 function runEditor(key) {
     document.getElementById('event-editor-section').style.display = 'block';
     if (page.run && page.run.key === key) return page.run.promise;
-    const run = { key, promise: null };
+    const run = { key, promise: null, loading: true };
     page.run = run;
-    run.promise = startEditor(key);
+    run.promise = startEditor(run);
     return run.promise;
 }
 
 // Another route is shown: the next visit starts fresh
 function leftEditor() {
-    clearTimeout(page.previewTimer);
-    clearTimeout(page.storeTimer);
-    page.previewTimer = null;
-    page.storeTimer = null;
+    stopTimers();
     cancelWizardPreview();
     // Saved, untouched or discarded on request: nothing to bring back next time.
-    // (A reload or a closed tab never comes here, so its input stays kept.)
-    if (page.run) clearDraft(page.run.key === NEW_KEY ? '' : page.run.key);
+    // (A reload or a closed tab never comes here, so its input stays kept; neither does an
+    // editor that was still loading, whose kept input nobody has seen yet.)
+    if (page.run && !page.run.loading) clearDraft(page.run.key === NEW_KEY ? '' : page.run.key);
     page.run = null;
+    page.fresh = false;
     page.prefill = null;
     page.returnTo = DEFAULT_RETURN;
 }
@@ -235,13 +267,15 @@ export function showEventEditor(param) {
  * @param {string} [options.eventId] -> Event to edit; empty = new event.
  * @param {Object} [options.prefill] -> Fields for a new event (shape of fillWizard).
  * @param {string} [options.returnTo] -> Route shown after closing; default: the page the admin is on.
+ * @param {boolean} [options.fresh] -> Start a new event without the kept input of an earlier visit (the caller fills the wizard itself: poll decision, Discord import).
  * @returns {Promise<void>} -> Resolves when the wizard is filled; callers may set further fields then.
  */
-export function openEventEditor({ eventId = '', prefill = null, returnTo = '' } = {}) {
+export function openEventEditor({ eventId = '', prefill = null, returnTo = '', fresh = false } = {}) {
     const from = currentRoute();
     const key = keyOf(eventId);
     page.run = null;
     page.prefill = eventId ? null : prefill;
+    page.fresh = !eventId && fresh;
     page.returnTo = returnTo || (from && from.split('/')[0] !== ROUTE ? from : DEFAULT_RETURN);
     navigateTo(`${ROUTE}/${key}`);
     return runEditor(key);
@@ -269,8 +303,7 @@ export function closeEventEditor({ saved = false, to = '' } = {}) {
 function discardEditorDraft() {
     if (!page.run) return undefined;
     const { key } = page.run;
-    clearTimeout(page.storeTimer);
-    page.storeTimer = null;
+    stopTimers();
     clearDraft(editId());
     page.run = null;
     return runEditor(key);

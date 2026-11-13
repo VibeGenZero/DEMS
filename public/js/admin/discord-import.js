@@ -53,7 +53,7 @@ export function selectDiscordEvent(el) {
     importModal.hide();
 
     // Open the editor for a new event
-    openEventEditor().then(() => {
+    openEventEditor({ fresh: true }).then(() => {
         // Fill form
         document.getElementById('event-title').value = eventData.name || '';
         if (state.descriptionEditor) {
