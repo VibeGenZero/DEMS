@@ -129,6 +129,12 @@ export async function loadServerInfo() {
         if (window.VERBOSE_LOG) console.log('[VERBOSE] GET /api/server-info', data);
         state.serverName = data.serverName || 'DEMS';
         state.serverIconUrl = data.iconUrl || null;
+        state.aiInfo = {
+            memberAssistant: !!(data.ai && data.ai.memberAssistant),
+            assistantName: (data.ai && data.ai.assistantName) || '',
+            teaserText: (data.ai && data.ai.teaserText) || '',
+            adminAssistant: !!(data.ai && data.ai.adminAssistant)
+        };
         window._demsGuildId = data.guildId || '';
         // The styleguide link (#nav-debug) appears with the login, see showLoggedIn()
         window.DEBUG_MODE = data.debugMode === true;

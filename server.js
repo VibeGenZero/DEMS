@@ -22,7 +22,7 @@ const { sharedSessionStore } = require('./utils/sessionStore');
 const store = require('./firebaseAdmin');
 const { runMigrations } = require('./db/migrate');
 const { loadSystemConfig } = require('./utils/systemConfig');
-const { loadAiSettings } = require('./ai/settings');
+const { loadAiSettings, publicAiInfo, isFeatureOn } = require('./ai/settings');
 const { pruneUsage } = require('./ai/usage');
 const { initSetupState, isSetupRequired } = require('./utils/setupState');
 const { createSetupRouter } = require('./routes/setup');
@@ -237,6 +237,7 @@ app.use(privacyGate);
 // Dev mock mode: persona login instead of Discord OAuth2 (see dev/devAuth.js)
 if (IS_MOCK_MODE) app.use('/auth', require('./dev/devAuth'));
 app.use('/auth', require('./routes/auth'));
+app.use('/api/events', require('./routes/eventAsk'));
 app.use('/api/events', require('./routes/events'));
 app.use('/api/polls', require('./routes/polls'));
 app.use('/api/admin', require('./routes/admin'));
@@ -277,26 +278,22 @@ app.get('/api/maintenance/status', async (req, res) => {
 // Server info endpoint - server name (env override or Discord API) and icon for the login page
 app.get('/api/server-info', async (req, res) => {
     const debugMode = IS_DEBUG;
+    let info;
+    let ai = { memberAssistant: false, assistantName: '', teaserText: '', adminAssistant: false };
     try {
+        ai = { ...publicAiInfo(), adminAssistant: isFeatureOn('adminAssistant') };
         const guildId = process.env.DISCORD_GUILD_ID || '';
         // The icon comes from Discord even when SERVER_NAME overrides the name
         const iconUrl = guildId ? await getGuildIconUrl(guildId) : null;
-        if (process.env.SERVER_NAME) {
-            return res.json({ serverName: process.env.SERVER_NAME, iconUrl, guildId, debugMode });
-        }
-
-        if (guildId) {
-            const serverName = await getGuildName(guildId);
-            if (serverName) {
-                return res.json({ serverName, iconUrl, guildId, debugMode });
-            }
-        }
-
-        res.json({ serverName: 'DEMS', iconUrl, guildId, debugMode });
+        // SERVER_NAME overrides the Discord name
+        const serverName = process.env.SERVER_NAME || (guildId ? await getGuildName(guildId) : '') || 'DEMS';
+        info = { serverName, iconUrl, guildId, debugMode };
     } catch (err) {
         console.error('Error fetching server info:', err);
-        res.json({ serverName: 'DEMS', iconUrl: null, guildId: '', debugMode });
+        info = { serverName: 'DEMS', iconUrl: null, guildId: '', debugMode };
+        ai = { memberAssistant: false, assistantName: '', teaserText: '', adminAssistant: false };
     }
+    res.json({ ...info, ai });
 });
 
 // Privacy policy of this installation (#138): public, linked from the login page

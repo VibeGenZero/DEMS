@@ -20,7 +20,7 @@ see_also: [request-lifecycle, add-api-endpoint]
 | GET | `/api/csrf-token` | — |
 | GET | `/api/maintenance/status` | — |
 | GET | `/api/privacy` (#138: current privacy policy `{ markdown, version, updatedAt }`, 404 without one) | — |
-| GET | `/api/server-info` | — |
+| GET | `/api/server-info` (`{ serverName, iconUrl, guildId, debugMode, ai: { memberAssistant, assistantName, teaserText, adminAssistant } }`; `ai` also in the error fallback, all off) | —
 | GET | `/api/updates` | — |
 | GET | `/{*splat}` (SPA fallback) | — |
 
@@ -55,6 +55,7 @@ Only in setup mode (afterwards 409 `Die Einrichtung ist bereits abgeschlossen.`)
 | GET | `/api/events/series/:seriesId` | U (draft/archived only for A) |
 | GET | `/api/events/form-options` | U |
 | GET | `/api/events/:id` | U (draft/archived → 404 unless A; same for every `/:id` route) |
+| POST | `/api/events/:id/ask` (`routes/eventAsk.js`, mounted before `routes/events.js`; body `{ question, history }`; JSON errors 400/404/429/500 before the stream, otherwise `text/event-stream` with `token` / `done` / `error` events; feature off → 404) | U + CSRF |
 | POST / DELETE | `/api/events/:id/register` | U (POST also maintenance gate) |
 | PUT | `/api/events/:id/register/slot` | U (+ maintenance gate) |
 | POST | `/api/events/:id/register/confirm` | U (+ maintenance gate) |

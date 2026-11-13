@@ -32,6 +32,8 @@ see_also: [registration-flow, event-lifecycle, api-index]
 | POST | `/:id/comments` | user | body `{ text (≤1000), replyTo }`; stores `source: 'web'` and mirrors the comment into the event's Discord thread (`mirrorCommentToThread`, fire and forget, B-16) |
 | DELETE | `/:id/comments/:commentId` | user (owner or admin) | deletes one comment and, when it has a `discordMessageId`, its Discord message (`deleteMirroredMessage`, fire and forget, B-16) |
 
+Related: `POST /api/events/:id/ask` (the event assistant, SSE stream) lives in `routes/eventAsk.js`, mounted before this router; see [api-index](../reference/api-index.md).
+
 ## Where in code
 
 grep `router.(get|post|put|delete)\('` in `routes/events.js`; handler order matters (see gotchas).
