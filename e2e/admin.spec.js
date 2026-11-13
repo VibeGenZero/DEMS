@@ -498,6 +498,17 @@ test('the System page shows the configuration and the Discord guide', async ({ p
     await navigate(page, 'admin');
     await page.click('#admin-section a[href="#system"]');
     await expect(page.locator('#system-section')).toBeVisible();
+    // One category at a time: the overview first, with version and status
+    await expect(page.locator('#system-panel-overview')).toBeVisible();
+    await expect(page.locator('#system-panel-discord')).toBeHidden();
+    await expect(page.locator('#system-status-list .system-status-row')).toHaveCount(2);
+    await expect(page.locator('#system-nav .settings-nav-item')).toHaveCount(5);
+
+    await page.click('#system-nav a[href="#system/discord"]');
+    await expect(page).toHaveURL(/#system\/discord$/);
+    await expect(page.locator('#system-panel-discord')).toBeVisible();
+    await expect(page.locator('#system-panel-overview')).toBeHidden();
+    await expect(page.locator('#system-nav a[aria-current="page"]')).toHaveText(/Discord/);
     await expect(page.locator('#system-DISCORD_GUILD_ID')).toHaveAttribute('readonly', '');
     await expect(page.locator('#system-discord-fields .chip-info').first()).toHaveText('aus .env');
     await expect(page.locator('#system-DISCORD_BOT_TOKEN')).toHaveValue('');
@@ -506,5 +517,40 @@ test('the System page shows the configuration and the Discord guide', async ({ p
     await waitForDialog(page, '#discordGuideModal');
     await expect(page.locator('#system-guide .setup-guide-step')).toHaveCount(5);
     await expect(page.locator('#system-guide #guide-step-2 code')).toContainText('/auth/discord/callback');
+    await page.keyboard.press('Escape');
+    await expect(page.locator('#discordGuideModal')).toBeHidden();
+
+    // The category is part of the address and survives a reload
+    await page.reload();
+    await expect(page.locator('#system-panel-discord')).toBeVisible();
+
+    // Unsaved input marks its category, stays across a category switch and is asked about on leaving
+    await page.click('#system-nav a[href="#system/server"]');
+    await page.fill('#system-SERVER_NAME', 'Nicht gespeichert');
+    await expect(page.locator('#system-nav-dot-server')).toBeVisible();
+    await page.click('#system-nav a[href="#system/overview"]');
+    await page.click('#system-nav a[href="#system/server"]');
+    await expect(page.locator('#system-SERVER_NAME')).toHaveValue('Nicht gespeichert');
+    await page.click('#system-section a[href="#admin"]');
+    await waitForDialog(page, '#confirmModal');
+    await expect(page.locator('#confirm-modal-text')).toHaveText('Ungespeicherte Änderungen verwerfen?');
+    await page.click('#confirmModal [data-bs-dismiss="modal"]');
+    await expect(page.locator('#confirmModal')).toBeHidden();
+    await expect(page).toHaveURL(/#system\/server$/);
+    await expect(page.locator('#system-SERVER_NAME')).toHaveValue('Nicht gespeichert');
+    await page.click('#system-section a[href="#admin"]');
+    await waitForDialog(page, '#confirmModal');
+    await page.click('#confirm-modal-ok');
+    await expect(page.locator('#admin-section')).toBeVisible();
     expect(errors).toEqual([]);
+});
+
+test('on a phone the System categories are a scrolling row and the page does not scroll sideways', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await loginAs(page, 'admin');
+    await page.evaluate(() => { window.location.hash = '#system/discord'; });
+    await expect(page.locator('#system-panel-discord')).toBeVisible();
+    await expect(page.locator('#system-nav .settings-nav-sub').first()).toBeHidden();
+    const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+    expect(overflow).toBeLessThanOrEqual(0);
 });

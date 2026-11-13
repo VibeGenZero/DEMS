@@ -49,7 +49,7 @@ test('the styleguide shows the tokens and all components', async ({ page }) => {
 test('long content stays inside the page and many tabs scroll sideways', async ({ page }, testInfo) => {
     await openStyleguide(page);
     const tooWide = await page.evaluate(() => [...document.querySelectorAll('#debug-section *')]
-        .filter(element => !element.closest('.nav-pills') && element.getBoundingClientRect().right > document.documentElement.clientWidth + 1)
+        .filter(element => !element.closest('.nav-pills, .settings-nav') && element.getBoundingClientRect().right > document.documentElement.clientWidth + 1)
         .map(element => `${element.tagName.toLowerCase()}.${element.className}`)
         .slice(0, 5));
     expect(tooWide).toEqual([]);
