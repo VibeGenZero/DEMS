@@ -8,7 +8,7 @@
 import { registerActions } from '../core/actions.js';
 import { navigateTo, onRouteLeave, setLeaveGuard } from '../core/router.js';
 import { state } from '../core/state.js';
-import { showConfirmDialog, showElement, showToast } from '../core/ui.js';
+import { showConfirmDialog, showElement, showToast, toggleElement } from '../core/ui.js';
 import { clearDraft, formatSavedAt, isDraftStale, readDraft, storeDraft } from './editor-draft.js';
 import { setDateChangeHandler } from './wizard-dates.js';
 import { cancelWizardPreview, renderWizardPreview } from './wizard-preview.js';
@@ -223,6 +223,8 @@ async function startEditor(run) {
 // The editor of a key: the one that is open, else a fresh one
 function runEditor(key) {
     document.getElementById('event-editor-section').style.display = 'block';
+    // Only while an assistant is on (shown as long as the AI info is unknown)
+    toggleElement(document.getElementById('event-ai-notes-group'), !state.aiInfo || !!(state.aiInfo.adminAssistant || state.aiInfo.memberAssistant));
     if (page.run && page.run.key === key) return page.run.promise;
     const run = { key, promise: null, loading: true };
     page.run = run;

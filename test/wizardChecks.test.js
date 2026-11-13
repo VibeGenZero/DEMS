@@ -28,6 +28,12 @@ test('a valid draft passes every step', async () => {
     for (const step of [1, 2, 3, 4, 5]) assert.deepEqual(check(step), [], `step ${step}`);
 });
 
+test('step 1 limits the assistant notes to 4000 characters', async () => {
+    const check = await checker();
+    assert.deepEqual(check(1, { title: 'A', aiNotes: 'x'.repeat(4000) }), []);
+    assert.deepEqual(check(1, { title: 'A', aiNotes: 'x'.repeat(4001) }), [{ field: 'aiNotes', message: 'Die Zusatzinfos dürfen höchstens 4000 Zeichen lang sein.' }]);
+});
+
 test('step 1 wants a title and an http(s) banner', async () => {
     const check = await checker();
     assert.deepEqual(check(1, { title: '   ' }), [{ field: 'title', message: 'Bitte einen Titel eingeben.' }]);
@@ -107,7 +113,7 @@ test('step 5 has nothing to check, and every step names its fields', async () =>
     const { STEP_FIELDS } = await load();
     assert.deepEqual(check(5, { title: '' }), []);
     assert.deepEqual(JSON.parse(JSON.stringify(STEP_FIELDS)), {
-        1: ['title', 'bannerUrl'], 2: ['startDate', 'endDate', 'registrationDeadline', 'unregisterDeadline', 'recurringUntil'],
+        1: ['title', 'bannerUrl', 'aiNotes'], 2: ['startDate', 'endDate', 'registrationDeadline', 'unregisterDeadline', 'recurringUntil'],
         3: ['maxParticipants', 'reminderHours', 'requiredRoles', 'slots'], 4: ['formFields'], 5: []
     });
 });

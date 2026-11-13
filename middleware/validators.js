@@ -29,6 +29,8 @@ function isHttpUrl(value) {
  * @param {Object} [options] -> `{ template }` for the settings of an event template.
  * @returns {Promise<string[]>} -> German error sentences, empty when everything is fine.
  */
+const AI_NOTES_MAX = 4000;
+
 async function checkEventFields(body, { template = false } = {}) {
     const { title, maxParticipants, accessMode, status, approvalMode } = body;
 
@@ -68,6 +70,12 @@ async function checkEventFields(body, { template = false } = {}) {
     if (announceChannelId !== undefined && announceChannelId !== null && announceChannelId !== ''
         && !(typeof announceChannelId === 'string' && /^\d{17,20}$/.test(announceChannelId))) {
         errors.push('Ankündigungskanal ist ungültig.');
+    }
+
+    // Extra details only the AI assistant reads
+    const { aiNotes } = body;
+    if (aiNotes !== undefined && aiNotes !== null && (typeof aiNotes !== 'string' || aiNotes.length > AI_NOTES_MAX)) {
+        errors.push(`Die Zusatzinfos für den Event-Assistenten dürfen höchstens ${AI_NOTES_MAX} Zeichen lang sein.`);
     }
 
     // Templates store no status, dates or deadlines (W-10)

@@ -157,6 +157,7 @@ function buildEvents(clock) {
             maxParticipants: 20,
             startDate: clock.slot(3, 19),
             endDate: clock.slot(3, 22),
+            aiNotes: 'Mitbringen: Headset und gute Laune, eigene Spiele sind nicht nötig.\nTreffpunkt ist die Lobby (Sprachkanal), dort holt dich Mori ab.\nBei Fragen zum Ablauf: Mori oder Ronja ansprechen.\nEs gibt keinen Dresscode.',
             category: 'Gaming',
             accentColor: '#8b5cf6',
             reminderHours: [{ hours: 24, sent: false }, { hours: 1, sent: false }],

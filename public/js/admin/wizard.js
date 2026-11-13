@@ -143,7 +143,7 @@ export async function resetWizard() {
     await rememberSeries(null);
     document.getElementById('event-edit-id').value = '';
     document.getElementById('event-title').value = '';
-    document.getElementById('event-description').value = '';
+    ['event-description', 'event-ai-notes'].forEach(id => { document.getElementById(id).value = ''; });
     document.getElementById('event-banner-url').value = '';
     document.getElementById('event-start-date').value = '';
     document.getElementById('event-end-date').value = '';
@@ -235,7 +235,7 @@ export async function fillWizard(fields) {
     document.getElementById('event-title').value = event.title || '';
     ensureDescriptionEditor();
     state.descriptionEditor.value(event.description || '');
-
+    document.getElementById('event-ai-notes').value = event.aiNotes || '';
     document.getElementById('event-banner-url').value = event.bannerUrl || '';
     const accentEl = document.getElementById('event-accent-color');
     if (accentEl) accentEl.value = event.accentColor || DEFAULT_ACCENT_COLOR;
@@ -373,6 +373,7 @@ export function collectEventDraft() {
     return {
         title: document.getElementById('event-title').value,
         description: state.descriptionEditor ? state.descriptionEditor.value() : document.getElementById('event-description').value,
+        aiNotes: document.getElementById('event-ai-notes').value,
         bannerUrl: document.getElementById('event-banner-url').value,
         startDate: state.startDatePicker && state.startDatePicker.selectedDates[0] ? state.startDatePicker.selectedDates[0].toISOString() : '',
         endDate: state.endDatePicker && state.endDatePicker.selectedDates[0] ? state.endDatePicker.selectedDates[0].toISOString() : '',

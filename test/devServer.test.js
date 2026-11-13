@@ -3961,3 +3961,40 @@ test('„Fest zusagen“ turns the answer into a registration and needs login an
     assert.equal(again.status, 400);
     assert.deepEqual(await again.json(), { error: 'Du stehst nicht auf der Ersatzbank.' });
 });
+
+// Extra details only the AI assistant reads: admin-only in answers, copied by duplicates
+test('aiNotes are stored, shown to admins only and copied by a duplicate', async () => {
+    const admin = await loginAs('admin');
+    const created = await createSlotEvent(admin, 'KI-Notizen', [], { aiNotes: 'Treffpunkt: Lobby' });
+    assert.equal(created.aiNotes, 'Treffpunkt: Lobby');
+
+    const adminDetail = await (await admin.request(`/api/events/${created.id}`)).json();
+    assert.equal(adminDetail.aiNotes, 'Treffpunkt: Lobby');
+
+    const updated = await admin.send('PUT', `/api/admin/events/${created.id}`, { ...adminDetail, aiNotes: 'Neu: Voice 2' });
+    assert.equal(updated.status, 200);
+    assert.equal((await (await admin.request(`/api/events/${created.id}`)).json()).aiNotes, 'Neu: Voice 2');
+
+    const copy = await (await admin.send('POST', `/api/admin/events/${created.id}/duplicate`)).json();
+    assert.equal(copy.aiNotes, 'Neu: Voice 2');
+
+    const member = await loginAs('member');
+    const memberDetail = await (await member.request(`/api/events/${EVENT_ID.OPEN}`)).json();
+    assert.equal(Object.hasOwn(memberDetail, 'aiNotes'), false);
+    const list = (await (await member.request('/api/events')).json()).data;
+    assert.ok(list.length > 0);
+    assert.equal(list.some(event => Object.hasOwn(event, 'aiNotes')), false);
+    const adminOpen = await (await admin.request(`/api/events/${EVENT_ID.OPEN}`)).json();
+    assert.match(adminOpen.aiNotes, /Treffpunkt/);
+});
+
+test('aiNotes longer than 4000 characters are refused', async () => {
+    const admin = await loginAs('admin');
+    const res = await admin.send('POST', '/api/admin/events', {
+        title: 'Zu lang', status: 'draft', aiNotes: 'x'.repeat(4001)
+    });
+    assert.equal(res.status, 400);
+    assert.equal((await res.json()).error, 'Die Zusatzinfos für den Event-Assistenten dürfen höchstens 4000 Zeichen lang sein.');
+    const ok = await admin.send('POST', '/api/admin/events', { title: 'Passt', status: 'draft', aiNotes: 'x'.repeat(4000) });
+    assert.equal(ok.status, 200);
+});

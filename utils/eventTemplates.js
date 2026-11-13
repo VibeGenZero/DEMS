@@ -11,7 +11,7 @@ const { normalizeReminderHours } = require('./reminders');
  * Mirrored in public/js/admin/wizard-templates.js (a test keeps both equal).
  */
 const TEMPLATE_FIELDS = [
-    'title', 'description', 'bannerUrl', 'accentColor', 'category', 'location',
+    'title', 'description', 'aiNotes', 'bannerUrl', 'accentColor', 'category', 'location',
     'maxParticipants', 'accessMode', 'requiredRoles', 'approvalMode', 'allowGuests', 'allowTentative',
     'slots', 'assignRoleId', 'formFields', 'reminderHours', 'checkinMessage',
     'autoCreateChannels', 'channelConfig', 'customBotMessages', 'announceChannelId'
@@ -40,6 +40,7 @@ function pickTemplateSettings(input) {
     const settings = {
         title: text(source.title),
         description: text(source.description),
+        aiNotes: text(source.aiNotes),
         bannerUrl: text(source.bannerUrl),
         accentColor: text(source.accentColor),
         category: text(source.category),

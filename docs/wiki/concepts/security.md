@@ -93,5 +93,6 @@ A fresh installation (no setup completed, `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_S
 
 - New endpoints: decide the guard explicitly (`requireAuth`/`requireAdmin`), never trust frontend hiding.
 - `routes/events.js` guards itself: `router.use(requireAuth)` for every route and `router.param('id')` hides `draft`/`archived` events from non-admins; new `/:id` routes inherit both.
+- `aiNotes` is admin-only in event answers (`ADMIN_EVENT_FIELDS`; `toPublicEvent(id, data, viewer)` keeps it only for an admin viewer, and only `GET /api/events/:id` passes the viewer) but not a secret store: the AI assistant may pass it on to members, so the editor says "Keine Geheimnisse eintragen".
 - Build event answers outside the admin area with `toPublicEvent(id, data)` (`utils/eventUtils.js`), never by spreading the document; a new secret event field goes into its `PRIVATE_EVENT_FIELDS`.
 - Do not add CDN hosts to the CSP: vendor scripts, styles and fonts into `public/vendor/` instead (see [frontend-markup](../modules/frontend-markup.md)). External images are already covered by `img-src https:`.

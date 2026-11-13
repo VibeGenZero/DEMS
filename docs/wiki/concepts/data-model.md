@@ -28,6 +28,7 @@ erDiagram
 | Field | Type | Meaning |
 |---|---|---|
 | `title`, `description` | string | description is Markdown (EasyMDE), ≤5000 chars |
+| `aiNotes` | string | extra details only the AI assistant reads, default `''`, ≤ 4000 chars (`checkEventFields`); admin-only in answers (`ADMIN_EVENT_FIELDS` in `toPublicEvent`: only `GET /api/events/:id` for an admin carries it); shared by series (`SERIES_FIELDS`) and templates (`TEMPLATE_FIELDS`), copied by duplicates; editor field `#event-ai-notes` on step 1 |
 | `status` | `draft` \| `active` \| `archived` \| `cancelled` | only `active` is listed and accepts registrations; `draft`/`archived` answer 404 to non-admins (`isEventVisibleTo`) |
 | `startDate`, `endDate` | ISO string or `''` | |
 | `registrationDeadline`, `unregisterDeadline` | ISO string or `''` | optional Anmeldeschluss / Abmeldeschluss (W-03); `''` or missing = none; must lie before the end; series dates keep the distance to their start |
@@ -97,7 +98,7 @@ Read in full by the admin member overview (W-15, `GET /api/admin/members`, `util
 
 ## eventTemplates (auto id) — written by `routes/admin.js` (`/api/admin/event-templates`, W-10)
 
-`{ name (unique ignoring case, ≤ 80), settings, createdAt, createdBy, updatedAt, updatedBy }` — shared by all admins, at most 50. `settings` holds only `TEMPLATE_FIELDS` of `utils/eventTemplates.js` with event shapes (see the events table): `title`, `description`, `bannerUrl`, `accentColor`, `category`, `location`, `maxParticipants`, `accessMode`, `requiredRoles`, `approvalMode`, `allowGuests`, `allowTentative`, `slots`, `assignRoleId`, `formFields`, `reminderHours` (`[{ hours }]`, no `sent`), `checkinMessage`, `autoCreateChannels`, `channelConfig`, `customBotMessages`. Never dates, deadlines, status, series fields, Discord ids, announcements or the check-in code. Applying a template in the wizard copies the settings once; events keep no link to it. An uploaded banner in `settings.bannerUrl` counts as used for the banner clean-up. Not wiped by the admin system reset.
+`{ name (unique ignoring case, ≤ 80), settings, createdAt, createdBy, updatedAt, updatedBy }` — shared by all admins, at most 50. `settings` holds only `TEMPLATE_FIELDS` of `utils/eventTemplates.js` with event shapes (see the events table): `title`, `description`, `aiNotes`, `bannerUrl`, `accentColor`, `category`, `location`, `maxParticipants`, `accessMode`, `requiredRoles`, `approvalMode`, `allowGuests`, `allowTentative`, `slots`, `assignRoleId`, `formFields`, `reminderHours` (`[{ hours }]`, no `sent`), `checkinMessage`, `autoCreateChannels`, `channelConfig`, `customBotMessages`. Never dates, deadlines, status, series fields, Discord ids, announcements or the check-in code. Applying a template in the wizard copies the settings once; events keep no link to it. An uploaded banner in `settings.bannerUrl` counts as used for the banner clean-up. Not wiped by the admin system reset.
 
 ## aiUsage (id = local day `YYYY-MM-DD` in `TIMEZONE`) — written by `ai/usage.js`
 

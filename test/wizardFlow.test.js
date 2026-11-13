@@ -330,3 +330,27 @@ test('the audit log marks a change notice as information', async () => {
     const html = element('audit-log-entries').innerHTML;
     assert.match(html, /chip-info[^>]*>NOTIFY_EVENT_CHANGE/, html);
 });
+
+test('the assistant notes are collected and emptied by a reset', async () => {
+    const { app, element } = await openWizard();
+    element('event-ai-notes').value = 'Treffpunkt: Lobby';
+    assert.equal(app.collectEventDraft().aiNotes, 'Treffpunkt: Lobby');
+    await app.fillWizard({ title: 'A', aiNotes: 'Mitbringen: Headset' });
+    assert.equal(element('event-ai-notes').value, 'Mitbringen: Headset');
+    await app.resetWizard();
+    assert.equal(element('event-ai-notes').value, '');
+});
+
+test('the assistant notes field shows while the AI info is unknown or an assistant is on, else it hides', async () => {
+    const shownFor = async (aiInfo) => {
+        const frontend = await loadFrontendApp({ '/api/admin/roles': [] });
+        frontend.state.currentUser = { id: 'u-admin', username: 'mori', roles: [], isAdmin: true };
+        frontend.state.aiInfo = aiInfo;
+        await frontend.app.openEventEditor();
+        return !isHidden(frontend.element('event-ai-notes-group'));
+    };
+    assert.equal(await shownFor(undefined), true);
+    assert.equal(await shownFor({ adminAssistant: false, memberAssistant: true }), true);
+    assert.equal(await shownFor({ adminAssistant: true, memberAssistant: false }), true);
+    assert.equal(await shownFor({ adminAssistant: false, memberAssistant: false }), false);
+});
