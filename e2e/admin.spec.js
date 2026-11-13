@@ -545,6 +545,66 @@ test('the System page shows the configuration and the Discord guide', async ({ p
     expect(errors).toEqual([]);
 });
 
+// The leave guard must not rewrite the browser history: Back walks the visited pages
+test('the Back button walks through the System categories and out of the page', async ({ page }) => {
+    const errors = watchErrors(page);
+    await loginAs(page, 'admin');
+    await navigate(page, 'admin');
+    const before = await page.evaluate(() => history.length);
+    await page.click('#admin-section a[href="#system"]');
+    await expect(page.locator('#system-panel-overview')).toBeVisible();
+    await page.click('#system-nav a[href="#system/discord"]');
+    await expect(page.locator('#system-panel-discord')).toBeVisible();
+    await page.click('#system-nav a[href="#system/server"]');
+    await expect(page.locator('#system-panel-server')).toBeVisible();
+    // Three clicks, three entries
+    expect(await page.evaluate(() => history.length)).toBe(before + 3);
+
+    await page.goBack();
+    await expect(page).toHaveURL(/#system\/discord$/);
+    await expect(page.locator('#system-panel-discord')).toBeVisible();
+    await page.goBack();
+    await expect(page).toHaveURL(/#system$/);
+    await expect(page.locator('#system-panel-overview')).toBeVisible();
+    await page.goBack();
+    await expect(page).toHaveURL(/#admin$/);
+    await expect(page.locator('#admin-section')).toBeVisible();
+    await page.goForward();
+    await expect(page.locator('#system-panel-overview')).toBeVisible();
+
+    // With unsaved input Back asks; "Abbrechen" keeps page, address and the marked navbar link
+    await page.click('#system-nav a[href="#system/server"]');
+    await page.fill('#system-SERVER_NAME', 'Nicht gespeichert');
+    // Back to another category is free ...
+    await page.goBack();
+    await expect(page).toHaveURL(/#system$/);
+    await expect(page.locator('#system-panel-overview')).toBeVisible();
+    await expect(page.locator('#system-nav-dot-server')).toBeVisible();
+    // ... Back out of the page asks
+    await page.goBack();
+    await waitForDialog(page, '#confirmModal');
+    await page.click('#confirmModal [data-bs-dismiss="modal"]');
+    await expect(page.locator('#confirmModal')).toBeHidden();
+    await expect(page).toHaveURL(/#system$/);
+    await expect(page.locator('#system-section')).toBeVisible();
+    await expect(page.locator('#main-navbar .nav-link.active')).toHaveAttribute('data-section', 'admin-section');
+    await page.click('#system-nav a[href="#system/server"]');
+    await expect(page.locator('#system-SERVER_NAME')).toHaveValue('Nicht gespeichert');
+
+    // "Verwerfen" leaves through a link without adding an entry for the question
+    const asked = await page.evaluate(() => history.length);
+    await page.click('#system-section a[href="#admin"]');
+    await waitForDialog(page, '#confirmModal');
+    await page.click('#confirm-modal-ok');
+    await expect(page.locator('#admin-section')).toBeVisible();
+    expect(await page.evaluate(() => history.length)).toBeLessThanOrEqual(asked + 1);
+    await page.goBack();
+    await expect(page).toHaveURL(/#system\/server$/);
+    // The discarded value is gone
+    await expect(page.locator('#system-SERVER_NAME')).not.toHaveValue('Nicht gespeichert');
+    expect(errors).toEqual([]);
+});
+
 test('on a phone the System categories are a scrolling row and the page does not scroll sideways', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await loginAs(page, 'admin');

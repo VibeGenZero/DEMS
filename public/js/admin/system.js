@@ -7,7 +7,7 @@
  * is a new version everybody accepts again).
  */
 import { registerActions } from '../core/actions.js';
-import { setLeaveGuard } from '../core/router.js';
+import { onRouteLeave, setLeaveGuard } from '../core/router.js';
 import { state } from '../core/state.js';
 import { escapeHtml, renderMarkdownSafe, showConfirmDialog, showToast } from '../core/ui.js';
 import { mountDiscordGuide, resetDiscordGuide } from '../pages/discord-guide.js';
@@ -108,11 +108,13 @@ export async function showSystemSection(param) {
     page.category = category;
     // The router uses a guard up when it lets a navigation through
     setLeaveGuard(mayLeaveSystem);
+    onRouteLeave(leftSystem);
     // A category switch keeps the loaded values and whatever was typed
     if (page.open) return;
     page.open = true;
     clearDirtyCategories();
-    await loadSettings();
+    // A failed load is tried again with the next category
+    if (!(await loadSettings())) page.open = false;
     await Promise.all([loadUpdateStatus(), loadPrivacyEditor()]);
 }
 
@@ -152,18 +154,30 @@ async function loadSettings(groups = GROUPS) {
         page.settings = data.settings || [];
         render(groups);
         renderStatusRows(statusRows(data.status));
+        return true;
     } catch (err) {
         showToast(err.message || 'Systemeinstellungen konnten nicht geladen werden.', 'danger');
+        return false;
     }
 }
 
-// Leave guard of the router: a category switch is free, leaving the page asks when input is unsaved
-async function mayLeaveSystem(next) {
-    if (next.route === 'system') return true;
-    if (dirtyCategories().length > 0 && !(await showConfirmDialog('Ungespeicherte Änderungen verwerfen?', 'Verwerfen'))) return false;
+// Leave guard of the router: a category switch and a page without unsaved input answer at once
+// (the browser history stays untouched), unsaved input asks first
+function mayLeaveSystem(next) {
+    if (next.route === 'system' || dirtyCategories().length === 0) return true;
+    return showConfirmDialog('Ungespeicherte Änderungen verwerfen?', 'Verwerfen');
+}
+
+// Another route is shown: the next visit loads again, and nothing typed or pending survives
+function leftSystem() {
     page.open = false;
+    page.pending = null;
+    page.pendingGroup = null;
+    passwordDialog().hide();
+    // Discarded input must not sit in the fields if the next load fails
+    render();
+    document.getElementById('system-privacy-text').value = page.privacyText;
     clearDirtyCategories();
-    return true;
 }
 
 const UPDATE_COMMAND = 'docker compose pull && docker compose up -d';
@@ -305,6 +319,8 @@ function saveSystemSettings(element) {
 }
 
 async function confirmSystemSave() {
+    // The page was left while the dialog was open
+    if (!page.pending) return;
     const passwordInput = document.getElementById('system-reset-password');
     const password = passwordInput.value;
     passwordInput.value = '';

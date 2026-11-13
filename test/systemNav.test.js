@@ -43,12 +43,15 @@ test('a leave guard that answers true lets the navigation through and is asked w
     const asked = [];
     // Copied field by field: the object comes from the module realm of the harness
     harness.app.setLeaveGuard((next) => { asked.push([next.route, next.param]); return true; });
-    await go(harness, 'event/abc');
-    assert.deepEqual(asked, [['event', 'abc']]);
-    assert.equal(harness.location.hash, '#event/abc');
+    await go(harness, 'info/abc');
+    assert.deepEqual(asked, [['info', 'abc']]);
+    assert.equal(harness.location.hash, '#info/abc');
+    // Answered at once: the route is shown in the same step and the history is never rewritten
+    assert.equal(harness.element('info-section').style.display, 'block');
+    assert.deepEqual(harness.historyCalls, []);
 
     // The guard is used up: the next change is not asked again
-    await go(harness, 'info');
+    await go(harness, 'privacy');
     assert.equal(asked.length, 1);
 });
 
@@ -195,8 +198,8 @@ test('switching the category keeps typed values, never asks and loads nothing ag
     const loads = () => harness.requests.filter(request => request.url === '/api/admin/system/settings').length;
     const before = loads();
     await go(harness, 'system/discord');
-    await harness.app.handleRoute();
     assert.equal(isHidden(harness.element('system-panel-discord')), false);
+    assert.deepEqual(harness.historyCalls, []);
     assert.equal(harness.element('system-SERVER_NAME').value, 'Neu');
     assert.equal(harness.dialogs.length, 0);
     assert.equal(loads(), before);
@@ -221,14 +224,22 @@ test('confirming the question leaves and forgets the marks', async () => {
     await go(harness, 'info');
     assert.equal(harness.dialogs.length, 1);
     assert.equal(harness.location.hash, '#info');
+    // The dialog answered later: the address was put back once and the target replaces it, nothing is pushed
+    assert.deepEqual(harness.historyCalls, ['replaceState #system/server', 'replace #info']);
+    // The browser routes on the hash change
+    assert.notEqual(harness.element('info-section').style.display, 'block');
+    await harness.app.handleRoute();
     assert.deepEqual([...harness.app.dirtyCategories()], []);
+    assert.equal(harness.element('info-section').style.display, 'block');
 });
 
-test('leaving without changes does not ask', async () => {
+test('leaving without changes does not ask and leaves the history alone', async () => {
     const harness = await openSystem();
     await go(harness, 'info');
     assert.equal(harness.dialogs.length, 0);
     assert.equal(harness.location.hash, '#info');
+    assert.deepEqual(harness.historyCalls, []);
+    assert.equal(harness.element('info-section').style.display, 'block');
 });
 
 test('a refused save keeps input and mark', async () => {
@@ -237,4 +248,74 @@ test('a refused save keeps input and mark', async () => {
     await save(harness, 'server');
     assert.equal(harness.element('system-SERVER_NAME').value, 'Neu');
     assert.deepEqual([...harness.app.dirtyCategories()], ['server']);
+});
+
+// ─── Findings of the branch review ───
+
+test('onRouteLeave tells a page once that another route is shown, not on its own parameter change', async () => {
+    const harness = await openApp();
+    await go(harness, 'info');
+    let left = 0;
+    harness.app.onRouteLeave(() => { left++; });
+    await go(harness, 'info/abc');
+    assert.equal(left, 0);
+    await go(harness, 'privacy');
+    assert.equal(left, 1);
+    await go(harness, 'news');
+    assert.equal(left, 1);
+});
+
+test('the system page is loaded again on the next visit even when its guard was replaced', async () => {
+    const harness = await openSystem();
+    const loads = () => harness.requests.filter(request => request.url === '/api/admin/system/settings').length;
+    harness.app.setLeaveGuard(null);
+    await go(harness, 'info');
+    const before = loads();
+    await go(harness, 'system');
+    assert.equal(loads(), before + 1);
+});
+
+test('a failed settings load is tried again on the next category switch', async () => {
+    let calls = 0;
+    const harness = await loadFrontendApp({
+        '/api/admin/system/settings': () => (++calls === 1 ? httpAnswer(500, { error: 'Kaputt' }) : { settings: SETTINGS })
+    });
+    harness.state.currentUser = { id: 'a', isAdmin: true };
+    await go(harness, 'system');
+    assert.deepEqual(harness.toasts, ['Kaputt']);
+    assert.equal(harness.element('system-SERVER_NAME'), null);
+    await go(harness, 'system/server');
+    assert.equal(calls, 2);
+    assert.equal(harness.element('system-SERVER_NAME').value, 'Gilde');
+});
+
+test('after "Verwerfen" the fields show the stored values again, also when the next load fails', async () => {
+    let fail = false;
+    const harness = await loadFrontendApp({
+        '/api/admin/system/settings': () => (fail ? httpAnswer(500, { error: 'Kaputt' }) : { settings: SETTINGS }),
+        '/api/privacy': { markdown: 'Alt', version: 1, updatedAt: '2026-11-01T10:00:00.000Z' }
+    });
+    harness.state.currentUser = { id: 'a', isAdmin: true };
+    await go(harness, 'system/server');
+    await type(harness, 'SERVER_NAME', 'Verworfen', 'server');
+    harness.element('system-privacy-text').value = 'Verworfen';
+    await harness.app.runAction('previewSystemPrivacy', {});
+    await go(harness, 'info');
+    await harness.app.handleRoute();
+    fail = true;
+    await go(harness, 'system/server');
+    assert.equal(harness.element('system-SERVER_NAME').value, 'Gilde');
+    assert.equal(harness.element('system-privacy-text').value, 'Alt');
+    assert.deepEqual([...harness.app.dirtyCategories()], []);
+});
+
+test('leaving forgets a save that waited for the password', async () => {
+    const harness = await openSystem();
+    await type(harness, 'SERVER_NAME', 'Neu', 'server');
+    await harness.app.runAction('saveSystemSettings', group('server'));
+    await go(harness, 'info');
+    await harness.app.handleRoute();
+    harness.element('system-reset-password').value = 'geheim';
+    await harness.app.runAction('confirmSystemSave', {});
+    assert.equal(harness.requests.filter(request => request.method === 'PUT').length, 0);
 });
