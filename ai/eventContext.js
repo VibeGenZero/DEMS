@@ -57,7 +57,9 @@ function termin(event, timezone) {
         const text = formatDateTime(value, timezone);
         if (text) lines.push(`${label}: ${text}`);
     }
-    if (event.location) lines.push(`Ort: ${event.location}`);
+    // Stored as { text, channelId, channelType } or null; only the text is shown, never the channel id
+    const place = typeof event.location === 'string' ? event.location : (event.location && event.location.text);
+    if (typeof place === 'string' && place.trim()) lines.push(`Ort: ${place.trim()}`);
     return lines;
 }
 

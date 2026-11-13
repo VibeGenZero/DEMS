@@ -11,7 +11,7 @@ function baseEvent(extra = {}) {
         startDate: '2026-11-21T19:00:00Z', endDate: '2026-11-21T22:00:00Z',
         registrationDeadline: '2026-11-20T19:00:00Z', unregisterDeadline: '',
         maxParticipants: 10, accessMode: 'role-required', requiredRoles: ['role-777'], approvalMode: 'manual',
-        allowGuests: true, allowTentative: false, checkinCode: '123456', location: 'Voice 1',
+        allowGuests: true, allowTentative: false, checkinCode: '123456', location: { text: 'Voice 1', channelId: '999000', channelType: 'voice' },
         formFields: [{ label: 'Charakter', type: 'text', required: true, options: [], description: 'Name deiner Figur' }],
         ...extra
     };
@@ -41,6 +41,7 @@ test('the context names start, deadline, free places, required role names and fo
     assert.match(text, /Name deiner Figur/);
     assert.match(text, /^Termin$/m);
     assert.match(text, /^Plätze$/m);
+    assert.match(text, /^Ort: Voice 1$/m);
 });
 
 test("the context never contains the check-in code, Discord ids, other members' names or form answers", () => {
@@ -48,6 +49,22 @@ test("the context never contains the check-in code, Discord ids, other members' 
     for (const secret of ['123456', 'Fremder', 'Geheim', 'Meiner', 'u-asker', 'u-other', 'g-42', 'role-777']) {
         assert.ok(!text.includes(secret), `leaked ${secret}`);
     }
+});
+
+test('only whitelisted event fields reach the context', () => {
+    const sentinels = {
+        checkinMessage: 'S-checkinMessage', customBotMessages: { welcome: 'S-customBotMessages' }, discordChannelId: 'S-discordChannelId',
+        discordTextChannelId: 'S-discordTextChannelId', discordScheduledEventId: 'S-discordScheduledEventId',
+        discordThread: 'S-discordThread', announcements: [{ channelId: 'S-announcements' }], announceChannelId: 'S-announceChannelId',
+        createdBy: 'S-createdBy', assignRoleId: 'S-assignRoleId', channelConfig: { name: 'S-channelConfig' },
+        seriesId: 'S-seriesId', sourcePollId: 'S-sourcePollId', bannerUrl: 'https://S-bannerUrl.example/x.png'
+    };
+    const text = build({ event: baseEvent({ ...sentinels, location: { text: ' Voice 1 ', channelId: 'S-locationChannelId', channelType: 'voice' } }) });
+    assert.match(text, /^Ort: Voice 1$/m);
+    assert.ok(!text.includes('S-'), text.match(/S-w+/)?.[0]);
+    assert.ok(!text.includes('object Object'));
+    assert.match(build({ event: baseEvent({ location: null }) }), /^Termin$/m);
+    assert.match(build({ event: baseEvent({ location: 'Alter Ort' }) }), /^Ort: Alter Ort$/m);
 });
 
 test('a role missing from the guild is written without its id', () => {

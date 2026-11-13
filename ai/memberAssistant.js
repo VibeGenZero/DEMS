@@ -80,36 +80,37 @@ async function loadContext(event, eventId, user, now) {
     });
 }
 
-/** Whether the end of the text so far could still turn into the `Quelle:` line (empty or part of it). */
+/** Whether a last line could still turn into the `Quelle:` line (part of it, or it already). */
 function mayBecomeSourceLine(lastLine) {
     const text = lastLine.trimStart();
-    return text === '' || 'Quelle:'.startsWith(text) || text.startsWith('Quelle:');
+    return 'Quelle:'.startsWith(text) || text.startsWith('Quelle:');
 }
 
 /**
- * Forwards pieces without a trailing `Quelle:` line: a possible last line is
- * held back until it is clear it is none. `finish(fullText)` sends the rest.
+ * Forwards pieces without a trailing `Quelle:` line. The last non-blank line
+ * (with the whitespace before it) is held back while it may become that line;
+ * `finish()` drops it if it is one and sends it otherwise.
  */
 function createSourceFilter(onToken) {
     let pending = '';
-    let sent = '';
-    const emit = (piece) => { if (piece) { sent += piece; onToken(piece); } };
     return {
         push(piece) {
             pending += piece;
-            const lineStart = pending.lastIndexOf('\n') + 1;
-            if (!mayBecomeSourceLine(pending.slice(lineStart))) {
-                emit(pending);
-                pending = '';
-                return;
+            const body = pending.trimEnd();
+            let holdFrom = body.length;
+            if (body) {
+                const lineStart = body.lastIndexOf('\n') + 1;
+                if (mayBecomeSourceLine(body.slice(lineStart))) holdFrom = body.slice(0, lineStart).trimEnd().length;
+            } else {
+                holdFrom = 0;
             }
-            const holdFrom = pending.slice(0, lineStart).trimEnd().length;
-            emit(pending.slice(0, holdFrom));
+            if (holdFrom > 0) onToken(pending.slice(0, holdFrom));
             pending = pending.slice(holdFrom);
         },
-        finish(fullText) {
-            const rest = splitSource(fullText).text;
-            if (rest.startsWith(sent)) emit(rest.slice(sent.length));
+        finish() {
+            const rest = pending.trimEnd();
+            pending = '';
+            if (rest && !/^\s*Quelle:/.test(rest)) onToken(rest);
         }
     };
 }
@@ -173,18 +174,24 @@ async function prepareEventQuestion({ eventId, user, question, history = [], cli
             if (used) throw new Error('Diese Frage wurde schon einmal gestellt.');
             used = true;
             const filter = typeof onToken === 'function' ? createSourceFilter(onToken) : null;
+            let counted = false;
+            // Every call that reached the provider counts exactly once, whatever the outcome
+            const count = (params) => { if (counted) return Promise.resolve(); counted = true; return countUsage({ ...params, now }); };
             try {
                 const result = await aiClient.chat({
                     system, messages, maxTokens: MAX_TOKENS, timeoutMs: TIMEOUT_MS, signal,
                     onToken: filter ? (piece) => filter.push(piece) : undefined
                 });
                 const answer = splitSource(result.text);
-                if (filter) filter.finish(result.text);
-                await countUsage({ usage: result.usage, now });
+                if (filter) filter.finish();
+                await count({ usage: result.usage });
                 return answer;
             } catch (err) {
-                if (!(err instanceof AiError)) throw err;
-                await countUsage({ failed: true, now });
+                if (!(err instanceof AiError)) {
+                    await count({});
+                    throw err;
+                }
+                await count({ failed: true });
                 throw new AskRefusal(503, UNAVAILABLE);
             } finally {
                 release();

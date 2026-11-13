@@ -167,3 +167,59 @@ test('streamed pieces never include the source line', async () => {
     });
     assert.equal(plain.join(''), 'Quellen sind Zeit.');
 });
+
+
+async function streamOf(pieces, fullText = pieces.join('')) {
+    const streamed = [];
+    const result = await answerEventQuestion({
+        eventId: 'ev-1', user: member, question: 'Wann?', client: fakeClient(fullText, { pieces }), onToken: p => streamed.push(p)
+    });
+    limits.resetLimits();
+    return { streamed: streamed.join(''), result };
+}
+
+test('a source line ending in a newline is not streamed', async () => {
+    for (const pieces of [['Um 20 Uhr.\n', 'Quelle: Termin', '\n'], ['Um 20 Uhr.\n\nQuelle: Termin\n\n'], ['Um 20 Uhr.\r\nQuelle: Termin\r\n']]) {
+        const { streamed } = await streamOf(pieces);
+        assert.equal(streamed.trim(), 'Um 20 Uhr.', JSON.stringify(pieces));
+    }
+});
+
+test('a held last line that is no source line is still streamed when the answer starts with whitespace', async () => {
+    const { streamed, result } = await streamOf(['\nUm 20 Uhr.\nQ']);
+    assert.equal(streamed.trim(), 'Um 20 Uhr.\nQ');
+    assert.equal(result.text, 'Um 20 Uhr.\nQ');
+});
+
+test('whatever the cuts, the stream has no source line and equals the returned text', async () => {
+    await settings.saveAiSettings({ dailyQuestionLimit: 0 }); // thousands of questions in this test
+    const answers = [
+        'Um 20 Uhr.', 'Um 20 Uhr.\nQuelle: Termin', 'Um 20 Uhr.\nQuelle: Erfunden', '\n  Um 20 Uhr.\nQuelle: Plätze\n\n',
+        'Um 20 Uhr.\r\nQuelle: Termin\r\n', 'Zeile eins.\nZeile zwei.\n', 'Quellen sind Zeit.', 'Um 20 Uhr.\nQ', 'Um 20 Uhr.\nQuelle'
+    ];
+    for (const answer of answers) {
+        const cuts = [];
+        for (let i = 0; i <= answer.length; i++) {
+            cuts.push([answer.slice(0, i), answer.slice(i)]);
+            for (let j = i; j <= answer.length; j += 3) cuts.push([answer.slice(0, i), answer.slice(i, j), answer.slice(j)]);
+        }
+        for (const pieces of cuts) {
+            const { streamed, result } = await streamOf(pieces, answer);
+            const info = JSON.stringify({ answer, pieces, streamed });
+            if (/^\s*Quelle:/m.test(answer.trimEnd().split('\n').pop())) assert.ok(!/Quelle:/.test(streamed), info);
+            assert.equal(streamed.trim(), result.text.trim(), info);
+        }
+    }
+});
+
+test('a caller abort still counts the question', async () => {
+    const abort = Object.assign(new Error('aborted'), { name: 'AbortError' });
+    await assert.rejects(answerEventQuestion({ eventId: 'ev-1', user: member, question: 'Wann?', client: fakeClient('', { error: abort }) }), /aborted/);
+    const rows = await usageRows();
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].memberQuestions, 1);
+    assert.equal(rows[0].errors, 0);
+    const ok = await answerEventQuestion({ eventId: 'ev-1', user: member, question: 'Wann?', client: fakeClient() });
+    assert.equal(ok.source, 'Termin');
+    assert.equal((await usageRows())[0].memberQuestions, 2);
+});
