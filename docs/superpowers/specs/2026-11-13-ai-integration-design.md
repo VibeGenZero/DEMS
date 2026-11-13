@@ -144,7 +144,8 @@ regardless of the switches.
   Event-Assistenten". In the editor in step "Grundlagen" below the description.
 - Whitelisted in **both** `POST /events` and `PUT /events/:id`; part of
   `TEMPLATE_FIELDS` and `SERIES_FIELDS`; copied on duplicate.
-- Added to `PRIVATE_EVENT_FIELDS`: it never appears in a member-facing event response.
+- Admin-only: it never appears in a member-facing event response; only an admin's
+  event detail answer carries it (the editor loads the event through that route).
 - It is **not a secret store**: the assistant may quote it to any member who can see
   the event. The field's help text says so ("Die KI kann diese Infos an Mitglieder
   weitergeben. Keine Geheimnisse eintragen.").
@@ -213,8 +214,8 @@ prompt-injection attempt can at worst produce a silly answer.
 ### Discord
 
 - Slash command `/ask` with options `event` (autocomplete like `/event info`: active,
-  visible, not over) and `question` (≤ 500 chars). Command names stay English like the
-  existing ones; descriptions German.
+  visible, not over) and `question` (≤ 500 chars). Like the existing commands the base
+  name is English with a German localisation (`/frage`); descriptions are German.
 - Button „Frage stellen" (`event_ask:<eventId>`) on event announcements next to the
   registration buttons → modal (`event_ask_modal:<eventId>`) with one paragraph input.
 - Both: `deferReply` ephemeral, same context builder and limits as the web (identity
@@ -289,7 +290,8 @@ Small buttons at two fields, same endpoint family (`POST /api/admin/ai/text`):
 
 - **Anbieter:** provider select; base URL (prefilled, mainly for Ollama); API key
   (password field, shows only "gesetzt"); model and optional admin model — a dropdown
-  filled from the provider's model list (`GET /api/admin/ai/models`), with free text as
+  filled from the provider's model list (`POST /api/admin/ai/models`, which like the
+  test takes the typed, not yet saved values), with free text as
   fallback; **„Verbindung testen"** (`POST /api/admin/ai/test`: one tiny request,
   answers ok + response time or the German explanation of the error class). Values
   locked by `.env` are shown locked like the Discord ones.
