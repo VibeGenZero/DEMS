@@ -61,11 +61,11 @@ test('overrides win; an empty override key keeps the stored one for the same pro
     };
     try {
         const env = { AI_PROVIDER: 'openai', AI_MODEL: 'stored', AI_API_KEY: 'stored-key' };
-        const client = getAiClient({ env, overrides: { provider: 'openai', baseUrl: 'https://example.test/v1', apiKey: '', model: 'other' } });
+        const client = getAiClient({ env, overrides: { provider: 'openai', baseUrl: '', apiKey: '', model: 'other' } });
         assert.equal(client.provider, 'openai');
         assert.equal(client.model, 'other');
         await client.chat({ system: 's', messages: [{ role: 'user', text: 'hi' }], maxTokens: 5 });
-        assert.equal(seen[0].url, 'https://example.test/v1/chat/completions');
+        assert.equal(seen[0].url, 'https://api.openai.com/v1/chat/completions');
         assert.equal(seen[0].auth, 'Bearer stored-key');
     } finally {
         globalThis.fetch = realFetch;
@@ -98,6 +98,48 @@ test('another provider never inherits the stored key or base URL', async () => {
         await same.chat({ system: 's', messages: [{ role: 'user', text: 'hi' }], maxTokens: 5 });
         assert.equal(seen[2].url, 'https://stored.test/v1/chat/completions');
         assert.equal(seen[2].auth, 'Bearer stored-key');
+    } finally {
+        globalThis.fetch = realFetch;
+    }
+});
+
+test('the stored key only goes to the stored base URL, never to a typed foreign one', async () => {
+    const seen = [];
+    const realFetch = globalThis.fetch;
+    globalThis.fetch = async (url, init) => {
+        seen.push({ url: String(url), auth: init.headers.Authorization || init.headers.authorization || '' });
+        return new Response(JSON.stringify({ choices: [{ message: { content: 'ok' } }], usage: {} }), { status: 200, headers: { 'content-type': 'application/json' } });
+    };
+    const ask = (client) => client.chat({ system: 's', messages: [{ role: 'user', text: 'hi' }], maxTokens: 5 });
+    try {
+        const env = { AI_PROVIDER: 'openai', AI_MODEL: 'm', AI_API_KEY: 'stored-key' };
+        // Same provider, foreign base URL, empty key: OpenAI needs a key, so there is no client and nothing is sent
+        assert.throws(() => getAiClient({ env, overrides: { provider: 'openai', baseUrl: 'https://evil.example/v1', apiKey: '' } }), { code: 'unreachable' });
+        assert.throws(() => getAiClient({ env, overrides: { baseUrl: 'https://evil.example/v1' } }), { code: 'unreachable' });
+        // A provider without a key requirement (Ollama) with a stored key: the foreign address gets no Authorization header
+        const ollama = { AI_PROVIDER: 'ollama', AI_MODEL: 'm', AI_API_KEY: 'stored-key' };
+        await ask(getAiClient({ env: ollama, overrides: { provider: 'ollama', baseUrl: 'https://evil.example/v1', apiKey: '' } }));
+        assert.equal(seen[0].url, 'https://evil.example/v1/chat/completions');
+        assert.doesNotMatch(seen[0].auth, /stored-key/);
+        await ask(getAiClient({ env: ollama, overrides: { baseUrl: 'https://evil.example/v1' } }));
+        assert.doesNotMatch(seen[1].auth, /stored-key/);
+        await ask(getAiClient({ env: ollama, overrides: { baseUrl: 'http://localhost:11434/v1/' } }));
+        assert.equal(seen[1 + 1].auth, 'Bearer stored-key');
+        seen.splice(0, seen.length);
+        // The default base URL of the stored provider (also typed with spaces and a slash) keeps the key
+        await ask(getAiClient({ env, overrides: { provider: 'openai', baseUrl: ' https://api.openai.com/v1/ ' } }));
+        assert.equal(seen[0].auth, 'Bearer stored-key');
+        // A typed key is always used
+        await ask(getAiClient({ env, overrides: { provider: 'openai', baseUrl: 'https://evil.example/v1', apiKey: 'typed' } }));
+        assert.equal(seen[1].auth, 'Bearer typed');
+        // A stored custom base URL is the one that keeps the key
+        const custom = { ...env, AI_BASE_URL: 'https://proxy.test/v1' };
+        await ask(getAiClient({ env: custom, overrides: { baseUrl: 'https://proxy.test/v1/' } }));
+        assert.equal(seen[2].auth, 'Bearer stored-key');
+        assert.throws(() => getAiClient({ env: custom, overrides: { baseUrl: 'https://api.openai.com/v1' } }), { code: 'unreachable' });
+        // No override at all: stored key and stored URL
+        await ask(getAiClient({ env: custom }));
+        assert.equal(seen[3].auth, 'Bearer stored-key');
     } finally {
         globalThis.fetch = realFetch;
     }

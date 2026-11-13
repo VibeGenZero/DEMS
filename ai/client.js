@@ -21,6 +21,7 @@ const MOCK_PROVIDER = { label: 'Mock', adapter: 'mock', defaultBaseUrl: '', keyR
 const TEST_TIMEOUT_MS = 20000;
 
 const filled = (value) => (typeof value === 'string' ? value.trim() : '');
+const trimSlash = (value) => value.replace(/\/+$/, '');
 
 /** The provider entry for an id; `mock` only with DEV_MOCK=true. */
 function providerEntry(id) {
@@ -34,11 +35,15 @@ function settingsFrom(env, overrides, admin) {
     const provider = filled(o.provider) || storedProvider;
     // A stored key and base URL belong to the stored provider: never hand them to another one
     const sameProvider = provider === storedProvider;
+    const baseUrl = filled(o.baseUrl) || (sameProvider ? filled(env.AI_BASE_URL) : '');
+    // The stored key is only sent to the stored endpoint: a typed, different address gets no key
+    const storedEndpoint = filled(env.AI_BASE_URL) || (providerEntry(storedProvider) || {}).defaultBaseUrl || '';
+    const sameEndpoint = !filled(o.baseUrl) || trimSlash(filled(o.baseUrl)) === trimSlash(storedEndpoint);
     const model = filled(o.model) || (admin ? filled(env.AI_MODEL_ADMIN) : '') || filled(env.AI_MODEL);
     return {
         provider,
-        baseUrl: filled(o.baseUrl) || (sameProvider ? filled(env.AI_BASE_URL) : ''),
-        apiKey: filled(o.apiKey) || (sameProvider ? filled(env.AI_API_KEY) : ''),
+        baseUrl,
+        apiKey: filled(o.apiKey) || (sameProvider && sameEndpoint ? filled(env.AI_API_KEY) : ''),
         model
     };
 }

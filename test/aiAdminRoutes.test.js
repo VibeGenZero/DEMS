@@ -1,6 +1,7 @@
 const { test, before, after } = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('path');
+const http = require('http');
 const { createTempDir, startServer, createClient } = require('./helpers');
 
 // Admin API of the AI integration (routes/adminAi.js) in dev mock mode:
@@ -106,4 +107,26 @@ test('no answer contains the stored API key', async () => {
         await admin.request('/api/admin/audit-log?limit=500')
     ];
     for (const res of answers) assert.equal((await res.text()).includes('sehr-geheimer-key-4711'), false);
+});
+
+test('a typed foreign base URL never receives the stored API key', async () => {
+    const received = [];
+    const foreign = http.createServer((req, res) => {
+        received.push(req.headers.authorization || '');
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({ data: [{ id: 'x' }], choices: [{ message: { content: 'ok' } }], usage: {} }));
+    });
+    await new Promise(resolve => foreign.listen(0, '127.0.0.1', resolve));
+    try {
+        const admin = await loginAs('admin');
+        assert.equal((await admin.send('PUT', '/api/admin/system/settings', { password: 'dev', values: { AI_API_KEY: 'gespeicherter-key-99' } })).status, 200);
+        // The stored provider is the mock (no HTTP): the real adapter is reached through a different provider
+        const body = { provider: 'ollama', baseUrl: `http://127.0.0.1:${foreign.address().port}/v1`, apiKey: '', model: 'm' };
+        await admin.send('POST', '/api/admin/ai/test', body);
+        await admin.send('POST', '/api/admin/ai/models', body);
+        assert.ok(received.length >= 2);
+        for (const header of received) assert.equal(header.includes('gespeicherter-key-99'), false);
+    } finally {
+        foreign.close();
+    }
 });

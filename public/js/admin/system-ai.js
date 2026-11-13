@@ -18,6 +18,7 @@ const TEXTS = ['assistantName', 'teaserText', 'extraInstructions'];
 const NUMBERS = ['memberQuestionsPerHour', 'dailyQuestionLimit'];
 const EXTRA_MAX = 1000;
 const MARK_SOURCE = 'behaviour';
+const LOAD_ERROR = 'KI-Einstellungen konnten nicht geladen werden.';
 
 // providers: table of the server; settings: the stored behaviour values the form is compared with
 const ai = { providers: [], settings: null };
@@ -137,6 +138,7 @@ async function getJson(url) {
  */
 export async function loadAiPanel() {
     const note = document.getElementById('ai-load-note');
+    const saveButton = document.getElementById('ai-save-settings');
     try {
         const data = await getJson('/api/admin/ai/settings');
         ai.providers = data.providers || [];
@@ -144,9 +146,11 @@ export async function loadAiPanel() {
         fillForm(ai.settings);
         markCategoryDirty('ai', false, MARK_SOURCE);
         note.textContent = '';
+        saveButton.disabled = false;
         renderUsage(await getJson('/api/admin/ai/usage'));
     } catch {
-        note.textContent = 'KI-Einstellungen konnten nicht geladen werden.';
+        note.textContent = LOAD_ERROR;
+        saveButton.disabled = !ai.settings;
     }
 }
 
@@ -199,6 +203,8 @@ async function loadAiModels() {
 }
 
 async function saveAiSettings() {
+    // Without the stored values the form is blank: saving it would overwrite them
+    if (!ai.settings) return showToast(LOAD_ERROR, 'danger');
     try {
         const res = await fetch('/api/admin/ai/settings', {
             method: 'PUT',

@@ -170,3 +170,16 @@ test('the module names its actions literally and keeps no inline style', () => {
     }
     assert.doesNotMatch(SOURCE, /style="|\bon[a-z]+="/);
 });
+
+test('while the settings are not loaded, saving does nothing but toast and the button is disabled', async () => {
+    const { app, element, requests, toasts } = await openSystem({ '/api/admin/ai/settings': httpAnswer(500, { error: 'x' }) });
+    assert.equal(element('ai-save-settings').disabled, true);
+    await app.runAction('saveAiSettings', {});
+    assert.equal(requests.some(request => request.url === '/api/admin/ai/settings' && request.method === 'PUT'), false);
+    assert.deepEqual(toasts, ['KI-Einstellungen konnten nicht geladen werden.']);
+});
+
+test('a successful load enables the save button', async () => {
+    const { element } = await openSystem();
+    assert.equal(element('ai-save-settings').disabled, false);
+});
