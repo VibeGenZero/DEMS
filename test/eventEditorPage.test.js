@@ -2,7 +2,11 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');
 const path = require('path');
-const { loadFrontendApp, httpAnswer, REPO_ROOT } = require('./helpers');
+const { loadFrontendApp, httpAnswer, isHidden, REPO_ROOT } = require('./helpers');
+
+// The breakpoint of the preview column, as editor-page.js exports it (checked against the stylesheet below)
+const EDITOR_SOURCE = require('fs').readFileSync(require('path').join(REPO_ROOT, 'public', 'js', 'admin', 'editor-page.js'), 'utf8');
+const harnessQuery = () => (EDITOR_SOURCE.match(/export const EDITOR_WIDE_QUERY = '([^']+)'/) || [])[1];
 
 // The event editor as a page (#event-editor/new, #event-editor/<id>; public/js/admin/editor-page.js)
 
@@ -155,4 +159,85 @@ test('the footer "Abbrechen" and the top bar "Zurück" close the editor through 
     const section = HTML.slice(HTML.indexOf('<section id="event-editor-section"'), HTML.indexOf('<section id="insights-section"'));
     assert.equal(section.split('data-click="closeEventEditor"').length - 1, 2);
     assert.doesNotMatch(section, /data-bs-dismiss="modal"/);
+});
+
+// ─── Layout: permanent preview on wide screens ───
+
+const PREVIEW = { places: { capacity: 10, taken: 0 }, components: [] };
+const previews = (harness) => harness.requests.filter(request => request.url === '/api/admin/events/preview').length;
+const previewRoutes = (answer = PREVIEW) => ({ '/api/admin/events/preview': answer });
+
+test('on a wide screen the preview is visible on every step and drawn on open', async () => {
+    const harness = await openApp(previewRoutes(), { wide: true, timers: true });
+    await go(harness, 'event-editor/new');
+    assert.equal(previews(harness), 1);
+    assert.equal(harness.app.isPreviewVisible(), true);
+    for (const step of [3, 5, 1]) {
+        harness.app.wizardGoTo(step);
+        assert.equal(isHidden(harness.element('wizard-preview')), false, `step ${step}`);
+        assert.equal(isHidden(harness.element(`wizard-page-${step}`)), false, `page ${step}`);
+    }
+    // Changing the step asks for nothing new and drops no pending answer
+    assert.equal(previews(harness), 1);
+});
+
+test('typing redraws the preview once after the pause, not per key', async () => {
+    const harness = await openApp(previewRoutes(), { wide: true, timers: true });
+    await go(harness, 'event-editor/new');
+    harness.element('event-title').value = 'Raid';
+    harness.app.editorChanged();
+    harness.app.editorChanged();
+    harness.app.editorChanged();
+    await harness.advance(599);
+    assert.equal(previews(harness), 1);
+    await harness.advance(1);
+    assert.equal(previews(harness), 2);
+    const sent = JSON.parse(harness.requests.filter(request => request.url === '/api/admin/events/preview')[1].body);
+    assert.equal(sent.title, 'Raid');
+    await harness.advance(5000);
+    assert.equal(previews(harness), 2);
+});
+
+test('on a narrow screen nothing is requested until the preview tab is chosen', async () => {
+    const harness = await openApp(previewRoutes(), { timers: true });
+    await go(harness, 'event-editor/new');
+    harness.app.editorChanged();
+    await harness.advance(600);
+    assert.equal(previews(harness), 0);
+    assert.equal(harness.app.isPreviewVisible(), false);
+    assert.equal(isHidden(harness.element('wizard-preview')), true);
+
+    await harness.app.setWizardMode('preview');
+    assert.equal(previews(harness), 1);
+    assert.equal(harness.app.isPreviewVisible(), true);
+    harness.app.editorChanged();
+    await harness.advance(600);
+    assert.equal(previews(harness), 2);
+});
+
+test('a failed preview shows a quiet note and no toast', async () => {
+    const harness = await openApp(previewRoutes(httpAnswer(500, { error: 'Kaputt' })), { wide: true, timers: true });
+    await go(harness, 'event-editor/new');
+    assert.match(harness.element('wizard-preview-discord').innerHTML, /Discord-Vorschau gerade nicht verfügbar\./);
+    assert.deepEqual(harness.toasts, []);
+});
+
+test('leaving the editor drops a preview that still waits', async () => {
+    const harness = await openApp(previewRoutes(), { wide: true, timers: true });
+    await go(harness, 'event-editor/new');
+    harness.app.editorChanged();
+    await go(harness, 'info');
+    await harness.advance(600);
+    assert.equal(previews(harness), 1);
+});
+
+test('the layout names its parts and the modal padding is gone', () => {
+    const section = HTML.slice(HTML.indexOf('<section id="event-editor-section"'), HTML.indexOf('<section id="insights-section"'));
+    for (const name of ['editor-topbar', 'editor-body', 'editor-form', 'editor-footer', 'editor-preview', 'editor-assist']) {
+        assert.match(section, new RegExp(`class="${name}[ "]`), name);
+    }
+    assert.match(section, /<div class="wizard-head">/);
+    const css = fs.readFileSync(path.join(REPO_ROOT, 'public', 'css', 'style.css'), 'utf8');
+    assert.match(css, /@media \(min-width: 1200px\) \{[^@]*\.editor-body \{/);
+    assert.equal(harnessQuery(), '(min-width: 1200px)');
 });

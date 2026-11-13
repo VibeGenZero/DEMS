@@ -5,7 +5,10 @@
  */
 import { state } from '../core/state.js';
 
-const PICKER_OPTIONS = { enableTime: true, dateFormat: 'Y-m-d H:i', time_24hr: true, locale: 'de' };
+// Called when a date is picked or cleared (the editor page redraws its preview)
+let dateChanged = null;
+
+const PICKER_OPTIONS = { enableTime: true, dateFormat: 'Y-m-d H:i', time_24hr: true, locale: 'de', onChange: () => dateChanged?.() };
 
 // Start and end: state key of the picker and its input
 const RANGE_PICKERS = [
@@ -18,6 +21,16 @@ export const DEADLINE_PICKERS = [
     { key: 'registrationDeadlinePicker', field: 'registrationDeadline', selector: '#event-registration-deadline' },
     { key: 'unregisterDeadlinePicker', field: 'unregisterDeadline', selector: '#event-unregister-deadline' }
 ];
+
+/**
+ * Set the function that hears about every changed date.
+ *
+ * @param {Function|null} handler -> Called without arguments.
+ * @returns {void}
+ */
+export function setDateChangeHandler(handler) {
+    dateChanged = typeof handler === 'function' ? handler : null;
+}
 
 /**
  * Create every date picker of the wizard that does not exist yet.

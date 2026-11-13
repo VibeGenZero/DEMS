@@ -8,7 +8,7 @@
  */
 import { state } from '../core/state.js';
 import { glideTabs } from '../core/tab-glider.js';
-import { closeEventEditor } from './editor-page.js';
+import { closeEventEditor, isWideEditor } from './editor-page.js';
 import { addFormField, getFormFieldsFromBuilder, getSlotsFromEditor, renderSlotEditor } from './wizard-builders.js';
 import { checkWizardStep } from './wizard-checks.js';
 import { clearAllMarks, showStepErrors } from './wizard-marks.js';
@@ -28,10 +28,12 @@ export let currentWizardStep = 1;
 
 export const WIZARD_TOTAL_STEPS = 5;
 
-// Preview area and the two switch buttons; leaving the preview drops a pending answer
+// Preview area and the two switch buttons; leaving the preview drops a pending answer.
+// On a wide screen the preview has its own column and stays, whatever the mode.
 function showPreviewArea(visible) {
-    if (!visible) cancelWizardPreview();
-    toggleElement(document.getElementById('wizard-preview'), visible);
+    const wide = isWideEditor();
+    if (!visible && !wide) cancelWizardPreview();
+    toggleElement(document.getElementById('wizard-preview'), visible || wide);
     for (const mode of ['edit', 'preview']) {
         const button = document.getElementById(`wizard-mode-${mode}`);
         const active = (mode === 'preview') === visible;
@@ -48,7 +50,8 @@ function showPreviewArea(visible) {
  * @returns {Promise<void>} -> Resolves when the preview is drawn (at once for "edit").
  */
 export function setWizardMode(mode) {
-    const preview = mode === 'preview';
+    // The column of a wide screen shows the preview beside the step; there is nothing to switch
+    const preview = mode === 'preview' && !isWideEditor();
     showPreviewArea(preview);
     toggleElement(document.getElementById(`wizard-page-${currentWizardStep}`), !preview);
     if (!preview) return Promise.resolve();
