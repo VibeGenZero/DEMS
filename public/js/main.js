@@ -18,6 +18,7 @@ import './admin/members.js';
 import './admin/participant-message.js';
 import './admin/registration-bulk.js';
 import './admin/registrations.js';
+import './admin/system-nav.js';
 import './admin/system.js';
 import './admin/wizard-builders.js';
 import './admin/wizard-location.js';

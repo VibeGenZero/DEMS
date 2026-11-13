@@ -4752,13 +4752,7 @@ a.info-version-badge:focus-visible {
   }
 }
 
-/* System page (admin/system.js, #138): three cards side by side from 992 px */
-.system-grid {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: var(--space-24);
-}
-
+/* System page (admin/system.js, #138): the cards of one category panel (layout: .settings-layout) */
 .system-card {
   display: flex;
   flex-direction: column;
@@ -4779,11 +4773,20 @@ a.info-version-badge:focus-visible {
   font-size: var(--font-size-xl);
 }
 
-@media (min-width: 992px) {
-  .system-grid {
-    grid-template-columns: repeat(3, 1fr);
-    align-items: start;
-  }
+/* Facts of the overview: label left, chip right */
+.system-status-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+}
+
+.system-status-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-8);
+  color: var(--text-secondary);
 }
 
 /* Privacy policy page and consent dialog (pages/privacy.js, #138) */
@@ -4810,10 +4813,6 @@ a.info-version-badge:focus-visible {
 }
 
 /* Privacy editor of the System page: text and preview side by side from 992 px */
-.system-privacy-card {
-  margin-top: var(--space-32);
-}
-
 .system-privacy-editor {
   display: grid;
   grid-template-columns: 1fr;

@@ -393,6 +393,7 @@ async function loadFrontendApp(routes, { storage = {}, confirm = true, reducedMo
     const toasts = [];
     const dialogs = [];
     const requests = [];
+    const historyCalls = [];
     const animations = [];
     const container = createFakeElement(registry);
     const listeners = [];
@@ -449,8 +450,17 @@ async function loadFrontendApp(routes, { storage = {}, confirm = true, reducedMo
     };
     const context = vm.createContext({
         document, fetch, console,
-        location: { hash: '', search: '' },
-        history: { replaceState: noop, pushState: noop },
+        // replaceState and location.replace with a hash move the address like the browser does and are
+        // recorded in historyCalls (leave guard of the router); no hashchange is fired
+        location: { hash: '', search: '', replace: (url) => { historyCalls.push(`replace ${url}`); context.location.hash = url; } },
+        history: {
+            replaceState: (data, title, url) => {
+                if (typeof url !== 'string' || !url.startsWith('#')) return;
+                historyCalls.push(`replaceState ${url}`);
+                context.location.hash = url;
+            },
+            pushState: noop
+        },
         addEventListener: noop,
         localStorage: createStorage(storage),
         sessionStorage: createStorage({}),
@@ -520,7 +530,7 @@ async function loadFrontendApp(routes, { storage = {}, confirm = true, reducedMo
         }
     }
     const fire = (type) => listeners.filter(entry => entry.type === type).forEach(entry => entry.listener({ type }));
-    return { app, state: app.state, element: (id) => registry.get(id) || null, toasts, dialogs, requests, animations, location: context.location, localStorage: context.localStorage, fire, root, setSystemLight };
+    return { app, state: app.state, element: (id) => registry.get(id) || null, toasts, dialogs, requests, historyCalls, animations, location: context.location, localStorage: context.localStorage, fire, root, setSystemLight };
 }
 
 /** Answer of a loadFrontendApp() route with its own status, e.g. an API error. */

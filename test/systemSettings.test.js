@@ -136,3 +136,13 @@ test('admins read the update status, members do not', async () => {
     const member = await loginAs('member');
     assert.equal((await member.request('/api/admin/system/update-status')).status, 403);
 });
+
+test('the answer carries the status of bot and database for the overview, without ids or secrets', async () => {
+    const admin = await loginAs('admin');
+    const { status } = await (await admin.request('/api/admin/system/settings')).json();
+    assert.equal(status.database, 'sqlite');
+    assert.equal(typeof status.bot.online, 'boolean');
+    assert.equal(typeof status.bot.guildName, 'string');
+    assert.deepEqual(Object.keys(status).sort(), ['bot', 'database']);
+    assert.deepEqual(Object.keys(status.bot).sort(), ['guildName', 'online']);
+});

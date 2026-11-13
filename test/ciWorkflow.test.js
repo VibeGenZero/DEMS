@@ -5,7 +5,8 @@ const path = require('path');
 const { REPO_ROOT } = require('./helpers');
 
 // The publish job of .github/workflows/ci.yml (docs/wiki/ops/ci.md)
-const CI = fs.readFileSync(path.join(REPO_ROOT, '.github', 'workflows', 'ci.yml'), 'utf8');
+// Line endings as in the repository, also on a Windows checkout (core.autocrlf)
+const CI = fs.readFileSync(path.join(REPO_ROOT, '.github', 'workflows', 'ci.yml'), 'utf8').replace(/\r\n/g, '\n');
 const publishJob = () => {
     const start = CI.indexOf('\n  publish:');
     assert.ok(start > 0, 'publish job exists');

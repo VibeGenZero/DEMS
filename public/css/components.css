@@ -1047,6 +1047,120 @@ button.chip.active,
 }
 
 /* ═══════════════════════════════════════════ */
+/* SETTINGS NAV                                */
+/* Categories on the left, one panel on the    */
+/* right (admin page "System").                */
+/* ═══════════════════════════════════════════ */
+.settings-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 220px) minmax(0, 1fr);
+  gap: var(--space-32);
+  align-items: start;
+}
+
+.settings-nav {
+  position: sticky;
+  top: var(--space-64);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.settings-nav-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-12);
+  padding: var(--space-8) var(--space-12);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  text-decoration: none;
+  transition: background-color var(--duration-fast) var(--ease-standard), color var(--duration-fast) var(--ease-standard);
+}
+
+.settings-nav-item:hover {
+  background: var(--bg-tint-2);
+  color: var(--text-primary);
+}
+
+.settings-nav-item:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-ring);
+}
+
+.settings-nav-item[aria-current="page"] {
+  background: var(--accent-tint-2);
+  color: var(--accent-text);
+}
+
+.settings-nav-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.settings-nav-label {
+  font-weight: 600;
+}
+
+.settings-nav-sub {
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+}
+
+/* Unsaved changes in this category */
+.settings-nav-dot {
+  flex: none;
+  width: var(--space-8);
+  height: var(--space-8);
+  margin-left: auto;
+  border-radius: var(--radius-pill);
+  background: var(--warning-fill);
+}
+
+.settings-panels {
+  min-width: 0;
+}
+
+.settings-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-16);
+  max-width: 52rem;
+}
+
+.settings-panel-title {
+  margin: 0;
+  font-size: var(--font-size-2xl);
+}
+
+.settings-panel-title:focus {
+  outline: none;
+}
+
+@media (max-width: 991.98px) {
+  .settings-layout {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-16);
+  }
+
+  /* One scrolling row of entries above the panel */
+  .settings-nav {
+    position: static;
+    flex-direction: row;
+    overflow-x: auto;
+    padding-bottom: var(--space-4);
+  }
+
+  .settings-nav-item {
+    flex: none;
+  }
+
+  .settings-nav-sub {
+    display: none;
+  }
+}
+
+/* ═══════════════════════════════════════════ */
 /* START STATE                                 */
 /* Markup carries no style attributes: the CSP */
 /* forbids them (style-src-attr 'none')        */

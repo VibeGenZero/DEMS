@@ -998,56 +998,83 @@
         <div class="section-header d-flex justify-content-between align-items-center flex-wrap gap-3">
           <div>
             <h2><i class="bi bi-sliders me-2"></i>System</h2>
-            <p class="text-secondary mb-0">Discord-Anwendung, Adresse und Sicherheit. Werte aus .env sind gesperrt und nur dort änderbar.</p>
+            <p class="text-secondary mb-0">Einstellungen der Installation. Werte aus .env sind gesperrt und nur dort änderbar.</p>
           </div>
           <a class="btn btn-outline-light" href="#admin"><i class="bi bi-arrow-left me-1"></i>Zum Dashboard</a>
         </div>
-        <div class="system-grid">
-          <div class="glass-card system-card" id="system-update-card">
-            <h3 class="system-card-title"><i class="bi bi-arrow-repeat me-2" aria-hidden="true"></i>Version</h3>
-            <div id="system-update-body"></div>
-          </div>
-          <div class="glass-card system-card">
-            <div class="system-card-head">
-              <h3 class="system-card-title"><i class="bi bi-discord me-2" aria-hidden="true"></i>Discord</h3>
-              <button type="button" class="btn btn-secondary btn-sm" data-click="showDiscordGuideDialog">
-                <i class="bi bi-signpost-split me-1" aria-hidden="true"></i>Anleitung anzeigen
-              </button>
-            </div>
-            <div class="setup-fields" id="system-discord-fields"></div>
-          </div>
-          <div class="glass-card system-card">
-            <h3 class="system-card-title"><i class="bi bi-hdd-network me-2" aria-hidden="true"></i>Server</h3>
-            <div class="setup-fields" id="system-server-fields"></div>
-          </div>
-          <div class="glass-card system-card">
-            <h3 class="system-card-title"><i class="bi bi-shield-lock me-2" aria-hidden="true"></i>Sicherheit</h3>
-            <div class="setup-fields" id="system-security-fields"></div>
-          </div>
-        </div>
-        <div class="setup-actions">
-          <button type="button" class="btn btn-primary" data-click="saveSystemSettings">
-            <i class="bi bi-check2 me-1" aria-hidden="true"></i>Speichern
-          </button>
-        </div>
-
-        <div class="glass-card system-card system-privacy-card">
-          <h3 class="system-card-title"><i class="bi bi-file-earmark-lock me-2" aria-hidden="true"></i>Datenschutzerklärung</h3>
-          <p class="text-secondary mb-0">Öffentlich unter „Datenschutz“. Jede Änderung ist eine neue Fassung: Alle Mitglieder müssen ihr beim nächsten Besuch erneut zustimmen. Leerer Text = keine Datenschutzerklärung. <span id="system-privacy-version"></span></p>
-          <div class="system-privacy-editor">
-            <div>
-              <label class="form-label" for="system-privacy-text">Text (Markdown)</label>
-              <textarea class="form-control setup-privacy-text" id="system-privacy-text" rows="14" maxlength="50000" data-input="previewSystemPrivacy"></textarea>
-            </div>
-            <div>
-              <p class="form-label">Vorschau</p>
-              <div class="setup-privacy-preview rendered-markdown" id="system-privacy-preview"></div>
-            </div>
-          </div>
-          <div class="setup-actions">
-            <button type="button" class="btn btn-primary" data-click="saveSystemPrivacy">
-              <i class="bi bi-check2 me-1" aria-hidden="true"></i>Datenschutzerklärung speichern
-            </button>
+        <div class="settings-layout">
+          <nav class="settings-nav" id="system-nav" aria-label="System-Kategorien"></nav>
+          <div class="settings-panels">
+            <section class="settings-panel is-hidden" id="system-panel-overview" aria-labelledby="system-panel-overview-title">
+              <h3 class="settings-panel-title" id="system-panel-overview-title" tabindex="-1">Übersicht</h3>
+              <div class="glass-card system-card" id="system-update-card">
+                <h4 class="system-card-title"><i class="bi bi-arrow-repeat me-2" aria-hidden="true"></i>Version</h4>
+                <div id="system-update-body"></div>
+              </div>
+              <div class="glass-card system-card">
+                <h4 class="system-card-title"><i class="bi bi-activity me-2" aria-hidden="true"></i>Status</h4>
+                <div class="system-status-list" id="system-status-list"></div>
+              </div>
+            </section>
+            <section class="settings-panel is-hidden" id="system-panel-discord" aria-labelledby="system-panel-discord-title">
+              <div class="system-card-head">
+                <h3 class="settings-panel-title" id="system-panel-discord-title" tabindex="-1">Discord</h3>
+                <button type="button" class="btn btn-secondary btn-sm" data-click="showDiscordGuideDialog">
+                  <i class="bi bi-signpost-split me-1" aria-hidden="true"></i>Anleitung anzeigen
+                </button>
+              </div>
+              <div class="glass-card system-card">
+                <div class="setup-fields" id="system-discord-fields"></div>
+                <div class="setup-actions">
+                  <button type="button" class="btn btn-primary" id="system-save-discord" data-click="saveSystemSettings" data-group="discord">
+                    <i class="bi bi-check2 me-1" aria-hidden="true"></i>Speichern
+                  </button>
+                </div>
+              </div>
+            </section>
+            <section class="settings-panel is-hidden" id="system-panel-server" aria-labelledby="system-panel-server-title">
+              <h3 class="settings-panel-title" id="system-panel-server-title" tabindex="-1">Server</h3>
+              <div class="glass-card system-card">
+                <div class="setup-fields" id="system-server-fields"></div>
+                <div class="setup-actions">
+                  <button type="button" class="btn btn-primary" id="system-save-server" data-click="saveSystemSettings" data-group="server">
+                    <i class="bi bi-check2 me-1" aria-hidden="true"></i>Speichern
+                  </button>
+                </div>
+              </div>
+            </section>
+            <section class="settings-panel is-hidden" id="system-panel-security" aria-labelledby="system-panel-security-title">
+              <h3 class="settings-panel-title" id="system-panel-security-title" tabindex="-1">Sicherheit</h3>
+              <div class="glass-card system-card">
+                <div class="setup-fields" id="system-security-fields"></div>
+                <div class="setup-actions">
+                  <button type="button" class="btn btn-primary" id="system-save-security" data-click="saveSystemSettings" data-group="security">
+                    <i class="bi bi-check2 me-1" aria-hidden="true"></i>Speichern
+                  </button>
+                </div>
+              </div>
+            </section>
+            <section class="settings-panel is-hidden" id="system-panel-privacy" aria-labelledby="system-panel-privacy-title">
+              <h3 class="settings-panel-title" id="system-panel-privacy-title" tabindex="-1">Datenschutz</h3>
+              <div class="glass-card system-card">
+                <p class="text-secondary mb-0">Öffentlich unter „Datenschutz“. Jede Änderung ist eine neue Fassung: Alle Mitglieder müssen ihr beim nächsten Besuch erneut zustimmen. Leerer Text = keine Datenschutzerklärung. <span id="system-privacy-version"></span></p>
+                <div class="system-privacy-editor">
+                  <div>
+                    <label class="form-label" for="system-privacy-text">Text (Markdown)</label>
+                    <textarea class="form-control setup-privacy-text" id="system-privacy-text" rows="14" maxlength="50000" data-input="previewSystemPrivacy"></textarea>
+                  </div>
+                  <div>
+                    <p class="form-label">Vorschau</p>
+                    <div class="setup-privacy-preview rendered-markdown" id="system-privacy-preview"></div>
+                  </div>
+                </div>
+                <div class="setup-actions">
+                  <button type="button" class="btn btn-primary" data-click="saveSystemPrivacy">
+                    <i class="bi bi-check2 me-1" aria-hidden="true"></i>Datenschutzerklärung speichern
+                  </button>
+                </div>
+              </div>
+            </section>
           </div>
         </div>
       </div>

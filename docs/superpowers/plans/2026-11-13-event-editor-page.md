@@ -161,12 +161,12 @@ test('a failed preview shows a quiet note and no toast', async () => {});
 - Test: `test/eventEditorPage.test.js`
 
 **Interfaces:**
-- Consumes: `storeDraft`, `readDraft`, `clearDraft`, `isDraftStale`, `formatSavedAt` (Task 1); `setLeaveGuard` (part 1); `editorChanged` (Task 3); `fillWizard`, `collectEventDraft`, `wizardGoTo`, `currentWizardStep`.
+- Consumes: `storeDraft`, `readDraft`, `clearDraft`, `isDraftStale`, `formatSavedAt` (Task 1); `setLeaveGuard` and `onRouteLeave` (part 1); `editorChanged` (Task 3); `fillWizard`, `collectEventDraft`, `wizardGoTo`, `currentWizardStep`.
 - Behaviour of `editorChanged()` in addition to the preview: sets the editor dirty and, 800 ms after the last change, `storeDraft(editId, { draft: collectEventDraft(), step: currentWizardStep, baseUpdatedAt })` where `baseUpdatedAt` is the loaded event's `updatedAt` (`''` for a new event); on `true` shows `#event-editor-saved` with `formatSavedAt`.
 - On open, after the form is filled: no pending prefill and `readDraft(editId)` exists → if `isDraftStale(stored, loadedEvent)` then `clearDraft` and an info toast „Der gespeicherte Entwurf war veraltet und wurde verworfen.", else `fillWizard(stored.draft)`, `wizardGoTo(stored.step)`, dirty, banner visible with „Ungespeicherter Entwurf wiederhergestellt". A pending prefill wins: the stored draft of `new` is cleared without a message.
 - `discardEditorDraft` → `clearDraft`, reload the form from scratch (`showEventEditor` for the same key), banner hidden.
 - A successful save and a confirmed leave call `clearDraft(editId)`.
-- Leave guard while the editor is open: `(next) => (next.route === 'event-editor' && next.param === currentKey) || !dirty || showConfirmDialog('Ungespeicherte Änderungen verwerfen?', 'Verwerfen')`. `beforeunload` is registered while dirty (sets `event.returnValue`), removed on close.
+- Leave guard while the editor is open: `(next) => (next.route === 'event-editor' && next.param === currentKey) || !dirty || showConfirmDialog('Ungespeicherte Änderungen verwerfen?', 'Verwerfen')`. `beforeunload` is registered while dirty (sets `event.returnValue`), removed on close. The guard only answers (at once with `true` whenever there is nothing to ask, so the browser history stays untouched — see `setLeaveGuard` in `core/router.js`); everything that must happen when the editor is left (forget the open run, clear the stored draft after a confirmed leave, remove `beforeunload`) goes into `onRouteLeave(callback)` of the router, which part 1 added for this.
 - `fillWizard(collectEventDraft())` must reproduce the form: the round-trip test below pins it; fix `fillWizard` where a field does not survive (typical suspects: deadlines, `reminderHours`, `customBotMessages`, `channelConfig`, slots, `location`).
 
 - [ ] **Step 1: Write the failing tests**
