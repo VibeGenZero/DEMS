@@ -116,6 +116,33 @@ export async function showSystemSection(param) {
     await Promise.all([loadUpdateStatus(), loadPrivacyEditor()]);
 }
 
+const DATABASE_NAMES = { postgresql: 'PostgreSQL', sqlite: 'SQLite (eingebaut)' };
+
+// Rows of the overview from the status of the settings answer; none without one
+function statusRows(status) {
+    if (!status) return [];
+    const bot = status.bot || {};
+    return [
+        bot.online
+            ? { label: 'Bot', text: bot.guildName ? `online · ${bot.guildName}` : 'online', tone: 'success' }
+            : { label: 'Bot', text: 'offline', tone: 'danger' },
+        { label: 'Datenbank', text: DATABASE_NAMES[status.database] || String(status.database || 'unbekannt'), tone: '' }
+    ];
+}
+
+/**
+ * Draw the status list of the overview.
+ *
+ * @param {Array<Object>} rows -> `{ label, text, tone }` per fact; tone is a chip tone (success, danger, info, warning) or ''.
+ * @returns {void}
+ */
+export function renderStatusRows(rows) {
+    document.getElementById('system-status-list').innerHTML = rows.map(row => `<div class="system-status-row">
+        <span>${escapeHtml(row.label)}</span>
+        <span class="chip chip-sm${row.tone ? ` chip-${escapeHtml(row.tone)}` : ''}">${escapeHtml(row.text)}</span>
+    </div>`).join('');
+}
+
 // Load the settings and draw the given groups (all when the page opens)
 async function loadSettings(groups = GROUPS) {
     try {
@@ -124,6 +151,7 @@ async function loadSettings(groups = GROUPS) {
         if (!res.ok) throw new Error(data.error || 'Laden fehlgeschlagen');
         page.settings = data.settings || [];
         render(groups);
+        renderStatusRows(statusRows(data.status));
     } catch (err) {
         showToast(err.message || 'Systemeinstellungen konnten nicht geladen werden.', 'danger');
     }

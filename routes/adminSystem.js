@@ -11,6 +11,7 @@ const systemConfig = require('../utils/systemConfig');
 const { SNOWFLAKE, normalizeSystemValue, botLoginError } = require('../utils/systemValues');
 const { savePrivacyPolicy } = require('../utils/privacyPolicy');
 const { getUpdateStatus } = require('../utils/updateCheck');
+const { selectStoreKind } = require('../db/config');
 
 const router = express.Router();
 
@@ -18,11 +19,26 @@ const router = express.Router();
 const BOT_KEYS = ['DISCORD_BOT_TOKEN', 'DISCORD_GUILD_ID'];
 
 /**
- * GET /api/admin/system/settings — every stored key with source; secrets only as isSet
+ * Facts for the overview of the "System" view; no ids, no secrets.
+ *
+ * @returns {{ database: 'postgresql'|'sqlite', bot: { online: boolean, guildName: string } }}
+ */
+function systemStatus() {
+    // Required here: bot.js loads modules that load the routes
+    const bot = require('../bot').getBotStatus() || {};
+    return {
+        database: selectStoreKind(process.env) === 'postgres' ? 'postgresql' : 'sqlite',
+        bot: { online: bot.online === true, guildName: bot.guildName || '' }
+    };
+}
+
+/**
+ * GET /api/admin/system/settings — every stored key with source (secrets only as isSet)
+ * and `status` for the overview
  */
 router.get('/system/settings', (req, res) => {
     try {
-        res.json({ settings: systemConfig.listSystemSettings() });
+        res.json({ settings: systemConfig.listSystemSettings(), status: systemStatus() });
     } catch (err) {
         console.error('System settings read error:', err);
         res.status(500).json({ error: 'Systemeinstellungen konnten nicht geladen werden.' });
