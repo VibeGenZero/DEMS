@@ -450,7 +450,8 @@ async function loadFrontendApp(routes, { storage = {}, confirm = true, reducedMo
     const context = vm.createContext({
         document, fetch, console,
         location: { hash: '', search: '' },
-        history: { replaceState: noop, pushState: noop },
+        // replaceState with a hash moves the address like the browser does (leave guard of the router)
+        history: { replaceState: (data, title, url) => { if (typeof url === 'string' && url.startsWith('#')) context.location.hash = url; }, pushState: noop },
         addEventListener: noop,
         localStorage: createStorage(storage),
         sessionStorage: createStorage({}),

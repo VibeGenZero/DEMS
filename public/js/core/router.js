@@ -61,12 +61,52 @@ export function restorePendingRoute() {
     }
 }
 
+// The page that is shown may veto leaving it (unsaved input); see setLeaveGuard
+let leaveGuard = null;
+let lastHash = null;
+let guardPending = false;
+
+/**
+ * Let the shown page decide whether it may be left.
+ *
+ * The guard is asked once before another route or parameter is shown. A guard
+ * that answers true is used up: the page sets it again when it is shown again.
+ *
+ * @param {Function|null} guard -> `({ route, param }) => boolean | Promise<boolean>`; false keeps the page. null removes the guard.
+ * @returns {void}
+ */
+export function setLeaveGuard(guard) {
+    leaveGuard = typeof guard === 'function' ? guard : null;
+}
+
+// Put the address of the shown page back, ask the guard, and only then go on
+async function askLeaveGuard(hash) {
+    history.replaceState(null, '', '#' + lastHash);
+    if (guardPending) return;
+    guardPending = true;
+    const [route, param] = hash.split('/');
+    let allowed = false;
+    try {
+        allowed = (await leaveGuard({ route, param })) === true;
+    } finally {
+        guardPending = false;
+    }
+    if (!allowed) return;
+    leaveGuard = null;
+    // The hash change routes like any other navigation
+    window.location.hash = '#' + hash;
+}
+
 /**
  * Show the section of the current hash.
  *
- * @returns {Promise<void>|void} -> For the overview and an event page: resolves once the section is drawn.
+ * @returns {Promise<void>|void} -> For the overview and an event page: resolves once the section is drawn; with a leave guard: once it has answered.
  */
 export function handleRoute() {
+    let hash = window.location.hash.replace('#', '') || 'events';
+    if (leaveGuard && lastHash !== null && hash !== lastHash) return askLeaveGuard(hash);
+    lastHash = hash;
+
     // Clear countdown timers
     state.countdownTimers.forEach(t => clearInterval(t));
     state.countdownTimers = [];
@@ -77,7 +117,6 @@ export function handleRoute() {
         state.botStatusRefreshInterval = null;
     }
 
-    let hash = window.location.hash.replace('#', '') || 'events';
     const legacyEvent = hash.match(LEGACY_EVENT_ROUTE);
     if (legacyEvent) {
         hash = 'event/' + legacyEvent[1];
@@ -150,7 +189,7 @@ export function handleRoute() {
             break;
         case 'system':
             if (state.currentUser && state.currentUser.isAdmin) {
-                showSystemSection();
+                showSystemSection(param);
             } else {
                 navigateTo('events');
             }
