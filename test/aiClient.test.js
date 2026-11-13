@@ -52,7 +52,7 @@ test('getAiClient throws unreachable when not configured', () => {
     assert.throws(() => getAiClient({ env: {} }), { name: 'AiError', code: 'unreachable' });
 });
 
-test('overrides win, an empty override key keeps the stored one', async () => {
+test('overrides win; an empty override key keeps the stored one for the same provider', async () => {
     const seen = [];
     const realFetch = globalThis.fetch;
     globalThis.fetch = async (url, init) => {
@@ -61,12 +61,43 @@ test('overrides win, an empty override key keeps the stored one', async () => {
     };
     try {
         const env = { AI_PROVIDER: 'openai', AI_MODEL: 'stored', AI_API_KEY: 'stored-key' };
-        const client = getAiClient({ env, overrides: { provider: 'openrouter', baseUrl: 'https://example.test/v1', apiKey: '', model: 'other' } });
-        assert.equal(client.provider, 'openrouter');
+        const client = getAiClient({ env, overrides: { provider: 'openai', baseUrl: 'https://example.test/v1', apiKey: '', model: 'other' } });
+        assert.equal(client.provider, 'openai');
         assert.equal(client.model, 'other');
         await client.chat({ system: 's', messages: [{ role: 'user', text: 'hi' }], maxTokens: 5 });
         assert.equal(seen[0].url, 'https://example.test/v1/chat/completions');
         assert.equal(seen[0].auth, 'Bearer stored-key');
+    } finally {
+        globalThis.fetch = realFetch;
+    }
+});
+
+test('another provider never inherits the stored key or base URL', async () => {
+    const seen = [];
+    const realFetch = globalThis.fetch;
+    globalThis.fetch = async (url, init) => {
+        seen.push({ url: String(url), auth: init.headers.Authorization || init.headers.authorization || '' });
+        return new Response(JSON.stringify({ choices: [{ message: { content: 'ok' } }], usage: {} }), { status: 200, headers: { 'content-type': 'application/json' } });
+    };
+    try {
+        const env = { AI_PROVIDER: 'openai', AI_MODEL: 'stored', AI_API_KEY: 'stored-key', AI_BASE_URL: 'https://stored.test/v1' };
+        // Different provider, no key typed: no key at all (OpenRouter needs one)
+        assert.throws(() => getAiClient({ env, overrides: { provider: 'openrouter' } }), { code: 'unreachable' });
+        // Ollama needs none: default base URL, no Authorization header
+        const ollama = getAiClient({ env, overrides: { provider: 'ollama', model: 'm' } });
+        await ollama.chat({ system: 's', messages: [{ role: 'user', text: 'hi' }], maxTokens: 5 });
+        assert.equal(seen[0].url, 'http://localhost:11434/v1/chat/completions');
+        assert.doesNotMatch(seen[0].auth, /stored-key/);
+        // A typed key is used
+        const typed = getAiClient({ env, overrides: { provider: 'openrouter', apiKey: 'typed' } });
+        await typed.chat({ system: 's', messages: [{ role: 'user', text: 'hi' }], maxTokens: 5 });
+        assert.equal(seen[1].url, 'https://openrouter.ai/api/v1/chat/completions');
+        assert.equal(seen[1].auth, 'Bearer typed');
+        // The same provider keeps both stored values
+        const same = getAiClient({ env, overrides: { provider: 'openai' } });
+        await same.chat({ system: 's', messages: [{ role: 'user', text: 'hi' }], maxTokens: 5 });
+        assert.equal(seen[2].url, 'https://stored.test/v1/chat/completions');
+        assert.equal(seen[2].auth, 'Bearer stored-key');
     } finally {
         globalThis.fetch = realFetch;
     }

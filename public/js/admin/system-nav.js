@@ -15,7 +15,8 @@ export const SYSTEM_CATEGORIES = [
 ];
 
 const DEFAULT_CATEGORY = 'overview';
-const dirty = new Set();
+// Category id -> sources that hold unsaved input (a category can have several, e.g. fields and a settings block)
+const dirty = new Map();
 let activeId = DEFAULT_CATEGORY;
 
 /**
@@ -43,7 +44,7 @@ export function addSystemCategory(category, afterId) {
 
 function entryHtml(category) {
     const current = category.id === activeId ? ' aria-current="page"' : '';
-    const hidden = dirty.has(category.id) ? '' : ' is-hidden';
+    const hidden = dirty.get(category.id)?.size > 0 ? '' : ' is-hidden';
     return `<a class="settings-nav-item" href="#system/${category.id}"${current}>
         <i class="bi ${category.icon}" aria-hidden="true"></i>
         <span class="settings-nav-text"><span class="settings-nav-label">${escapeHtml(category.label)}</span>
@@ -87,14 +88,18 @@ export function showSystemCategory(id, { focus = false } = {}) {
  * Set or clear the mark for unsaved changes of a category.
  *
  * @param {string} id -> Category id.
- * @param {boolean} isDirty -> Whether the category holds unsaved input.
+ * @param {boolean} isDirty -> Whether the source holds unsaved input.
+ * @param {string} [source] -> Part of the category that reports; the mark stays while any source is dirty.
  * @returns {void}
  */
-export function markCategoryDirty(id, isDirty) {
-    if (isDirty) dirty.add(id);
+export function markCategoryDirty(id, isDirty, source = 'main') {
+    const sources = dirty.get(id) || new Set();
+    if (isDirty) sources.add(source);
+    else sources.delete(source);
+    if (sources.size > 0) dirty.set(id, sources);
     else dirty.delete(id);
     const dot = document.getElementById(`system-nav-dot-${id}`);
-    if (dot) toggleElement(dot, isDirty);
+    if (dot) toggleElement(dot, sources.size > 0);
 }
 
 /**

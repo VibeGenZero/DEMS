@@ -1054,6 +1054,98 @@
                 </div>
               </div>
             </section>
+            <section class="settings-panel is-hidden" id="system-panel-ai" aria-labelledby="system-panel-ai-title">
+              <h3 class="settings-panel-title" id="system-panel-ai-title" tabindex="-1">KI</h3>
+              <p class="text-secondary" id="ai-load-note" role="status"></p>
+              <div class="glass-card system-card">
+                <div class="system-card-head"><h4 class="system-card-title">Anbieter</h4></div>
+                <div class="setup-fields" id="system-ai-fields"></div>
+                <datalist id="system-ai-models"></datalist>
+                <div class="setup-actions">
+                  <button type="button" class="btn btn-ghost" id="ai-models-button" data-click="loadAiModels">
+                    <i class="bi bi-list-ul me-1" aria-hidden="true"></i>Modelle laden
+                  </button>
+                  <button type="button" class="btn btn-ghost" id="ai-test-button" data-click="testAiConnection">
+                    <i class="bi bi-plug me-1" aria-hidden="true"></i>Verbindung testen
+                  </button>
+                  <span id="ai-test-result" role="status"></span>
+                  <button type="button" class="btn btn-primary" id="system-save-ai" data-click="saveSystemSettings" data-group="ai">
+                    <i class="bi bi-check2 me-1" aria-hidden="true"></i>Speichern
+                  </button>
+                </div>
+              </div>
+              <div class="glass-card system-card">
+                <div class="system-card-head"><h4 class="system-card-title">Event-Assistent für Mitglieder</h4></div>
+                <div class="setup-fields">
+                  <div class="form-check form-switch setup-field">
+                    <input class="form-check-input" type="checkbox" role="switch" id="ai-memberWeb" data-change="aiSettingChanged">
+                    <label class="form-check-label" for="ai-memberWeb">Auf der Webseite</label>
+                    <div class="setup-hint">Mitglieder fragen im Event-Fenster.</div>
+                  </div>
+                  <div class="form-check form-switch setup-field">
+                    <input class="form-check-input" type="checkbox" role="switch" id="ai-memberDiscord" data-change="aiSettingChanged">
+                    <label class="form-check-label" for="ai-memberDiscord">In Discord</label>
+                    <div class="setup-hint">Der Befehl /ask im Server.</div>
+                  </div>
+                  <div class="setup-field">
+                    <label class="form-label" for="ai-assistantName">Name des Assistenten</label>
+                    <input class="form-control" id="ai-assistantName" type="text" maxlength="40" autocomplete="off" data-input="aiSettingChanged">
+                  </div>
+                  <div class="form-check form-switch setup-field">
+                    <input class="form-check-input" type="checkbox" role="switch" id="ai-teaserEnabled" data-change="aiSettingChanged">
+                    <label class="form-check-label" for="ai-teaserEnabled">Hinweis bei Events anzeigen</label>
+                    <div class="setup-hint">Ein kurzer Hinweis lädt zum Fragen ein.</div>
+                  </div>
+                  <div class="setup-field">
+                    <label class="form-label" for="ai-teaserText">Hinweistext</label>
+                    <input class="form-control" id="ai-teaserText" type="text" maxlength="120" autocomplete="off" data-input="aiSettingChanged">
+                  </div>
+                  <div class="setup-field">
+                    <label class="form-label" for="ai-memberQuestionsPerHour">Fragen pro Mitglied und Stunde</label>
+                    <input class="form-control" id="ai-memberQuestionsPerHour" type="number" min="1" max="200" step="1" data-input="aiSettingChanged">
+                  </div>
+                  <div class="setup-field">
+                    <label class="form-label" for="ai-dailyQuestionLimit">Fragen pro Tag insgesamt</label>
+                    <input class="form-control" id="ai-dailyQuestionLimit" type="number" min="0" max="100000" step="1" data-input="aiSettingChanged">
+                    <div class="setup-hint">0 = kein Limit</div>
+                  </div>
+                </div>
+                <div class="system-card-head"><h4 class="system-card-title">KI für Admins</h4></div>
+                <div class="setup-fields">
+                  <div class="form-check form-switch setup-field">
+                    <input class="form-check-input" type="checkbox" role="switch" id="ai-adminAssistant" data-change="aiSettingChanged">
+                    <label class="form-check-label" for="ai-adminAssistant">Assistent im Event-Editor</label>
+                    <div class="setup-hint">Hilft Admins beim Erstellen von Events.</div>
+                  </div>
+                </div>
+                <div class="system-card-head"><h4 class="system-card-title">Verhalten</h4></div>
+                <div class="setup-fields">
+                  <div class="setup-field">
+                    <label class="form-label" for="ai-extraInstructions">Zusatzanweisungen</label>
+                    <textarea class="form-control" id="ai-extraInstructions" rows="4" maxlength="1000" data-input="aiSettingChanged"></textarea>
+                    <div class="setup-hint">Gilt für alle Antworten, z. B. Ton oder Anrede. <span id="ai-extraInstructions-count">0 / 1000</span></div>
+                  </div>
+                </div>
+                <div class="setup-actions">
+                  <button type="button" class="btn btn-primary" id="ai-save-settings" data-click="saveAiSettings">
+                    <i class="bi bi-check2 me-1" aria-hidden="true"></i>KI-Einstellungen speichern
+                  </button>
+                </div>
+              </div>
+              <div class="glass-card system-card">
+                <div class="system-card-head"><h4 class="system-card-title">Nutzung</h4></div>
+                <div class="table-responsive">
+                  <table class="table">
+                    <thead><tr><th scope="col"></th><th scope="col">Fragen</th><th scope="col">Admin-Anfragen</th><th scope="col">Tokens (ein)</th><th scope="col">Tokens (aus)</th></tr></thead>
+                    <tbody id="ai-usage-body"></tbody>
+                  </table>
+                </div>
+              </div>
+              <div class="glass-card system-card">
+                <div class="system-card-head"><h4 class="system-card-title">Datenschutz-Hinweis</h4></div>
+                <p class="text-secondary mb-0">Bei einem Cloud-Anbieter werden Fragen und Event-Inhalte an diesen Anbieter gesendet. Ergänze das in deiner Datenschutzerklärung. Mit einem lokalen Ollama verlässt nichts den Server. Namen und Discord-IDs der Mitglieder werden nie mitgesendet.</p>
+              </div>
+            </section>
             <section class="settings-panel is-hidden" id="system-panel-privacy" aria-labelledby="system-panel-privacy-title">
               <h3 class="settings-panel-title" id="system-panel-privacy-title" tabindex="-1">Datenschutz</h3>
               <div class="glass-card system-card">

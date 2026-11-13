@@ -1,6 +1,6 @@
 /**
  * Admin page "System" (#system/<category>, #138): the database-backed configuration
- * (Discord, Server, Sicherheit), one category at a time (list: system-nav.js). A value from .env is read-only; secrets show
+ * (Discord, Server, Sicherheit, KI), one category at a time (list: system-nav.js). A value from .env is read-only; secrets show
  * only whether they are set. Saving asks for the admin reset password.
  * First card "Version": the update status (GET /api/admin/system/update-status).
  * Below: the editor of the privacy policy (no reset password, every change
@@ -11,6 +11,7 @@ import { onRouteLeave, setLeaveGuard } from '../core/router.js';
 import { state } from '../core/state.js';
 import { escapeHtml, renderMarkdownSafe, showConfirmDialog, showToast } from '../core/ui.js';
 import { mountDiscordGuide, resetDiscordGuide } from '../pages/discord-guide.js';
+import { aiFieldChanged, baseUrlPlaceholder, loadAiPanel, providerOptions, resetAiBehaviour } from './system-ai.js';
 import { categoryOf, clearDirtyCategories, dirtyCategories, markCategoryDirty, showSystemCategory } from './system-nav.js';
 
 // Label and hint of each key, in the order of the page
@@ -26,7 +27,12 @@ const SYSTEM_FIELDS = {
     SERVER_NAME: ['Anzeigename', 'Leer lassen = Name des Discord-Servers.'],
     BASE_URL: ['Adresse (BASE_URL)', 'Mit https://. Die Redirect-URL im Developer Portal muss <Adresse>/auth/discord/callback sein.'],
     TIMEZONE: ['Zeitzone', 'IANA-Zeitzone, z. B. Europe/Berlin. Leer = Europe/Berlin.'],
-    ADMIN_RESET_PASSWORD: ['Neues Admin-Reset-Passwort', 'Mindestens 12 Zeichen. Leer lassen = das bisherige behalten.']
+    ADMIN_RESET_PASSWORD: ['Neues Admin-Reset-Passwort', 'Mindestens 12 Zeichen. Leer lassen = das bisherige behalten.'],
+    AI_PROVIDER: ['Anbieter', '„Aus“ schaltet alle KI-Funktionen ab.'],
+    AI_BASE_URL: ['Adresse', 'Nur für Ollama oder eigene Endpunkte nötig.'],
+    AI_API_KEY: ['API-Schlüssel', 'Leer lassen = den bisherigen behalten.'],
+    AI_MODEL: ['Modell', 'Das Modell für Fragen von Mitgliedern. „Modelle laden“ zeigt die Auswahl des Anbieters.'],
+    AI_MODEL_ADMIN: ['Modell für Admins', 'Optional: stärkeres Modell für das Erstellen von Events. Leer = wie oben.']
 };
 
 const SOURCE_CHIPS = {
@@ -36,12 +42,14 @@ const SOURCE_CHIPS = {
 };
 
 // Groups of settings that are saved together; each is a category of the page
-const GROUPS = ['discord', 'server', 'security'];
+const GROUPS = ['discord', 'server', 'security', 'ai'];
 
 // open: the page is shown and holds the loaded values (a category switch must not reload them)
 const page = { settings: [], pending: null, pendingGroup: null, category: 'overview', open: false, privacyText: '' };
 
 const fieldId = (key) => `system-${key}`;
+
+const valueOf = (key) => (page.settings.find(entry => entry.key === key) || {}).value || '';
 
 function fieldHtml(entry) {
     const [label, hint] = SYSTEM_FIELDS[entry.key] || [entry.key, ''];
@@ -57,6 +65,13 @@ function fieldHtml(entry) {
             ${hintHtml}
         </div>`;
     }
+    if (entry.key === 'AI_PROVIDER') {
+        return `<div class="setup-field">
+            <label class="form-label" for="${id}">${escapeHtml(label)} ${chip}</label>
+            <select class="form-select" id="${id}" data-change="systemFieldChanged" data-group="${entry.group}"${entry.locked ? ' disabled' : ''}>${providerOptions(entry.value || '')}</select>
+            ${hintHtml}
+        </div>`;
+    }
     if (entry.secret) {
         const setChip = entry.isSet ? '<span class="chip chip-sm chip-success">gesetzt</span>' : '<span class="chip chip-sm">nicht gesetzt</span>';
         const placeholder = entry.locked ? 'gesetzt (aus .env)' : (entry.isSet ? 'gesetzt – leer lassen zum Behalten' : 'nicht gesetzt');
@@ -66,9 +81,13 @@ function fieldHtml(entry) {
             ${hintHtml}
         </div>`;
     }
+    // Base URL: the default of the provider as placeholder; models: suggestions of "Modelle laden"
+    const extra = entry.key === 'AI_BASE_URL'
+        ? ` placeholder="${escapeHtml(baseUrlPlaceholder(valueOf('AI_PROVIDER')))}"`
+        : (entry.key === 'AI_MODEL' || entry.key === 'AI_MODEL_ADMIN' ? ' list="system-ai-models"' : '');
     return `<div class="setup-field">
         <label class="form-label" for="${id}">${escapeHtml(label)} ${chip}</label>
-        <input class="form-control" id="${id}" type="text" value="${escapeHtml(entry.value || '')}" autocomplete="off" spellcheck="false" data-input="systemFieldChanged" data-group="${entry.group}"${entry.locked ? ' readonly' : ''}>
+        <input class="form-control" id="${id}" type="text"${extra} value="${escapeHtml(entry.value || '')}" autocomplete="off" spellcheck="false" data-input="systemFieldChanged" data-group="${entry.group}"${entry.locked ? ' readonly' : ''}>
         ${hintHtml}
     </div>`;
 }
@@ -90,6 +109,7 @@ function render(groups = GROUPS) {
         const element = document.getElementById(fieldId(entry.key));
         if (!element) continue;
         if (entry.key === 'DISCORD_THREAD_SYNC') element.checked = entry.value === 'true';
+        else if (element.tagName === 'SELECT') element.value = entry.value || '';
         else element.value = entry.secret ? '' : (entry.value || '');
     }
 }
@@ -113,6 +133,8 @@ export async function showSystemSection(param) {
     if (page.open) return;
     page.open = true;
     clearDirtyCategories();
+    // The provider list comes first: the connection fields of the group "ai" need it
+    await loadAiPanel();
     // A failed load is tried again with the next category
     if (!(await loadSettings())) page.open = false;
     await Promise.all([loadUpdateStatus(), loadPrivacyEditor()]);
@@ -128,7 +150,10 @@ function statusRows(status) {
         bot.online
             ? { label: 'Bot', text: bot.guildName ? `online · ${bot.guildName}` : 'online', tone: 'success' }
             : { label: 'Bot', text: 'offline', tone: 'danger' },
-        { label: 'Datenbank', text: DATABASE_NAMES[status.database] || String(status.database || 'unbekannt'), tone: '' }
+        { label: 'Datenbank', text: DATABASE_NAMES[status.database] || String(status.database || 'unbekannt'), tone: '' },
+        status.ai?.on
+            ? { label: 'KI', text: status.ai.provider || 'an', tone: 'success' }
+            : { label: 'KI', text: 'aus', tone: '' }
     ];
 }
 
@@ -176,6 +201,7 @@ function leftSystem() {
     passwordDialog().hide();
     // Discarded input must not sit in the fields if the next load fails
     render();
+    resetAiBehaviour();
     document.getElementById('system-privacy-text').value = page.privacyText;
     clearDirtyCategories();
 }
@@ -304,6 +330,7 @@ function passwordDialog() {
 function systemFieldChanged(element) {
     const group = element?.dataset?.group;
     if (!GROUPS.includes(group)) return;
+    aiFieldChanged(element);
     markCategoryDirty(group, Object.keys(collectChanges(group)).length > 0);
 }
 

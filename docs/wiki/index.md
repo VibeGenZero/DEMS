@@ -78,7 +78,7 @@ sources: [scripts/wiki-graph.js, docs/wiki/graph.json, CLAUDE.md]
 | `utils/localDateTime.js` | discord-integration, utils |
 | `utils/systemConfig.js` | configuration, utils, data-model |
 | `utils/setupState.js`, `routes/setup.js` | security, api-index, configuration |
-| `routes/adminSystem.js`, `utils/systemValues.js` | routes-admin, configuration |
+| `routes/adminSystem.js`, `routes/adminAi.js`, `utils/systemValues.js` | routes-admin, configuration |
 | `middleware/privacy.js`, `utils/privacyPolicy.js`, `public/js/pages/privacy.js` | auth-session, data-model |
 | `utils/timezone.js` | configuration, utils |
 | `utils/discordFetch.js` | routes-auth, utils |

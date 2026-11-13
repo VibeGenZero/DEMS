@@ -30,11 +30,15 @@ function providerEntry(id) {
 
 function settingsFrom(env, overrides, admin) {
     const o = overrides || {};
+    const storedProvider = filled(env.AI_PROVIDER);
+    const provider = filled(o.provider) || storedProvider;
+    // A stored key and base URL belong to the stored provider: never hand them to another one
+    const sameProvider = provider === storedProvider;
     const model = filled(o.model) || (admin ? filled(env.AI_MODEL_ADMIN) : '') || filled(env.AI_MODEL);
     return {
-        provider: filled(o.provider) || filled(env.AI_PROVIDER),
-        baseUrl: filled(o.baseUrl) || filled(env.AI_BASE_URL),
-        apiKey: filled(o.apiKey) || filled(env.AI_API_KEY),
+        provider,
+        baseUrl: filled(o.baseUrl) || (sameProvider ? filled(env.AI_BASE_URL) : ''),
+        apiKey: filled(o.apiKey) || (sameProvider ? filled(env.AI_API_KEY) : ''),
         model
     };
 }

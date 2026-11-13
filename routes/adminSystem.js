@@ -12,6 +12,7 @@ const { SNOWFLAKE, normalizeSystemValue, botLoginError } = require('../utils/sys
 const { savePrivacyPolicy } = require('../utils/privacyPolicy');
 const { getUpdateStatus } = require('../utils/updateCheck');
 const { selectStoreKind } = require('../db/config');
+const { PROVIDERS, isAiConfigured } = require('../ai/client');
 
 const router = express.Router();
 
@@ -21,15 +22,23 @@ const BOT_KEYS = ['DISCORD_BOT_TOKEN', 'DISCORD_GUILD_ID'];
 /**
  * Facts for the overview of the "System" view; no ids, no secrets.
  *
- * @returns {{ database: 'postgresql'|'sqlite', bot: { online: boolean, guildName: string } }}
+ * @returns {{ database: 'postgresql'|'sqlite', bot: { online: boolean, guildName: string }, ai: { on: boolean, provider: string } }}
  */
 function systemStatus() {
     // Required here: bot.js loads modules that load the routes
     const bot = require('../bot').getBotStatus() || {};
     return {
         database: selectStoreKind(process.env) === 'postgres' ? 'postgresql' : 'sqlite',
-        bot: { online: bot.online === true, guildName: bot.guildName || '' }
+        bot: { online: bot.online === true, guildName: bot.guildName || '' },
+        ai: aiStatus()
     };
+}
+
+/** Whether the AI is usable and with which provider (label); no key, no model. */
+function aiStatus() {
+    const on = isAiConfigured();
+    const provider = on ? ((PROVIDERS[process.env.AI_PROVIDER] || {}).label || 'Mock') : '';
+    return { on, provider };
 }
 
 /**

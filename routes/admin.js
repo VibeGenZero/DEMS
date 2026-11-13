@@ -74,6 +74,7 @@ router.use(requireAuth, requireAdmin);
 
 // Database-backed configuration and privacy policy, the "System" view (#138)
 router.use(require('./adminSystem'));
+router.use(require('./adminAi'));
 
 /**
  * GET /api/admin/roles — Get all guild roles
