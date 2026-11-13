@@ -109,6 +109,32 @@ test('no answer contains the stored API key', async () => {
     for (const res of answers) assert.equal((await res.text()).includes('sehr-geheimer-key-4711'), false);
 });
 
+const ASK_REFRESHED = 'Befehle und Ankündigungen aktualisiert (Event-Assistent)';
+const askRefreshes = () => server.output().split(ASK_REFRESHED).length - 1;
+/** Wait until the server printed the refresh line `count` times (stdout may lag behind the answer). */
+async function waitForRefreshes(count) {
+    for (let i = 0; i < 40 && askRefreshes() < count; i++) await new Promise(resolve => setTimeout(resolve, 50));
+    return askRefreshes();
+}
+
+test('the Discord switch and a changed AI_* key refresh the /ask command and the announcements', async () => {
+    const admin = await loginAs('admin');
+    const start = askRefreshes();
+    assert.equal((await admin.send('PUT', '/api/admin/ai/settings', { teaserText: 'Frag ruhig.' })).status, 200);
+    assert.equal((await admin.send('PUT', '/api/admin/system/settings', { password: 'dev', values: { SERVER_NAME: 'Fragerunde' } })).status, 200);
+    assert.equal(await waitForRefreshes(start + 1), start, 'other values leave Discord alone');
+
+    assert.equal((await admin.send('PUT', '/api/admin/ai/settings', { memberDiscord: false })).status, 200);
+    assert.equal(await waitForRefreshes(start + 1), start + 1);
+    assert.equal((await admin.send('PUT', '/api/admin/ai/settings', { memberDiscord: true })).status, 200);
+    assert.equal(await waitForRefreshes(start + 2), start + 2);
+
+    const saved = await admin.send('PUT', '/api/admin/system/settings', { password: 'dev', values: { AI_MODEL_ADMIN: 'mock-admin' } });
+    assert.equal(saved.status, 200);
+    assert.deepEqual((await saved.json()).changed, ['AI_MODEL_ADMIN']);
+    assert.equal(await waitForRefreshes(start + 3), start + 3);
+});
+
 test('a typed foreign base URL never receives the stored API key', async () => {
     const received = [];
     const foreign = http.createServer((req, res) => {

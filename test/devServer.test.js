@@ -569,12 +569,12 @@ test('the wizard preview builds the Discord announcement of an unsaved event and
     assert.equal(head, '## 🎉 Vorschau-Raid\nBringt Tränke mit.');
     assert.match(facts, /^🗓️ \*\*Datum:\*\* /);
     assert.ok(facts.includes('👥 **Plätze:** 0 von 5 Plätzen belegt'), facts);
-    // Slot buttons beside their line-up blocks, the link in the last row (B-05)
+    // Slot buttons beside their line-up blocks, „Frage stellen“ (mock AI on) and the link in the last row (B-05)
     const buttons = container.components.flatMap(part => {
         if (part.type === 9) return [part.accessory];
         return part.type === 1 ? part.components : [];
     });
-    assert.deepEqual(buttons.map(button => button.label), ['Tank', 'Heiler', 'Zum Event']);
+    assert.deepEqual(buttons.map(button => button.label), ['Tank', 'Heiler', 'Frage stellen', 'Zum Event']);
     assert.equal(preview.places.text, '0 von 5 Plätzen belegt');
     assert.deepEqual(preview.bot, { name: 'DEMS Bot (Mock)', avatarUrl: 'https://cdn.discordapp.com/embed/avatars/0.png' });
     assert.equal(await countEvents(), before);
@@ -584,7 +584,7 @@ test('the preview shows „Vielleicht“ when the wizard allows it (B-17)', asyn
     const admin = await loginAs('admin');
     const preview = await (await admin.send('POST', '/api/admin/events/preview', { title: 'Bank', status: 'active', allowTentative: true })).json();
     const row = previewContainer(preview).components.find(part => part.type === 1);
-    assert.deepEqual(row.components.map(button => button.label), ['Anmelden', 'Vielleicht', 'Zum Event']);
+    assert.deepEqual(row.components.map(button => button.label), ['Anmelden', 'Vielleicht', 'Frage stellen', 'Zum Event']);
 });
 
 test('a half-done draft can be previewed; members and requests without a token cannot', async () => {

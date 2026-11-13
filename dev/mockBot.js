@@ -355,6 +355,12 @@ async function sendWaitlistOffer(registrationId) {
     return true;
 }
 
+// The real bot registers /ask again and redraws the announcements of active events
+async function refreshAskFeature() {
+    mockLog('Befehle und Ankündigungen aktualisiert (Event-Assistent)');
+    return true;
+}
+
 async function removeRoleFromMembers(roleId, userIds) {
     const members = userIds.length === 1 ? '1 Mitglied' : `${userIds.length} Mitgliedern`;
     mockLog(`Rolle ${describeRole(roleId)} von ${members} entfernt`, userIds.map(describeUser));
@@ -463,6 +469,7 @@ module.exports = {
     removeRole,
     removeRoleFromMembers,
     sendWaitlistOffer,
+    refreshAskFeature,
     createEventChannels,
     addParticipantToEventChannels,
     removeParticipantFromEventChannels,

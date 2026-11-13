@@ -106,6 +106,15 @@ router.put('/system/settings', async (req, res) => {
             // Key names only: values of secrets never reach the audit log
             await addAuditLog('UPDATE_SYSTEM_SETTINGS', req.session.user.id, { keys: saved.changed });
         }
+        // A changed AI connection can switch /ask and „Frage stellen“ on or off; Discord trouble never fails the save
+        if (saved.changed.some(key => key.startsWith('AI_'))) {
+            try {
+                const { refreshAskFeature } = require('../bot');
+                await refreshAskFeature();
+            } catch (err) {
+                console.error('Discord refresh after an AI change failed:', err.message);
+            }
+        }
         res.json({ success: true, changed: saved.changed, restartRequired: saved.applies.has('restart'), bot });
     } catch (err) {
         console.error('System settings save error:', err);
