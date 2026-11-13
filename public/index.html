@@ -1025,18 +1025,33 @@
               </div>
               <div class="glass-card system-card">
                 <div class="setup-fields" id="system-discord-fields"></div>
+                <div class="setup-actions">
+                  <button type="button" class="btn btn-primary" id="system-save-discord" data-click="saveSystemSettings" data-group="discord">
+                    <i class="bi bi-check2 me-1" aria-hidden="true"></i>Speichern
+                  </button>
+                </div>
               </div>
             </section>
             <section class="settings-panel is-hidden" id="system-panel-server" aria-labelledby="system-panel-server-title">
               <h3 class="settings-panel-title" id="system-panel-server-title" tabindex="-1">Server</h3>
               <div class="glass-card system-card">
                 <div class="setup-fields" id="system-server-fields"></div>
+                <div class="setup-actions">
+                  <button type="button" class="btn btn-primary" id="system-save-server" data-click="saveSystemSettings" data-group="server">
+                    <i class="bi bi-check2 me-1" aria-hidden="true"></i>Speichern
+                  </button>
+                </div>
               </div>
             </section>
             <section class="settings-panel is-hidden" id="system-panel-security" aria-labelledby="system-panel-security-title">
               <h3 class="settings-panel-title" id="system-panel-security-title" tabindex="-1">Sicherheit</h3>
               <div class="glass-card system-card">
                 <div class="setup-fields" id="system-security-fields"></div>
+                <div class="setup-actions">
+                  <button type="button" class="btn btn-primary" id="system-save-security" data-click="saveSystemSettings" data-group="security">
+                    <i class="bi bi-check2 me-1" aria-hidden="true"></i>Speichern
+                  </button>
+                </div>
               </div>
             </section>
             <section class="settings-panel is-hidden" id="system-panel-privacy" aria-labelledby="system-panel-privacy-title">
@@ -1060,11 +1075,6 @@
                 </div>
               </div>
             </section>
-            <div class="setup-actions" id="system-save-bar">
-              <button type="button" class="btn btn-primary" data-click="saveSystemSettings">
-                <i class="bi bi-check2 me-1" aria-hidden="true"></i>Speichern
-              </button>
-            </div>
           </div>
         </div>
       </div>

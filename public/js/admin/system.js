@@ -7,10 +7,11 @@
  * is a new version everybody accepts again).
  */
 import { registerActions } from '../core/actions.js';
+import { setLeaveGuard } from '../core/router.js';
 import { state } from '../core/state.js';
-import { escapeHtml, renderMarkdownSafe, showToast } from '../core/ui.js';
+import { escapeHtml, renderMarkdownSafe, showConfirmDialog, showToast } from '../core/ui.js';
 import { mountDiscordGuide, resetDiscordGuide } from '../pages/discord-guide.js';
-import { categoryOf, showSystemCategory } from './system-nav.js';
+import { categoryOf, clearDirtyCategories, dirtyCategories, markCategoryDirty, showSystemCategory } from './system-nav.js';
 
 // Label and hint of each key, in the order of the page
 const SYSTEM_FIELDS = {
@@ -34,7 +35,11 @@ const SOURCE_CHIPS = {
     none: ''
 };
 
-const page = { settings: [], pending: null, category: 'overview', shown: false };
+// Groups of settings that are saved together; each is a category of the page
+const GROUPS = ['discord', 'server', 'security'];
+
+// open: the page is shown and holds the loaded values (a category switch must not reload them)
+const page = { settings: [], pending: null, pendingGroup: null, category: 'overview', open: false, privacyText: '' };
 
 const fieldId = (key) => `system-${key}`;
 
@@ -47,7 +52,7 @@ function fieldHtml(entry) {
 
     if (entry.key === 'DISCORD_THREAD_SYNC') {
         return `<div class="form-check setup-field">
-            <input class="form-check-input" type="checkbox" id="${id}"${entry.value === 'true' ? ' checked' : ''}${entry.locked ? ' disabled' : ''}>
+            <input class="form-check-input" type="checkbox" id="${id}" data-change="systemFieldChanged" data-group="${entry.group}"${entry.value === 'true' ? ' checked' : ''}${entry.locked ? ' disabled' : ''}>
             <label class="form-check-label" for="${id}">${escapeHtml(label)} ${chip}</label>
             ${hintHtml}
         </div>`;
@@ -57,22 +62,28 @@ function fieldHtml(entry) {
         const placeholder = entry.locked ? 'gesetzt (aus .env)' : (entry.isSet ? 'gesetzt – leer lassen zum Behalten' : 'nicht gesetzt');
         return `<div class="setup-field">
             <label class="form-label" for="${id}">${escapeHtml(label)} ${chip || setChip}</label>
-            <input class="form-control" id="${id}" type="password" value="" placeholder="${escapeHtml(placeholder)}" autocomplete="new-password"${entry.locked ? ' readonly' : ''}>
+            <input class="form-control" id="${id}" type="password" value="" placeholder="${escapeHtml(placeholder)}" autocomplete="new-password" data-input="systemFieldChanged" data-group="${entry.group}"${entry.locked ? ' readonly' : ''}>
             ${hintHtml}
         </div>`;
     }
     return `<div class="setup-field">
         <label class="form-label" for="${id}">${escapeHtml(label)} ${chip}</label>
-        <input class="form-control" id="${id}" type="text" value="${escapeHtml(entry.value || '')}" autocomplete="off" spellcheck="false"${entry.locked ? ' readonly' : ''}>
+        <input class="form-control" id="${id}" type="text" value="${escapeHtml(entry.value || '')}" autocomplete="off" spellcheck="false" data-input="systemFieldChanged" data-group="${entry.group}"${entry.locked ? ' readonly' : ''}>
         ${hintHtml}
     </div>`;
 }
 
-function render() {
+// Draw the fields of the given groups from page.settings; the other groups keep what was typed
+function render(groups = GROUPS) {
     const order = Object.keys(SYSTEM_FIELDS);
-    const sorted = [...page.settings].sort((a, b) => order.indexOf(a.key) - order.indexOf(b.key));
-    for (const group of ['discord', 'server', 'security']) {
-        document.getElementById(`system-${group}-fields`).innerHTML = sorted.filter(entry => entry.group === group).map(fieldHtml).join('');
+    const sorted = [...page.settings].sort((a, b) => order.indexOf(a.key) - order.indexOf(b.key)).filter(entry => groups.includes(entry.group));
+    for (const group of groups) {
+        const entries = sorted.filter(entry => entry.group === group);
+        document.getElementById(`system-${group}-fields`).innerHTML = entries.map(fieldHtml).join('');
+        // Nothing to save where .env sets every value
+        const button = document.getElementById(`system-save-${group}`);
+        if (button) button.disabled = entries.every(entry => entry.locked);
+        markCategoryDirty(group, false);
     }
     // The loaded values as properties too: collectChanges() compares against them
     for (const entry of sorted) {
@@ -93,19 +104,38 @@ export async function showSystemSection(param) {
     document.getElementById('system-section').style.display = 'block';
     const category = categoryOf(param);
     // Only a click in the list moves the focus, not opening the page
-    showSystemCategory(category, { focus: page.shown && category !== page.category });
+    showSystemCategory(category, { focus: page.open && category !== page.category });
     page.category = category;
-    page.shown = true;
+    // The router uses a guard up when it lets a navigation through
+    setLeaveGuard(mayLeaveSystem);
+    // A category switch keeps the loaded values and whatever was typed
+    if (page.open) return;
+    page.open = true;
+    clearDirtyCategories();
+    await loadSettings();
+    await Promise.all([loadUpdateStatus(), loadPrivacyEditor()]);
+}
+
+// Load the settings and draw the given groups (all when the page opens)
+async function loadSettings(groups = GROUPS) {
     try {
         const res = await fetch('/api/admin/system/settings');
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Laden fehlgeschlagen');
         page.settings = data.settings || [];
-        render();
+        render(groups);
     } catch (err) {
         showToast(err.message || 'Systemeinstellungen konnten nicht geladen werden.', 'danger');
     }
-    await Promise.all([loadUpdateStatus(), loadPrivacyEditor()]);
+}
+
+// Leave guard of the router: a category switch is free, leaving the page asks when input is unsaved
+async function mayLeaveSystem(next) {
+    if (next.route === 'system') return true;
+    if (dirtyCategories().length > 0 && !(await showConfirmDialog('Ungespeicherte Änderungen verwerfen?', 'Verwerfen'))) return false;
+    page.open = false;
+    clearDirtyCategories();
+    return true;
 }
 
 const UPDATE_COMMAND = 'docker compose pull && docker compose up -d';
@@ -169,7 +199,8 @@ async function loadPrivacyEditor() {
     } catch {
         policy = null;
     }
-    document.getElementById('system-privacy-text').value = policy ? policy.markdown : '';
+    page.privacyText = policy ? policy.markdown : '';
+    document.getElementById('system-privacy-text').value = page.privacyText;
     document.getElementById('system-privacy-version').textContent = policy
         ? `Aktuell: Fassung ${policy.version} vom ${new Date(policy.updatedAt).toLocaleDateString('de-DE')}.`
         : 'Noch keine Datenschutzerklärung veröffentlicht.';
@@ -177,7 +208,9 @@ async function loadPrivacyEditor() {
 }
 
 function previewSystemPrivacy() {
-    const text = String(document.getElementById('system-privacy-text').value || '').trim();
+    const typed = String(document.getElementById('system-privacy-text').value || '');
+    markCategoryDirty('privacy', typed !== page.privacyText);
+    const text = typed.trim();
     document.getElementById('system-privacy-preview').innerHTML = text
         ? renderMarkdownSafe(text)
         : '<p class="text-secondary">Ohne Text gibt es keine Datenschutzseite, und niemand muss etwas akzeptieren.</p>';
@@ -203,11 +236,11 @@ async function saveSystemPrivacy() {
     }
 }
 
-// Changed, unlocked values; a secret only when something was typed in
-function collectChanges() {
+// Changed, unlocked values of one group (all groups without one); a secret only when something was typed in
+function collectChanges(group) {
     const changes = {};
     for (const entry of page.settings) {
-        if (entry.locked) continue;
+        if (entry.locked || (group && entry.group !== group)) continue;
         const element = document.getElementById(fieldId(entry.key));
         if (!element) continue;
         if (entry.key === 'DISCORD_THREAD_SYNC') {
@@ -225,10 +258,20 @@ function passwordDialog() {
     return bootstrap.Modal.getOrCreateInstance(document.getElementById('systemPasswordModal'));
 }
 
-function saveSystemSettings() {
-    const changes = collectChanges();
+// A field changed: the mark of its category follows what collectChanges() would send
+function systemFieldChanged(element) {
+    const group = element?.dataset?.group;
+    if (!GROUPS.includes(group)) return;
+    markCategoryDirty(group, Object.keys(collectChanges(group)).length > 0);
+}
+
+// The save button of a category carries its group; without one every group is saved
+function saveSystemSettings(element) {
+    const group = GROUPS.includes(element?.dataset?.group) ? element.dataset.group : null;
+    const changes = collectChanges(group);
     if (Object.keys(changes).length === 0) return showToast('Keine Änderungen zum Speichern.', 'info');
     page.pending = changes;
+    page.pendingGroup = group;
     document.getElementById('system-reset-password').value = '';
     passwordDialog().show();
 }
@@ -250,7 +293,8 @@ async function confirmSystemSave() {
         const botNote = data.bot && data.bot.ok ? ' Der Bot ist neu angemeldet.' : '';
         showToast(`Systemeinstellungen gespeichert.${botNote}`, 'success');
         if (data.restartRequired) showToast('Der Kommentar-Sync ändert sich erst nach einem Neustart von DEMS.', 'warning');
-        await showSystemSection(page.category);
+        // Only the saved fields are drawn again: input of the other categories stays
+        await loadSettings(page.pendingGroup ? [page.pendingGroup] : GROUPS);
     } catch {
         showToast('Speichern fehlgeschlagen.', 'danger');
     }
@@ -271,6 +315,7 @@ async function showDiscordGuideDialog() {
 }
 
 registerActions({
+    systemFieldChanged,
     saveSystemSettings,
     confirmSystemSave,
     showDiscordGuideDialog,

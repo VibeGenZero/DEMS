@@ -2,7 +2,7 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');
 const path = require('path');
-const { loadFrontendApp, isHidden, REPO_ROOT } = require('./helpers');
+const { loadFrontendApp, httpAnswer, isHidden, REPO_ROOT } = require('./helpers');
 
 const HTML = fs.readFileSync(path.join(REPO_ROOT, 'public', 'index.html'), 'utf8');
 const CATEGORY_IDS = ['overview', 'discord', 'server', 'security', 'privacy'];
@@ -108,4 +108,133 @@ test('the entries carry a hidden mark for unsaved changes', async () => {
     const nav = harness.element('system-nav').innerHTML;
     assert.equal(nav.split('class="settings-nav-dot is-hidden"').length - 1, CATEGORY_IDS.length);
     assert.match(nav, /<span class="visually-hidden">ungespeicherte Änderungen<\/span>/);
+});
+
+// ─── Saving per category, marks for unsaved input, leave question ───
+
+const group = (name) => ({ dataset: { group: name } });
+
+async function openSystem(options = {}, put = { success: true, changed: [], restartRequired: false }) {
+    const harness = await loadFrontendApp({
+        '/api/admin/system/settings': (request) => (request.method === 'PUT' ? put : { settings: SETTINGS }),
+        '/api/privacy': { markdown: 'Alt', version: 1, updatedAt: '2026-11-01T10:00:00.000Z' }
+    }, options);
+    harness.state.currentUser = { id: 'a', isAdmin: true };
+    harness.state.csrfToken = 'token';
+    await go(harness, 'system/server');
+    return harness;
+}
+
+/** Type into a field like an admin does: value plus the input action of the field. */
+async function type(harness, key, value, groupName) {
+    harness.element(`system-${key}`).value = value;
+    await harness.app.runAction('systemFieldChanged', group(groupName));
+}
+
+async function save(harness, groupName) {
+    await harness.app.runAction('saveSystemSettings', group(groupName));
+    harness.element('system-reset-password').value = 'geheim';
+    await harness.app.runAction('confirmSystemSave', {});
+}
+
+test('every editable category has its own save button', () => {
+    for (const name of ['discord', 'server', 'security']) {
+        assert.match(HTML, new RegExp(`id="system-save-${name}" data-click="saveSystemSettings" data-group="${name}"`), name);
+    }
+    assert.doesNotMatch(HTML, /id="system-save-bar"/);
+});
+
+test('saving the server category sends only server keys', async () => {
+    const harness = await openSystem();
+    await type(harness, 'SERVER_NAME', 'Neu', 'server');
+    await type(harness, 'DISCORD_CLIENT_ID', '999999999999999999', 'discord');
+    await save(harness, 'server');
+    const put = harness.requests.find(request => request.method === 'PUT');
+    assert.deepEqual(JSON.parse(put.body), { password: 'geheim', values: { SERVER_NAME: 'Neu' } });
+});
+
+test('after saving one category the typed value of another is still there and still marked', async () => {
+    const harness = await openSystem();
+    await type(harness, 'SERVER_NAME', 'Neu', 'server');
+    await type(harness, 'DISCORD_CLIENT_ID', '999999999999999999', 'discord');
+    await save(harness, 'server');
+    assert.equal(harness.element('system-DISCORD_CLIENT_ID').value, '999999999999999999');
+    assert.deepEqual([...harness.app.dirtyCategories()], ['discord']);
+    assert.equal(isHidden(harness.element('system-panel-server')), false);
+});
+
+test('typing marks the category, restoring the loaded value clears the mark', async () => {
+    const harness = await openSystem();
+    await type(harness, 'SERVER_NAME', 'Neu', 'server');
+    assert.deepEqual([...harness.app.dirtyCategories()], ['server']);
+    assert.equal(isHidden(harness.element('system-nav-dot-server')), false);
+    await type(harness, 'SERVER_NAME', 'Gilde', 'server');
+    assert.deepEqual([...harness.app.dirtyCategories()], []);
+    assert.equal(isHidden(harness.element('system-nav-dot-server')), true);
+});
+
+test('the privacy text marks its category while it differs from the stored one', async () => {
+    const harness = await openSystem();
+    harness.element('system-privacy-text').value = 'Neu';
+    await harness.app.runAction('previewSystemPrivacy', {});
+    assert.deepEqual([...harness.app.dirtyCategories()], ['privacy']);
+    harness.element('system-privacy-text').value = 'Alt';
+    await harness.app.runAction('previewSystemPrivacy', {});
+    assert.deepEqual([...harness.app.dirtyCategories()], []);
+});
+
+test('a category locked by .env has a disabled save button', async () => {
+    const harness = await openSystem();
+    assert.equal(harness.element('system-save-security').disabled, true);
+    assert.equal(harness.element('system-save-server').disabled, false);
+});
+
+test('switching the category keeps typed values, never asks and loads nothing again', async () => {
+    const harness = await openSystem();
+    await type(harness, 'SERVER_NAME', 'Neu', 'server');
+    const loads = () => harness.requests.filter(request => request.url === '/api/admin/system/settings').length;
+    const before = loads();
+    await go(harness, 'system/discord');
+    await harness.app.handleRoute();
+    assert.equal(isHidden(harness.element('system-panel-discord')), false);
+    assert.equal(harness.element('system-SERVER_NAME').value, 'Neu');
+    assert.equal(harness.dialogs.length, 0);
+    assert.equal(loads(), before);
+    assert.deepEqual([...harness.app.dirtyCategories()], ['server']);
+});
+
+test('leaving with unsaved changes asks once; "Abbrechen" stays', async () => {
+    const harness = await openSystem({ confirm: false });
+    await type(harness, 'SERVER_NAME', 'Neu', 'server');
+    await go(harness, 'info');
+    assert.equal(harness.dialogs.length, 1);
+    assert.equal(harness.dialogs[0].text, 'Ungespeicherte Änderungen verwerfen?');
+    assert.equal(harness.dialogs[0].label, 'Verwerfen');
+    assert.equal(harness.location.hash, '#system/server');
+    assert.equal(harness.element('system-section').style.display, 'block');
+    assert.equal(harness.element('system-SERVER_NAME').value, 'Neu');
+});
+
+test('confirming the question leaves and forgets the marks', async () => {
+    const harness = await openSystem();
+    await type(harness, 'SERVER_NAME', 'Neu', 'server');
+    await go(harness, 'info');
+    assert.equal(harness.dialogs.length, 1);
+    assert.equal(harness.location.hash, '#info');
+    assert.deepEqual([...harness.app.dirtyCategories()], []);
+});
+
+test('leaving without changes does not ask', async () => {
+    const harness = await openSystem();
+    await go(harness, 'info');
+    assert.equal(harness.dialogs.length, 0);
+    assert.equal(harness.location.hash, '#info');
+});
+
+test('a refused save keeps input and mark', async () => {
+    const harness = await openSystem({}, httpAnswer(401, { error: 'Ungültiges Admin-Reset-Passwort.' }));
+    await type(harness, 'SERVER_NAME', 'Neu', 'server');
+    await save(harness, 'server');
+    assert.equal(harness.element('system-SERVER_NAME').value, 'Neu');
+    assert.deepEqual([...harness.app.dirtyCategories()], ['server']);
 });

@@ -31,7 +31,7 @@ test('the admin toolbar links the System page, the router guards it', () => {
     assert.match(HTML, /<a class="btn btn-ghost btn-sm" href="#system">/);
     assert.match(HTML, /<section id="system-section" class="app-section is-hidden">/);
     const router = fs.readFileSync(path.join(REPO_ROOT, 'public', 'js', 'core', 'router.js'), 'utf8');
-    assert.match(router, /case 'system':\s*\n\s*if \(state\.currentUser && state\.currentUser\.isAdmin\) \{\s*\n\s*showSystemSection\(param\);/);
+    assert.match(router, /case 'system':\s*\n\s*if \(state\.currentUser && state\.currentUser\.isAdmin\) \{\s*\n\s*return showSystemSection\(param\);/);
     assert.match(router, /system: 'admin'/);
 });
 

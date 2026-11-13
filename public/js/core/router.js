@@ -189,7 +189,7 @@ export function handleRoute() {
             break;
         case 'system':
             if (state.currentUser && state.currentUser.isAdmin) {
-                showSystemSection(param);
+                return showSystemSection(param);
             } else {
                 navigateTo('events');
             }
