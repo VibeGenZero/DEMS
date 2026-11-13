@@ -192,6 +192,6 @@ test('a failed status request says so in the card, without a toast', async () =>
 });
 
 test('the version card is the first card of the System page', () => {
-    assert.match(HTML, /<div class="system-grid">\s*<div class="glass-card system-card" id="system-update-card">/);
+    assert.match(HTML, /id="system-panel-overview"[^>]*>\s*<h3[^>]*>Übersicht<\/h3>\s*<div class="glass-card system-card" id="system-update-card">/);
     assert.match(HTML, /<div id="system-update-body"><\/div>/);
 });

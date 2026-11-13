@@ -237,6 +237,26 @@ function helpersBlock() {
     ].join(''));
 }
 
+function settingsNavBlock() {
+    const entry = (label, subtitle, icon, { current = false, changed = false } = {}) => `
+        <a class="settings-nav-item" href="#debug"${current ? ' aria-current="page"' : ''}>
+            <i class="bi ${icon}" aria-hidden="true"></i>
+            <span class="settings-nav-text"><span class="settings-nav-label">${label}</span><span class="settings-nav-sub">${subtitle}</span></span>
+            <span class="settings-nav-dot${changed ? '' : ' is-hidden'}"><span class="visually-hidden">ungespeicherte Änderungen</span></span>
+        </a>`;
+    return block('settings-nav', 'Einstellungs-Navigation', '.settings-layout > .settings-nav + .settings-panels | .settings-nav-item [aria-current="page"] | .settings-nav-dot', `
+        <div class="settings-layout">
+            <nav class="settings-nav" aria-label="Beispiel-Kategorien">
+                ${entry('Übersicht', 'Version, Status', 'bi-speedometer2', { current: true })}
+                ${entry('Discord', 'Bot, Rollen, Kanäle', 'bi-discord', { changed: true })}
+                ${entry('Server', 'Adresse, Zeitzone', 'bi-hdd-network')}
+            </nav>
+            <div class="settings-panels"><section class="settings-panel"><h3 class="settings-panel-title">Übersicht</h3>
+                <p class="text-secondary mb-0">Eine Kategorie pro Ansicht. Der Punkt zeigt ungespeicherte Änderungen. Unter 992 px wird die Liste zur scrollbaren Zeile.</p>
+            </section></div>
+        </div>`);
+}
+
 /**
  * Render one block per component.
  *
@@ -247,7 +267,7 @@ export function renderDebugComponents(container) {
     container.innerHTML = [
         buttonBlock(), cardBlock(), chipBlock(), tabsBlock(), dialogBlock(),
         toastBlock(), emptyStateBlock(), skeletonBlock(), avatarBlock(), dateTileBlock(), capacityBlock(),
-        dataTableBlock(), menuBlock(), helpersBlock()
+        dataTableBlock(), menuBlock(), settingsNavBlock(), helpersBlock()
     ].join('');
 }
 

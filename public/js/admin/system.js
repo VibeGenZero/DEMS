@@ -1,6 +1,6 @@
 /**
- * Admin page "System" (#system, #138): the database-backed configuration
- * (Discord, Server, Sicherheit). A value from .env is read-only; secrets show
+ * Admin page "System" (#system/<category>, #138): the database-backed configuration
+ * (Discord, Server, Sicherheit), one category at a time (list: system-nav.js). A value from .env is read-only; secrets show
  * only whether they are set. Saving asks for the admin reset password.
  * First card "Version": the update status (GET /api/admin/system/update-status).
  * Below: the editor of the privacy policy (no reset password, every change
@@ -10,6 +10,7 @@ import { registerActions } from '../core/actions.js';
 import { state } from '../core/state.js';
 import { escapeHtml, renderMarkdownSafe, showToast } from '../core/ui.js';
 import { mountDiscordGuide, resetDiscordGuide } from '../pages/discord-guide.js';
+import { categoryOf, showSystemCategory } from './system-nav.js';
 
 // Label and hint of each key, in the order of the page
 const SYSTEM_FIELDS = {
@@ -33,7 +34,7 @@ const SOURCE_CHIPS = {
     none: ''
 };
 
-const page = { settings: [], pending: null };
+const page = { settings: [], pending: null, category: 'overview', shown: false };
 
 const fieldId = (key) => `system-${key}`;
 
@@ -83,12 +84,18 @@ function render() {
 }
 
 /**
- * Show the page and load the settings.
+ * Show the page with one category and load the settings.
  *
+ * @param {string} [param] -> Category from the hash (`#system/<category>`); unknown or missing = overview.
  * @returns {Promise<void>}
  */
-export async function showSystemSection() {
+export async function showSystemSection(param) {
     document.getElementById('system-section').style.display = 'block';
+    const category = categoryOf(param);
+    // Only a click in the list moves the focus, not opening the page
+    showSystemCategory(category, { focus: page.shown && category !== page.category });
+    page.category = category;
+    page.shown = true;
     try {
         const res = await fetch('/api/admin/system/settings');
         const data = await res.json();
@@ -243,7 +250,7 @@ async function confirmSystemSave() {
         const botNote = data.bot && data.bot.ok ? ' Der Bot ist neu angemeldet.' : '';
         showToast(`Systemeinstellungen gespeichert.${botNote}`, 'success');
         if (data.restartRequired) showToast('Der Kommentar-Sync ändert sich erst nach einem Neustart von DEMS.', 'warning');
-        await showSystemSection();
+        await showSystemSection(page.category);
     } catch {
         showToast('Speichern fehlgeschlagen.', 'danger');
     }
