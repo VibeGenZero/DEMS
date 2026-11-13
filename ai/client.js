@@ -1,0 +1,98 @@
+'use strict';
+
+/**
+ * Picks the adapter for the configured AI provider. Settings are read from the
+ * environment at call time (they are managed system keys and change live).
+ */
+const { AiError, AI_ERROR_MESSAGES } = require('./errors');
+const openaiAdapter = require('./providers/openaiCompatible');
+const anthropicAdapter = require('./providers/anthropic');
+const mockAdapter = require('./providers/mock');
+
+const PROVIDERS = Object.freeze({
+    ollama: { label: 'Ollama (lokal oder Cloud)', adapter: 'openai', defaultBaseUrl: 'http://localhost:11434/v1', keyRequired: false },
+    openrouter: { label: 'OpenRouter', adapter: 'openai', defaultBaseUrl: 'https://openrouter.ai/api/v1', keyRequired: true },
+    openai: { label: 'OpenAI', adapter: 'openai', defaultBaseUrl: 'https://api.openai.com/v1', keyRequired: true },
+    gemini: { label: 'Google Gemini', adapter: 'openai', defaultBaseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai', keyRequired: true },
+    anthropic: { label: 'Claude (Anthropic)', adapter: 'anthropic', defaultBaseUrl: 'https://api.anthropic.com/v1', keyRequired: true }
+});
+
+const MOCK_PROVIDER = { label: 'Mock', adapter: 'mock', defaultBaseUrl: '', keyRequired: false };
+const TEST_TIMEOUT_MS = 20000;
+
+const filled = (value) => (typeof value === 'string' ? value.trim() : '');
+
+/** The provider entry for an id; `mock` only with DEV_MOCK=true. */
+function providerEntry(id) {
+    if (id === 'mock') return process.env.DEV_MOCK === 'true' ? MOCK_PROVIDER : null;
+    return Object.hasOwn(PROVIDERS, id) ? PROVIDERS[id] : null;
+}
+
+function settingsFrom(env, overrides, admin) {
+    const o = overrides || {};
+    const model = filled(o.model) || (admin ? filled(env.AI_MODEL_ADMIN) : '') || filled(env.AI_MODEL);
+    return {
+        provider: filled(o.provider) || filled(env.AI_PROVIDER),
+        baseUrl: filled(o.baseUrl) || filled(env.AI_BASE_URL),
+        apiKey: filled(o.apiKey) || filled(env.AI_API_KEY),
+        model
+    };
+}
+
+function isUsable(settings) {
+    const entry = providerEntry(settings.provider);
+    return !!entry && !!settings.model && (!entry.keyRequired || !!settings.apiKey);
+}
+
+/**
+ * Whether provider, model and (when the provider needs one) key are set.
+ *
+ * @param {Object} [env] -> Environment to read (default process.env).
+ * @returns {boolean}
+ */
+function isAiConfigured(env = process.env) {
+    return isUsable(settingsFrom(env, null, false));
+}
+
+/**
+ * Build a client for the configured provider.
+ *
+ * @param {Object} [options]
+ * @param {boolean} [options.admin] -> Use `AI_MODEL_ADMIN` (falls back to `AI_MODEL`).
+ * @param {Object|null} [options.overrides] -> `{ provider, baseUrl, apiKey, model }`, unsaved values; an empty `apiKey` keeps the stored one.
+ * @param {Object} [options.env] -> Environment to read (default process.env).
+ * @returns {{ provider: string, model: string, chat: Function, listModels: Function }}
+ * @throws {AiError} -> `unreachable` when not configured.
+ */
+function getAiClient({ admin = false, overrides = null, env = process.env } = {}) {
+    const settings = settingsFrom(env, overrides, admin);
+    if (!isUsable(settings)) throw new AiError('unreachable');
+    const entry = providerEntry(settings.provider);
+    const baseUrl = (settings.baseUrl || entry.defaultBaseUrl).replace(/\/+$/, '');
+    const adapterArgs = { baseUrl, apiKey: settings.apiKey, model: settings.model };
+    let adapter;
+    if (entry.adapter === 'mock') adapter = mockAdapter.create(adapterArgs);
+    else if (entry.adapter === 'anthropic') adapter = anthropicAdapter.create(adapterArgs);
+    else adapter = openaiAdapter.create(adapterArgs);
+    return { provider: settings.provider, model: settings.model, chat: adapter.chat, listModels: adapter.listModels };
+}
+
+/**
+ * Try one tiny request with the given (possibly unsaved) settings.
+ *
+ * @param {Object|null} [overrides] -> See getAiClient.
+ * @returns {Promise<{ ok: true, ms: number }|{ ok: false, code: string, error: string }>}
+ */
+async function testConnection(overrides = null) {
+    const started = Date.now();
+    try {
+        const client = getAiClient({ overrides });
+        await client.chat({ system: 'Antworte mit einem Wort.', messages: [{ role: 'user', text: 'Hallo' }], maxTokens: 5, timeoutMs: TEST_TIMEOUT_MS });
+        return { ok: true, ms: Date.now() - started };
+    } catch (err) {
+        const code = err instanceof AiError ? err.code : 'unreachable';
+        return { ok: false, code, error: AI_ERROR_MESSAGES[code] };
+    }
+}
+
+module.exports = { PROVIDERS, isAiConfigured, getAiClient, testConnection };

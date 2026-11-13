@@ -5,6 +5,10 @@
 const SNOWFLAKE = /^\d{17,20}$/;
 const RESET_PASSWORD_MIN = 12;
 const SERVER_NAME_MAX = 100;
+const AI_MODEL_MAX = 200;
+const AI_KEY_MAX = 500;
+// 'mock' is allowed on top of these with DEV_MOCK=true (checked at call time)
+const AI_PROVIDER_IDS = ['ollama', 'openrouter', 'openai', 'gemini', 'anthropic'];
 
 const SYSTEM_VALUE_ERRORS = Object.freeze({
     BASE_URL: 'Die Adresse (BASE_URL) muss eine vollständige Adresse mit http:// oder https:// sein, z. B. https://events.example.org.',
@@ -14,6 +18,8 @@ const SYSTEM_VALUE_ERRORS = Object.freeze({
     DISCORD_ADMIN_ROLE_ID: 'Ungültige ID für die Admin-Rolle.',
     DISCORD_ANNOUNCE_CHANNEL_ID: 'Ungültige ID für den Ankündigungskanal.',
     DISCORD_EVENT_CATEGORY_ID: 'Ungültige ID für die Kategorie der Event-Kanäle.',
+    AI_PROVIDER: 'Unbekannter KI-Anbieter.',
+    AI_BASE_URL: 'Die KI-Adresse muss mit http:// oder https:// beginnen.',
     ADMIN_RESET_PASSWORD: `Das Admin-Reset-Passwort braucht mindestens ${RESET_PASSWORD_MIN} Zeichen.`
 });
 
@@ -82,6 +88,17 @@ function normalizeSystemValue(key, raw) {
         case 'ADMIN_RESET_PASSWORD':
             if (!value) return { skip: true };
             return value.length < RESET_PASSWORD_MIN ? { error: SYSTEM_VALUE_ERRORS.ADMIN_RESET_PASSWORD } : { value };
+        case 'AI_PROVIDER':
+            if (value && !AI_PROVIDER_IDS.includes(value) && !(value === 'mock' && process.env.DEV_MOCK === 'true')) return { error: SYSTEM_VALUE_ERRORS.AI_PROVIDER };
+            return { value };
+        case 'AI_BASE_URL':
+            if (value && !/^https?:\/\/[^\s/]\S*[^\s/]$|^https?:\/\/[^\s/]$/i.test(value)) return { error: SYSTEM_VALUE_ERRORS.AI_BASE_URL };
+            return { value };
+        case 'AI_MODEL':
+        case 'AI_MODEL_ADMIN':
+            return { value: value.slice(0, AI_MODEL_MAX) };
+        case 'AI_API_KEY':
+            return value ? { value: value.slice(0, AI_KEY_MAX) } : { skip: true };
         case 'DISCORD_CLIENT_SECRET':
         case 'DISCORD_BOT_TOKEN':
             return value ? { value } : { skip: true };
