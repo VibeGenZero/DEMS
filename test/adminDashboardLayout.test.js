@@ -12,7 +12,8 @@ const STATS = {
     registrations: { total: 38, pending: 3, accepted: 29, rejected: 0, waitlisted: 4, tentative: 2 }
 };
 
-const html = fs.readFileSync(path.join(REPO_ROOT, 'public', 'index.html'), 'utf8');
+// Line endings as in the repository, also on a Windows checkout (core.autocrlf)
+const html = fs.readFileSync(path.join(REPO_ROOT, 'public', 'index.html'), 'utf8').replace(/\r\n/g, '\n');
 const adminSection = html.slice(html.indexOf('<section id="admin-section"'), html.indexOf('id="admin-stats"'));
 
 test('the admin header holds only the two main actions', () => {
