@@ -69,6 +69,7 @@ test('openai-compatible: request shape, bearer key, plain answer with usage', as
         assert.equal(req.body.model, 'gpt-x');
         assert.equal(req.body.max_completion_tokens, 400);
         assert.equal(req.body.stream, undefined);
+        assert.equal('limit' in req.body, false);
         assert.deepEqual(req.body.messages, [
             { role: 'system', content: 'Sei nett.' },
             { role: 'user', content: 'Hi' },
@@ -78,12 +79,20 @@ test('openai-compatible: request shape, bearer key, plain answer with usage', as
     } finally { await fake.stop(); }
 });
 
-test('openai-compatible: json mode sets response_format', async () => {
-    const fake = await startFake((req, res) => sendJson(res, 200, OPENAI_ANSWER));
+test('json mode asks by prompt, not through response_format (both adapters)', async () => {
+    const fake = await startFake((req, res) => {
+        if (req.url.endsWith('/messages')) return sendJson(res, 200, { content: [{ type: 'text', text: '{}' }], usage: {} });
+        return sendJson(res, 200, OPENAI_ANSWER);
+    });
     try {
-        const client = openai.create({ baseUrl: fake.baseUrl, apiKey: SECRET, model: 'm' });
-        await client.chat({ system: 's', messages: MESSAGES, maxTokens: 10, timeoutMs: 5000, json: true });
-        assert.deepEqual(fake.requests[0].body.response_format, { type: 'json_object' });
+        for (const adapter of [openai, anthropic]) {
+            const client = adapter.create({ baseUrl: fake.baseUrl, apiKey: SECRET, model: 'm' });
+            await client.chat({ system: 'Sei nett.', messages: MESSAGES, maxTokens: 10, timeoutMs: 5000, json: true });
+        }
+        const [a, b] = fake.requests.map((r) => r.body);
+        assert.equal('response_format' in a, false);
+        assert.match(a.messages[0].content, /^Sei nett[.][^]+JSON/);
+        assert.match(b.system, /^Sei nett[.][^]+JSON/);
     } finally { await fake.stop(); }
 });
 
@@ -109,6 +118,8 @@ test('openai-compatible: a 400 on max_completion_tokens is retried once with max
         assert.equal(fake.requests.length, 2);
         assert.equal(fake.requests[1].body.max_tokens, 77);
         assert.equal(fake.requests[1].body.max_completion_tokens, undefined);
+        assert.equal('limit' in fake.requests[0].body, false);
+        assert.equal('limit' in fake.requests[1].body, false);
     } finally { await fake.stop(); }
 });
 

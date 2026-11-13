@@ -2,6 +2,7 @@
 
 const { AiError, errorFromStatus, errorFromThrown } = require('../errors');
 const { readServerSentEvents } = require('./sse');
+const { JSON_HINT } = require('./jsonHint');
 
 const DEFAULT_TIMEOUT_MS = 60000;
 
@@ -39,11 +40,12 @@ function create({ baseUrl, apiKey, model, fetchImpl = fetch }) {
     // Newer OpenAI models reject max_tokens, some compatible servers only know it.
     // So the newer name goes first and the old one is the single fallback after a 400.
     async function post(body, { timeoutMs, signal }) {
+        const { limit, ...rest } = body;
         const combined = signalFor(timeoutMs, signal);
         const attempt = (limitKey) => send(`${root}/chat/completions`, {
             method: 'POST',
             headers: headers({ 'Content-Type': 'application/json' }),
-            body: JSON.stringify({ ...body, [limitKey]: body.limit }),
+            body: JSON.stringify({ ...rest, [limitKey]: limit }),
             signal: combined,
         }, signal);
         let response = await attempt('max_completion_tokens');
@@ -59,15 +61,15 @@ function create({ baseUrl, apiKey, model, fetchImpl = fetch }) {
     }
 
     async function chat({ system, messages, maxTokens, timeoutMs, signal, onToken, json }) {
+        const systemText = [system, json ? JSON_HINT : ''].filter(Boolean).join('\n\n');
         const body = {
             model,
             messages: [
-                ...(system ? [{ role: 'system', content: system }] : []),
+                ...(systemText ? [{ role: 'system', content: systemText }] : []),
                 ...messages.map((m) => ({ role: m.role, content: m.text })),
             ],
             limit: maxTokens,
         };
-        if (json) body.response_format = { type: 'json_object' };
         if (onToken) {
             body.stream = true;
             body.stream_options = { include_usage: true };

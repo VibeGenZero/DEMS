@@ -2,11 +2,11 @@
 
 const { AiError, errorFromStatus, errorFromThrown } = require('../errors');
 const { readServerSentEvents } = require('./sse');
+const { JSON_HINT } = require('./jsonHint');
 
 const DEFAULT_TIMEOUT_MS = 60000;
 // Long-standing stable version; the provider keeps existing parameters per version.
 const API_VERSION = '2023-06-01';
-const JSON_HINT = 'Respond with valid JSON only, without any other text.';
 
 /**
  * Adapter for the Anthropic Messages API.
