@@ -2,7 +2,7 @@
  * Event page: banner, sidebar, participants, series dates.
  */
 import { state } from '../core/state.js';
-import { navigateTo } from '../core/router.js';
+import { navigateTo, onRouteLeave } from '../core/router.js';
 import { registerActions } from '../core/actions.js';
 import { applyStyleData, escapeHtml, isValidBannerUrl, renderMarkdownSafe, showElement, showToast, toggleElement } from '../core/ui.js';
 import { avatar } from '../core/components.js';
@@ -16,6 +16,7 @@ import { startCountdown } from './countdown.js';
 import { revealDetail } from './detail-motion.js';
 import { renderOfferCard } from './offer.js';
 import { renderBench, renderTentativeAction, renderTentativeCard } from './bench.js';
+import { mountEventAssistant, unmountEventAssistant } from './assistant.js';
 
 export const GRADIENT_PRESETS = [
     'linear-gradient(135deg, #6d28d9 0%, #8b5cf6 100%)',
@@ -286,6 +287,7 @@ export async function showEventDetail(eventId, { celebrate, fromTaken } = {}) {
     resetGuestSelection();
     resetEventDetailAreas();
     state.detailEventId = eventId;
+    onRouteLeave(unmountEventAssistant);
 
     const section = document.getElementById('event-detail-section');
     section.style.display = 'block';
@@ -295,6 +297,7 @@ export async function showEventDetail(eventId, { celebrate, fromTaken } = {}) {
         if (!res.ok) throw new Error('Not found');
         const event = await res.json();
         if (state.detailEventId !== eventId) return;
+        mountEventAssistant(event);
 
         // Banner
         renderDetailBanner(event);

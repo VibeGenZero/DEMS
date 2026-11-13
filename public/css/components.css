@@ -1162,6 +1162,385 @@ button.chip.active,
 }
 
 /* ═══════════════════════════════════════════ */
+/* ASSISTANT                                   */
+/* Chat bubble of the event page: round button */
+/* bottom right, hint and chat panel           */
+/* (events/assistant.js)                       */
+/* ═══════════════════════════════════════════ */
+/* The box is the round button; hint and panel stand above it. Inside the event
+   section, which only fades (a transform would make it the frame of this fixed box). */
+.assistant {
+  --assistant-fab-size: calc(var(--space-48) + var(--space-4));
+  --assistant-gap: var(--space-24);
+  --assistant-bottom: var(--assistant-gap);
+  position: fixed;
+  right: var(--assistant-gap);
+  bottom: var(--assistant-bottom);
+  z-index: var(--z-banner);
+  width: var(--assistant-fab-size);
+  height: var(--assistant-fab-size);
+}
+
+.assistant-fab {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--accent-fill);
+  color: var(--on-accent);
+  font-size: var(--font-size-2xl);
+  box-shadow: var(--shadow-md), var(--shadow-glow);
+  transition: background-color var(--duration-fast) var(--ease-standard), translate var(--duration-fast) var(--ease-standard);
+}
+
+.assistant-fab:hover {
+  background: var(--accent-fill-hover);
+  translate: 0 calc(-1 * var(--space-4) / 2);
+}
+
+.assistant-fab:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-ring), var(--shadow-md);
+}
+
+/* The "online" dot of the button */
+.assistant-fab::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: var(--space-12);
+  height: var(--space-12);
+  border: 2px solid var(--bg-primary);
+  border-radius: var(--radius-pill);
+  background: var(--success-fill);
+}
+
+/* Beside the button, not above it: above it, it would cover the sidebar's
+   "Teilnehmen" on a desktop screen */
+.assistant-teaser {
+  position: absolute;
+  right: calc(100% + var(--space-12));
+  bottom: 0;
+  width: max-content;
+  max-width: min(15rem, calc(100vw - 2 * var(--assistant-gap) - var(--assistant-fab-size) - var(--space-12)));
+  padding: var(--space-8) var(--space-32) var(--space-8) var(--space-12);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius) var(--radius) var(--space-4) var(--radius);
+  background: var(--bg-card);
+  color: var(--text-primary);
+  font-size: var(--font-size-sm);
+  line-height: 1.4;
+  box-shadow: var(--shadow-md);
+}
+
+.assistant-teaser-name {
+  display: block;
+  margin-bottom: var(--space-4);
+  color: var(--accent-text);
+  font-size: var(--font-size-xs);
+}
+
+.assistant-teaser-close {
+  position: absolute;
+  top: var(--space-8);
+  right: var(--space-8);
+  font-size: var(--font-size-xs);
+}
+
+.assistant-panel {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + var(--space-12));
+  display: flex;
+  flex-direction: column;
+  width: min(22rem, calc(100vw - 2 * var(--assistant-gap)));
+  height: min(34rem, calc(100dvh - var(--navbar-height) - var(--assistant-bottom) - var(--assistant-fab-size) - 2 * var(--space-12)));
+  overflow: hidden;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  background: var(--bg-card);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-lg);
+  transform-origin: bottom right;
+}
+
+/* Hint and panel pop up; with "reduce motion" they simply appear */
+@media (prefers-reduced-motion: no-preference) {
+  .assistant-teaser,
+  .assistant-panel {
+    animation: assistant-pop var(--duration-base) var(--ease-standard);
+  }
+}
+
+@keyframes assistant-pop {
+  from {
+    opacity: 0;
+    transform: translateY(var(--space-8)) scale(0.96);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.assistant-head {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-12);
+  padding: var(--space-12) var(--space-12) var(--space-12) var(--space-16);
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--bg-secondary);
+}
+
+.assistant-head-icon {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: var(--space-32);
+  height: var(--space-32);
+  border-radius: var(--radius-pill);
+  background: var(--accent-tint-2);
+  color: var(--accent-text);
+}
+
+.assistant-head-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  font-size: var(--font-size-sm);
+  line-height: 1.3;
+}
+
+.assistant-head-event {
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: var(--font-size-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.assistant-messages {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--space-8);
+  min-height: 0;
+  padding: var(--space-12);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  font-size: var(--font-size-sm);
+  line-height: 1.45;
+}
+
+.assistant-message {
+  max-width: 85%;
+  padding: var(--space-8) var(--space-12);
+  overflow-wrap: anywhere;
+}
+
+.assistant-message.is-bot {
+  align-self: flex-start;
+  border-radius: var(--radius) var(--radius) var(--radius) var(--space-4);
+  background: var(--bg-tint-2);
+  color: var(--text-primary);
+}
+
+.assistant-message.is-user {
+  align-self: flex-end;
+  border-radius: var(--radius) var(--radius) var(--space-4) var(--radius);
+  background: var(--accent-fill);
+  color: var(--on-accent);
+}
+
+/* A refusal or an error of the server, in its own words */
+.assistant-message.is-warning {
+  border: 1px solid var(--warning-border);
+  background: var(--warning-bg);
+  color: var(--warning);
+}
+
+/* Rendered Markdown of an answer: no outer margins; links in the text colour (tint-2 is too light for --accent-text) */
+.assistant-message :is(p, ul, ol) {
+  margin: 0;
+}
+
+.assistant-message :is(p, ul, ol) + :is(p, ul, ol) {
+  margin-top: var(--space-8);
+}
+
+.assistant-message :is(ul, ol) {
+  padding-left: var(--space-16);
+}
+
+.assistant-message a {
+  color: var(--text-primary);
+  text-decoration: underline;
+}
+
+.assistant-source {
+  display: flex;
+  width: fit-content;
+  margin-top: var(--space-8);
+}
+
+/* Three dots while the answer is being written */
+.assistant-typing {
+  display: inline-flex;
+  gap: var(--space-4);
+  padding-block: var(--space-8);
+}
+
+.assistant-typing > span {
+  width: 0.375rem;
+  height: 0.375rem;
+  border-radius: var(--radius-pill);
+  background: var(--text-muted);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .assistant-typing > span {
+    animation: assistant-typing calc(2 * var(--duration-slow)) var(--ease-standard) infinite;
+  }
+
+  .assistant-typing > span:nth-child(2) {
+    animation-delay: calc(var(--duration-slow) / 3);
+  }
+
+  .assistant-typing > span:nth-child(3) {
+    animation-delay: calc(2 * var(--duration-slow) / 3);
+  }
+}
+
+@keyframes assistant-typing {
+  0%,
+  80%,
+  100% {
+    opacity: 0.3;
+  }
+
+  40% {
+    opacity: 1;
+  }
+}
+
+/* A fieldset, so one disabled switch turns off all three while an answer runs */
+.assistant-suggestions {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  gap: var(--space-8);
+  min-width: 0;
+  margin: 0;
+  padding: 0 var(--space-12) var(--space-8);
+  border: 0;
+}
+
+.assistant-suggestions .chip:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.assistant-form {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-8);
+  padding: var(--space-8) var(--space-12);
+  border-top: 1px solid var(--border-subtle);
+}
+
+/* 16 px text: a smaller one makes phones zoom into the field */
+.assistant-input {
+  flex: 1;
+  min-width: 0;
+  /* As high as the send button (.btn, 40 px) */
+  height: 2.5rem;
+  padding: 0 var(--space-16);
+  border-radius: var(--radius-pill);
+  font-size: var(--font-size-md);
+}
+
+.assistant-send {
+  flex: none;
+  border-radius: var(--radius-pill);
+}
+
+.assistant-note {
+  flex: none;
+  margin: 0;
+  padding: 0 var(--space-12) var(--space-8);
+  color: var(--text-muted);
+  font-size: var(--font-size-xs);
+  text-align: center;
+}
+
+/* A page with the phone action bar (event page, .has-action-bar) keeps the button above it, like the toasts */
+@media (max-width: 991.98px) {
+  .has-action-bar .assistant {
+    --assistant-bottom: calc(var(--assistant-gap) + var(--space-64) + env(safe-area-inset-bottom));
+  }
+}
+
+/* Phone: the open panel fills the screen below the navbar. The event section
+   is a stacking context of its own (its fade), so the navbar stays above
+   anything in it, whatever the layer. */
+@media (max-width: 575.98px) {
+  .assistant {
+    --assistant-gap: var(--space-16);
+  }
+
+  .assistant-panel {
+    position: fixed;
+    inset: var(--navbar-height) 0 0;
+    width: auto;
+    height: auto;
+    border: 0;
+    border-radius: 0;
+  }
+}
+
+/* Styleguide sample: in the flow of the page instead of fixed in the corner */
+.assistant.is-static {
+  position: static;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--space-12);
+  width: auto;
+  height: auto;
+}
+
+.assistant.is-static .assistant-fab {
+  width: var(--assistant-fab-size);
+  height: var(--assistant-fab-size);
+}
+
+/* relative: the hint keeps its close button in its own corner */
+.assistant.is-static .assistant-teaser,
+.assistant.is-static .assistant-panel {
+  position: relative;
+  inset: auto;
+  max-width: 100%;
+}
+
+.assistant.is-static .assistant-panel {
+  width: min(22rem, 100%);
+  height: 28rem;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+}
+
+/* ═══════════════════════════════════════════ */
 /* START STATE                                 */
 /* Markup carries no style attributes: the CSP */
 /* forbids them (style-src-attr 'none')        */

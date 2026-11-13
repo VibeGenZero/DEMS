@@ -564,6 +564,45 @@
           </div>
         </div><!-- /event-page -->
       </div><!-- /container -->
+
+      <!-- Event assistant: chat bubble bottom right (events/assistant.js mounts it for an active event) -->
+      <div id="event-assistant" class="assistant is-hidden">
+        <div id="assistant-teaser" class="assistant-teaser is-hidden">
+          <button type="button" class="btn-close assistant-teaser-close" data-click="closeAssistantTeaser" aria-label="Hinweis schließen"></button>
+          <strong id="assistant-teaser-name" class="assistant-teaser-name">Event-Assistent</strong>
+          <span id="assistant-teaser-text"></span>
+        </div>
+        <button id="assistant-toggle" type="button" class="assistant-fab" data-click="toggleAssistant" aria-label="Event-Assistent öffnen" aria-expanded="false" aria-controls="assistant-panel">
+          <i class="bi bi-chat-dots" aria-hidden="true"></i>
+        </button>
+        <section id="assistant-panel" class="assistant-panel is-hidden" role="dialog" aria-label="Event-Assistent">
+          <header class="assistant-head">
+            <span class="assistant-head-icon" aria-hidden="true"><i class="bi bi-stars"></i></span>
+            <div class="assistant-head-text">
+              <strong id="assistant-name">Event-Assistent</strong>
+              <small id="assistant-event-title" class="assistant-head-event"></small>
+            </div>
+            <button type="button" class="btn btn-ghost btn-icon btn-sm assistant-close" data-click="toggleAssistant" aria-label="Event-Assistent schließen">
+              <i class="bi bi-x-lg" aria-hidden="true"></i>
+            </button>
+          </header>
+          <div id="assistant-messages" class="assistant-messages" aria-live="polite"></div>
+          <fieldset id="assistant-suggestions" class="assistant-suggestions">
+            <legend class="visually-hidden">Vorschläge</legend>
+            <button type="button" class="chip chip-sm" data-click="askSuggestedQuestion" data-question="Wann geht es los?">Wann geht es los?</button>
+            <button type="button" class="chip chip-sm" data-click="askSuggestedQuestion" data-question="Was sind die Regeln?">Was sind die Regeln?</button>
+            <button type="button" class="chip chip-sm" data-click="askSuggestedQuestion" data-question="Darf ich mitmachen?">Darf ich mitmachen?</button>
+          </fieldset>
+          <form id="assistant-form" class="assistant-form">
+            <label for="assistant-input" class="visually-hidden">Deine Frage</label>
+            <input id="assistant-input" type="text" class="form-control assistant-input" maxlength="500" autocomplete="off" placeholder="Frage eingeben …">
+            <button id="assistant-send" type="button" class="btn btn-primary btn-icon assistant-send" data-click="sendAssistantQuestion" aria-label="Frage senden">
+              <i class="bi bi-arrow-right" aria-hidden="true"></i>
+            </button>
+          </form>
+          <p class="assistant-note">KI-Antworten können Fehler enthalten. Im Zweifel gilt die Eventbeschreibung.</p>
+        </section>
+      </div>
     </section>
 
     <!-- ── PROFILE SECTION ── -->

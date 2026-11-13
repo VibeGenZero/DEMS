@@ -5,7 +5,7 @@ const path = require('path');
 const { loadFrontendApp, frontendSources, REPO_ROOT } = require('./helpers');
 
 const INDEX_HTML = fs.readFileSync(path.join(REPO_ROOT, 'public', 'index.html'), 'utf8');
-const BLOCKS = ['button', 'card', 'chip', 'tabs', 'dialog', 'toast', 'empty-state', 'skeleton', 'avatar', 'date-tile', 'capacity', 'data-table', 'menu', 'settings-nav', 'helpers'];
+const BLOCKS = ['button', 'card', 'chip', 'tabs', 'dialog', 'toast', 'empty-state', 'skeleton', 'avatar', 'date-tile', 'capacity', 'data-table', 'menu', 'settings-nav', 'assistant', 'helpers'];
 
 test('the styleguide renders one block per component, in the order of the library', async () => {
     const { app } = await loadFrontendApp({});
