@@ -1135,6 +1135,11 @@
 
         <div class="editor-body">
           <div class="editor-form">
+            <!-- Shown when unsaved input from an earlier visit was put back (admin/editor-page.js) -->
+            <div class="editor-restored is-hidden" id="event-editor-restored" role="status">
+              <span>Ungespeicherter Entwurf wiederhergestellt</span>
+              <button type="button" class="btn btn-secondary btn-sm" data-click="discardEditorDraft">Verwerfen</button>
+            </div>
             <form id="event-form">
               <input type="hidden" id="event-edit-id" value="">
 

@@ -104,7 +104,10 @@ test('opening the editor again after leaving starts fresh', async () => {
     const harness = await openApp();
     await go(harness, 'event-editor/new');
     harness.element('event-title').value = 'Alt';
+    // Unsaved input: the question is confirmed, then the browser routes on the hash change
     await go(harness, 'admin');
+    await harness.app.handleRoute();
+    assert.equal(harness.dialogs.length, 1);
     await go(harness, 'event-editor/new');
     assert.equal(harness.element('event-title').value, '');
 });
@@ -240,4 +243,210 @@ test('the layout names its parts and the modal padding is gone', () => {
     const css = fs.readFileSync(path.join(REPO_ROOT, 'public', 'css', 'style.css'), 'utf8');
     assert.match(css, /@media \(min-width: 1200px\) \{[^@]*\.editor-body \{/);
     assert.equal(harnessQuery(), '(min-width: 1200px)');
+});
+
+// ─── Not losing work: stored draft, restore, leave question ───
+
+const stored = (draft, extra = {}) => JSON.stringify({ draft, step: 3, baseUpdatedAt: '', savedAt: '2026-11-13T19:14:00.000Z', ...extra });
+const NEW_KEY = 'dems_event_draft_new';
+const E1_KEY = 'dems_event_draft_e1';
+
+async function typeTitle(harness, title) {
+    harness.element('event-title').value = title;
+    harness.app.editorChanged();
+    await harness.advance(800);
+}
+
+test('a filled wizard survives collect -> apply -> collect unchanged', async () => {
+    const harness = await openApp();
+    await go(harness, 'event-editor/new');
+    const set = (id, value) => { harness.element(id).value = value; };
+    set('event-title', 'Raid');
+    harness.state.descriptionEditor.value('**Text**');
+    set('event-banner-url', '/uploads/banners/x.png');
+    harness.app.wizardGoTo(2);
+    harness.state.startDatePicker.setDate('2026-12-01T19:00:00.000Z');
+    harness.state.endDatePicker.setDate('2026-12-01T22:00:00.000Z');
+    harness.state.registrationDeadlinePicker.setDate('2026-11-30T18:00:00.000Z');
+    harness.state.unregisterDeadlinePicker.setDate('2026-12-01T12:00:00.000Z');
+    set('event-status', 'draft');
+    set('event-max', '20');
+    set('event-category', 'Raid');
+    set('event-access', 'role-required');
+    set('event-approval', 'instant');
+    set('event-reminder', '24, 1');
+    set('event-checkin-message', 'Willkommen');
+    harness.element('event-auto-create-channels').checked = true;
+    set('event-channel-type', 'both');
+    set('event-voice-name', 'Raid Voice');
+    set('event-text-name', 'raid-text');
+    harness.element('event-allow-guests').checked = false;
+    harness.element('event-allow-tentative').checked = true;
+    harness.element('event-recurring').checked = true;
+    set('event-recurring-interval', 'biweekly');
+    set('event-recurring-until', '2027-01-31');
+    set('event-msg-registration', 'A');
+    set('event-msg-accepted', 'B');
+    set('event-msg-rejected', 'C');
+    set('event-location-text', 'Voice 1');
+    set('event-location-channel-id', '123456789012345678');
+    set('event-location-channel-type', 'voice');
+    // A colour input always holds a colour in the browser
+    set('event-accent-color', '#22c55e');
+
+    const before = JSON.stringify(harness.app.collectEventDraft());
+    await harness.app.resetWizard();
+    assert.notEqual(JSON.stringify(harness.app.collectEventDraft()), before);
+    await harness.app.applyDraft(JSON.parse(before));
+    assert.equal(JSON.stringify(harness.app.collectEventDraft()), before);
+});
+
+test('a change is stored after the pause and the note shows the time', async () => {
+    const harness = await openApp({}, { timers: true });
+    await go(harness, 'event-editor/new');
+    assert.equal(isHidden(harness.element('event-editor-saved')), true);
+    harness.element('event-title').value = 'Raid';
+    harness.app.wizardGoTo(2);
+    harness.app.editorChanged();
+    await harness.advance(799);
+    assert.equal(harness.localStorage.getItem(NEW_KEY), null);
+    await harness.advance(1);
+    const kept = JSON.parse(harness.localStorage.getItem(NEW_KEY));
+    assert.equal(kept.draft.title, 'Raid');
+    assert.equal(kept.step, 2);
+    assert.equal(kept.baseUpdatedAt, '');
+    assert.match(harness.element('event-editor-saved').textContent, /^Entwurf gesichert \d\d:\d\d$/);
+    assert.equal(isHidden(harness.element('event-editor-saved')), false);
+});
+
+test('input that is back at the loaded state is not kept', async () => {
+    const harness = await openApp({}, { timers: true });
+    await go(harness, 'event-editor/new');
+    await typeTitle(harness, 'Raid');
+    assert.ok(harness.localStorage.getItem(NEW_KEY));
+    await typeTitle(harness, '');
+    assert.equal(harness.localStorage.getItem(NEW_KEY), null);
+    assert.equal(isHidden(harness.element('event-editor-saved')), true);
+});
+
+test('reopening restores draft and step and shows the banner', async () => {
+    const harness = await openApp({}, { storage: { [NEW_KEY]: stored({ title: 'Gesichert', status: 'draft', maxParticipants: '12' }) } });
+    await go(harness, 'event-editor/new');
+    assert.equal(harness.element('event-title').value, 'Gesichert');
+    assert.equal(harness.element('event-max').value, '12');
+    assert.equal(harness.element('wizard-step-counter').textContent, 'Schritt 3 von 5');
+    assert.equal(isHidden(harness.element('event-editor-restored')), false);
+    assert.match(HTML, /id="event-editor-restored"[^>]*>\s*<span>Ungespeicherter Entwurf wiederhergestellt<\/span>\s*<button[^>]*data-click="discardEditorDraft"[^>]*>Verwerfen<\/button>/);
+    assert.match(harness.element('event-editor-saved').textContent, /^Entwurf gesichert \d\d:\d\d$/);
+});
+
+test('without a stored draft there is no banner', async () => {
+    const harness = await openApp();
+    await go(harness, 'event-editor/new');
+    assert.equal(isHidden(harness.element('event-editor-restored')), true);
+});
+
+test('a draft of an event changed on the server is dropped with a note', async () => {
+    const harness = await openApp({}, { storage: { [E1_KEY]: stored({ title: 'Alt getippt' }, { baseUpdatedAt: 'T0' }) } });
+    await go(harness, 'event-editor/e1');
+    assert.equal(harness.element('event-title').value, 'Raid');
+    assert.ok(harness.toasts.includes('Der gespeicherte Entwurf war veraltet und wurde verworfen.'));
+    assert.equal(harness.localStorage.getItem(E1_KEY), null);
+    assert.equal(isHidden(harness.element('event-editor-restored')), true);
+});
+
+test('a draft based on the current event is restored over it', async () => {
+    const harness = await openApp({}, { storage: { [E1_KEY]: stored({ title: 'Weitergetippt', status: 'active' }, { baseUpdatedAt: 'T1', step: 1 }) } });
+    await go(harness, 'event-editor/e1');
+    assert.equal(harness.element('event-title').value, 'Weitergetippt');
+    assert.equal(harness.element('event-edit-id').value, 'e1');
+    assert.equal(isHidden(harness.element('event-editor-restored')), false);
+});
+
+test('"Verwerfen" removes the draft and shows the server state', async () => {
+    const harness = await openApp({}, { storage: { [E1_KEY]: stored({ title: 'Weitergetippt' }, { baseUpdatedAt: 'T1' }) } });
+    await go(harness, 'event-editor/e1');
+    await harness.app.runAction('discardEditorDraft', {});
+    assert.equal(harness.element('event-title').value, 'Raid');
+    assert.equal(harness.localStorage.getItem(E1_KEY), null);
+    assert.equal(isHidden(harness.element('event-editor-restored')), true);
+    assert.equal(isHidden(harness.element('event-editor-saved')), true);
+    assert.equal(harness.element('wizard-step-counter').textContent, 'Schritt 1 von 5');
+});
+
+test('a prefill wins over a stored draft of a new event', async () => {
+    const harness = await openApp({}, { storage: { [NEW_KEY]: stored({ title: 'Gesichert' }) } });
+    await harness.app.openEventEditor({ prefill: { title: 'Aus Vorlage' } });
+    assert.equal(harness.element('event-title').value, 'Aus Vorlage');
+    assert.equal(harness.localStorage.getItem(NEW_KEY), null);
+    assert.equal(isHidden(harness.element('event-editor-restored')), true);
+});
+
+test('saving clears the stored draft and does not ask on the way out', async () => {
+    const harness = await openApp({ '/api/admin/events': { id: 'neu' } }, { timers: true });
+    await go(harness, 'event-editor/new');
+    harness.element('event-status').value = 'draft';
+    await typeTitle(harness, 'Raidnacht');
+    assert.ok(harness.localStorage.getItem(NEW_KEY));
+    await harness.app.saveEvent();
+    assert.equal(harness.localStorage.getItem(NEW_KEY), null);
+    await harness.app.handleRoute();
+    assert.equal(harness.dialogs.length, 0);
+    assert.equal(harness.location.hash, '#admin');
+});
+
+test('leaving a changed editor asks; "Abbrechen" keeps page, input and the stored draft', async () => {
+    const harness = await openApp({}, { confirm: false, timers: true });
+    await go(harness, 'event-editor/new');
+    await typeTitle(harness, 'Raid');
+    await go(harness, 'admin');
+    assert.equal(harness.dialogs.length, 1);
+    assert.equal(harness.dialogs[0].text, 'Ungespeicherte Änderungen verwerfen?');
+    assert.equal(harness.dialogs[0].label, 'Verwerfen');
+    assert.equal(harness.location.hash, '#event-editor/new');
+    assert.equal(harness.element('event-editor-section').style.display, 'block');
+    assert.equal(harness.element('event-title').value, 'Raid');
+    assert.ok(harness.localStorage.getItem(NEW_KEY));
+});
+
+test('a confirmed leave forgets the stored draft', async () => {
+    const harness = await openApp({}, { timers: true });
+    await go(harness, 'event-editor/new');
+    await typeTitle(harness, 'Raid');
+    await go(harness, 'admin');
+    assert.equal(harness.dialogs.length, 1);
+    await harness.app.handleRoute();
+    assert.equal(harness.localStorage.getItem(NEW_KEY), null);
+    await go(harness, 'event-editor/new');
+    assert.equal(harness.element('event-title').value, '');
+    assert.equal(isHidden(harness.element('event-editor-restored')), true);
+});
+
+test('leaving an untouched editor does not ask and leaves the history alone', async () => {
+    const harness = await openApp();
+    await go(harness, 'event-editor/e1');
+    await go(harness, 'admin');
+    assert.equal(harness.dialogs.length, 0);
+    assert.deepEqual(harness.historyCalls, []);
+    assert.equal(harness.location.hash, '#admin');
+});
+
+test('"Zurück" with unsaved input asks as well', async () => {
+    const harness = await openApp({}, { confirm: false, timers: true });
+    await go(harness, 'event-editor/new');
+    await typeTitle(harness, 'Raid');
+    await harness.app.runAction('closeEventEditor', {});
+    await harness.app.handleRoute();
+    assert.equal(harness.dialogs.length, 1);
+    assert.equal(harness.location.hash, '#event-editor/new');
+});
+
+test('a storage that throws leaves the editor usable and shows no note', async () => {
+    const harness = await openApp({}, { storage: 'throws', timers: true });
+    await go(harness, 'event-editor/new');
+    await typeTitle(harness, 'Raid');
+    assert.equal(harness.element('event-title').value, 'Raid');
+    assert.equal(isHidden(harness.element('event-editor-saved')), true);
+    assert.deepEqual(harness.toasts, []);
+    assert.equal(isHidden(harness.element('event-editor-restored')), true);
 });

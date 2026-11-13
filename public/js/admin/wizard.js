@@ -277,6 +277,28 @@ export async function fillWizard(fields) {
 }
 
 /**
+ * Put collected input back into the wizard: everything collectEventDraft() reads,
+ * including dates, status and the repeat fields that fillWizard() leaves alone.
+ *
+ * @param {Object} draft -> Result of collectEventDraft() (e.g. kept by editor-draft.js).
+ * @returns {Promise<void>}
+ */
+export async function applyDraft(draft) {
+    ensureDatePickers();
+    state.startDatePicker.setDate(draft.startDate || null);
+    state.endDatePicker.setDate(draft.endDate || null);
+    DEADLINE_PICKERS.forEach(({ key, field }) => state[key].setDate(draft[field] || null));
+    document.getElementById('event-status').value = draft.status || 'active';
+    document.getElementById('event-recurring').checked = !!draft.recurring;
+    toggleElement(document.getElementById('recurring-options'), !!draft.recurring);
+    document.getElementById('event-recurring-interval').value = draft.recurringInterval || 'weekly';
+    document.getElementById('event-recurring-until').value = draft.recurringUntil || '';
+    if (draft.fromPoll) state.pendingPollDecision = draft.fromPoll;
+    await fillWizard(draft);
+    updateStartRequired();
+}
+
+/**
  * Load an event into the wizard and show step 1.
  *
  * @param {string} eventId -> The event document ID.

@@ -542,7 +542,15 @@ async function loadFrontendApp(routes, { storage = {}, confirm = true, reducedMo
             constructor() { this.text = ''; this.codemirror = { refresh: noop }; }
             value(text) { if (text === undefined) return this.text; this.text = text; }
         },
-        flatpickr: () => ({ setDate: noop, clear: noop, selectedDates: [] })
+        // Keeps the date it is given, like the real picker; no calendar, no onChange
+        flatpickr: () => {
+            const picker = {
+                selectedDates: [],
+                setDate(value) { picker.selectedDates = value ? [new Date(value)] : []; },
+                clear() { picker.selectedDates = []; }
+            };
+            return picker;
+        }
     });
     context.window = context;
     const app = {};
