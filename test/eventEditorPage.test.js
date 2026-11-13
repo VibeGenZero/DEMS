@@ -236,7 +236,7 @@ test('leaving the editor drops a preview that still waits', async () => {
 
 test('the layout names its parts and the modal padding is gone', () => {
     const section = HTML.slice(HTML.indexOf('<section id="event-editor-section"'), HTML.indexOf('<section id="insights-section"'));
-    for (const name of ['editor-topbar', 'editor-body', 'editor-form', 'editor-footer', 'editor-preview', 'editor-assist']) {
+    for (const name of ['editor-topbar', 'editor-body', 'editor-form', 'editor-footer', 'editor-preview-column', 'editor-assist']) {
         assert.match(section, new RegExp(`class="${name}[ "]`), name);
     }
     assert.match(section, /<div class="wizard-head">/);
@@ -449,4 +449,15 @@ test('a storage that throws leaves the editor usable and shows no note', async (
     assert.equal(isHidden(harness.element('event-editor-saved')), true);
     assert.deepEqual(harness.toasts, []);
     assert.equal(isHidden(harness.element('event-editor-restored')), true);
+});
+
+test('the layout uses no class name of the Markdown editor inside it', () => {
+    // EasyMDE styles .editor-toolbar, .editor-preview, .editor-preview-side, .editor-statusbar ...; a shared name would style both
+    const vendor = fs.readFileSync(path.join(REPO_ROOT, 'public', 'vendor', 'easymde', 'easymde.min.css'), 'utf8');
+    const taken = new Set([...vendor.matchAll(/\.(editor-[a-z-]+)/g)].map(match => match[1]));
+    assert.ok(taken.has('editor-preview'));
+    const section = HTML.slice(HTML.indexOf('<section id="event-editor-section"'), HTML.indexOf('<section id="insights-section"'));
+    const used = new Set([...section.matchAll(/class="([^"]*)"/g)].flatMap(match => match[1].split(/\s+/)).filter(name => name.startsWith('editor-')));
+    assert.ok(used.size >= 8);
+    assert.deepEqual([...used].filter(name => taken.has(name)), []);
 });

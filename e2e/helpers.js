@@ -118,4 +118,27 @@ async function navigate(page, route) {
     await closeMenu(page);
 }
 
-module.exports = { watchErrors, loginAs, openMenu, closeMenu, navigate, waitForDialog };
+/**
+ * Leave the event editor through "Zurück" of its top bar. With unsaved input
+ * the editor asks first; the question is answered with "Verwerfen".
+ *
+ * @param {import('@playwright/test').Page} page -> Page showing the editor.
+ * @returns {Promise<void>} -> Resolves when the editor is gone.
+ */
+async function closeEditor(page) {
+    const section = page.locator('#event-editor-section');
+    const question = page.locator('#confirmModal');
+    await section.locator('.editor-topbar [data-click="closeEventEditor"]').click();
+    await Promise.race([
+        question.waitFor({ state: 'visible' }),
+        section.waitFor({ state: 'hidden' })
+    ]);
+    if (await question.isVisible()) {
+        await waitForDialog(page, '#confirmModal');
+        await expect(page.locator('#confirm-modal-text')).toHaveText('Ungespeicherte Änderungen verwerfen?');
+        await page.locator('#confirm-modal-ok').click();
+    }
+    await expect(section).toBeHidden();
+}
+
+module.exports = { watchErrors, loginAs, openMenu, closeMenu, navigate, waitForDialog, closeEditor };

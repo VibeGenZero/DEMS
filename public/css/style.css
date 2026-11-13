@@ -3524,7 +3524,7 @@ a.info-version-badge:focus-visible {
   border-top: 1px solid var(--border-subtle);
 }
 
-.editor-preview,
+.editor-preview-column,
 .editor-assist {
   min-width: 0;
 }
@@ -3535,7 +3535,7 @@ a.info-version-badge:focus-visible {
     grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr) auto;
   }
 
-  .editor-preview {
+  .editor-preview-column {
     position: sticky;
     top: calc(var(--editor-sticky-top) + var(--space-64) + var(--space-8));
     max-height: calc(100vh - var(--editor-sticky-top) - var(--space-64) - var(--space-24));
