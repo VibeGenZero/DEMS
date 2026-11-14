@@ -9,6 +9,7 @@ import { registerActions } from '../core/actions.js';
 import { navigateTo, onRouteLeave, setLeaveGuard } from '../core/router.js';
 import { state } from '../core/state.js';
 import { showConfirmDialog, showElement, showToast, toggleElement } from '../core/ui.js';
+import { clearEditorAssistMarks, mountEditorAssist, syncEditorAssist, unmountEditorAssist } from './editor-assist.js';
 import { clearDraft, formatSavedAt, isDraftStale, readDraft, storeDraft } from './editor-draft.js';
 import { setDateChangeHandler } from './wizard-dates.js';
 import { cancelWizardPreview, renderWizardPreview } from './wizard-preview.js';
@@ -145,6 +146,7 @@ function drawPreview() {
 export function editorChanged() {
     // Filling the wizard changes fields too (the description editor reports it); that is loading, not input
     if (!page.run || page.run.loading) return;
+    syncEditorAssist();
     clearTimeout(page.previewTimer);
     page.previewTimer = setTimeout(drawPreview, PREVIEW_DELAY_MS);
     clearTimeout(page.storeTimer);
@@ -179,6 +181,7 @@ async function startEditor(run) {
     page.previewDrawn = null;
     stopTimers();
     cancelWizardPreview();
+    unmountEditorAssist();
     hide('event-editor-restored');
     hide('event-editor-saved');
     let event = null;
@@ -216,6 +219,7 @@ async function startEditor(run) {
     // Changes reported while the wizard was filled were not input
     stopTimers();
     run.loading = false;
+    mountEditorAssist({ changed: editorChanged });
     // The column of a wide screen shows the preview at once
     if (isWideEditor()) await drawPreview();
 }
@@ -236,6 +240,7 @@ function runEditor(key) {
 function leftEditor() {
     stopTimers();
     cancelWizardPreview();
+    unmountEditorAssist();
     // Saved, untouched or discarded on request: nothing to bring back next time.
     // (A reload or a closed tab never comes here, so its input stays kept; neither does an
     // editor that was still loading, whose kept input nobody has seen yet.)
@@ -294,6 +299,7 @@ export function openEventEditor({ eventId = '', prefill = null, returnTo = '', f
 export function closeEventEditor({ saved = false, to = '' } = {}) {
     if (saved) {
         page.saved = true;
+        clearEditorAssistMarks();
         clearTimeout(page.storeTimer);
         page.storeTimer = null;
         clearDraft(editId());

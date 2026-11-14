@@ -354,7 +354,8 @@ test('closing the panel while an answer runs stops it without an error message',
     await sending;
     await settle();
     assert.equal(signal.aborted, true);
-    assert.doesNotMatch(message(harness, 3).innerHTML, /unterbrochen|Fehler/);
+    // The stopped answer leaves nothing behind: no bubble, no error message
+    assert.equal(message(harness, 3), null);
     assert.deepEqual(harness.toasts, []);
     assert.equal(harness.element('assistant-input').disabled, false, 'the input is free again');
 });

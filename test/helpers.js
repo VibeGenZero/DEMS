@@ -314,6 +314,8 @@ function createFakeElement(registry, id = '', classNames = []) {
         getAttribute: (name) => (attributes.has(name) ? attributes.get(name) : null),
         appendChild: register,
         prepend: register,
+        /** Take the element out of the page: getElementById no longer finds it (its own id only, not the ids inside it). */
+        remove() { if (this.id && registry.get(this.id) === this) registry.delete(this.id); },
         insertAdjacentElement: (_position, child) => register(child),
         // Not laid out: no box, no offset parent (a hidden element in a browser)
         offsetParent: null,

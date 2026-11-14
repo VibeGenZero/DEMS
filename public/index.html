@@ -1221,7 +1221,11 @@
           <h2 class="editor-title" id="event-editor-title">Neues Event</h2>
           <div class="editor-topbar-actions">
             <span class="editor-saved is-hidden" id="event-editor-saved" role="status"></span>
-            <div class="editor-topbar-extra" id="event-editor-topbar-extra"></div>
+            <div class="editor-topbar-extra" id="event-editor-topbar-extra">
+              <button type="button" class="btn btn-ghost btn-sm is-hidden" id="event-editor-assist-toggle" data-click="toggleEditorAssist" aria-expanded="false" aria-controls="event-editor-assist" aria-label="KI-Assistent">
+                <i class="bi bi-stars" aria-hidden="true"></i><span class="editor-topbar-label ms-1">KI-Assistent</span>
+              </button>
+            </div>
             <button type="button" class="btn btn-accent btn-sm" id="event-editor-save" data-click="saveEventFromTopbar" aria-label="Speichern">
               <i class="bi bi-save" aria-hidden="true"></i><span class="editor-topbar-label ms-1">Speichern</span>
             </button>
@@ -1298,13 +1302,23 @@
                   <input type="text" class="form-control" id="event-title" maxlength="200" placeholder="Event-Name">
                   <div class="invalid-feedback" id="event-title-feedback"></div>
                 </div>
-                <div class="mb-3">
-                  <label class="form-label">Beschreibung</label>
+                <div class="mb-3" id="event-description-group">
+                  <div class="editor-field-head">
+                    <label class="form-label">Beschreibung</label>
+                    <button type="button" class="btn btn-ghost btn-sm is-hidden" id="event-description-improve" data-click="improveDescription">
+                      <i class="bi bi-stars me-1" aria-hidden="true"></i>Mit KI verbessern
+                    </button>
+                  </div>
                   <textarea class="form-control" id="event-description" rows="4"
                     placeholder="Beschreibe das Event..."></textarea>
                 </div>
                 <div class="mb-3" id="event-ai-notes-group">
-                  <label class="form-label" for="event-ai-notes">Zusatzinfos für den Event-Assistenten</label>
+                  <div class="editor-field-head">
+                    <label class="form-label" for="event-ai-notes">Zusatzinfos für den Event-Assistenten</label>
+                    <button type="button" class="btn btn-ghost btn-sm is-hidden" id="event-ai-notes-suggest" data-click="suggestAiNotes">
+                      <i class="bi bi-stars me-1" aria-hidden="true"></i>Vorschlag von KI
+                    </button>
+                  </div>
                   <textarea class="form-control" id="event-ai-notes" rows="4" maxlength="4000"></textarea>
                   <div class="invalid-feedback" id="event-ai-notes-feedback"></div>
                   <div class="form-text">Nur die KI liest dieses Feld und kann die Infos an Mitglieder weitergeben. Keine Geheimnisse eintragen.</div>
@@ -1673,8 +1687,30 @@
         
           </aside>
 
-          <!-- Side panel of the AI assistant (3.2.0 part 3); empty and hidden until then -->
-          <aside class="editor-assist is-hidden" id="event-editor-assist" aria-label="KI-Assistent"></aside>
+          <!-- Side panel of the AI assistant (admin/editor-assist.js): fills the form, saves nothing -->
+          <aside class="editor-assist is-hidden" id="event-editor-assist" aria-label="KI-Assistent">
+            <header class="assistant-head">
+              <span class="assistant-head-icon" aria-hidden="true"><i class="bi bi-stars"></i></span>
+              <div class="assistant-head-text">
+                <strong>KI-Assistent</strong>
+                <small class="assistant-head-event">Füllt das Formular aus, speichert nichts</small>
+              </div>
+              <button type="button" class="btn btn-ghost btn-icon btn-sm" data-click="toggleEditorAssist" aria-label="KI-Assistent schließen">
+                <i class="bi bi-x-lg" aria-hidden="true"></i>
+              </button>
+            </header>
+            <div id="editor-assist-messages" class="assistant-messages" aria-live="polite">
+              <div class="assistant-message is-bot">Beschreib dein Event in eigenen Worten – ich fülle das Formular aus. Gespeichert wird erst, wenn du speicherst.</div>
+            </div>
+            <div class="editor-assist-form">
+              <label for="editor-assist-input" class="visually-hidden">Deine Nachricht an den KI-Assistenten</label>
+              <textarea id="editor-assist-input" class="form-control editor-assist-input" rows="3" maxlength="2000" placeholder="z. B. Raid am Samstag 20 Uhr, 20 Plätze, nur Raider …"></textarea>
+              <button id="editor-assist-send" type="button" class="btn btn-primary btn-icon assistant-send" data-click="sendEditorAssist" aria-label="Nachricht senden">
+                <i class="bi bi-arrow-right" aria-hidden="true"></i>
+              </button>
+            </div>
+            <p class="assistant-note">KI-Vorschläge können Fehler enthalten. Prüf das Formular vor dem Speichern.</p>
+          </aside>
         </div>
       </div>
     </section>
