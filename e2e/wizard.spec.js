@@ -417,3 +417,25 @@ test('the assistant takes the place of the preview and the form keeps most of th
     await expect(page.locator('.editor-preview-column')).toBeVisible();
     expect(errors).toEqual([]);
 });
+
+test('every visible group of every step is a card, and an AI mark stays inside its card', async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== 'desktop', 'same cards on the phone');
+    const errors = watchErrors(page);
+    await loginAs(page, 'admin');
+    await page.evaluate(() => { window.location.hash = '#event-editor/dev-event-bigform'; });
+    await expect(page.locator('#event-editor-section')).toBeVisible();
+    for (const step of [1, 2, 3, 4, 5]) {
+        await page.locator('#wstep-' + step).click();
+        await expect(page.locator('#wizard-page-' + step)).toBeVisible();
+        const loose = await page.locator('#wizard-page-' + step).evaluate((pageEl) => [...pageEl.children]
+            .filter(child => child.offsetParent !== null && child.tagName !== 'INPUT')
+            .filter(child => getComputedStyle(child).borderTopWidth === '0px')
+            .map(child => child.id || child.className || child.tagName));
+        expect(loose, 'step ' + step).toEqual([]);
+    }
+    // The description card holds its own „von KI“ mark (mock provider: „Mit KI verbessern“ always answers)
+    await page.locator('#wstep-1').click();
+    await page.click('#event-description-improve');
+    await expect(page.locator('#event-description-group #ai-mark-description')).toBeVisible();
+    expect(errors).toEqual([]);
+});

@@ -3594,7 +3594,7 @@ a.info-version-badge:focus-visible {
   min-width: 0;
 }
 
-/* AI assistant (admin/editor-assist.js): a floating panel; from 1200 px the third column */
+/* AI assistant (admin/editor-assist.js): a floating panel; from 1200 px the column in the preview's place */
 .editor-assist {
   position: fixed;
   right: var(--space-16);
