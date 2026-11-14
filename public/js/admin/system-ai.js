@@ -7,6 +7,7 @@
  * of the behaviour block.
  */
 import { registerActions } from '../core/actions.js';
+import { refreshAiInfo } from '../core/boot.js';
 import { state } from '../core/state.js';
 import { escapeHtml, showToast } from '../core/ui.js';
 import { addSystemCategory, markCategoryDirty } from './system-nav.js';
@@ -217,6 +218,8 @@ async function saveAiSettings() {
         fillForm(ai.settings);
         markCategoryDirty('ai', false, MARK_SOURCE);
         showToast('KI-Einstellungen gespeichert.', 'success');
+        // Bubble and editor assistant follow the switches without a reload
+        await refreshAiInfo();
     } catch {
         showToast('Speichern fehlgeschlagen.', 'danger');
     }

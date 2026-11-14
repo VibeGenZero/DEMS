@@ -4,7 +4,7 @@
  * connection test and the model list. Each router applies its own guard.
  * No answer ever contains the stored API key.
  */
-const { AiError, AI_ERROR_MESSAGES } = require('../ai/errors');
+const { AiError, AI_ERROR_MESSAGES, logAiFailure } = require('../ai/errors');
 const { PROVIDERS, getAiClient, testConnection } = require('../ai/client');
 
 const text = (value) => (typeof value === 'string' ? value : '');
@@ -45,6 +45,7 @@ async function answerModelList(req, res) {
         res.json({ models });
     } catch (err) {
         const code = err instanceof AiError ? err.code : 'unreachable';
+        logAiFailure('Modellliste', err);
         res.status(502).json({ error: AI_ERROR_MESSAGES[code] });
     }
 }

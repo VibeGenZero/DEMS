@@ -8,6 +8,7 @@ import { checkAuth } from './auth.js';
 import { handleRoute, restorePendingRoute } from './router.js';
 import { getErrorMessage, showError, showToast } from './ui.js';
 import { avatar } from './components.js';
+import { installRateLimitNotice } from './rate-limit-notice.js';
 import { checkSetupMode } from '../pages/setup.js';
 import { loadPrivacyLinks, settlePrivacyConsent } from '../pages/privacy.js';
 
@@ -110,14 +111,39 @@ export function runBootAnimation() {
 export async function fetchCSRFToken() {
     try {
         const res = await fetch('/api/csrf-token');
-        if (res.status === 429) {
-            showToast('Zu viele Anfragen – bitte Seite in einem Moment neu laden.', 'warning');
-            return;
-        }
+        // The rate-limit notice has told the user already
+        if (res.status === 429) return;
         const data = await res.json();
         state.csrfToken = data.token;
     } catch (e) {
         console.error('Failed to fetch CSRF token', e);
+    }
+}
+
+// The AI block of /api/server-info in the shape of state.aiInfo
+function aiInfoFrom(data) {
+    const ai = (data && data.ai) || {};
+    return {
+        memberAssistant: !!ai.memberAssistant,
+        assistantName: ai.assistantName || '',
+        teaserText: ai.teaserText || '',
+        adminAssistant: !!ai.adminAssistant
+    };
+}
+
+/**
+ * Ask the server again what of the AI is on (after a save in System › KI), so
+ * bubble and editor assistant follow without a reload. A failure keeps the known state.
+ *
+ * @returns {Promise<void>}
+ */
+export async function refreshAiInfo() {
+    try {
+        const res = await fetch('/api/server-info');
+        if (!res.ok) return;
+        state.aiInfo = aiInfoFrom(await res.json());
+    } catch {
+        // Keep what is known; the next page load asks again
     }
 }
 
@@ -129,12 +155,7 @@ export async function loadServerInfo() {
         if (window.VERBOSE_LOG) console.log('[VERBOSE] GET /api/server-info', data);
         state.serverName = data.serverName || 'DEMS';
         state.serverIconUrl = data.iconUrl || null;
-        state.aiInfo = {
-            memberAssistant: !!(data.ai && data.ai.memberAssistant),
-            assistantName: (data.ai && data.ai.assistantName) || '',
-            teaserText: (data.ai && data.ai.teaserText) || '',
-            adminAssistant: !!(data.ai && data.ai.adminAssistant)
-        };
+        state.aiInfo = aiInfoFrom(data);
         window._demsGuildId = data.guildId || '';
         // The styleguide link (#nav-debug) appears with the login, see showLoggedIn()
         window.DEBUG_MODE = data.debugMode === true;
@@ -194,6 +215,8 @@ export async function finishLoading() {
     loadingScreen.style.display = 'none';
     document.getElementById('app').style.display = 'block';
 
+    // A refused request of the general limiter says how long to wait
+    installRateLimitNotice();
     await fetchCSRFToken();
     await loadServerInfo();
     // A fresh installation shows the setup wizard instead of login and router (#138)

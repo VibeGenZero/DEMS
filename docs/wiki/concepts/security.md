@@ -21,7 +21,7 @@ see_also: [auth-session, known-issues, deployment]
 |---|---|
 | Security headers + CSP | `helmet(...)` in `server.js` (directive list there) |
 | CORS | `cors({ origin: BASE_URL, credentials: true })` |
-| Rate limits | `/api/` 200 / 15 min, `/auth/` 30 / 15 min (off in dev mock mode); failed check-ins 10 / 15 min per member (`checkinLimiter`, on in mock mode too); member search `GET /api/user/search` 60 / min per member (`searchLimiter` in `routes/user.js`, on in mock mode too) |
+| Rate limits | `/api/` per logged-in user 1000 / 15 min, otherwise per IP 200 / 15 min (`middleware/rateLimits.js`, mounted after the session; `RATE_LIMIT_MAX_USER`, `RATE_LIMIT_MAX`; the 429 names the wait in minutes and the page shows it once per 30 s, `core/rate-limit-notice.js`), `/auth/` 30 / 15 min (both off in dev mock mode); failed check-ins 10 / 15 min per member (`checkinLimiter`, on in mock mode too); member search `GET /api/user/search` 60 / min per member (`searchLimiter` in `routes/user.js`, on in mock mode too) |
 | CSRF | double-submit token, see [auth-session](auth-session.md) |
 | AuthZ | `requireAuth`, `requireAdmin`; the whole event API needs a login (no public preview); `draft`/`archived` events answer 404 to non-admins; comment delete = owner or admin |
 | XSS | frontend `escapeHtml()` for interpolated values, values for actions in `data-*` attributes (escaped with `escapeHtml`, read via `dataset`), never in handler code — the CSP blocks inline handlers, `renderMarkdownSafe()` = marked + DOMPurify for descriptions |

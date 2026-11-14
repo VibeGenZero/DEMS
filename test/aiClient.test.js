@@ -238,3 +238,20 @@ test('the connection test counts an answer without text as connected (reasoning 
         await new Promise(resolve => fake.close(resolve));
     }
 });
+
+test('a failed connection test names a certificate problem and logs it', async () => {
+    const lines = [];
+    const original = console.warn;
+    console.warn = (...args) => lines.push(args.join(' '));
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async () => { throw Object.assign(new TypeError('fetch failed'), { cause: Object.assign(new Error('x'), { code: 'SELF_SIGNED_CERT_IN_CHAIN' }) }); };
+    try {
+        const result = await testConnection({ provider: 'openai', baseUrl: 'https://provider.test/v1', apiKey: 'k', model: 'm' });
+        assert.deepEqual(result, { ok: false, code: 'certificate', error: 'Das Zertifikat des KI-Anbieters wird nicht anerkannt. Prüft ein Virenscanner oder Proxy die HTTPS-Verbindung?' });
+    } finally {
+        globalThis.fetch = originalFetch;
+        console.warn = original;
+    }
+    assert.equal(lines.length, 1);
+    assert.ok(lines[0].startsWith('KI-Anfrage fehlgeschlagen (Verbindungstest): certificate SELF_SIGNED_CERT_IN_CHAIN'), lines[0]);
+});

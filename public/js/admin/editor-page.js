@@ -9,7 +9,7 @@ import { registerActions } from '../core/actions.js';
 import { navigateTo, onRouteLeave, setLeaveGuard } from '../core/router.js';
 import { state } from '../core/state.js';
 import { showConfirmDialog, showElement, showToast, toggleElement } from '../core/ui.js';
-import { clearEditorAssistMarks, mountEditorAssist, syncEditorAssist, unmountEditorAssist } from './editor-assist.js';
+import { clearEditorAssistMarks, mountEditorAssist, openEditorAssist, syncEditorAssist, unmountEditorAssist } from './editor-assist.js';
 import { clearDraft, formatSavedAt, isDraftStale, readDraft, storeDraft } from './editor-draft.js';
 import { setDateChangeHandler } from './wizard-dates.js';
 import { cancelWizardPreview, renderWizardPreview } from './wizard-preview.js';
@@ -331,6 +331,11 @@ function saveEventFromTopbar() {
 
 registerActions({
     showCreateEvent: () => openEventEditor(),
+    // „Mit KI erstellen“: a new event with the assistant panel already open
+    createEventWithAi: async () => {
+        await openEventEditor();
+        openEditorAssist();
+    },
     editEvent: (el) => openEventEditor({ eventId: el.dataset.eventId }),
     closeEventEditor: () => closeEventEditor(),
     discardEditorDraft,
