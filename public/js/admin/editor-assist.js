@@ -287,6 +287,8 @@ function suggestAiNotes() {
 
 function setPanelOpen(open) {
     toggleElement(byId('event-editor-assist'), open);
+    // From 1200 px the assistant takes the place of the preview (style.css)
+    byId('event-editor-body').classList.toggle('is-assist-open', open);
     byId('event-editor-assist-toggle').setAttribute('aria-expanded', String(open));
     if (open) byId('editor-assist-input').focus();
 }
@@ -364,6 +366,7 @@ export function unmountEditorAssist() {
     for (const element of messages) element.remove();
     messages = [];
     toggleElement(byId('event-editor-assist'), false);
+    byId('event-editor-body').classList.remove('is-assist-open');
     byId('event-editor-assist-toggle').setAttribute('aria-expanded', 'false');
     byId('editor-assist-input').value = '';
 }

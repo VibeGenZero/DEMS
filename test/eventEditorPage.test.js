@@ -628,3 +628,9 @@ test('the description editor offers no fullscreen and no side-by-side view', () 
         assert.match(toolbar, new RegExp(`'${name}'`), name);
     }
 });
+
+test('the editor puts at most two fields in a row', () => {
+    const editor = HTML.slice(HTML.indexOf('<section id="event-editor-section"'), HTML.indexOf('<section id="insights-section"'));
+    assert.doesNotMatch(editor, /class="col-md-4"/);
+    assert.match(editor, /<div class="editor-body" id="event-editor-body">/);
+});

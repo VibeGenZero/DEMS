@@ -341,3 +341,16 @@ test('„Mit KI erstellen" opens a new event with the assistant open and the inp
     assert.equal(harness.element('event-editor-assist-toggle').getAttribute('aria-expanded'), 'true');
     assert.deepEqual(harness.element('editor-assist-input').calls.at(-1), ['focus']);
 });
+
+test('the editor body knows when the assistant is open', async () => {
+    const harness = await openEditor();
+    const body = harness.element('event-editor-body');
+    await harness.app.runAction('toggleEditorAssist', {});
+    assert.ok(body.classList.contains('is-assist-open'));
+    await harness.app.runAction('toggleEditorAssist', {});
+    assert.ok(!body.classList.contains('is-assist-open'));
+    await harness.app.runAction('toggleEditorAssist', {});
+    harness.location.hash = '#admin';
+    await harness.app.handleRoute();
+    assert.ok(!body.classList.contains('is-assist-open'), 'leaving the editor closes it');
+});
