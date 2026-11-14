@@ -8,10 +8,13 @@ const { safeEqual } = require('../middleware/auth');
 const { addAuditLog } = require('../utils/eventUtils');
 const { buildBotInviteUrl } = require('../utils/botPermissions');
 const systemConfig = require('../utils/systemConfig');
-const { SNOWFLAKE, normalizeSystemValue, botLoginError } = require('../utils/systemValues');
+const { SNOWFLAKE, normalizeSystemValue, dropsStoredAiKey, botLoginError } = require('../utils/systemValues');
 const { savePrivacyPolicy } = require('../utils/privacyPolicy');
 const { getUpdateStatus } = require('../utils/updateCheck');
 const { selectStoreKind } = require('../db/config');
+const { PROVIDERS, isAiConfigured } = require('../ai/client');
+const { isFeatureOn } = require('../ai/settings');
+const { refreshAskIfSwitched } = require('../utils/askRefresh');
 
 const router = express.Router();
 
@@ -21,15 +24,23 @@ const BOT_KEYS = ['DISCORD_BOT_TOKEN', 'DISCORD_GUILD_ID'];
 /**
  * Facts for the overview of the "System" view; no ids, no secrets.
  *
- * @returns {{ database: 'postgresql'|'sqlite', bot: { online: boolean, guildName: string } }}
+ * @returns {{ database: 'postgresql'|'sqlite', bot: { online: boolean, guildName: string }, ai: { on: boolean, provider: string } }}
  */
 function systemStatus() {
     // Required here: bot.js loads modules that load the routes
     const bot = require('../bot').getBotStatus() || {};
     return {
         database: selectStoreKind(process.env) === 'postgres' ? 'postgresql' : 'sqlite',
-        bot: { online: bot.online === true, guildName: bot.guildName || '' }
+        bot: { online: bot.online === true, guildName: bot.guildName || '' },
+        ai: aiStatus()
     };
+}
+
+/** Whether the AI is usable and with which provider (label); no key, no model. */
+function aiStatus() {
+    const on = isAiConfigured();
+    const provider = on ? ((PROVIDERS[process.env.AI_PROVIDER] || {}).label || 'Mock') : '';
+    return { on, provider };
 }
 
 /**
@@ -72,6 +83,8 @@ router.put('/system/settings', async (req, res) => {
             if (result.error) return res.status(400).json({ error: result.error });
             if (!result.skip) changes[key] = result.value;
         }
+        // A key from .env stays; a stored one never follows a new provider or address
+        if (!systemConfig.isLocked('AI_API_KEY') && dropsStoredAiKey(changes)) changes.AI_API_KEY = '';
 
         // A new token or guild: log in with it first, keep the old values when Discord refuses
         let bot = null;
@@ -92,11 +105,14 @@ router.put('/system/settings', async (req, res) => {
             }
         }
 
+        const askWasOn = isFeatureOn('memberDiscord');
         const saved = await systemConfig.saveSystemValues(changes, { by: req.session.user.id });
         if (saved.changed.length > 0) {
             // Key names only: values of secrets never reach the audit log
             await addAuditLog('UPDATE_SYSTEM_SETTINGS', req.session.user.id, { keys: saved.changed });
         }
+        // A changed AI connection can switch /ask and „Frage stellen“ on or off: refreshed in the background
+        refreshAskIfSwitched(askWasOn);
         res.json({ success: true, changed: saved.changed, restartRequired: saved.applies.has('restart'), bot });
     } catch (err) {
         console.error('System settings save error:', err);

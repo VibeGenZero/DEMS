@@ -243,6 +243,23 @@
             </div>
           </div>
 
+          <div class="setup-step is-hidden" id="setup-step-ai">
+            <h2 class="setup-step-title">KI (optional)</h2>
+            <p class="text-secondary">DEMS kann Fragen von Mitgliedern zu Events beantworten und dir beim Erstellen von Events helfen. Du kannst das auch später unter System › KI einrichten.</p>
+            <div class="setup-fields" id="setup-ai-fields"></div>
+            <div class="setup-field">
+              <button type="button" class="btn btn-secondary btn-sm" id="setup-ai-test" data-click="testSetupAi">
+                <i class="bi bi-plug me-1" aria-hidden="true"></i>Verbindung testen
+              </button>
+              <span class="ms-2" id="setup-ai-test-result" role="status"></span>
+            </div>
+            <div class="setup-actions">
+              <button type="button" class="btn btn-secondary" data-click="setupBack" data-setup-step="security">Zurück</button>
+              <button type="button" class="btn btn-ghost" data-click="skipSetupAi">Überspringen</button>
+              <button type="button" class="btn btn-primary" data-click="submitSetupAi">Weiter</button>
+            </div>
+          </div>
+
           <div class="setup-step is-hidden" id="setup-step-privacy">
             <h2 class="setup-step-title">Datenschutzerklärung (optional)</h2>
             <p class="text-secondary">Schreib hier die Datenschutzerklärung deiner Community (Markdown). Sie erscheint öffentlich unter „Datenschutz“, und jedes Mitglied muss sie beim ersten Login akzeptieren. Du kannst sie auch später unter Admin &gt; System anlegen oder ändern.</p>
@@ -251,7 +268,7 @@
             <p class="setup-hint">Vorschau</p>
             <div class="setup-privacy-preview rendered-markdown" id="setup-privacy-preview"></div>
             <div class="setup-actions">
-              <button type="button" class="btn btn-secondary" data-click="setupBack" data-setup-step="security">Zurück</button>
+              <button type="button" class="btn btn-secondary" data-click="setupBack" data-setup-step="ai">Zurück</button>
               <button type="button" class="btn btn-primary" id="setup-complete-submit" data-click="completeSetup">
                 <i class="bi bi-check2-circle me-2" aria-hidden="true"></i>Einrichtung abschließen
               </button>
@@ -564,6 +581,45 @@
           </div>
         </div><!-- /event-page -->
       </div><!-- /container -->
+
+      <!-- Event assistant: chat bubble bottom right (events/assistant.js mounts it for an active event) -->
+      <div id="event-assistant" class="assistant is-hidden">
+        <div id="assistant-teaser" class="assistant-teaser is-hidden">
+          <button type="button" class="btn-close assistant-teaser-close" data-click="closeAssistantTeaser" aria-label="Hinweis schließen"></button>
+          <strong id="assistant-teaser-name" class="assistant-teaser-name">Event-Assistent</strong>
+          <span id="assistant-teaser-text"></span>
+        </div>
+        <button id="assistant-toggle" type="button" class="assistant-fab" data-click="toggleAssistant" aria-label="Event-Assistent öffnen" aria-expanded="false" aria-controls="assistant-panel">
+          <i class="bi bi-chat-dots" aria-hidden="true"></i>
+        </button>
+        <section id="assistant-panel" class="assistant-panel is-hidden" role="dialog" aria-label="Event-Assistent">
+          <header class="assistant-head">
+            <span class="assistant-head-icon" aria-hidden="true"><i class="bi bi-stars"></i></span>
+            <div class="assistant-head-text">
+              <strong id="assistant-name">Event-Assistent</strong>
+              <small id="assistant-event-title" class="assistant-head-event"></small>
+            </div>
+            <button type="button" class="btn btn-ghost btn-icon btn-sm assistant-close" data-click="toggleAssistant" aria-label="Event-Assistent schließen">
+              <i class="bi bi-x-lg" aria-hidden="true"></i>
+            </button>
+          </header>
+          <div id="assistant-messages" class="assistant-messages" aria-live="polite"></div>
+          <fieldset id="assistant-suggestions" class="assistant-suggestions">
+            <legend class="visually-hidden">Vorschläge</legend>
+            <button type="button" class="chip chip-sm" data-click="askSuggestedQuestion" data-question="Wann geht es los?">Wann geht es los?</button>
+            <button type="button" class="chip chip-sm" data-click="askSuggestedQuestion" data-question="Was sind die Regeln?">Was sind die Regeln?</button>
+            <button type="button" class="chip chip-sm" data-click="askSuggestedQuestion" data-question="Darf ich mitmachen?">Darf ich mitmachen?</button>
+          </fieldset>
+          <form id="assistant-form" class="assistant-form">
+            <label for="assistant-input" class="visually-hidden">Deine Frage</label>
+            <input id="assistant-input" type="text" class="form-control assistant-input" maxlength="500" autocomplete="off" placeholder="Frage eingeben …">
+            <button id="assistant-send" type="button" class="btn btn-primary btn-icon assistant-send" data-click="sendAssistantQuestion" aria-label="Frage senden">
+              <i class="bi bi-arrow-right" aria-hidden="true"></i>
+            </button>
+          </form>
+          <p class="assistant-note">KI-Antworten können Fehler enthalten. Im Zweifel gilt die Eventbeschreibung.</p>
+        </section>
+      </div>
     </section>
 
     <!-- ── PROFILE SECTION ── -->
@@ -1054,6 +1110,98 @@
                 </div>
               </div>
             </section>
+            <section class="settings-panel is-hidden" id="system-panel-ai" aria-labelledby="system-panel-ai-title">
+              <h3 class="settings-panel-title" id="system-panel-ai-title" tabindex="-1">KI</h3>
+              <p class="text-secondary" id="ai-load-note" role="status"></p>
+              <div class="glass-card system-card">
+                <div class="system-card-head"><h4 class="system-card-title">Anbieter</h4></div>
+                <div class="setup-fields" id="system-ai-fields"></div>
+                <datalist id="system-ai-models"></datalist>
+                <div class="setup-actions">
+                  <button type="button" class="btn btn-ghost" id="ai-models-button" data-click="loadAiModels">
+                    <i class="bi bi-list-ul me-1" aria-hidden="true"></i>Modelle laden
+                  </button>
+                  <button type="button" class="btn btn-ghost" id="ai-test-button" data-click="testAiConnection">
+                    <i class="bi bi-plug me-1" aria-hidden="true"></i>Verbindung testen
+                  </button>
+                  <span id="ai-test-result" role="status"></span>
+                  <button type="button" class="btn btn-primary" id="system-save-ai" data-click="saveSystemSettings" data-group="ai">
+                    <i class="bi bi-check2 me-1" aria-hidden="true"></i>Speichern
+                  </button>
+                </div>
+              </div>
+              <div class="glass-card system-card">
+                <div class="system-card-head"><h4 class="system-card-title">Event-Assistent für Mitglieder</h4></div>
+                <div class="setup-fields">
+                  <div class="form-check form-switch setup-field">
+                    <input class="form-check-input" type="checkbox" role="switch" id="ai-memberWeb" data-change="aiSettingChanged">
+                    <label class="form-check-label" for="ai-memberWeb">Auf der Webseite</label>
+                    <div class="setup-hint">Mitglieder fragen im Event-Fenster.</div>
+                  </div>
+                  <div class="form-check form-switch setup-field">
+                    <input class="form-check-input" type="checkbox" role="switch" id="ai-memberDiscord" data-change="aiSettingChanged">
+                    <label class="form-check-label" for="ai-memberDiscord">In Discord</label>
+                    <div class="setup-hint">Der Befehl /frage und der Knopf „Frage stellen“ an Ankündigungen.</div>
+                  </div>
+                  <div class="setup-field">
+                    <label class="form-label" for="ai-assistantName">Name des Assistenten</label>
+                    <input class="form-control" id="ai-assistantName" type="text" maxlength="40" autocomplete="off" data-input="aiSettingChanged">
+                  </div>
+                  <div class="form-check form-switch setup-field">
+                    <input class="form-check-input" type="checkbox" role="switch" id="ai-teaserEnabled" data-change="aiSettingChanged">
+                    <label class="form-check-label" for="ai-teaserEnabled">Hinweis bei Events anzeigen</label>
+                    <div class="setup-hint">Ein kurzer Hinweis lädt zum Fragen ein.</div>
+                  </div>
+                  <div class="setup-field">
+                    <label class="form-label" for="ai-teaserText">Hinweistext</label>
+                    <input class="form-control" id="ai-teaserText" type="text" maxlength="120" autocomplete="off" data-input="aiSettingChanged">
+                  </div>
+                  <div class="setup-field">
+                    <label class="form-label" for="ai-memberQuestionsPerHour">Fragen pro Mitglied und Stunde</label>
+                    <input class="form-control" id="ai-memberQuestionsPerHour" type="number" min="1" max="200" step="1" data-input="aiSettingChanged">
+                  </div>
+                  <div class="setup-field">
+                    <label class="form-label" for="ai-dailyQuestionLimit">Fragen pro Tag insgesamt</label>
+                    <input class="form-control" id="ai-dailyQuestionLimit" type="number" min="0" max="100000" step="1" data-input="aiSettingChanged">
+                    <div class="setup-hint">0 = kein Limit</div>
+                  </div>
+                </div>
+                <div class="system-card-head"><h4 class="system-card-title">KI für Admins</h4></div>
+                <div class="setup-fields">
+                  <div class="form-check form-switch setup-field">
+                    <input class="form-check-input" type="checkbox" role="switch" id="ai-adminAssistant" data-change="aiSettingChanged">
+                    <label class="form-check-label" for="ai-adminAssistant">Assistent im Event-Editor</label>
+                    <div class="setup-hint">Hilft Admins beim Erstellen von Events.</div>
+                  </div>
+                </div>
+                <div class="system-card-head"><h4 class="system-card-title">Verhalten</h4></div>
+                <div class="setup-fields">
+                  <div class="setup-field">
+                    <label class="form-label" for="ai-extraInstructions">Zusatzanweisungen</label>
+                    <textarea class="form-control" id="ai-extraInstructions" rows="4" maxlength="1000" data-input="aiSettingChanged"></textarea>
+                    <div class="setup-hint">Gilt für alle Antworten, z. B. Ton oder Anrede. <span id="ai-extraInstructions-count">0 / 1000</span></div>
+                  </div>
+                </div>
+                <div class="setup-actions">
+                  <button type="button" class="btn btn-primary" id="ai-save-settings" data-click="saveAiSettings">
+                    <i class="bi bi-check2 me-1" aria-hidden="true"></i>KI-Einstellungen speichern
+                  </button>
+                </div>
+              </div>
+              <div class="glass-card system-card">
+                <div class="system-card-head"><h4 class="system-card-title">Nutzung</h4></div>
+                <div class="table-responsive">
+                  <table class="table">
+                    <thead><tr><th scope="col"></th><th scope="col">Fragen</th><th scope="col">Admin-Anfragen</th><th scope="col">Tokens (ein)</th><th scope="col">Tokens (aus)</th></tr></thead>
+                    <tbody id="ai-usage-body"></tbody>
+                  </table>
+                </div>
+              </div>
+              <div class="glass-card system-card">
+                <div class="system-card-head"><h4 class="system-card-title">Datenschutz-Hinweis</h4></div>
+                <p class="text-secondary mb-0">Bei einem Cloud-Anbieter werden Fragen und Event-Inhalte an diesen Anbieter gesendet. Ergänze das in deiner Datenschutzerklärung. Mit einem lokalen Ollama verlässt nichts den Server. Namen und Discord-IDs der Mitglieder werden nie mitgesendet.</p>
+              </div>
+            </section>
             <section class="settings-panel is-hidden" id="system-panel-privacy" aria-labelledby="system-panel-privacy-title">
               <h3 class="settings-panel-title" id="system-panel-privacy-title" tabindex="-1">Datenschutz</h3>
               <div class="glass-card system-card">
@@ -1090,7 +1238,11 @@
           <h2 class="editor-title" id="event-editor-title">Neues Event</h2>
           <div class="editor-topbar-actions">
             <span class="editor-saved is-hidden" id="event-editor-saved" role="status"></span>
-            <div class="editor-topbar-extra" id="event-editor-topbar-extra"></div>
+            <div class="editor-topbar-extra" id="event-editor-topbar-extra">
+              <button type="button" class="btn btn-ghost btn-sm is-hidden" id="event-editor-assist-toggle" data-click="toggleEditorAssist" aria-expanded="false" aria-controls="event-editor-assist" aria-label="KI-Assistent">
+                <i class="bi bi-stars" aria-hidden="true"></i><span class="editor-topbar-label ms-1">KI-Assistent</span>
+              </button>
+            </div>
             <button type="button" class="btn btn-accent btn-sm" id="event-editor-save" data-click="saveEventFromTopbar" aria-label="Speichern">
               <i class="bi bi-save" aria-hidden="true"></i><span class="editor-topbar-label ms-1">Speichern</span>
             </button>
@@ -1167,10 +1319,26 @@
                   <input type="text" class="form-control" id="event-title" maxlength="200" placeholder="Event-Name">
                   <div class="invalid-feedback" id="event-title-feedback"></div>
                 </div>
-                <div class="mb-3">
-                  <label class="form-label">Beschreibung</label>
+                <div class="mb-3" id="event-description-group">
+                  <div class="editor-field-head">
+                    <label class="form-label">Beschreibung</label>
+                    <button type="button" class="btn btn-ghost btn-sm is-hidden" id="event-description-improve" data-click="improveDescription">
+                      <i class="bi bi-stars me-1" aria-hidden="true"></i>Mit KI verbessern
+                    </button>
+                  </div>
                   <textarea class="form-control" id="event-description" rows="4"
                     placeholder="Beschreibe das Event..."></textarea>
+                </div>
+                <div class="mb-3" id="event-ai-notes-group">
+                  <div class="editor-field-head">
+                    <label class="form-label" for="event-ai-notes">Zusatzinfos für den Event-Assistenten</label>
+                    <button type="button" class="btn btn-ghost btn-sm is-hidden" id="event-ai-notes-suggest" data-click="suggestAiNotes">
+                      <i class="bi bi-stars me-1" aria-hidden="true"></i>Vorschlag von KI
+                    </button>
+                  </div>
+                  <textarea class="form-control" id="event-ai-notes" rows="4" maxlength="4000"></textarea>
+                  <div class="invalid-feedback" id="event-ai-notes-feedback"></div>
+                  <div class="form-text">Nur die KI liest dieses Feld und kann die Infos an Mitglieder weitergeben. Keine Geheimnisse eintragen.</div>
                 </div>
                 <div class="mb-3">
                   <label class="form-label" for="event-banner-url"><i class="bi bi-image me-1"></i>Banner</label>
@@ -1536,8 +1704,30 @@
         
           </aside>
 
-          <!-- Side panel of the AI assistant (3.2.0 part 3); empty and hidden until then -->
-          <aside class="editor-assist is-hidden" id="event-editor-assist" aria-label="KI-Assistent"></aside>
+          <!-- Side panel of the AI assistant (admin/editor-assist.js): fills the form, saves nothing -->
+          <aside class="editor-assist is-hidden" id="event-editor-assist" aria-label="KI-Assistent">
+            <header class="assistant-head">
+              <span class="assistant-head-icon" aria-hidden="true"><i class="bi bi-stars"></i></span>
+              <div class="assistant-head-text">
+                <strong>KI-Assistent</strong>
+                <small class="assistant-head-event">Füllt das Formular aus, speichert nichts</small>
+              </div>
+              <button type="button" class="btn btn-ghost btn-icon btn-sm" data-click="toggleEditorAssist" aria-label="KI-Assistent schließen">
+                <i class="bi bi-x-lg" aria-hidden="true"></i>
+              </button>
+            </header>
+            <div id="editor-assist-messages" class="assistant-messages" aria-live="polite">
+              <div class="assistant-message is-bot">Beschreib dein Event in eigenen Worten – ich fülle das Formular aus. Gespeichert wird erst, wenn du speicherst.</div>
+            </div>
+            <div class="editor-assist-form">
+              <label for="editor-assist-input" class="visually-hidden">Deine Nachricht an den KI-Assistenten</label>
+              <textarea id="editor-assist-input" class="form-control editor-assist-input" rows="3" maxlength="2000" placeholder="z. B. Raid am Samstag 20 Uhr, 20 Plätze, nur Raider …"></textarea>
+              <button id="editor-assist-send" type="button" class="btn btn-primary btn-icon assistant-send" data-click="sendEditorAssist" aria-label="Nachricht senden">
+                <i class="bi bi-arrow-right" aria-hidden="true"></i>
+              </button>
+            </div>
+            <p class="assistant-note">KI-Vorschläge können Fehler enthalten. Prüf das Formular vor dem Speichern.</p>
+          </aside>
         </div>
       </div>
     </section>

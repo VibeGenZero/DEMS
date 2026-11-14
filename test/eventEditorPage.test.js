@@ -263,6 +263,7 @@ test('a filled wizard survives collect -> apply -> collect unchanged', async () 
     const set = (id, value) => { harness.element(id).value = value; };
     set('event-title', 'Raid');
     harness.state.descriptionEditor.value('**Text**');
+    set('event-ai-notes', 'Treffpunkt: Lobby');
     set('event-banner-url', '/uploads/banners/x.png');
     harness.app.wizardGoTo(2);
     harness.state.startDatePicker.setDate('2026-12-01T19:00:00.000Z');

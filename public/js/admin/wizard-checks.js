@@ -8,10 +8,12 @@
 export const SLOT_NAME_MAX_LENGTH = 30;
 export const SLOT_CAPACITY_MIN = 1;
 export const SLOT_CAPACITY_MAX = 100;
+// Same limit as AI_NOTES_MAX in middleware/validators.js
+const AI_NOTES_MAX_LENGTH = 4000;
 
 // Field keys per step; "slots" and "formFields" stand for all rows of their builder
 export const STEP_FIELDS = {
-    1: ['title', 'bannerUrl'],
+    1: ['title', 'bannerUrl', 'aiNotes'],
     2: ['startDate', 'endDate', 'registrationDeadline', 'unregisterDeadline', 'recurringUntil'],
     3: ['maxParticipants', 'reminderHours', 'requiredRoles', 'slots'],
     4: ['formFields'],
@@ -21,6 +23,7 @@ export const STEP_FIELDS = {
 export const WIZARD_MESSAGES = {
     title: 'Bitte einen Titel eingeben.',
     bannerUrl: 'Die Banner-URL muss mit http:// oder https:// beginnen oder ein hochgeladenes Bild sein.',
+    aiNotes: 'Die Zusatzinfos dürfen höchstens 4000 Zeichen lang sein.',
     startRequired: 'Aktive Events brauchen ein Startdatum.',
     endBeforeStart: 'Das Ende liegt vor dem Start.',
     registrationDeadlineAfterEnd: 'Der Anmeldeschluss liegt nach dem Ende des Events.',
@@ -64,6 +67,7 @@ function checkBasics(draft, add) {
     if (!String(draft.title ?? '').trim()) add('title', WIZARD_MESSAGES.title);
     const banner = String(draft.bannerUrl ?? '').trim();
     if (banner && !HTTP_URL.test(banner) && !UPLOADED_BANNER.test(banner)) add('bannerUrl', WIZARD_MESSAGES.bannerUrl);
+    if (String(draft.aiNotes ?? '').length > AI_NOTES_MAX_LENGTH) add('aiNotes', WIZARD_MESSAGES.aiNotes);
 }
 
 function checkDates(draft, add) {

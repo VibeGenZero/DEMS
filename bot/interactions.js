@@ -9,7 +9,8 @@ const {
     MY_LEAVE_PREFIX, MY_LEAVE_CANCEL_PREFIX, MY_SWITCH_PREFIX,
     APPROVAL_ACCEPT_PREFIX, APPROVAL_REJECT_PREFIX, APPROVAL_WAITLIST_PREFIX, CHECKIN_BUTTON_PREFIX,
     ADMIN_EVENT_MODAL_PREFIX, ADMIN_POLL_MODAL_PREFIX, ADMIN_EVENT_PUBLISH_PREFIX, ADMIN_EVENT_ACTIVATE_PREFIX,
-    ADMIN_RETRY_PREFIX, OFFER_CONFIRM_PREFIX, OFFER_DECLINE_PREFIX, TENTATIVE_BUTTON_PREFIX, TENTATIVE_MODAL_PREFIX
+    ADMIN_RETRY_PREFIX, OFFER_CONFIRM_PREFIX, OFFER_DECLINE_PREFIX, TENTATIVE_BUTTON_PREFIX, TENTATIVE_MODAL_PREFIX,
+    ASK_BUTTON_PREFIX, ASK_MODAL_PREFIX
 } = require('./constants');
 const {
     handleEventRegisterButton, handleEventRegisterModal, replyWithFailure, handleEventSlotButton,
@@ -23,6 +24,8 @@ const { handleCheckinButton } = require('./checkin');
 const { handleAdminEventModal, handleAdminPollModal, handleDraftButton, handleRetryButton } = require('./adminCommands');
 const { handleOfferButton } = require('./waitlistOffers');
 const { handleTentativeButton, handleTentativeModal } = require('./tentative');
+// The ask handlers answer every failure themselves (never reject)
+const { handleAskButton, handleAskModal } = require('./ask');
 const { state } = require('./client');
 
 /**
@@ -50,6 +53,11 @@ async function handleInteraction(interaction) {
                 console.error('Admin command modal error:', err);
                 await replyWithFailure(interaction, '❌ Fehler beim Speichern.');
             }
+            return;
+        }
+        // Question to the event assistant from „Frage stellen“
+        if (modalAction === ASK_MODAL_PREFIX && modalEventId) {
+            await handleAskModal(interaction, modalEventId);
             return;
         }
         // „Vielleicht“ modal (B-17)
@@ -151,6 +159,12 @@ async function handleInteraction(interaction) {
                 console.error('Check-in button error:', err);
                 await replyWithFailure(interaction, '❌ Fehler beim Check-in.');
             }
+            return;
+        }
+
+        // „Frage stellen“ of an announcement: opens the question modal
+        if (buttonAction === ASK_BUTTON_PREFIX && buttonEventId) {
+            await handleAskButton(interaction, buttonEventId);
             return;
         }
 

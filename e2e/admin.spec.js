@@ -5,7 +5,10 @@
  * something create their own event.
  */
 const { test, expect } = require('@playwright/test');
+const os = require('os');
+const path = require('path');
 const { watchErrors, loginAs, navigate, waitForDialog, closeEditor } = require('./helpers');
+const { startServer } = require('../test/helpers');
 
 const rows = (page) => page.locator('#admin-events-table .data-table tbody tr');
 const row = (page, title) => rows(page).filter({ hasText: title });
@@ -501,8 +504,8 @@ test('the System page shows the configuration and the Discord guide', async ({ p
     // One category at a time: the overview first, with version and status
     await expect(page.locator('#system-panel-overview')).toBeVisible();
     await expect(page.locator('#system-panel-discord')).toBeHidden();
-    await expect(page.locator('#system-status-list .system-status-row')).toHaveCount(2);
-    await expect(page.locator('#system-nav .settings-nav-item')).toHaveCount(5);
+    await expect(page.locator('#system-status-list .system-status-row')).toHaveCount(3);
+    await expect(page.locator('#system-nav .settings-nav-item')).toHaveCount(6);
 
     await page.click('#system-nav a[href="#system/discord"]');
     await expect(page).toHaveURL(/#system\/discord$/);
@@ -613,4 +616,62 @@ test('on a phone the System categories are a scrolling row and the page does not
     await expect(page.locator('#system-nav .settings-nav-sub').first()).toBeHidden();
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
     expect(overflow).toBeLessThanOrEqual(0);
+});
+
+// ── System category „KI" ──
+
+test('the System category „KI" shows the provider, and the connection test reports „Verbunden"', async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== 'desktop', 'same panel on the phone');
+    const errors = watchErrors(page);
+    await loginAs(page, 'admin');
+    await page.evaluate(() => { window.location.hash = '#system/ai'; });
+    await expect(page.locator('#system-panel-ai')).toBeVisible();
+    await expect(page.locator('#system-nav a[aria-current="page"]')).toHaveText(/KI/);
+    await expect(page.locator('#system-AI_PROVIDER')).toBeVisible();
+    await page.click('#ai-test-button');
+    await expect(page.locator('#ai-test-result')).toContainText('Verbunden');
+    expect(errors).toEqual([]);
+});
+
+test('switching „Auf der Webseite" off removes the bubble for members', async ({ browser }, testInfo) => {
+    test.skip(testInfo.project.name !== 'desktop', 'one switch for everybody; once is enough');
+    // An own server: the switch is shared state, the other tests keep their bubble
+    const stamp = `${process.pid}-${Date.now()}`;
+    const server = await startServer('dev/start.js', {
+        DEV_SQLITE_PATH: path.join(os.tmpdir(), `dems-e2e-ai-${stamp}.sqlite`),
+        DEV_UPLOAD_DIR: path.join(os.tmpdir(), `dems-e2e-ai-uploads-${stamp}`)
+    });
+    const contexts = [];
+    try {
+        const open = async (persona) => {
+            const context = await browser.newContext({ baseURL: server.baseUrl, viewport: { width: 1440, height: 900 }, colorScheme: 'dark' });
+            contexts.push(context);
+            const page = await context.newPage();
+            await loginAs(page, persona);
+            return page;
+        };
+        const openEventPage = async (page) => {
+            await page.evaluate(() => { window.location.hash = '#event/dev-event-open'; });
+            await expect(page.locator('#detail-title')).not.toHaveText('');
+        };
+
+        const member = await open('member');
+        await openEventPage(member);
+        await expect(member.locator('#assistant-toggle')).toBeVisible();
+
+        const admin = await open('admin');
+        await admin.evaluate(() => { window.location.hash = '#system/ai'; });
+        await expect(admin.locator('#ai-memberWeb')).toBeChecked();
+        await admin.locator('#ai-memberWeb').uncheck();
+        await admin.click('#ai-save-settings');
+        await expect(admin.getByText('KI-Einstellungen gespeichert.')).toBeVisible();
+
+        // The next page load knows: no bubble
+        await member.reload();
+        await expect(member.locator('#detail-title')).not.toHaveText('');
+        await expect(member.locator('#assistant-toggle')).toBeHidden();
+    } finally {
+        for (const context of contexts) await context.close();
+        await server.stop();
+    }
 });

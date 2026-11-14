@@ -293,7 +293,7 @@ router.get('/:id', async (req, res) => {
             } catch { /* non-fatal */ }
         }
 
-        const event = withPlaces(toPublicEvent(docSnap.id, docSnap.data()), registrations);
+        const event = withPlaces(toPublicEvent(docSnap.id, docSnap.data(), req.session.user), registrations);
         res.json(withSlotSummary({
             ...event,
             checkinEnabled: !!event.checkinEnabled,

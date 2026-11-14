@@ -1,6 +1,6 @@
 /**
  * Setup wizard of a fresh installation (#138): PIN → Discord → Server →
- * Sicherheit → Datenschutz → Fertig. finishLoading() asks /api/setup/status
+ * Sicherheit → KI (optional) → Datenschutz → Fertig. finishLoading() asks /api/setup/status
  * first; while DEMS is not set up, this page replaces login and router.
  */
 import { registerActions } from '../core/actions.js';
@@ -8,12 +8,16 @@ import { state } from '../core/state.js';
 import { escapeHtml, renderMarkdownSafe, showElement, toggleElement } from '../core/ui.js';
 import { GUIDE_FIELD_STEPS, guideStepLink, mountDiscordGuide, openGuideStep, resetDiscordGuide, updateGuideInviteUrl } from './discord-guide.js';
 
-const STEPS = [['pin', 'PIN'], ['discord', 'Discord'], ['server', 'Server'], ['security', 'Sicherheit'], ['privacy', 'Datenschutz'], ['done', 'Fertig']];
+const STEPS = [['pin', 'PIN'], ['discord', 'Discord'], ['server', 'Server'], ['security', 'Sicherheit'], ['ai', 'KI'], ['privacy', 'Datenschutz'], ['done', 'Fertig']];
 const SNOWFLAKE = /^\d{17,20}$/;
 const RESET_PASSWORD_MIN = 12;
 const INVITE_DELAY_MS = 400;
+const AI_MODEL_MISSING = 'Bitte wähle ein KI-Modell oder überspringe den KI-Schritt.';
+const AI_PROVIDER_MISSING = 'Bitte zuerst einen KI-Anbieter wählen.';
+const EMPTY_AI = Object.freeze({ provider: '', baseUrl: '', apiKey: '', model: '' });
 
-const wizard = { status: null, step: 'pin', guild: null, server: {}, password: '', inviteTimer: null };
+// ai: values of the AI step once it was left with „Weiter" or „Überspringen" (null = not yet)
+const wizard = { status: null, step: 'pin', guild: null, server: {}, password: '', ai: null, inviteTimer: null };
 
 const isLocked = (key) => !!(wizard.status && wizard.status.locked.includes(key));
 const valueOf = (key) => ((wizard.status && wizard.status.values) || {})[key] || '';
@@ -137,6 +141,52 @@ function renderSecurityFields() {
         ].join('');
 }
 
+const aiProviders = () => (wizard.status && wizard.status.aiProviders) || [];
+const aiDefaultUrl = (provider) => (aiProviders().find(entry => entry.id === provider) || {}).defaultBaseUrl || '';
+// Value of the AI step: what was entered before, else the stored one
+const aiValue = (field, key) => (wizard.ai ? wizard.ai[field] : valueOf(key));
+
+function aiProviderHtml(selected) {
+    if (isLocked('AI_PROVIDER')) return fieldHtml({ id: 'setup-ai-provider', key: 'AI_PROVIDER', label: 'Anbieter', hint: 'Steht in .env und bleibt dort.' });
+    const options = [{ id: '', label: 'Keine KI verwenden' }, ...aiProviders()];
+    if (selected && !options.some(option => option.id === selected)) options.push({ id: selected, label: selected });
+    const items = options.map(option => `<option value="${escapeHtml(option.id)}"${option.id && option.id === selected ? ' selected' : ''}>${escapeHtml(option.label)}</option>`);
+    return `<div class="setup-field">
+        <label class="form-label" for="setup-ai-provider">Anbieter</label>
+        <select class="form-select" id="setup-ai-provider" data-change="setupAiProviderChanged">${items.join('')}</select>
+        <div class="setup-hint">Ollama läuft auf deinem eigenen Rechner und braucht keinen Schlüssel; die Cloud-Anbieter brauchen einen API-Schlüssel.</div>
+    </div>`;
+}
+
+function aiModelHtml(value) {
+    if (isLocked('AI_MODEL')) return fieldHtml({ id: 'setup-ai-model', key: 'AI_MODEL', label: 'Modell', hint: 'Steht in .env und bleibt dort.' });
+    return `<div class="setup-field">
+        <label class="form-label" for="setup-ai-model">Modell</label>
+        <div class="input-group">
+            <input type="text" class="form-control" id="setup-ai-model" list="setup-ai-models" value="${escapeHtml(value)}" autocomplete="off" spellcheck="false">
+            <button type="button" class="btn btn-secondary" id="setup-ai-models-load" data-click="loadSetupAiModels">Modelle laden</button>
+        </div>
+        <datalist id="setup-ai-models"></datalist>
+        <div class="setup-hint">Zum Beispiel „llama3.1“ bei Ollama. „Modelle laden“ fragt den Anbieter nach seiner Liste.</div>
+    </div>`;
+}
+
+function renderAiFields() {
+    const provider = aiValue('provider', 'AI_PROVIDER');
+    document.getElementById('setup-ai-fields').innerHTML = [
+        aiProviderHtml(provider),
+        fieldHtml({ id: 'setup-ai-base-url', key: 'AI_BASE_URL', label: 'Adresse (optional)', value: aiValue('baseUrl', 'AI_BASE_URL'), placeholder: aiDefaultUrl(provider), hint: 'Leer lassen = Standardadresse des Anbieters.' }),
+        fieldHtml({ id: 'setup-ai-api-key', key: 'AI_API_KEY', label: 'API-Schlüssel', type: 'password', secret: true, value: wizard.ai ? wizard.ai.apiKey : '', hint: 'Bei Ollama auf dem eigenen Rechner leer lassen.' }),
+        aiModelHtml(aiValue('model', 'AI_MODEL'))
+    ].join('');
+    document.getElementById('setup-ai-test-result').innerHTML = '';
+}
+
+/** The values typed into the AI step (a value from .env shows read-only; the server keeps it anyway). */
+function typedAi() {
+    return { provider: inputValue('setup-ai-provider'), baseUrl: inputValue('setup-ai-base-url'), apiKey: inputValue('setup-ai-api-key'), model: inputValue('setup-ai-model') };
+}
+
 /**
  * Show one step of the wizard.
  *
@@ -155,6 +205,7 @@ export function showSetupStep(step) {
     }
     if (step === 'server') renderServerFields();
     if (step === 'security') renderSecurityFields();
+    if (step === 'ai') renderAiFields();
 }
 
 async function refreshInviteUrl(clientId) {
@@ -261,18 +312,73 @@ function submitSetupSecurity() {
         if (password !== inputValue('setup-reset-password-repeat')) return showSetupError('Die beiden Passwörter stimmen nicht überein.');
         wizard.password = password;
     }
+    showSetupStep('ai');
+}
+
+function submitSetupAi() {
+    const ai = typedAi();
+    if (ai.provider && !ai.model && !isLocked('AI_MODEL')) return showSetupError(AI_MODEL_MISSING);
+    wizard.ai = ai;
     showSetupStep('privacy');
 }
 
+// „Überspringen": no AI now; the System view can set it up later
+function skipSetupAi() {
+    wizard.ai = { ...EMPTY_AI };
+    showSetupStep('privacy');
+}
+
+// A new provider: its default address as placeholder, the old test result is void
+function setupAiProviderChanged(element) {
+    const base = document.getElementById('setup-ai-base-url');
+    if (base && !isLocked('AI_BASE_URL')) base.placeholder = aiDefaultUrl(String(element.value || ''));
+    document.getElementById('setup-ai-test-result').innerHTML = '';
+}
+
+async function testSetupAi() {
+    const result = document.getElementById('setup-ai-test-result');
+    const ai = typedAi();
+    if (!ai.provider) {
+        result.innerHTML = `<span class="chip chip-sm chip-danger">${escapeHtml(AI_PROVIDER_MISSING)}</span>`;
+        return;
+    }
+    const button = document.getElementById('setup-ai-test');
+    button.disabled = true;
+    result.innerHTML = '';
+    const { ok, data } = await setupRequest('POST', '/api/setup/ai/test', ai);
+    button.disabled = false;
+    result.innerHTML = ok && data.ok
+        ? `<span class="chip chip-sm chip-success">Verbunden · ${escapeHtml(String(data.ms))} ms</span>`
+        : `<span class="chip chip-sm chip-danger">${escapeHtml(data.error || 'Verbindung fehlgeschlagen.')}</span>`;
+}
+
+async function loadSetupAiModels() {
+    const { provider, baseUrl, apiKey } = typedAi();
+    if (!provider) return showSetupError(AI_PROVIDER_MISSING);
+    const button = document.getElementById('setup-ai-models-load');
+    if (button) button.disabled = true;
+    const { ok, data } = await setupRequest('POST', '/api/setup/ai/models', { provider, baseUrl, apiKey });
+    if (button) button.disabled = false;
+    if (!ok) return showSetupError(data.error || 'Die Modelle konnten nicht geladen werden.');
+    showSetupError('');
+    const list = document.getElementById('setup-ai-models');
+    if (list) list.innerHTML = (Array.isArray(data.models) ? data.models : []).map(model => `<option value="${escapeHtml(model)}"></option>`).join('');
+}
+
 // The server answers with the field that failed -> back to the step that has it
-const ERROR_STEPS = [[/Discord-Schritt|Bot|Client|Server-ID/, 'discord'], [/BASE_URL|Zeitzone|ID für/, 'server'], [/Reset-Passwort/, 'security']];
+const ERROR_STEPS = [[/Discord-Schritt|Bot|Client|Server-ID/, 'discord'], [/BASE_URL|Zeitzone|ID für/, 'server'], [/Reset-Passwort/, 'security'], [/KI-/, 'ai']];
 
 async function completeSetup() {
     const button = document.getElementById('setup-complete-submit');
     button.disabled = true;
+    const ai = wizard.ai || EMPTY_AI;
     const { ok, data } = await setupRequest('POST', '/api/setup/complete', {
         ...wizard.server,
         adminResetPassword: wizard.password,
+        aiProvider: ai.provider,
+        aiBaseUrl: ai.baseUrl,
+        aiApiKey: ai.apiKey,
+        aiModel: ai.model,
         privacyMarkdown: inputValue('setup-privacy-text')
     });
     button.disabled = false;
@@ -282,6 +388,7 @@ async function completeSetup() {
         return showSetupError(data.error || 'Die Einrichtung konnte nicht abgeschlossen werden.');
     }
     wizard.password = '';
+    wizard.ai = null;
     showSetupStep('done');
     toggleElement(document.getElementById('setup-done-restart'), !!data.restartRequired);
 }
@@ -303,6 +410,11 @@ registerActions({
     submitSetupDiscord,
     submitSetupServer,
     submitSetupSecurity,
+    submitSetupAi,
+    skipSetupAi,
+    testSetupAi,
+    loadSetupAiModels,
+    setupAiProviderChanged: (el) => setupAiProviderChanged(el),
     completeSetup,
     previewSetupPrivacy,
     setupClientIdChanged: (el) => setupClientIdChanged(el),

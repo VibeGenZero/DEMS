@@ -64,9 +64,9 @@ test('an admin builds a raid step by step, checks the preview and saves from it'
     await expect(page.locator('#wizard-preview-card .event-card-title')).toHaveText('E2E-Raidnacht');
     await expect(page.locator('#wizard-preview-card .capacity-text')).toHaveText('0 von 15 belegt');
     await expect(page.locator('#wizard-preview-discord .discord-container h2')).toHaveText('🎉 E2E-Raidnacht');
-    // Each slot button sits beside its line-up block (B-05)
+    // Each slot button sits beside its line-up block (B-05); „Frage stellen“ comes from the mock AI of dev mock mode
     await expect(page.locator('#wizard-preview-discord .discord-section')).toHaveCount(3);
-    await expect(page.locator('#wizard-preview-discord .discord-button')).toHaveText([/Tank/, /Heiler/, /Schaden/, /Zum Event/]);
+    await expect(page.locator('#wizard-preview-discord .discord-button')).toHaveText([/Tank/, /Heiler/, /Schaden/, /Frage stellen/, /Zum Event/]);
 
     // A reload keeps the unsaved input, the step and tells so; slots are part of it
     await expect(page.locator('#event-editor-saved')).toHaveText(/^Entwurf gesichert \d\d:\d\d$/);
@@ -369,4 +369,25 @@ test('an admin saves the wizard as a template and starts the next event from it 
         }
         if (eventId) await adminRequest(page, 'DELETE', `/api/admin/events/${eventId}`);
     }
+});
+
+test('the AI assistant fills the title, marks it, and „Rückgängig" takes it back', async ({ page }) => {
+    const errors = watchErrors(page);
+    await loginAs(page, 'admin');
+    await openWizard(page);
+    await page.click('#event-editor-assist-toggle');
+    await expect(page.locator('#event-editor-assist')).toBeVisible();
+    await expect(page.locator('#editor-assist-input')).toBeFocused();
+    await page.fill('#editor-assist-input', 'Raid am Samstag');
+    await page.click('#editor-assist-send');
+    await expect(page.locator('#editor-assist-messages')).toContainText('Entwurf ist im Formular.');
+    await expect(page.locator('#event-title')).toHaveValue('Raid am Samstag');
+    await expect(page.locator('#event-title')).toHaveClass(/is-ai-filled/);
+    await expect(page.locator('#ai-mark-title')).toHaveText('von KI');
+    await page.click('#editor-assist-undo');
+    await expect(page.locator('#event-title')).toHaveValue('');
+    await expect(page.locator('#event-title')).not.toHaveClass(/is-ai-filled/);
+    await expect(page.locator('#ai-mark-title')).toHaveCount(0);
+    await expect(page.locator('#editor-assist-undo')).toHaveCount(0);
+    expect(errors).toEqual([]);
 });

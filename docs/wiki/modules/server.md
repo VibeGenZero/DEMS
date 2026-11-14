@@ -10,7 +10,7 @@ see_also: [request-lifecycle, security, configuration]
 ---
 # server.js — Express app, misc endpoints, startup
 
-> TL;DR: `server.js` builds the Express 5 app (security headers, rate limits, session, CSRF, static files), mounts the four routers, defines five small endpoints itself (`/healthz`, `/api/csrf-token`, `/api/maintenance/status`, `/api/server-info`, `/api/updates`) plus the SPA fallback, then starts the HTTP server, the Discord bot and the reminder, poll and archive schedulers and the update check.
+> TL;DR: `server.js` builds the Express 5 app (security headers, rate limits, session, CSRF, static files), mounts the routers (auth, the event assistant `routes/eventAsk.js` before events, events, polls, admin, user, setup), defines five small endpoints itself (`/healthz`, `/api/csrf-token`, `/api/maintenance/status`, `/api/server-info`, `/api/updates`) plus the SPA fallback, then starts the HTTP server, the Discord bot and the reminder, poll and archive schedulers and the update check.
 
 ## Responsibilities
 
@@ -29,7 +29,7 @@ see_also: [request-lifecycle, security, configuration]
 | GET | `/healthz` | none | `{ status: 'ok' }` — registered before session/CSRF (Docker healthcheck) |
 | GET | `/api/csrf-token` | none | `{ token }` = `req.session.csrfToken`; the CSRF middleware mints it (and thereby the session) here when missing — the only place besides the login |
 | GET | `/api/maintenance/status` | none | public subset of `maintenanceSettings/config` (`active`, `warningEnabled`, `warningText`, `loginDisabled`, `registrationDisabled`, `plannedMaintenance*`, `panicMode`); `{ active: false }` when unset/error |
-| GET | `/api/server-info` | none | `{ serverName, iconUrl, guildId, debugMode }`; name from `SERVER_NAME`, else `getGuildName()`, else `'DEMS'`; `iconUrl` from `getGuildIconUrl()` (also with `SERVER_NAME`), `null` without an icon or bot |
+| GET | `/api/server-info` | none | `{ serverName, iconUrl, guildId, debugMode, ai: { memberAssistant, assistantName, teaserText, adminAssistant } }` (`ai` from `publicAiInfo()` + `isFeatureOn('adminAssistant')`, all off on an error; never a key or model, [ai-integration](../concepts/ai-integration.md)); name from `SERVER_NAME`, else `getGuildName()`, else `'DEMS'`; `iconUrl` from `getGuildIconUrl()` (also with `SERVER_NAME`), `null` without an icon or bot |
 | GET | `/api/updates` | none | sends `updates.json`: `{ version, releases: [{ version, date, news: [{ title, content, highlight? }] }] }`, newest release first, `version` = newest (D-13; `test/updatesData.test.js` guards order, dates and at most 3 highlights per release) |
 | GET | `/{*splat}` | none | `public/index.html` (SPA fallback, Express 5 wildcard syntax) |
 

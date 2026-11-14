@@ -13,7 +13,8 @@ process.env.DEV_SQLITE_PATH = path.join(tmpDir, 'announcement.sqlite');
 
 const bot = require('../bot');
 const { buildRoster } = require('../utils/slotService');
-const { countComponents, textLength } = require('../bot/layout');
+const { countComponents, textLength, MESSAGE_COMPONENTS_MAX } = require('../bot/layout');
+const aiSettings = require('../ai/settings');
 
 after(async () => {
     await bot.client.destroy();
@@ -120,15 +121,50 @@ test('the places sentence tells guests and open requests; nobody waiting means n
     assert.ok(!facts.some(line => line.includes('Warteliste')));
 });
 
-test('a normal event ends with "Anmelden" and "Zum Event"', () => {
+test('a normal event ends with "Anmelden", "Frage stellen" and "Zum Event"', () => {
     const payload = announce(plainEvent());
     assert.deepEqual(blocksOf(payload), []);
     const buttons = rowButtons(payload);
-    assert.deepEqual(buttons.map(button => button.label), ['Anmelden', 'Zum Event']);
+    // Mock mode turns the mock AI provider on, so the event assistant button is there
+    assert.deepEqual(buttons.map(button => button.label), ['Anmelden', 'Frage stellen', 'Zum Event']);
     assert.equal(buttons[0].custom_id, 'event_register:evt1');
     assert.equal(buttons[0].style, BUTTON_STYLE.SUCCESS);
-    assert.equal(buttons[1].style, BUTTON_STYLE.LINK);
-    assert.ok(buttons[1].url.endsWith('#event/evt1'));
+    assert.equal(buttons[2].style, BUTTON_STYLE.LINK);
+    assert.ok(buttons[2].url.endsWith('#event/evt1'));
+});
+
+test('„Frage stellen“ opens the event assistant while it is on for Discord', async () => {
+    const [, ask] = rowButtons(announce(plainEvent()));
+    assert.deepEqual([ask.custom_id, ask.style, ask.emoji.name], ['event_ask:evt1', BUTTON_STYLE.SECONDARY, '💬']);
+
+    await aiSettings.saveAiSettings({ memberDiscord: false });
+    try {
+        assert.deepEqual(rowButtons(announce(plainEvent())).map(button => button.label), ['Anmelden', 'Zum Event']);
+    } finally {
+        await aiSettings.saveAiSettings({ memberDiscord: true });
+    }
+    const provider = process.env.AI_PROVIDER;
+    process.env.AI_PROVIDER = '';
+    try {
+        assert.deepEqual(rowButtons(announce(plainEvent())).map(button => button.label), ['Anmelden', 'Zum Event']);
+    } finally {
+        process.env.AI_PROVIDER = provider;
+    }
+});
+
+test('no „Frage stellen“ for events that are not active or already over', () => {
+    const HOUR = 60 * 60 * 1000;
+    for (const event of [
+        plainEvent({ status: 'draft' }),
+        plainEvent({ status: 'archived' }),
+        plainEvent({ status: 'cancelled' }),
+        plainEvent({ startDate: new Date(Date.now() - 3 * HOUR).toISOString(), endDate: new Date(Date.now() - HOUR).toISOString() })
+    ]) {
+        assert.ok(!rowButtons(announce(event)).some(button => button.label === 'Frage stellen'), JSON.stringify(event));
+    }
+    // A closed registration still lets members ask
+    const deadline = plainEvent({ registrationDeadline: new Date(Date.now() - HOUR).toISOString() });
+    assert.deepEqual(rowButtons(announce(deadline)).map(button => button.label), ['Frage stellen', 'Zum Event']);
 });
 
 test('every slot is a block with its button beside it; the row keeps only the link', () => {
@@ -138,7 +174,7 @@ test('every slot is a block with its button beside it; the row keeps only the li
     assert.deepEqual(blocks.map(block => block.button.label), ['Tank', 'Heiler', 'Schaden']);
     assert.equal(blocks[0].button.emoji.name, '🛡️');
     assert.equal(blocks[0].button.style, BUTTON_STYLE.PRIMARY);
-    assert.deepEqual(rowButtons(payload).map(button => button.label), ['Zum Event']);
+    assert.deepEqual(rowButtons(payload).map(button => button.label), ['Frage stellen', 'Zum Event']);
 });
 
 test('the blocks show the line-up; a full slot is marked and its button stays clickable', () => {
@@ -169,34 +205,36 @@ test('closed registration keeps the line-up as text and only the link button', (
         slotEvent({ registrationDeadline: new Date(Date.now() - HOUR).toISOString() }),
         slotEvent({ startDate: new Date(Date.now() - 3 * HOUR).toISOString(), endDate: new Date(Date.now() - HOUR).toISOString() })
     ];
-    for (const event of closed) {
+    // Questions stay possible after the deadline of an active event that is not over
+    const rows = [['Zum Event'], ['Frage stellen', 'Zum Event'], ['Zum Event']];
+    closed.forEach((event, index) => {
         const payload = announce(event);
         const blocks = blocksOf(payload);
         assert.equal(blocks.length, 3);
         assert.ok(blocks.every(block => block.button === null));
         assert.equal(blocks[0].text, '**🛡️ Tank 0/2**\n— frei —');
-        assert.deepEqual(rowButtons(payload).map(button => button.label), ['Zum Event']);
-    }
+        assert.deepEqual(rowButtons(payload).map(button => button.label), rows[index]);
+    });
 });
 
-test('a form too big for a Discord modal leaves only the link button', () => {
+test('a form too big for a Discord modal leaves only the question and link buttons', () => {
     const fields = ['A', 'B', 'C', 'D', 'E', 'F'].map(label => ({ label, type: 'text', required: false }));
     const plain = announce(plainEvent({ formFields: fields }));
-    assert.deepEqual(rowButtons(plain).map(button => button.label), ['Zum Event']);
+    assert.deepEqual(rowButtons(plain).map(button => button.label), ['Frage stellen', 'Zum Event']);
     const slots = announce(slotEvent({ formFields: fields }));
     assert.ok(blocksOf(slots).every(block => block.button === null));
 });
 
-test('an event that allows „Vielleicht“ gets the button between „Anmelden“ and „Zum Event“ (B-17)', () => {
+test('an event that allows „Vielleicht“ gets the button right after „Anmelden“ (B-17)', () => {
     const buttons = rowButtons(announce(plainEvent({ allowTentative: true })));
-    assert.deepEqual(buttons.map(button => button.label), ['Anmelden', 'Vielleicht', 'Zum Event']);
+    assert.deepEqual(buttons.map(button => button.label), ['Anmelden', 'Vielleicht', 'Frage stellen', 'Zum Event']);
     assert.equal(buttons[1].custom_id, 'event_maybe:evt1');
     assert.equal(buttons[1].style, BUTTON_STYLE.SECONDARY);
     assert.equal(buttons[1].emoji.name, '🤔');
 
     // Slot events keep their role buttons beside the line-up
     const slot = announce(slotEvent({ allowTentative: true }));
-    assert.deepEqual(rowButtons(slot).map(button => button.label), ['Vielleicht', 'Zum Event']);
+    assert.deepEqual(rowButtons(slot).map(button => button.label), ['Vielleicht', 'Frage stellen', 'Zum Event']);
     assert.equal(blocksOf(slot).length, 3);
 });
 
@@ -238,12 +276,14 @@ test('a 5000-character description is cut so the whole message stays within 4000
     assert.doesNotMatch(head, /[\uD800-\uDBFF]…$/);
 });
 
-test('ten slots with banner and ping line stay within 40 components', () => {
-    const slots = Array.from({ length: 10 }, (_, i) => ({ id: `s${i}`, name: `Slot ${i}`, emoji: '🛡️', capacity: 1 }));
-    const payload = announce(slotEvent({ slots, bannerUrl: 'https://example.com/raid.png' }), undefined, '<@&1>');
-    assert.equal(blocksOf(payload).length, 10);
+test('the most slots with banner, ping line, „Vielleicht“ and „Frage stellen“ stay within 40 components', () => {
+    const { MAX_SLOTS } = require('../utils/slotService');
+    const slots = Array.from({ length: MAX_SLOTS }, (_, i) => ({ id: `s${i}`, name: `Slot ${i}`, emoji: '🛡️', capacity: 1 }));
+    const payload = announce(slotEvent({ slots, bannerUrl: 'https://example.com/raid.png', allowTentative: true }), undefined, '<@&1>');
+    assert.equal(blocksOf(payload).length, MAX_SLOTS);
     assert.ok(blocksOf(payload).every(block => block.button));
-    assert.ok(countComponents(payload) <= 40, String(countComponents(payload)));
+    assert.deepEqual(rowButtons(payload).map(button => button.label), ['Vielleicht', 'Frage stellen', 'Zum Event']);
+    assert.ok(countComponents(payload) <= MESSAGE_COMPONENTS_MAX, String(countComponents(payload)));
 });
 
 test('the banner opens the container as an image', () => {

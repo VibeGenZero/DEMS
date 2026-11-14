@@ -22,6 +22,8 @@ const { sharedSessionStore } = require('./utils/sessionStore');
 const store = require('./firebaseAdmin');
 const { runMigrations } = require('./db/migrate');
 const { loadSystemConfig } = require('./utils/systemConfig');
+const { loadAiSettings, publicAiInfo, isFeatureOn } = require('./ai/settings');
+const { pruneUsage } = require('./ai/usage');
 const { initSetupState, isSetupRequired } = require('./utils/setupState');
 const { createSetupRouter } = require('./routes/setup');
 const { privacyGate } = require('./middleware/privacy');
@@ -235,6 +237,7 @@ app.use(privacyGate);
 // Dev mock mode: persona login instead of Discord OAuth2 (see dev/devAuth.js)
 if (IS_MOCK_MODE) app.use('/auth', require('./dev/devAuth'));
 app.use('/auth', require('./routes/auth'));
+app.use('/api/events', require('./routes/eventAsk'));
 app.use('/api/events', require('./routes/events'));
 app.use('/api/polls', require('./routes/polls'));
 app.use('/api/admin', require('./routes/admin'));
@@ -275,26 +278,22 @@ app.get('/api/maintenance/status', async (req, res) => {
 // Server info endpoint - server name (env override or Discord API) and icon for the login page
 app.get('/api/server-info', async (req, res) => {
     const debugMode = IS_DEBUG;
+    let info;
+    let ai = { memberAssistant: false, assistantName: '', teaserText: '', adminAssistant: false };
     try {
+        ai = { ...publicAiInfo(), adminAssistant: isFeatureOn('adminAssistant') };
         const guildId = process.env.DISCORD_GUILD_ID || '';
         // The icon comes from Discord even when SERVER_NAME overrides the name
         const iconUrl = guildId ? await getGuildIconUrl(guildId) : null;
-        if (process.env.SERVER_NAME) {
-            return res.json({ serverName: process.env.SERVER_NAME, iconUrl, guildId, debugMode });
-        }
-
-        if (guildId) {
-            const serverName = await getGuildName(guildId);
-            if (serverName) {
-                return res.json({ serverName, iconUrl, guildId, debugMode });
-            }
-        }
-
-        res.json({ serverName: 'DEMS', iconUrl, guildId, debugMode });
+        // SERVER_NAME overrides the Discord name
+        const serverName = process.env.SERVER_NAME || (guildId ? await getGuildName(guildId) : '') || 'DEMS';
+        info = { serverName, iconUrl, guildId, debugMode };
     } catch (err) {
         console.error('Error fetching server info:', err);
-        res.json({ serverName: 'DEMS', iconUrl: null, guildId: '', debugMode });
+        info = { serverName: 'DEMS', iconUrl: null, guildId: '', debugMode };
+        ai = { memberAssistant: false, assistantName: '', teaserText: '', adminAssistant: false };
     }
+    res.json({ ...info, ai });
 });
 
 // Privacy policy of this installation (#138): public, linked from the login page
@@ -336,6 +335,7 @@ async function start() {
     // Stored configuration (setup wizard, admin "System" view) fills what .env leaves empty
     const loaded = await loadSystemConfig();
     console.log(`⚙️ Konfiguration: ${loaded.fromDb} Werte aus der Datenbank, ${loaded.fromEnv} aus der Umgebung (.env).`);
+    await loadAiSettings();
     sessionMiddleware = createSessionMiddleware();
     // Setup mode: no Discord values yet -> the wizard runs, the PIN goes to the log
     await initSetupState({ mockMode: IS_MOCK_MODE });
@@ -363,6 +363,10 @@ async function start() {
     startOfferScheduler({ waitFor: whenBotSettled() });
     // Tells admins about a newer DEMS release (GitHub releases, every 12 h; off in mock mode)
     startUpdateCheck({ mockMode: IS_MOCK_MODE });
+    // AI usage counters are kept 90 days: prune at start, then every 6 h like expired sessions
+    const pruneAiUsage = () => pruneUsage().catch((err) => console.error('KI-Nutzung konnte nicht bereinigt werden:', err.message));
+    pruneAiUsage();
+    setInterval(pruneAiUsage, 6 * 60 * 60 * 1000).unref();
     // Uploaded banners no event uses and older than a day (wizard closed without saving, W-12)
     sweepOrphanBanners().then((count) => {
         if (count > 0) console.log(`🧹 ${count} verwaiste Banner gelöscht.`);

@@ -22,6 +22,7 @@ import './admin/registration-bulk.js';
 import './admin/registrations.js';
 import './admin/system-nav.js';
 import './admin/system.js';
+import './admin/system-ai.js';
 import './admin/wizard-builders.js';
 import './admin/wizard-location.js';
 import './admin/wizard-banner.js';

@@ -113,6 +113,11 @@ test('a member opens event, polls and profile without one refused style', async 
     const slotBar = page.locator('#detail-roster .capacity-progress-bar').first();
     await expect(slotBar).toHaveAttribute('data-style-width', /^\d+$/);
     expect(await slotBar.evaluate(element => element.style.width)).toMatch(/^\d+%$/);
+    // The open chat of the event assistant with a streamed answer and its source chip
+    await page.click('#assistant-toggle');
+    await page.locator('#assistant-suggestions [data-question="Was sind die Regeln?"]').click();
+    await expect(page.locator('#assistant-messages .assistant-source').last()).toHaveText('Quelle: Beschreibung');
+    await page.click('#assistant-panel .assistant-close');
     await navigate(page, 'polls');
     await page.locator('#polls-open .poll-card').first().click();
     await expect(page.locator('#poll-detail-section')).toBeVisible();

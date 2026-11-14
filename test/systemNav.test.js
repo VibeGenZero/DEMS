@@ -5,7 +5,7 @@ const path = require('path');
 const { loadFrontendApp, httpAnswer, isHidden, REPO_ROOT } = require('./helpers');
 
 const HTML = fs.readFileSync(path.join(REPO_ROOT, 'public', 'index.html'), 'utf8');
-const CATEGORY_IDS = ['overview', 'discord', 'server', 'security', 'privacy'];
+const CATEGORY_IDS = ['overview', 'discord', 'server', 'security', 'ai', 'privacy'];
 
 // Categories of the admin page "System" (#system/<category>) and the leave guard of the router
 

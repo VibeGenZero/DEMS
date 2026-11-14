@@ -20,7 +20,7 @@ see_also: [request-lifecycle, add-api-endpoint]
 | GET | `/api/csrf-token` | — |
 | GET | `/api/maintenance/status` | — |
 | GET | `/api/privacy` (#138: current privacy policy `{ markdown, version, updatedAt }`, 404 without one) | — |
-| GET | `/api/server-info` | — |
+| GET | `/api/server-info` (`{ serverName, iconUrl, guildId, debugMode, ai: { memberAssistant, assistantName, teaserText, adminAssistant } }`; `ai` also in the error fallback, all off) | —
 | GET | `/api/updates` | — |
 | GET | `/{*splat}` (SPA fallback) | — |
 
@@ -30,12 +30,13 @@ Only in setup mode (afterwards 409 `Die Einrichtung ist bereits abgeschlossen.`)
 
 | Method | Path | Guard |
 |---|---|---|
-| GET | `/api/setup/status` → `{ required, unlocked, locked, httpsRequired (production over plain HTTP), defaults: { BASE_URL, TIMEZONE } }`, with `P` also `discordDone`, `values` (non-secret), `secretsSet` | — |
+| GET | `/api/setup/status` → `{ required, unlocked, locked, httpsRequired (production over plain HTTP), defaults: { BASE_URL, TIMEZONE } }`, with `P` also `discordDone`, `values` (non-secret), `secretsSet`, `aiProviders` (`[{ id, label, defaultBaseUrl, keyRequired }]`) | — |
 | POST | `/api/setup/unlock` `{ pin }` (5 attempts / 15 min / IP → 429; new session) | — |
 | GET | `/api/setup/invite-url?clientId=` → `{ url }` | P |
 | POST | `/api/setup/discord` `{ clientId, clientSecret, botToken, guildId }` → `{ guildName, roles, channels, categories }`; 400 names the guide step, `inviteUrl` when the bot is not on the guild | P |
 | GET | `/api/setup/guild` → roles, channels, categories again | P |
-| POST | `/api/setup/complete` `{ baseUrl, serverName, timezone, adminRoleId, announceChannelId, eventCategoryId, threadSync, adminResetPassword, privacyMarkdown? }` → `{ success, restartRequired }`; ends setup mode and the session | P |
+| POST | `/api/setup/ai/test`, `/api/setup/ai/models` `{ provider, baseUrl, apiKey, model }` → same answers as `/api/admin/ai/test` and `/api/admin/ai/models` (optional step „KI") | P |
+| POST | `/api/setup/complete` `{ baseUrl, serverName, timezone, adminRoleId, announceChannelId, eventCategoryId, threadSync, adminResetPassword, aiProvider?, aiBaseUrl?, aiApiKey?, aiModel?, privacyMarkdown? }` → `{ success, restartRequired }`; AI values only with a provider, which needs a model (400); ends setup mode and the session | P |
 
 ## /auth — [routes-auth](../modules/routes-auth.md)
 
@@ -55,6 +56,7 @@ Only in setup mode (afterwards 409 `Die Einrichtung ist bereits abgeschlossen.`)
 | GET | `/api/events/series/:seriesId` | U (draft/archived only for A) |
 | GET | `/api/events/form-options` | U |
 | GET | `/api/events/:id` | U (draft/archived → 404 unless A; same for every `/:id` route) |
+| POST | `/api/events/:id/ask` (`routes/eventAsk.js`, mounted before `routes/events.js`; body `{ question, history }`; JSON errors 400/404/429/500 before the stream, otherwise `text/event-stream` with `token` / `done` / `error` events; feature off → 404) | U + CSRF |
 | POST / DELETE | `/api/events/:id/register` | U (POST also maintenance gate) |
 | PUT | `/api/events/:id/register/slot` | U (+ maintenance gate) |
 | POST | `/api/events/:id/register/confirm` | U (+ maintenance gate) |
@@ -88,8 +90,10 @@ Only in setup mode (afterwards 409 `Die Einrichtung ist bereits abgeschlossen.`)
 | Method | Path |
 |---|---|
 | GET | `/api/admin/roles`, `/channels`, `/stats`, `/all-events`, `/import/discord-events` |
-| GET | `/api/admin/system/settings`, `/system/invite-url` (#138), `/system/update-status` (newest GitHub release vs. running version) |
-| PUT | `/api/admin/system/settings` (#138, needs `password` = admin reset password), `/api/admin/privacy` (#138, `{ markdown }`) |
+| GET | `/api/admin/ai/settings`, `/api/admin/ai/usage` (AI integration), `/api/admin/system/settings`, `/system/invite-url` (#138), `/system/update-status` (newest GitHub release vs. running version) |
+| PUT | `/api/admin/ai/settings` (behaviour settings, no password), `/api/admin/system/settings` (#138, needs `password` = admin reset password), `/api/admin/privacy` (#138, `{ markdown }`) |
+| POST | `/api/admin/ai/test`, `/api/admin/ai/models` (typed, unsaved connection values; test always answers 200) |
+| POST | `/api/admin/ai/event-draft` (`{ message, draft, history }` → `{ patch, reply, questions }`), `/api/admin/ai/text` (`{ kind, draft }` → `{ text }`) — editor assistant, 404 while `adminAssistant` is off, nothing saved |
 | POST | `/api/admin/events`, `/events/preview` |
 | POST | `/api/admin/uploads/banner` (W-12, raw image body ≤ 5 MB) |
 | PUT | `/api/admin/events/:id` (series dates: optional `applyTo: 'following'`, a later `recurringUntil` extends the series, answer adds `updatedDates` and `createdDates`, W-11), `/events/:id/status`, `/events/:id/cancel` |

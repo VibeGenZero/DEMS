@@ -402,6 +402,9 @@ function validateSlotChange({ oldSlots, newSlots, registrations }) {
 
 module.exports = {
     MAX_SLOTS,
+    SLOT_NAME_MAX_LENGTH,
+    SLOT_CAPACITY_MIN,
+    SLOT_CAPACITY_MAX,
     getSlots,
     hasSlots,
     findSlot,

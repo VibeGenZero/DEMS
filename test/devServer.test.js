@@ -569,12 +569,12 @@ test('the wizard preview builds the Discord announcement of an unsaved event and
     assert.equal(head, '## 🎉 Vorschau-Raid\nBringt Tränke mit.');
     assert.match(facts, /^🗓️ \*\*Datum:\*\* /);
     assert.ok(facts.includes('👥 **Plätze:** 0 von 5 Plätzen belegt'), facts);
-    // Slot buttons beside their line-up blocks, the link in the last row (B-05)
+    // Slot buttons beside their line-up blocks, „Frage stellen“ (mock AI on) and the link in the last row (B-05)
     const buttons = container.components.flatMap(part => {
         if (part.type === 9) return [part.accessory];
         return part.type === 1 ? part.components : [];
     });
-    assert.deepEqual(buttons.map(button => button.label), ['Tank', 'Heiler', 'Zum Event']);
+    assert.deepEqual(buttons.map(button => button.label), ['Tank', 'Heiler', 'Frage stellen', 'Zum Event']);
     assert.equal(preview.places.text, '0 von 5 Plätzen belegt');
     assert.deepEqual(preview.bot, { name: 'DEMS Bot (Mock)', avatarUrl: 'https://cdn.discordapp.com/embed/avatars/0.png' });
     assert.equal(await countEvents(), before);
@@ -584,7 +584,7 @@ test('the preview shows „Vielleicht“ when the wizard allows it (B-17)', asyn
     const admin = await loginAs('admin');
     const preview = await (await admin.send('POST', '/api/admin/events/preview', { title: 'Bank', status: 'active', allowTentative: true })).json();
     const row = previewContainer(preview).components.find(part => part.type === 1);
-    assert.deepEqual(row.components.map(button => button.label), ['Anmelden', 'Vielleicht', 'Zum Event']);
+    assert.deepEqual(row.components.map(button => button.label), ['Anmelden', 'Vielleicht', 'Frage stellen', 'Zum Event']);
 });
 
 test('a half-done draft can be previewed; members and requests without a token cannot', async () => {
@@ -3960,4 +3960,41 @@ test('„Fest zusagen“ turns the answer into a registration and needs login an
     const again = await raider.send('POST', url);
     assert.equal(again.status, 400);
     assert.deepEqual(await again.json(), { error: 'Du stehst nicht auf der Ersatzbank.' });
+});
+
+// Extra details only the AI assistant reads: admin-only in answers, copied by duplicates
+test('aiNotes are stored, shown to admins only and copied by a duplicate', async () => {
+    const admin = await loginAs('admin');
+    const created = await createSlotEvent(admin, 'KI-Notizen', [], { aiNotes: 'Treffpunkt: Lobby' });
+    assert.equal(created.aiNotes, 'Treffpunkt: Lobby');
+
+    const adminDetail = await (await admin.request(`/api/events/${created.id}`)).json();
+    assert.equal(adminDetail.aiNotes, 'Treffpunkt: Lobby');
+
+    const updated = await admin.send('PUT', `/api/admin/events/${created.id}`, { ...adminDetail, aiNotes: 'Neu: Voice 2' });
+    assert.equal(updated.status, 200);
+    assert.equal((await (await admin.request(`/api/events/${created.id}`)).json()).aiNotes, 'Neu: Voice 2');
+
+    const copy = await (await admin.send('POST', `/api/admin/events/${created.id}/duplicate`)).json();
+    assert.equal(copy.aiNotes, 'Neu: Voice 2');
+
+    const member = await loginAs('member');
+    const memberDetail = await (await member.request(`/api/events/${EVENT_ID.OPEN}`)).json();
+    assert.equal(Object.hasOwn(memberDetail, 'aiNotes'), false);
+    const list = (await (await member.request('/api/events')).json()).data;
+    assert.ok(list.length > 0);
+    assert.equal(list.some(event => Object.hasOwn(event, 'aiNotes')), false);
+    const adminOpen = await (await admin.request(`/api/events/${EVENT_ID.OPEN}`)).json();
+    assert.match(adminOpen.aiNotes, /Treffpunkt/);
+});
+
+test('aiNotes longer than 4000 characters are refused', async () => {
+    const admin = await loginAs('admin');
+    const res = await admin.send('POST', '/api/admin/events', {
+        title: 'Zu lang', status: 'draft', aiNotes: 'x'.repeat(4001)
+    });
+    assert.equal(res.status, 400);
+    assert.equal((await res.json()).error, 'Die Zusatzinfos für den Event-Assistenten dürfen höchstens 4000 Zeichen lang sein.');
+    const ok = await admin.send('POST', '/api/admin/events', { title: 'Passt', status: 'draft', aiNotes: 'x'.repeat(4000) });
+    assert.equal(ok.status, 200);
 });

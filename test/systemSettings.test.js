@@ -143,6 +143,6 @@ test('the answer carries the status of bot and database for the overview, withou
     assert.equal(status.database, 'sqlite');
     assert.equal(typeof status.bot.online, 'boolean');
     assert.equal(typeof status.bot.guildName, 'string');
-    assert.deepEqual(Object.keys(status).sort(), ['bot', 'database']);
+    assert.deepEqual(Object.keys(status).sort(), ['ai', 'bot', 'database']);
     assert.deepEqual(Object.keys(status.bot).sort(), ['guildName', 'online']);
 });
