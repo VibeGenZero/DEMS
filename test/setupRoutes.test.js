@@ -265,3 +265,104 @@ test('in production over plain HTTP the status says that the setup needs HTTPS',
     // Outside production (dev, tests) plain HTTP works
     assert.equal((await (await createClient(baseUrl).request('/api/setup/status')).json()).httpsRequired, false);
 });
+
+// ── Step „KI (optional)" ───────────────────────────────────────────────
+
+/** A port nobody listens on: a server is opened and closed again. */
+async function closedPort() {
+    const http = require('http');
+    const probe = http.createServer();
+    await new Promise(resolve => probe.listen(0, '127.0.0.1', resolve));
+    const { port } = probe.address();
+    await new Promise(resolve => probe.close(resolve));
+    return port;
+}
+
+test('the AI test and model list need the unlocked setup session', async () => {
+    const client = createClient(baseUrl);
+    await client.request('/api/csrf-token');
+    for (const url of ['/api/setup/ai/test', '/api/setup/ai/models']) {
+        const res = await client.send('POST', url, { provider: 'ollama', baseUrl: 'http://127.0.0.1:9', model: 'x' });
+        assert.equal(res.status, 403, url);
+    }
+});
+
+test('the AI test answers like the admin route; the model list reads the typed provider', async () => {
+    const http = require('http');
+    const fake = http.createServer((req, res) => {
+        res.setHeader('Content-Type', 'application/json');
+        res.end(JSON.stringify(req.url.endsWith('/models') ? { data: [{ id: 'llama3' }, { id: 'qwen' }] } : {}));
+    });
+    await new Promise(resolve => fake.listen(0, '127.0.0.1', resolve));
+    try {
+        const client = await unlockedClient();
+        const port = await closedPort();
+        const test = await client.send('POST', '/api/setup/ai/test', { provider: 'openai', baseUrl: `http://127.0.0.1:${port}/v1`, apiKey: 'k', model: 'gpt' });
+        assert.equal(test.status, 200);
+        assert.deepEqual(await test.json(), { ok: false, error: 'Der KI-Anbieter ist nicht erreichbar.' });
+        const models = await client.send('POST', '/api/setup/ai/models', { provider: 'ollama', baseUrl: `http://127.0.0.1:${fake.address().port}/v1` });
+        assert.equal(models.status, 200);
+        assert.deepEqual((await models.json()).models.sort(), ['llama3', 'qwen']);
+    } finally {
+        await new Promise(resolve => fake.close(resolve));
+    }
+});
+
+test('the unlocked status lists the AI providers', async () => {
+    const client = await unlockedClient();
+    const status = await (await client.request('/api/setup/status')).json();
+    const ids = status.aiProviders.map(provider => provider.id);
+    assert.deepEqual(ids, ['ollama', 'openrouter', 'openai', 'gemini', 'anthropic']);
+    assert.equal(status.aiProviders[0].defaultBaseUrl, 'http://localhost:11434/v1');
+    assert.equal(status.aiProviders[0].keyRequired, false);
+});
+
+test('completing with the AI values stores them; the key is reported as set, never as value', async () => {
+    const client = await unlockedClient();
+    await client.send('POST', '/api/setup/discord', DISCORD_BODY);
+    const res = await client.send('POST', '/api/setup/complete', {
+        ...COMPLETE_BODY, aiProvider: 'openai', aiBaseUrl: '', aiApiKey: 'sk-geheim', aiModel: 'gpt-4.1-mini'
+    });
+    assert.equal(res.status, 200, JSON.stringify(await res.clone().json()));
+    const settings = systemConfig.listSystemSettings();
+    const entry = (key) => settings.find(item => item.key === key);
+    assert.equal(entry('AI_PROVIDER').value, 'openai');
+    assert.equal(entry('AI_MODEL').value, 'gpt-4.1-mini');
+    assert.equal(entry('AI_API_KEY').isSet, true);
+    assert.equal(entry('AI_API_KEY').value, null);
+    assert.equal(process.env.AI_API_KEY, 'sk-geheim');
+});
+
+test('completing without AI values stores nothing of the AI', async () => {
+    const client = await unlockedClient();
+    await client.send('POST', '/api/setup/discord', DISCORD_BODY);
+    const res = await client.send('POST', '/api/setup/complete', { ...COMPLETE_BODY, aiProvider: '', aiBaseUrl: '', aiApiKey: '', aiModel: '' });
+    assert.equal(res.status, 200);
+    const values = (await stored()).values || {};
+    for (const key of ['AI_PROVIDER', 'AI_BASE_URL', 'AI_API_KEY', 'AI_MODEL', 'AI_MODEL_ADMIN']) assert.equal(values[key], undefined, key);
+    assert.equal(process.env.AI_PROVIDER || '', '');
+});
+
+test('a provider without a model is refused and setup mode continues', async () => {
+    const client = await unlockedClient();
+    await client.send('POST', '/api/setup/discord', DISCORD_BODY);
+    const res = await client.send('POST', '/api/setup/complete', { ...COMPLETE_BODY, aiProvider: 'ollama', aiModel: '  ' });
+    assert.equal(res.status, 400);
+    assert.deepEqual(await res.json(), { error: 'Bitte wähle ein KI-Modell oder überspringe den KI-Schritt.' });
+    const bad = await client.send('POST', '/api/setup/complete', { ...COMPLETE_BODY, aiProvider: 'skynet', aiModel: 'x' });
+    assert.equal(bad.status, 400);
+    assert.match((await bad.json()).error, /KI-Anbieter/);
+    assert.equal(setupState.isSetupRequired(), true);
+});
+
+test('AI values from .env stay as they are', async () => {
+    await freshSetup({ AI_PROVIDER: 'ollama', AI_MODEL: 'llama3' });
+    const client = await unlockedClient();
+    await client.send('POST', '/api/setup/discord', DISCORD_BODY);
+    const res = await client.send('POST', '/api/setup/complete', { ...COMPLETE_BODY, aiProvider: 'openai', aiModel: '' });
+    assert.equal(res.status, 200);
+    assert.equal(process.env.AI_PROVIDER, 'ollama');
+    assert.equal(process.env.AI_MODEL, 'llama3');
+    assert.equal(((await stored()).values || {}).AI_PROVIDER, undefined);
+    for (const key of ['AI_PROVIDER', 'AI_MODEL']) delete process.env[key];
+});

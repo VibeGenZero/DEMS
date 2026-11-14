@@ -16,6 +16,7 @@ const systemConfig = require('../utils/systemConfig');
 const setupState = require('../utils/setupState');
 const { savePrivacyPolicy, PRIVACY_MAX_LENGTH } = require('../utils/privacyPolicy');
 const { SNOWFLAKE, RESET_PASSWORD_MIN, SYSTEM_VALUE_ERRORS, normalizeSystemValue, botLoginError } = require('../utils/systemValues');
+const { providerList, answerConnectionTest, answerModelList } = require('./aiConnection');
 
 const UNLOCK_WINDOW_MS = 15 * 60 * 1000;
 const UNLOCK_LIMIT = 5;
@@ -41,11 +42,15 @@ const MESSAGES = {
     unreachable: 'Discord ist gerade nicht erreichbar. Bitte versuche es gleich noch einmal.',
     notOnGuild: 'Der Bot ist nicht auf dem Server mit dieser ID. Lade ihn mit dem Einladungslink ein (Schritt 4 der Anleitung) und prüfe die Server-ID (Schritt 5).',
     discordFirst: 'Bitte zuerst den Discord-Schritt abschließen.',
+    aiModel: 'Bitte wähle ein KI-Modell oder überspringe den KI-Schritt.',
     privacy: `Die Datenschutzerklärung darf höchstens ${PRIVACY_MAX_LENGTH} Zeichen lang sein.`,
     failed: 'Die Einrichtung ist fehlgeschlagen. Bitte versuche es erneut.'
 };
 
 const text = (value) => (typeof value === 'string' ? value.trim() : '');
+
+// Field of the complete request -> stored key of the optional AI step
+const AI_FIELDS = { aiProvider: 'AI_PROVIDER', aiBaseUrl: 'AI_BASE_URL', aiApiKey: 'AI_API_KEY', aiModel: 'AI_MODEL' };
 
 /** Default Discord helpers; required late so the tests never load the bot. */
 function defaultDeps() {
@@ -128,6 +133,7 @@ function createSetupRouter(deps = {}) {
                 body.discordDone = isDiscordDone();
                 body.values = Object.fromEntries(settings.filter(entry => !entry.secret).map(entry => [entry.key, entry.value]));
                 body.secretsSet = Object.fromEntries(settings.filter(entry => entry.secret).map(entry => [entry.key, entry.isSet]));
+                body.aiProviders = providerList();
             }
             res.json(body);
         } catch (err) {
@@ -244,7 +250,35 @@ function createSetupRouter(deps = {}) {
     });
 
     /**
-     * POST /api/setup/complete — server values, reset password, optional privacy policy; ends setup mode
+     * POST /api/setup/ai/test and /api/setup/ai/models — the typed, unsaved AI values of the optional step
+     * (same answers as /api/admin/ai/test and /api/admin/ai/models)
+     */
+    router.post('/ai/test', requireUnlocked, answerConnectionTest);
+    router.post('/ai/models', requireUnlocked, answerModelList);
+
+    /**
+     * Changes of the optional AI step. Without a provider (typed or from .env) nothing of the AI is stored.
+     *
+     * @param {Object} body -> Request body with aiProvider, aiBaseUrl, aiApiKey, aiModel.
+     * @returns {{ changes: Object }|{ error: string }}
+     */
+    function aiChanges(body) {
+        const changes = {};
+        for (const [field, key] of Object.entries(AI_FIELDS)) {
+            if (systemConfig.isLocked(key)) continue;
+            const result = normalizeSystemValue(key, body[field]);
+            if (result.error) return { error: result.error };
+            if (!result.skip) changes[key] = result.value;
+        }
+        const provider = systemConfig.isLocked('AI_PROVIDER') ? text(process.env.AI_PROVIDER) : changes.AI_PROVIDER;
+        if (!provider) return { changes: {} };
+        const model = systemConfig.isLocked('AI_MODEL') ? text(process.env.AI_MODEL) : changes.AI_MODEL;
+        if (!model) return { error: MESSAGES.aiModel };
+        return { changes };
+    }
+
+    /**
+     * POST /api/setup/complete — server values, reset password, optional AI connection and privacy policy; ends setup mode
      */
     router.post('/complete', requireUnlocked, async (req, res) => {
         try {
@@ -274,6 +308,9 @@ function createSetupRouter(deps = {}) {
                 if (result.error) return res.status(400).json({ error: result.error });
                 changes[key] = result.value;
             }
+            const ai = aiChanges(body);
+            if (ai.error) return res.status(400).json({ error: ai.error });
+            Object.assign(changes, ai.changes);
             const privacyMarkdown = text(body.privacyMarkdown);
             if (privacyMarkdown.length > PRIVACY_MAX_LENGTH) return res.status(400).json({ error: MESSAGES.privacy });
 

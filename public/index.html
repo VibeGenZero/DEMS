@@ -243,6 +243,23 @@
             </div>
           </div>
 
+          <div class="setup-step is-hidden" id="setup-step-ai">
+            <h2 class="setup-step-title">KI (optional)</h2>
+            <p class="text-secondary">DEMS kann Fragen von Mitgliedern zu Events beantworten und dir beim Erstellen von Events helfen. Du kannst das auch später unter System › KI einrichten.</p>
+            <div class="setup-fields" id="setup-ai-fields"></div>
+            <div class="setup-field">
+              <button type="button" class="btn btn-secondary btn-sm" id="setup-ai-test" data-click="testSetupAi">
+                <i class="bi bi-plug me-1" aria-hidden="true"></i>Verbindung testen
+              </button>
+              <span class="ms-2" id="setup-ai-test-result" role="status"></span>
+            </div>
+            <div class="setup-actions">
+              <button type="button" class="btn btn-secondary" data-click="setupBack" data-setup-step="security">Zurück</button>
+              <button type="button" class="btn btn-ghost" data-click="skipSetupAi">Überspringen</button>
+              <button type="button" class="btn btn-primary" data-click="submitSetupAi">Weiter</button>
+            </div>
+          </div>
+
           <div class="setup-step is-hidden" id="setup-step-privacy">
             <h2 class="setup-step-title">Datenschutzerklärung (optional)</h2>
             <p class="text-secondary">Schreib hier die Datenschutzerklärung deiner Community (Markdown). Sie erscheint öffentlich unter „Datenschutz“, und jedes Mitglied muss sie beim ersten Login akzeptieren. Du kannst sie auch später unter Admin &gt; System anlegen oder ändern.</p>
@@ -251,7 +268,7 @@
             <p class="setup-hint">Vorschau</p>
             <div class="setup-privacy-preview rendered-markdown" id="setup-privacy-preview"></div>
             <div class="setup-actions">
-              <button type="button" class="btn btn-secondary" data-click="setupBack" data-setup-step="security">Zurück</button>
+              <button type="button" class="btn btn-secondary" data-click="setupBack" data-setup-step="ai">Zurück</button>
               <button type="button" class="btn btn-primary" id="setup-complete-submit" data-click="completeSetup">
                 <i class="bi bi-check2-circle me-2" aria-hidden="true"></i>Einrichtung abschließen
               </button>

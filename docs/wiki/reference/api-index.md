@@ -30,12 +30,13 @@ Only in setup mode (afterwards 409 `Die Einrichtung ist bereits abgeschlossen.`)
 
 | Method | Path | Guard |
 |---|---|---|
-| GET | `/api/setup/status` → `{ required, unlocked, locked, httpsRequired (production over plain HTTP), defaults: { BASE_URL, TIMEZONE } }`, with `P` also `discordDone`, `values` (non-secret), `secretsSet` | — |
+| GET | `/api/setup/status` → `{ required, unlocked, locked, httpsRequired (production over plain HTTP), defaults: { BASE_URL, TIMEZONE } }`, with `P` also `discordDone`, `values` (non-secret), `secretsSet`, `aiProviders` (`[{ id, label, defaultBaseUrl, keyRequired }]`) | — |
 | POST | `/api/setup/unlock` `{ pin }` (5 attempts / 15 min / IP → 429; new session) | — |
 | GET | `/api/setup/invite-url?clientId=` → `{ url }` | P |
 | POST | `/api/setup/discord` `{ clientId, clientSecret, botToken, guildId }` → `{ guildName, roles, channels, categories }`; 400 names the guide step, `inviteUrl` when the bot is not on the guild | P |
 | GET | `/api/setup/guild` → roles, channels, categories again | P |
-| POST | `/api/setup/complete` `{ baseUrl, serverName, timezone, adminRoleId, announceChannelId, eventCategoryId, threadSync, adminResetPassword, privacyMarkdown? }` → `{ success, restartRequired }`; ends setup mode and the session | P |
+| POST | `/api/setup/ai/test`, `/api/setup/ai/models` `{ provider, baseUrl, apiKey, model }` → same answers as `/api/admin/ai/test` and `/api/admin/ai/models` (optional step „KI") | P |
+| POST | `/api/setup/complete` `{ baseUrl, serverName, timezone, adminRoleId, announceChannelId, eventCategoryId, threadSync, adminResetPassword, aiProvider?, aiBaseUrl?, aiApiKey?, aiModel?, privacyMarkdown? }` → `{ success, restartRequired }`; AI values only with a provider, which needs a model (400); ends setup mode and the session | P |
 
 ## /auth — [routes-auth](../modules/routes-auth.md)
 
