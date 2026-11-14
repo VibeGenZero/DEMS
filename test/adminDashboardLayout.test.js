@@ -16,10 +16,11 @@ const STATS = {
 const html = fs.readFileSync(path.join(REPO_ROOT, 'public', 'index.html'), 'utf8').replace(/\r\n/g, '\n');
 const adminSection = html.slice(html.indexOf('<section id="admin-section"'), html.indexOf('id="admin-stats"'));
 
-test('the admin header holds only the two main actions', () => {
+test('the admin header holds the main actions; „Mit KI erstellen" starts hidden', () => {
     const header = adminSection.slice(0, adminSection.indexOf('</div>\n        </div>'));
     const actions = header.match(/data-click="[^"]+"/g);
-    assert.deepEqual(actions, ['data-click="showImportDiscordEventsModal"', 'data-click="showCreateEvent"']);
+    assert.deepEqual(actions, ['data-click="showImportDiscordEventsModal"', 'data-click="createEventWithAi"', 'data-click="showCreateEvent"']);
+    assert.match(header, /class="btn btn-secondary is-hidden" id="admin-create-ai" data-click="createEventWithAi"/);
     assert.match(header, /class="btn btn-accent"[^>]*data-click="showCreateEvent"/);
 });
 

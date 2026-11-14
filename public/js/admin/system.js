@@ -7,6 +7,7 @@
  * is a new version everybody accepts again).
  */
 import { registerActions } from '../core/actions.js';
+import { refreshAiInfo } from '../core/boot.js';
 import { onRouteLeave, setLeaveGuard } from '../core/router.js';
 import { state } from '../core/state.js';
 import { escapeHtml, renderMarkdownSafe, showConfirmDialog, showToast } from '../core/ui.js';
@@ -366,6 +367,8 @@ async function confirmSystemSave() {
         if (data.restartRequired) showToast('Der Kommentar-Sync ändert sich erst nach einem Neustart von DEMS.', 'warning');
         // Only the saved fields are drawn again: input of the other categories stays
         await loadSettings(page.pendingGroup ? [page.pendingGroup] : GROUPS);
+        // A changed AI connection switches bubble and editor assistant without a reload
+        await refreshAiInfo();
     } catch {
         showToast('Speichern fehlgeschlagen.', 'danger');
     }

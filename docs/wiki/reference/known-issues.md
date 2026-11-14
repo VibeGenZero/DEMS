@@ -26,3 +26,4 @@ see_also: [security, frontend-app, bot, reminders-presence]
 | 17 | `GET /api/events/:id` ignores `?status=` (frontend sends `?status=all`) | routes/events.js |
 | 20 | README is partly outdated: mentions `DISCORD_REDIRECT_URI` (unused) and "EJS Templating" (there is no EJS) | `README.md` |
 | 21 | dev mock mode: reminder DMs not simulated; sample dates go stale → `npm run dev:reset` | [dev-mock-mode](../modules/dev-mock-mode.md) |
+| 22 | Windows with an antivirus that inspects HTTPS (Kaspersky, …): Node rejects its certificate, AI calls fail now and then with code `certificate` (admin: „Zertifikat … nicht anerkannt“, members: „nicht erreichbar“); start DEMS with `node --use-system-ca` | [ai-integration](../concepts/ai-integration.md) |

@@ -4,7 +4,7 @@
  * Picks the adapter for the configured AI provider. Settings are read from the
  * environment at call time (they are managed system keys and change live).
  */
-const { AiError, AI_ERROR_MESSAGES } = require('./errors');
+const { AiError, AI_ERROR_MESSAGES, logAiFailure } = require('./errors');
 const openaiAdapter = require('./providers/openaiCompatible');
 const anthropicAdapter = require('./providers/anthropic');
 const mockAdapter = require('./providers/mock');
@@ -103,6 +103,7 @@ async function testConnection(overrides = null) {
         // The provider answered with success but no text: reasoning models spend the few
         // test tokens on thinking. Address, key and model work, which is all this tests.
         if (code === 'empty_answer') return { ok: true, ms: Date.now() - started };
+        logAiFailure('Verbindungstest', err);
         return { ok: false, code, error: AI_ERROR_MESSAGES[code] };
     }
 }

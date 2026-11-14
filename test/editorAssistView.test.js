@@ -310,3 +310,34 @@ test('opening another event starts a fresh conversation', async () => {
     await send(harness, 'y');
     assert.deepEqual(JSON.parse(posts(harness, DRAFT_URL).at(-1).body).history, []);
 });
+
+async function openAdmin(ai) {
+    const harness = await loadFrontendApp({
+        '/api/admin/roles': [], '/api/admin/stats': { events: {}, registrations: {} }, '/api/admin/all-events': []
+    });
+    harness.state.currentUser = ADMIN;
+    harness.state.csrfToken = 'csrf-1';
+    harness.state.aiInfo = ai;
+    harness.location.hash = '#admin';
+    await harness.app.handleRoute();
+    await settle();
+    return harness;
+}
+
+test('„Mit KI erstellen" shows on the dashboard only while the admin assistant is on', async () => {
+    const off = await openAdmin({ ...AI_ON, adminAssistant: false });
+    assert.ok(isHidden(off.element('admin-create-ai')));
+    const on = await openAdmin(AI_ON);
+    assert.ok(!isHidden(on.element('admin-create-ai')));
+});
+
+test('„Mit KI erstellen" opens a new event with the assistant open and the input focused', async () => {
+    const harness = await openAdmin(AI_ON);
+    await harness.app.runAction('createEventWithAi', {});
+    await settle();
+    assert.equal(harness.location.hash, '#event-editor/new');
+    assert.equal(harness.element('event-editor-section').style.display, 'block');
+    assert.ok(!isHidden(harness.element('event-editor-assist')));
+    assert.equal(harness.element('event-editor-assist-toggle').getAttribute('aria-expanded'), 'true');
+    assert.deepEqual(harness.element('editor-assist-input').calls.at(-1), ['focus']);
+});

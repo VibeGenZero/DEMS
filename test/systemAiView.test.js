@@ -183,3 +183,36 @@ test('a successful load enables the save button', async () => {
     const { element } = await openSystem();
     assert.equal(element('ai-save-settings').disabled, false);
 });
+
+const SERVER_INFO_ON = { serverName: 'G', iconUrl: null, guildId: '', debugMode: false, ai: { memberAssistant: true, assistantName: 'Gildenhelfer', teaserText: 'Frag mich!', adminAssistant: true } };
+
+test('after saving the behaviour the page knows at once what is on (no reload)', async () => {
+    const { app, state, requests } = await openSystem({ '/api/server-info': SERVER_INFO_ON });
+    state.aiInfo = { memberAssistant: false, assistantName: '', teaserText: '', adminAssistant: false };
+    await app.runAction('saveAiSettings', {});
+    assert.ok(requests.some(request => request.url === '/api/server-info'), 'the AI state is asked again');
+    assert.deepEqual({ ...state.aiInfo }, { memberAssistant: true, assistantName: 'Gildenhelfer', teaserText: 'Frag mich!', adminAssistant: true });
+});
+
+test('after saving the connection the page knows at once what is on (no reload)', async () => {
+    const { app, state, element } = await openSystem({
+        '/api/server-info': SERVER_INFO_ON,
+        '/api/admin/system/settings': (options) => (options.method === 'PUT'
+            ? { success: true, changed: ['AI_MODEL'], restartRequired: false, bot: null }
+            : { settings: SETTINGS, status: { database: 'sqlite', bot: { online: true, guildName: 'G' }, ai: { on: true, provider: 'OpenAI' } } })
+    });
+    state.aiInfo = { memberAssistant: false, assistantName: '', teaserText: '', adminAssistant: false };
+    element('system-AI_MODEL').value = 'gpt-neu';
+    await app.runAction('saveSystemSettings', { dataset: { group: 'ai' } });
+    element('system-reset-password').value = 'geheim';
+    await app.runAction('confirmSystemSave', {});
+    assert.equal(state.aiInfo.adminAssistant, true);
+    assert.equal(state.aiInfo.memberAssistant, true);
+});
+
+test('a failed refresh keeps the known AI state', async () => {
+    const { app, state } = await openSystem({ '/api/server-info': httpAnswer(500, { error: 'x' }) });
+    state.aiInfo = { memberAssistant: true, assistantName: 'A', teaserText: '', adminAssistant: true };
+    await app.runAction('saveAiSettings', {});
+    assert.equal(state.aiInfo.adminAssistant, true);
+});

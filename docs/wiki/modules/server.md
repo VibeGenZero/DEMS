@@ -38,7 +38,7 @@ see_also: [request-lifecycle, security, configuration]
 | What | grep anchor |
 |---|---|
 | CSP directives | `contentSecurityPolicy: {` |
-| rate limiters | `const apiLimiter`, `const authLimiter` |
+| rate limiters | `createApiLimiter(` (after the session middleware; `middleware/rateLimits.js`), `const authLimiter` |
 | Express 5 body shim | `req.body === undefined` |
 | session options | `app.use(session({` |
 | CSRF middleware | `CSRF Protection (Double-Submit Cookie)` |

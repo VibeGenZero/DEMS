@@ -18,6 +18,7 @@ const { startArchiveScheduler, stopArchiveScheduler } = require('./utils/eventAr
 const { startOfferScheduler, stopOfferScheduler } = require('./utils/waitlistOffers');
 const { startUpdateCheck, stopUpdateCheck } = require('./utils/updateCheck');
 const { createCsrfToken, createRoleRefresh } = require('./middleware/auth');
+const { createApiLimiter } = require('./middleware/rateLimits');
 const { sharedSessionStore } = require('./utils/sessionStore');
 const store = require('./firebaseAdmin');
 const { runMigrations } = require('./db/migrate');
@@ -86,16 +87,7 @@ app.use(cors({
 }));
 
 // ── Rate limiting ───────────────────────────────────────────────────────
-const apiLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 200,
-    message: { error: 'Zu viele Anfragen. Bitte versuche es später erneut.' },
-    standardHeaders: true,
-    legacyHeaders: false,
-    // Dev mock mode: frequent reloads while developing must not hit the limit
-    skip: () => IS_MOCK_MODE
-});
-app.use('/api/', apiLimiter);
+// /api/* is limited per user once the session is read (middleware/rateLimits.js, below)
 
 const authLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
@@ -141,6 +133,8 @@ function createSessionMiddleware() {
     });
 }
 app.use((req, res, next) => sessionMiddleware(req, res, next));
+// Per logged-in user, else per IP; dev mock mode: frequent reloads while developing must not hit the limit
+app.use('/api/', createApiLimiter({ skip: IS_MOCK_MODE }));
 
 // ── CSRF Protection (Double-Submit Cookie) ──────────────────────────────
 // Generate a CSRF token per session and validate on mutating requests

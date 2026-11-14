@@ -464,3 +464,16 @@ test('forbidden or unknown keys of the model are named in the reply', async () =
     assert.deepEqual(plain(result.patch), { title: 'Raid' });
     assert.equal(result.reply, 'Event aktiviert. Felder wie Status oder Banner setze ich nicht – die änderst du selbst.');
 });
+
+test('a failed draft leaves one log line with code and cause', async () => {
+    const lines = [];
+    const original = console.warn;
+    console.warn = (...args) => lines.push(args.join(' '));
+    try {
+        const client = scriptedClient(new AiError('unreachable', { detail: 'ECONNREFUSED' }));
+        await assert.rejects(draftCall({ client }), refusal(503, 'Der KI-Anbieter ist nicht erreichbar.'));
+    } finally {
+        console.warn = original;
+    }
+    assert.deepEqual(lines, ['KI-Anfrage fehlgeschlagen (Entwurf): unreachable ECONNREFUSED']);
+});

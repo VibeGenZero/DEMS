@@ -297,6 +297,17 @@ function toggleEditorAssist() {
 }
 
 /**
+ * Open the panel of the mounted editor (the dashboard's „Mit KI erstellen“).
+ * Does nothing while the admin assistant is off or no editor is ready.
+ *
+ * @returns {void}
+ */
+export function openEditorAssist() {
+    if (!mounted || !isOn()) return;
+    setPanelOpen(true);
+}
+
+/**
  * Bring the helper buttons up to date with the form („Mit KI verbessern" needs a description).
  * Called by the editor on every change.
  *

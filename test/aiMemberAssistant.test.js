@@ -233,3 +233,21 @@ test('an answer that is only a source line is refused as not reachable, never an
     // The busy mark is free again
     assert.equal((await answerEventQuestion({ eventId: 'ev-1', user: member, question: 'Wann?', client: fakeClient() })).text, 'Um 20 Uhr.');
 });
+
+test('a failed member question leaves one log line with code and cause, nothing of the question', async () => {
+    const lines = [];
+    const original = console.warn;
+    console.warn = (...args) => lines.push(args.join(' '));
+    try {
+        const client = fakeClient('', { error: new AiError('certificate', { detail: 'SELF_SIGNED_CERT_IN_CHAIN' }) });
+        await assert.rejects(answerEventQuestion({ eventId: 'ev-1', user: member, question: 'Geheime Frage?', client }), refusal(503));
+        await assert.rejects(answerEventQuestion({ eventId: 'ev-1', user: member, question: 'Wann?', client: fakeClient('Quelle: Termin') }), refusal(503));
+    } finally {
+        console.warn = original;
+    }
+    assert.deepEqual(lines.map(line => line.split(' – ')[0]), [
+        'KI-Anfrage fehlgeschlagen (Mitgliederfrage): certificate SELF_SIGNED_CERT_IN_CHAIN',
+        'KI-Anfrage fehlgeschlagen (Mitgliederfrage): empty_answer'
+    ]);
+    assert.ok(lines.every(line => !line.includes('Geheime')));
+});

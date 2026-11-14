@@ -27,6 +27,8 @@ see_also: [docker, deployment, dev-mock-mode]
 | `AI_API_KEY` | for all providers but ollama | — | provider key; secret (never listed, logged or audited) |
 | `AI_MODEL` | with `AI_PROVIDER` | — (`mock-1` in dev mock mode) | model for member answers; AI counts as configured only with provider, model and (except ollama) key |
 | `AI_MODEL_ADMIN` | no | `AI_MODEL` | model for admin features |
+| `RATE_LIMIT_MAX_USER` | no | `1000` | `/api/*` requests per 15 minutes per logged-in user (`middleware/rateLimits.js`, read on every request) |
+| `RATE_LIMIT_MAX` | no | `200` | `/api/*` requests per 15 minutes per IP for everybody not logged in; both limits are off in dev mock mode |
 | `DATABASE_URL` | production: this or `PGHOST` | — | PostgreSQL connection URL (`postgres://user:pass@host:5432/db`); wins over `PG*`. Not needed with `compose.yaml` |
 | `PGHOST`, `PGPORT`, `PGDATABASE`, `PGUSER` | production: `PGHOST` or `DATABASE_URL` | —, `5432`, `dems`, `dems` | PostgreSQL as single values; `compose.yaml` sets them to its `postgres` service |
 | `PGPASSWORD` / `PGPASSWORD_FILE` | with `PGHOST` | — | password, or a file holding only the password (trimmed; wins over `PGPASSWORD`). Compose: `/run/dems-secrets/db_password`, generated on the first start |

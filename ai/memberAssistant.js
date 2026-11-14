@@ -12,7 +12,7 @@
 const { db, doc, getDoc } = require('../firebaseAdmin');
 const { getTimezone } = require('../utils/timezone');
 const { waitlistPositions } = require('../utils/capacity');
-const { AiError } = require('./errors');
+const { AiError, logAiFailure } = require('./errors');
 const { getAiClient } = require('./client');
 const { getAiSettings } = require('./settings');
 const { beginMemberQuestion, endMemberQuestion, MEMBER_REFUSALS } = require('./limits');
@@ -26,6 +26,8 @@ const MAX_TOKENS = 400;
 const TIMEOUT_MS = 60000;
 
 const FALLBACK_SENTENCE = 'Das steht leider nicht in den Event-Infos. Frag am besten die Orga.';
+// Name of this caller in the failure log (web bubble and Discord share it)
+const WHERE = 'Mitgliederfrage';
 const UNAVAILABLE = 'Der Event-Assistent ist gerade nicht erreichbar. Bitte versuche es später noch einmal.';
 
 const SYSTEM_RULES = [
@@ -161,6 +163,7 @@ async function prepareEventQuestion({ eventId, user, question, history = [], cli
     } catch (err) {
         release();
         if (err instanceof AiError) {
+            logAiFailure(WHERE, err);
             await countUsage({ failed: true, now });
             throw new AskRefusal(503, UNAVAILABLE);
         }
@@ -187,6 +190,7 @@ async function prepareEventQuestion({ eventId, user, question, history = [], cli
                 if (filter) filter.finish();
                 // Only a „Quelle:“ line, or nothing: no answer to show on either channel
                 if (!answer.text.trim()) {
+                    logAiFailure(WHERE, new AiError('empty_answer'));
                     await count({ usage: result.usage, failed: true });
                     throw new AskRefusal(503, UNAVAILABLE);
                 }
@@ -197,6 +201,7 @@ async function prepareEventQuestion({ eventId, user, question, history = [], cli
                     await count({});
                     throw err;
                 }
+                logAiFailure(WHERE, err);
                 await count({ failed: true });
                 throw new AskRefusal(503, UNAVAILABLE);
             } finally {
