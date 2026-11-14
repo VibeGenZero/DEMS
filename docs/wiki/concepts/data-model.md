@@ -9,7 +9,7 @@ see_also: [registration-flow, event-lifecycle, maintenance-mode, glossary]
 ---
 # Data model — collections and document shapes
 
-> TL;DR: Fourteen schemaless collections. `events`, `registrations`, `comments`, `auditLogs`, `polls`, `eventTemplates` use auto ids; `pollVotes` uses `<pollId>_<userId>`; `users` uses the Discord user id; `botMessages/templates`, `botSettings/config`, `maintenanceSettings/config`, `systemSettings/config`, `privacyPolicy/current` are singleton documents; `devMeta/seed` exists only in dev mock mode. All dates are ISO-8601 strings. Shapes are defined by the code that writes them (no schema file) — the producers are listed per collection.
+> TL;DR: Sixteen schemaless collections. `events`, `registrations`, `comments`, `auditLogs`, `polls`, `eventTemplates` use auto ids; `pollVotes` uses `<pollId>_<userId>`; `users` uses the Discord user id; `aiUsage` uses the local day `YYYY-MM-DD`; `botMessages/templates`, `botSettings/config`, `maintenanceSettings/config`, `systemSettings/config`, `privacyPolicy/current`, `aiSettings/config` are singleton documents; `devMeta/seed` exists only in dev mock mode. All dates are ISO-8601 strings. Shapes are defined by the code that writes them (no schema file) — the producers are listed per collection.
 
 ```mermaid
 erDiagram

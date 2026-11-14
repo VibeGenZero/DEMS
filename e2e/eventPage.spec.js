@@ -93,3 +93,52 @@ test('an empty required field stops the registration at that field', async ({ pa
     expect(fieldBox.y + fieldBox.height).toBeLessThanOrEqual(bar.y);
     expect(registrations).toEqual([]);
 });
+
+// ── Event assistant (dev mock mode answers with the mock provider) ──
+
+// The teaser shows 4 s after the page opened (events/assistant.js)
+const TEASER_WAIT_MS = 8000;
+
+test('a member asks the event assistant and gets the mock answer with its source', async ({ page }) => {
+    const errors = watchErrors(page);
+    await openEvent(page, 'member', 'dev-event-open');
+    await expect(page.locator('#assistant-toggle')).toBeVisible();
+    await expect(page.locator('#assistant-teaser')).toBeVisible({ timeout: TEASER_WAIT_MS });
+    await page.click('#assistant-toggle');
+    await expect(page.locator('#assistant-panel')).toBeVisible();
+    await expect(page.locator('#assistant-teaser')).toBeHidden();
+    await page.locator('#assistant-suggestions [data-question="Wann geht es los?"]').click();
+    const answer = page.locator('#assistant-messages .assistant-message.is-bot').last();
+    await expect(answer).toContainText('Mock-Antwort: Wann geht es los?');
+    await expect(answer.locator('.assistant-source')).toHaveText('Quelle: Beschreibung');
+    await expect(page.locator('#assistant-input')).toBeEnabled();
+    expect(errors).toEqual([]);
+});
+
+test('a dismissed teaser stays away after a reload', async ({ page }) => {
+    await openEvent(page, 'member', 'dev-event-open');
+    await expect(page.locator('#assistant-teaser')).toBeVisible({ timeout: TEASER_WAIT_MS });
+    await page.click('#assistant-teaser .assistant-teaser-close');
+    await expect(page.locator('#assistant-teaser')).toBeHidden();
+    await page.reload();
+    await expect(page.locator('#detail-title')).not.toHaveText('');
+    await expect(page.locator('#assistant-toggle')).toBeVisible();
+    // Longer than the teaser's delay: it would be there by now
+    await page.waitForTimeout(5000);
+    await expect(page.locator('#assistant-teaser')).toBeHidden();
+});
+
+test('on a phone the open chat fills the screen and nothing scrolls sideways', async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== 'mobile', 'phone layout');
+    await openEvent(page, 'member', 'dev-event-open');
+    await page.click('#assistant-toggle');
+    await expect(page.locator('#assistant-panel')).toBeVisible();
+    // Measure after the pop-up animation (it scales the panel)
+    await page.locator('#assistant-panel').evaluate(element => Promise.all(element.getAnimations().map(animation => animation.finished)));
+    const panel = await box(page, '#assistant-panel');
+    const viewport = page.viewportSize();
+    expect(panel.x).toBeLessThanOrEqual(1);
+    expect(panel.width).toBeGreaterThanOrEqual(viewport.width - 1);
+    expect(panel.y + panel.height).toBeGreaterThanOrEqual(viewport.height - 1);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)).toBe(0);
+});

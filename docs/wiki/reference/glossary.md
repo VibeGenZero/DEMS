@@ -48,3 +48,7 @@ see_also: [data-model, conventions]
 | Abzeichen / Badges | profile badges (computed) | [routes-user](../modules/routes-user.md) |
 | Neuer Nutzer (Willkommen) | `isNewUser`, `#firstLoginModal` | auth |
 | Persona, Mock-Modus | dev persona login, `DEV_MOCK` | [dev-mock-mode](../modules/dev-mock-mode.md) |
+| Event-Assistent, KI-Assistent, „Frage stellen“, `/frage` | member assistant (`ai/memberAssistant.js`, `/ask`, button `event_ask:<id>`), editor panel (`admin/editor-assist.js`) | [ai-integration](../concepts/ai-integration.md) |
+| Zusatzinfos (für den Event-Assistenten) | event field `aiNotes` | [ai-integration](../concepts/ai-integration.md) |
+| KI, KI-Anbieter, Modell | AI provider / model (`AI_PROVIDER`, `AI_MODEL`) | [configuration](../ops/configuration.md) |
+| „von KI“, Rückgängig (Editor) | AI mark `.is-ai-filled` / `#ai-mark-<field>`, undo of the last patch | [frontend-app](../modules/frontend-app.md) |
