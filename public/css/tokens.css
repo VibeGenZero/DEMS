@@ -53,6 +53,10 @@
   --radius-lg: 16px;
   --radius-pill: 999px;
 
+  /* Height of the fixed navbar: the start value of the desktop navbar; syncNavbarHeight()
+     (core/tab-glider.js) sets the measured height on <html>, because the navbar wraps on medium screens */
+  --navbar-height: calc(var(--space-64) + var(--space-16));
+
   /* Layers, aligned with Bootstrap's z-index scale */
   --z-dropdown: 1000;
   --z-sticky: 1020;

@@ -3,9 +3,10 @@
  */
 import { registerActions } from './actions.js';
 import { state } from './state.js';
-import { placeNavMarker } from './tab-glider.js';
+import { placeNavMarker, syncNavbarHeight } from './tab-glider.js';
 import { showBotControlSection } from '../admin/bot-control.js';
 import { showAdminSection } from '../admin/dashboard.js';
+import { showEventEditor } from '../admin/editor-page.js';
 import { showInsightsSection } from '../admin/insights.js';
 import { showMemberDetail, showMembersSection } from '../admin/members.js';
 import { showSystemSection } from '../admin/system.js';
@@ -23,7 +24,7 @@ import { showPollDetail, showPollsSection } from '../polls/polls.js';
 export const LEGACY_EVENT_ROUTE = /^events\/(.+)$/;
 
 // Pages without their own navbar link mark the link of their list
-const NAV_ROUTE = { member: 'members', insights: 'admin', system: 'admin', news: 'info', privacy: 'info' };
+const NAV_ROUTE = { member: 'members', insights: 'admin', system: 'admin', 'event-editor': 'admin', news: 'info', privacy: 'info' };
 
 // Event a logged-out user opened -> shown after the Discord login
 export const PENDING_ROUTE_KEY = 'dems_pending_route';
@@ -61,12 +62,81 @@ export function restorePendingRoute() {
     }
 }
 
+// The page that is shown may veto leaving it (unsaved input); see setLeaveGuard
+let leaveGuard = null;
+let lastHash = null;
+let guardPending = false;
+// The page that is shown is told once when another route replaces it; see onRouteLeave
+let leaveHandler = null;
+
+const routeOf = (hash) => String(hash || '').split('/')[0];
+
+/**
+ * Let the shown page decide whether it may be left.
+ *
+ * The guard is asked once before another route or parameter is shown. An
+ * answer at once (true or false) leaves the browser history alone. A promise
+ * (a confirm dialog) puts the address of the shown page back while it waits.
+ * A guard that answered true is used up: the page sets it again when it is
+ * shown again.
+ *
+ * @param {Function|null} guard -> `({ route, param }) => boolean | Promise<boolean>`; false keeps the page. null removes the guard.
+ * @returns {void}
+ */
+export function setLeaveGuard(guard) {
+    leaveGuard = typeof guard === 'function' ? guard : null;
+}
+
+/**
+ * Tell the shown page when another route is shown instead of it.
+ *
+ * Unlike the guard this cannot be vetoed and does not depend on it: the
+ * callback runs once, before the other route is drawn. A change of the
+ * parameter within the same route (`#system/a` -> `#system/b`) does not count.
+ *
+ * @param {Function|null} callback -> Called without arguments; null removes it.
+ * @returns {void}
+ */
+export function onRouteLeave(callback) {
+    leaveHandler = typeof callback === 'function' ? { route: routeOf(lastHash), callback } : null;
+}
+
+// The guard did not say yes at once: keep the shown page in the address; a promise may still allow the change
+async function settleLeaveGuard(hash, answer) {
+    history.replaceState(null, '', '#' + lastHash);
+    if (!answer || typeof answer.then !== 'function') return;
+    guardPending = true;
+    let allowed = false;
+    try {
+        allowed = (await answer) === true;
+    } finally {
+        guardPending = false;
+    }
+    if (!allowed) return;
+    leaveGuard = null;
+    // Replaces the entry that was put back, so nothing is added to the history; the hash change routes
+    window.location.replace('#' + hash);
+}
+
 /**
  * Show the section of the current hash.
  *
- * @returns {Promise<void>|void} -> For the overview and an event page: resolves once the section is drawn.
+ * @returns {Promise<void>|void} -> For the overview and an event page: resolves once the section is drawn; with a leave guard: once it has answered.
  */
 export function handleRoute() {
+    let hash = window.location.hash.replace('#', '') || 'events';
+    if (leaveGuard && lastHash !== null && hash !== lastHash) {
+        // A second navigation while the question is open changes nothing
+        if (guardPending) {
+            history.replaceState(null, '', '#' + lastHash);
+            return;
+        }
+        const [nextRoute, nextParam] = hash.split('/');
+        const answer = leaveGuard({ route: nextRoute, param: nextParam });
+        if (answer !== true) return settleLeaveGuard(hash, answer);
+        leaveGuard = null;
+    }
+
     // Clear countdown timers
     state.countdownTimers.forEach(t => clearInterval(t));
     state.countdownTimers = [];
@@ -77,15 +147,21 @@ export function handleRoute() {
         state.botStatusRefreshInterval = null;
     }
 
-    let hash = window.location.hash.replace('#', '') || 'events';
     const legacyEvent = hash.match(LEGACY_EVENT_ROUTE);
     if (legacyEvent) {
         hash = 'event/' + legacyEvent[1];
         history.replaceState(null, '', '#' + hash);
     }
+    lastHash = hash;
     const parts = hash.split('/');
     const route = parts[0];
     const param = parts[1];
+
+    if (leaveHandler && leaveHandler.route !== route) {
+        const { callback } = leaveHandler;
+        leaveHandler = null;
+        callback();
+    }
 
     // A page opened by a card flight is copied before its section disappears
     const closingFlight = beginCardClose(route);
@@ -102,6 +178,8 @@ export function handleRoute() {
         }
     });
     placeNavMarker();
+    // The links of the navbar depend on who is logged in
+    syncNavbarHeight();
 
     // Info, the release notes and the privacy policy are public
     if (!state.currentUser && route !== 'login' && route !== 'info' && route !== 'news' && route !== 'privacy') {
@@ -150,7 +228,14 @@ export function handleRoute() {
             break;
         case 'system':
             if (state.currentUser && state.currentUser.isAdmin) {
-                showSystemSection();
+                return showSystemSection(param);
+            } else {
+                navigateTo('events');
+            }
+            break;
+        case 'event-editor':
+            if (state.currentUser && state.currentUser.isAdmin) {
+                return showEventEditor(param);
             } else {
                 navigateTo('events');
             }

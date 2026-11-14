@@ -45,6 +45,7 @@ Personas `admin`, `raider`, `member`, `newbie` (`/auth/dev-login/<id>`); check-i
 | `Keine PostgreSQL-Verbindung konfiguriert` | production needs PostgreSQL: start with `compose.yaml` or set `DATABASE_URL`/`PGHOST` |
 | `PostgreSQL nicht erreichbar` / `Start abgebrochen` | database down or wrong credentials (DEMS retries 60 s); a failing migration step names itself |
 | `Server konnte nicht auf Port 3000 starten` | port in use → change `PORT` |
-| 429 "Zu viele Anfragen" while developing | rate limits (`/auth` 30 / 15 min); restart or use mock mode |
+| 429 "Zu viele Anfragen" while developing | rate limits (`/auth` 30 / 15 min, `/api` 1000 per user or 200 per IP / 15 min, `RATE_LIMIT_MAX_USER` / `RATE_LIMIT_MAX`); restart or use mock mode |
+| AI: „Zertifikat wird nicht anerkannt“ or „nicht erreichbar“ on Windows, test sometimes green | an antivirus inspecting HTTPS (e.g. Kaspersky) puts its own certificate in, which Node does not trust; the log says `KI-Anfrage fehlgeschlagen (…): certificate SELF_SIGNED_CERT_IN_CHAIN`. Start with `node --use-system-ca server.js` or exclude `node.exe` from the HTTPS scan |
 | stuck on "Initialisiere System..." | page opened via `http://<ip>` instead of localhost/HTTPS ([security](../concepts/security.md)) |
 | `DEV_MOCK=true ist in Produktion ... nicht erlaubt` | `NODE_ENV=production` is set — mock mode is dev-only |

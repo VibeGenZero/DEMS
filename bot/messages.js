@@ -7,12 +7,15 @@ const { db, doc, getDoc, updateDoc } = require('../firebaseAdmin');
 const { debugLog } = require('../utils/debugLog');
 const { buildEventUrl } = require('../utils/eventUrl');
 const { bannerForDiscord } = require('../utils/bannerStore');
-const { isRegistrationClosed } = require('../utils/eventListing');
+const { isRegistrationClosed, isEventOver } = require('../utils/eventListing');
+const { isFeatureOn } = require('../ai/settings');
 const { formatPlaces } = require('../utils/capacity');
 const { fitsIntoDiscordModal } = require('../utils/formFields');
 const { hasSlots, formatSlotLabel, buildRoster } = require('../utils/slotService');
 const { client, state } = require('./client');
-const { REGISTER_BUTTON_PREFIX, TENTATIVE_BUTTON_PREFIX, SLOT_BUTTON_PREFIX, ROSTER_NAMES_MAX } = require('./constants');
+const {
+    REGISTER_BUTTON_PREFIX, TENTATIVE_BUTTON_PREFIX, SLOT_BUTTON_PREFIX, ASK_BUTTON_PREFIX, ROSTER_NAMES_MAX
+} = require('./constants');
 const { getTimezone } = require('../utils/timezone');
 const { toAccentColor, fitText, MESSAGE_TEXT_MAX } = require('./layout');
 
@@ -245,12 +248,15 @@ function canRegisterViaDiscord(event) {
  *
  * "Anmelden" for an event without slots while it can be joined from Discord
  * (slot events carry their buttons beside the line-up), "Vielleicht" while it
- * can be joined and allows it (B-17), then always the link to the event page.
+ * can be joined and allows it (B-17), "Frage stellen" while the event
+ * assistant is on for Discord and the event is active and not over, then
+ * always the link to the event page. Ten slots with every button still stay
+ * within MESSAGE_COMPONENTS_MAX (test/eventAnnouncement.test.js).
  *
  * @param {Object} event -> The event document data.
  * @param {string} eventId -> The event document ID.
  * @param {boolean} joinable -> Result of canRegisterViaDiscord(event).
- * @returns {ButtonBuilder[]} -> One to three buttons.
+ * @returns {ButtonBuilder[]} -> One to four buttons.
  */
 function buildAnnouncementButtons(event, eventId, joinable) {
     const buttons = [];
@@ -270,6 +276,15 @@ function buildAnnouncementButtons(event, eventId, joinable) {
                 .setLabel('Vielleicht')
                 .setStyle(ButtonStyle.Secondary)
                 .setEmoji('🤔')
+        );
+    }
+    if (event.status === 'active' && !isEventOver(event) && isFeatureOn('memberDiscord')) {
+        buttons.push(
+            new ButtonBuilder()
+                .setCustomId(`${ASK_BUTTON_PREFIX}:${eventId}`)
+                .setLabel('Frage stellen')
+                .setStyle(ButtonStyle.Secondary)
+                .setEmoji('💬')
         );
     }
     buttons.push(

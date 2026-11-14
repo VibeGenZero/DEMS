@@ -18,7 +18,7 @@ see_also: [api-index, testing, security]
    | Audience | File | Guard |
    |---|---|---|
    | anyone | `server.js` (next to `/api/server-info`) | none — keep it to non-event data |
-   | logged-in member | `routes/events.js` | inherited from `router.use(requireAuth)`; `/:id` routes also get the draft/archived 404 from `router.param('id')` |
+   | logged-in member | `routes/events.js` | inherited from `router.use(requireAuth)`; `/:id` routes also get the draft/archived 404 from `router.param('id')`. A router mounted on the same path before it (`routes/eventAsk.js`) inherits **neither**: it adds `requireAuth` itself and its service checks the event |
    | own account | `routes/user.js` | add `requireAuth` |
    | admin | `routes/admin.js` | inherited from `router.use(requireAuth, requireAdmin)` |
    | new resource | new `routes/<name>.js` + `app.use('/api/<name>', require('./routes/<name>'))` in `server.js` next to the others (before the SPA fallback) |

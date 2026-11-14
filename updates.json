@@ -1,6 +1,35 @@
 {
-    "version": "3.1.1",
+    "version": "3.2.0",
     "releases": [
+        {
+            "version": "3.2.0",
+            "date": "2026-11-14",
+            "news": [
+                {
+                    "title": "🤖 Der Event-Assistent beantwortet Fragen",
+                    "content": "Auf der Event-Seite gibt es unten rechts eine Chat-Blase: Frag nach Beginn, Regeln oder freien Plätzen und bekomm sofort eine Antwort – mit Hinweis, woher sie stammt. In Discord fragst du mit /frage oder über den Button „Frage stellen“ an der Ankündigung; die Antwort sieht nur du. Der Assistent kennt nur das jeweilige Event und erfindet nichts dazu. Er ist optional: Admins richten ihn unter System › KI ein.",
+                    "highlight": true
+                },
+                {
+                    "title": "✨ Events mit KI erstellen",
+                    "content": "Für Admins: Beschreib dein Event in eigenen Worten – „Raid am Samstag 20 Uhr, 20 Plätze, nur Raider“ – und die KI füllt das Formular aus. Ausgefüllte Felder sind mit „von KI“ markiert, ein Klick auf „Rückgängig“ holt den alten Stand zurück, und gespeichert wird erst, wenn du speicherst. Dazu kommen „Mit KI verbessern“ für die Beschreibung, Vorschläge für die Zusatzinfos und der Button „Mit KI erstellen“ im Dashboard.",
+                    "highlight": true
+                },
+                {
+                    "title": "📝 Der Event-Editor als eigene Seite",
+                    "content": "Events erstellst und bearbeitest du jetzt auf einer eigenen Seite statt in einem Fenster – mit mehr Platz und der Vorschau für Übersicht und Discord direkt daneben. Ungespeicherte Eingaben bleiben auch nach einem Neuladen erhalten, und bevor du die Seite verlässt, fragt DEMS nach.",
+                    "highlight": true
+                },
+                {
+                    "title": "⚙️ Aufgeräumte Systemeinstellungen",
+                    "content": "Unter System findest du die Einstellungen jetzt nach Kategorien geordnet – Discord, Server, Sicherheit, KI und Datenschutz –, jede wird für sich gespeichert, und die Übersicht zeigt, ob Bot und Datenbank laufen. Den KI-Anbieter kannst du auch schon im Einrichtungsassistenten wählen oder den Schritt überspringen."
+                },
+                {
+                    "title": "🚦 Seltener „Zu viele Anfragen“",
+                    "content": "Das Anfrage-Limit zählt jetzt pro Person statt pro Internetanschluss: Wer viel einrichtet, sperrt nicht mehr alle anderen aus. Greift das Limit doch einmal, sagt DEMS, wie lange du warten musst."
+                }
+            ]
+        },
         {
             "version": "3.1.1",
             "date": "2026-11-12",

@@ -31,7 +31,7 @@ test('the admin toolbar links the System page, the router guards it', () => {
     assert.match(HTML, /<a class="btn btn-ghost btn-sm" href="#system">/);
     assert.match(HTML, /<section id="system-section" class="app-section is-hidden">/);
     const router = fs.readFileSync(path.join(REPO_ROOT, 'public', 'js', 'core', 'router.js'), 'utf8');
-    assert.match(router, /case 'system':\s*\n\s*if \(state\.currentUser && state\.currentUser\.isAdmin\) \{\s*\n\s*showSystemSection\(\);/);
+    assert.match(router, /case 'system':\s*\n\s*if \(state\.currentUser && state\.currentUser\.isAdmin\) \{\s*\n\s*return showSystemSection\(param\);/);
     assert.match(router, /system: 'admin'/);
 });
 
@@ -192,6 +192,37 @@ test('a failed status request says so in the card, without a toast', async () =>
 });
 
 test('the version card is the first card of the System page', () => {
-    assert.match(HTML, /<div class="system-grid">\s*<div class="glass-card system-card" id="system-update-card">/);
+    assert.match(HTML, /id="system-panel-overview"[^>]*>\s*<h3[^>]*>Übersicht<\/h3>\s*<div class="glass-card system-card" id="system-update-card">/);
     assert.match(HTML, /<div id="system-update-body"><\/div>/);
+});
+
+test('the overview lists bot and database status, values escaped', async () => {
+    const { element } = await openSystem({
+        '/api/admin/system/settings': { settings: SETTINGS, status: { database: 'postgresql', bot: { online: true, guildName: 'Gilde<b>' } } }
+    });
+    const list = element('system-status-list').innerHTML;
+    assert.match(list, /<span>Bot<\/span>\s*<span class="chip chip-sm chip-success">online · Gilde&lt;b&gt;<\/span>/);
+    assert.match(list, /<span>Datenbank<\/span>\s*<span class="chip chip-sm">PostgreSQL<\/span>/);
+});
+
+test('an offline bot and the built-in database are named', async () => {
+    const { element } = await openSystem({
+        '/api/admin/system/settings': { settings: SETTINGS, status: { database: 'sqlite', bot: { online: false, guildName: '' } } }
+    });
+    const list = element('system-status-list').innerHTML;
+    assert.match(list, /<span class="chip chip-sm chip-danger">offline<\/span>/);
+    assert.match(list, /SQLite \(eingebaut\)/);
+});
+
+test('without a status the list stays empty', async () => {
+    const { element } = await openSystem();
+    assert.equal(element('system-status-list').innerHTML, '');
+});
+
+test('renderStatusRows draws the given rows', async () => {
+    const { app, element } = await openSystem();
+    app.renderStatusRows([{ label: 'KI', text: 'aus', tone: '' }, { label: 'A&B', text: '<x>', tone: 'success' }]);
+    const list = element('system-status-list').innerHTML;
+    assert.match(list, /<span>KI<\/span>\s*<span class="chip chip-sm">aus<\/span>/);
+    assert.match(list, /<span>A&amp;B<\/span>\s*<span class="chip chip-sm chip-success">&lt;x&gt;<\/span>/);
 });

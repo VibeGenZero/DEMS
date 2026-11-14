@@ -30,7 +30,12 @@ const MANAGED_KEYS = Object.freeze({
     SERVER_NAME: { group: 'server', secret: false, applies: 'live' },
     BASE_URL: { group: 'server', secret: false, applies: 'live' },
     TIMEZONE: { group: 'server', secret: false, applies: 'live' },
-    ADMIN_RESET_PASSWORD: { group: 'security', secret: true, applies: 'live' }
+    ADMIN_RESET_PASSWORD: { group: 'security', secret: true, applies: 'live' },
+    AI_PROVIDER: { group: 'ai', secret: false, applies: 'live' },
+    AI_BASE_URL: { group: 'ai', secret: false, applies: 'live' },
+    AI_API_KEY: { group: 'ai', secret: true, applies: 'live' },
+    AI_MODEL: { group: 'ai', secret: false, applies: 'live' },
+    AI_MODEL_ADMIN: { group: 'ai', secret: false, applies: 'live' }
 });
 
 // Generated on the first start without SESSION_SECRET; never listed or editable

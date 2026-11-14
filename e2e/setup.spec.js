@@ -1,7 +1,8 @@
 /**
  * Setup wizard of a fresh installation (#138): PIN, the Discord guide, the
- * Discord step against a fake Discord, server values, reset password,
- * privacy policy, done. Every test starts its own server in setup mode.
+ * Discord step against a fake Discord, server values, reset password, the
+ * optional AI step (skipped), privacy policy, done. Every test starts its own
+ * server in setup mode.
  */
 const path = require('path');
 const { test, expect } = require('@playwright/test');
@@ -71,6 +72,12 @@ test('a fresh installation is set up in the browser, guided step by step', async
     await page.fill('#setup-reset-password', 'ein-langes-passwort');
     await page.fill('#setup-reset-password-repeat', 'ein-langes-passwort');
     await page.click('[data-click="submitSetupSecurity"]');
+
+    // AI (optional): the providers are offered, the step is skipped
+    await expect(page.locator('#setup-step-ai')).toBeVisible();
+    await expect(page.locator('#setup-steps [aria-current="step"]')).toHaveText('KI');
+    await expect(page.locator('#setup-ai-provider option').first()).toHaveText('Keine KI verwenden');
+    await page.click('[data-click="skipSetupAi"]');
 
     // Privacy policy with preview
     await expect(page.locator('#setup-step-privacy')).toBeVisible();

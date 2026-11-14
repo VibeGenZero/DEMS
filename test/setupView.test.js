@@ -15,7 +15,7 @@ const STATUS = {
 
 test('the setup section and its steps start hidden', () => {
     for (const id of ['setup-section', 'setup-error', 'setup-step-pin', 'setup-step-discord', 'setup-step-server',
-        'setup-step-security', 'setup-step-privacy', 'setup-step-done', 'setup-done-restart']) {
+        'setup-step-security', 'setup-step-ai', 'setup-step-privacy', 'setup-step-done', 'setup-done-restart']) {
         assert.match(HTML, new RegExp(`<[^>]*class="[^"]*is-hidden[^"]*"[^>]*id="${id}"|<[^>]*id="${id}"[^>]*class="[^"]*is-hidden`), id);
     }
 });
@@ -147,7 +147,7 @@ test('the security step checks length and repetition before going on', async () 
 
     element('setup-reset-password-repeat').value = 'ein-langes-passwort';
     await app.runAction('submitSetupSecurity', {});
-    assert.equal(isHidden(element('setup-step-privacy')), false);
+    assert.equal(isHidden(element('setup-step-ai')), false);
 });
 
 test('completing sends every collected value and shows the login button', async () => {
@@ -163,6 +163,9 @@ test('completing sends every collected value and shows the login button', async 
     element('setup-reset-password').value = 'ein-langes-passwort';
     element('setup-reset-password-repeat').value = 'ein-langes-passwort';
     await app.runAction('submitSetupSecurity', {});
+    element('setup-ai-provider').value = 'ollama';
+    element('setup-ai-model').value = 'llama3.1';
+    await app.runAction('submitSetupAi', {});
     element('setup-privacy-text').value = '# Datenschutz';
     await app.runAction('completeSetup', {});
 
@@ -170,6 +173,8 @@ test('completing sends every collected value and shows the login button', async 
     assert.equal(body.baseUrl, 'https://dems.example.org');
     assert.equal(body.adminResetPassword, 'ein-langes-passwort');
     assert.equal(body.privacyMarkdown, '# Datenschutz');
+    assert.equal(body.aiProvider, 'ollama');
+    assert.equal(body.aiModel, 'llama3.1');
     assert.equal(isHidden(element('setup-step-done')), false);
     assert.equal(isHidden(element('setup-done-restart')), false);
 });
@@ -177,8 +182,8 @@ test('completing sends every collected value and shows the login button', async 
 test('the wizard escapes values and names its actions literally', () => {
     assert.match(SOURCE, /escapeHtml\(/);
     assert.doesNotMatch(SOURCE, /style="|\bon[a-z]+="/);
-    for (const name of ['submitSetupPin', 'submitSetupDiscord', 'submitSetupServer', 'submitSetupSecurity', 'completeSetup', 'previewSetupPrivacy', 'setupBack', 'setupClientIdChanged']) {
-        assert.ok(HTML.includes(`data-click="${name}"`) || HTML.includes(`data-input="${name}"`) || SOURCE.includes(`data-input="${name}"`), name);
+    for (const name of ['submitSetupPin', 'submitSetupDiscord', 'submitSetupServer', 'submitSetupSecurity', 'submitSetupAi', 'skipSetupAi', 'testSetupAi', 'loadSetupAiModels', 'setupAiProviderChanged', 'completeSetup', 'previewSetupPrivacy', 'setupBack', 'setupClientIdChanged']) {
+        assert.ok(HTML.includes(`data-click="${name}"`) || HTML.includes(`data-input="${name}"`) || SOURCE.includes(`data-input="${name}"`) || SOURCE.includes(`data-click="${name}"`) || SOURCE.includes(`data-change="${name}"`), name);
         assert.match(SOURCE, new RegExp(`\\b${name}[,:]`));
     }
 });
@@ -190,4 +195,119 @@ test('the PIN step warns when the setup is opened without HTTPS in production', 
     const secure = await loadFrontendApp({ '/api/csrf-token': { token: 't' }, '/api/setup/status': { ...STATUS, httpsRequired: false } });
     await secure.app.finishLoading();
     assert.equal(isHidden(secure.element('setup-https-warning')), true);
+});
+
+// ── Step „KI (optional)" ───────────────────────────────────────────────
+
+const AI_PROVIDERS = [
+    { id: 'ollama', label: 'Ollama (lokal oder Cloud)', defaultBaseUrl: 'http://localhost:11434/v1', keyRequired: false },
+    { id: 'openai', label: 'OpenAI', defaultBaseUrl: 'https://api.openai.com/v1', keyRequired: true }
+];
+
+async function openAiStep(routes = {}, status = {}) {
+    const harness = await loadFrontendApp({
+        '/api/csrf-token': { token: 't' },
+        '/api/setup/status': { ...STATUS, unlocked: true, discordDone: true, values: {}, secretsSet: {}, aiProviders: AI_PROVIDERS, ...status },
+        '/api/setup/guild': { guildName: 'G', roles: [], channels: [], categories: [] },
+        '/api/setup/complete': { success: true, restartRequired: false },
+        ...routes
+    });
+    await harness.app.finishLoading();
+    harness.app.showSetupStep('ai');
+    return harness;
+}
+
+test('the step list shows seven labels with „KI" fifth', async () => {
+    const { element } = await openAiStep();
+    const labels = [...element('setup-steps').innerHTML.matchAll(/<span>([^<]*)<\/span>/g)].map(match => match[1]);
+    assert.deepEqual(labels, ['PIN', 'Discord', 'Server', 'Sicherheit', 'KI', 'Datenschutz', 'Fertig']);
+    assert.match(element('setup-steps').innerHTML, /is-active[^>]*aria-current="step"><i class="bi bi-5-circle"/);
+});
+
+test('the AI step explains itself and offers „Keine KI verwenden" first', async () => {
+    const { element } = await openAiStep();
+    assert.match(HTML, /id="setup-step-ai"[\s\S]*KI \(optional\)[\s\S]*DEMS kann Fragen von Mitgliedern zu Events beantworten und dir beim Erstellen von Events helfen\. Du kannst das auch später unter System › KI einrichten\./);
+    const fields = element('setup-ai-fields').innerHTML;
+    assert.match(fields, /<select[^>]*id="setup-ai-provider"[^>]*data-change="setupAiProviderChanged"[^>]*><option value="">Keine KI verwenden<\/option><option value="ollama">Ollama \(lokal oder Cloud\)<\/option>/);
+    assert.match(fields, /id="setup-ai-base-url"/);
+    assert.match(fields, /type="password"[^>]*id="setup-ai-api-key"|id="setup-ai-api-key"[^>]*type="password"/);
+    assert.match(fields, /id="setup-ai-model"[^>]*list="setup-ai-models"/);
+    assert.match(fields, /data-click="loadSetupAiModels"/);
+    for (const action of ['testSetupAi', 'skipSetupAi', 'submitSetupAi']) assert.match(HTML, new RegExp(`data-click="${action}"`));
+});
+
+test('„Überspringen" leads to the privacy step and sends empty AI values', async () => {
+    const { app, element, requests } = await openAiStep();
+    element('setup-ai-provider').value = 'openai';
+    element('setup-ai-api-key').value = 'sk-x';
+    element('setup-ai-model').value = 'gpt';
+    await app.runAction('skipSetupAi', {});
+    assert.equal(isHidden(element('setup-step-privacy')), false);
+    await app.runAction('completeSetup', {});
+    const body = JSON.parse(requests.find(request => request.url === '/api/setup/complete').body);
+    assert.equal(body.aiProvider, '');
+    assert.equal(body.aiBaseUrl, '');
+    assert.equal(body.aiApiKey, '');
+    assert.equal(body.aiModel, '');
+});
+
+test('„Weiter" with a provider but no model stays on the step', async () => {
+    const { app, element } = await openAiStep();
+    element('setup-ai-provider').value = 'ollama';
+    await app.runAction('submitSetupAi', {});
+    assert.match(element('setup-error').innerHTML, /Bitte wähle ein KI-Modell oder überspringe den KI-Schritt\./);
+    assert.equal(isHidden(element('setup-step-ai')), false);
+});
+
+test('the test button sends the typed values and shows the result chip', async () => {
+    const { app, element, requests } = await openAiStep({ '/api/setup/ai/test': { ok: true, ms: 42 } });
+    element('setup-ai-provider').value = 'ollama';
+    element('setup-ai-model').value = 'llama3.1';
+    await app.runAction('testSetupAi', {});
+    const request = requests.find(entry => entry.url === '/api/setup/ai/test');
+    assert.equal(request.method, 'POST');
+    assert.deepEqual(JSON.parse(request.body), { provider: 'ollama', baseUrl: '', apiKey: '', model: 'llama3.1' });
+    assert.match(element('setup-ai-test-result').innerHTML, /chip-success[^>]*>Verbunden · 42 ms/);
+
+    const failed = await openAiStep({ '/api/setup/ai/test': { ok: false, error: '<b>Der KI-Anbieter ist nicht erreichbar.</b>' } });
+    failed.element('setup-ai-provider').value = 'ollama';
+    await failed.app.runAction('testSetupAi', {});
+    assert.match(failed.element('setup-ai-test-result').innerHTML, /chip-danger[^>]*>&lt;b&gt;Der KI-Anbieter ist nicht erreichbar\.&lt;\/b&gt;/);
+});
+
+test('„Modelle laden" fills the suggestions of the model field', async () => {
+    const { app, element } = await openAiStep({ '/api/setup/ai/models': { models: ['llama3.1', '<x>'] } });
+    element('setup-ai-provider').value = 'ollama';
+    await app.runAction('loadSetupAiModels', {});
+    assert.equal(element('setup-ai-models').innerHTML, '<option value="llama3.1"></option><option value="&lt;x&gt;"></option>');
+    const failed = await openAiStep({ '/api/setup/ai/models': httpAnswer(502, { error: 'Der KI-Anbieter ist nicht erreichbar.' }) });
+    failed.element('setup-ai-provider').value = 'ollama';
+    await failed.app.runAction('loadSetupAiModels', {});
+    assert.match(failed.element('setup-error').innerHTML, /Der KI-Anbieter ist nicht erreichbar\./);
+});
+
+test('a new provider shows its default address and drops the old test result', async () => {
+    const { app, element } = await openAiStep({ '/api/setup/ai/test': { ok: true, ms: 5 } });
+    element('setup-ai-provider').value = 'ollama';
+    await app.runAction('testSetupAi', {});
+    element('setup-ai-provider').value = 'openai';
+    await app.runAction('setupAiProviderChanged', element('setup-ai-provider'));
+    assert.equal(element('setup-ai-base-url').placeholder, 'https://api.openai.com/v1');
+    assert.equal(element('setup-ai-test-result').innerHTML, '');
+});
+
+test('AI values from .env are read-only with "aus .env"', async () => {
+    const { element } = await openAiStep({}, { locked: ['AI_PROVIDER', 'AI_API_KEY'], values: { AI_PROVIDER: 'ollama' }, secretsSet: { AI_API_KEY: true } });
+    const fields = element('setup-ai-fields').innerHTML;
+    assert.match(fields, /id="setup-ai-provider" value="ollama"[^>]*readonly/);
+    assert.match(fields, /API-Schlüssel <span class="chip chip-sm chip-info">aus \.env<\/span>/);
+    assert.doesNotMatch(fields, /<select[^>]*id="setup-ai-provider"/);
+});
+
+test('a refused AI value of the server leads back to the AI step', async () => {
+    const { app, element } = await openAiStep({ '/api/setup/complete': httpAnswer(400, { error: 'Bitte wähle ein KI-Modell oder überspringe den KI-Schritt.' }) });
+    app.showSetupStep('privacy');
+    await app.runAction('completeSetup', {});
+    assert.equal(isHidden(element('setup-step-ai')), false);
+    assert.match(element('setup-error').innerHTML, /KI-Modell/);
 });

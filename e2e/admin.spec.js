@@ -5,7 +5,10 @@
  * something create their own event.
  */
 const { test, expect } = require('@playwright/test');
-const { watchErrors, loginAs, navigate, waitForDialog } = require('./helpers');
+const os = require('os');
+const path = require('path');
+const { watchErrors, loginAs, navigate, waitForDialog, closeEditor } = require('./helpers');
+const { startServer } = require('../test/helpers');
 
 const rows = (page) => page.locator('#admin-events-table .data-table tbody tr');
 const row = (page, title) => rows(page).filter({ hasText: title });
@@ -479,12 +482,12 @@ test('admins choose the announcement channel and lock channel creation in the bo
 
         // The wizard shows the locked channel option
         await navigate(page, 'admin');
-        await page.locator('[data-click="showCreateEventModal"]').first().click();
-        await waitForDialog(page, '#eventModal');
-        await page.locator('#eventModal [data-click="wizardGoTo"][data-step="5"]').click();
+        await page.locator('[data-click="showCreateEvent"]').first().click();
+        await expect(page.locator('#event-editor-section')).toBeVisible();
+        await page.locator('#event-editor-section [data-click="wizardGoTo"][data-step="5"]').click();
         await expect(page.locator('#event-auto-create-channels')).toBeDisabled();
         await expect(page.locator('#event-channels-locked')).toHaveText('In der Bot-Zentrale ausgeschaltet.');
-        await page.locator('#eventModal .btn-close').click();
+        await closeEditor(page);
         expect(errors).toEqual([]);
     } finally {
         await adminRequest(page, 'PUT', '/api/admin/bot/settings', before);
@@ -498,6 +501,17 @@ test('the System page shows the configuration and the Discord guide', async ({ p
     await navigate(page, 'admin');
     await page.click('#admin-section a[href="#system"]');
     await expect(page.locator('#system-section')).toBeVisible();
+    // One category at a time: the overview first, with version and status
+    await expect(page.locator('#system-panel-overview')).toBeVisible();
+    await expect(page.locator('#system-panel-discord')).toBeHidden();
+    await expect(page.locator('#system-status-list .system-status-row')).toHaveCount(3);
+    await expect(page.locator('#system-nav .settings-nav-item')).toHaveCount(6);
+
+    await page.click('#system-nav a[href="#system/discord"]');
+    await expect(page).toHaveURL(/#system\/discord$/);
+    await expect(page.locator('#system-panel-discord')).toBeVisible();
+    await expect(page.locator('#system-panel-overview')).toBeHidden();
+    await expect(page.locator('#system-nav a[aria-current="page"]')).toHaveText(/Discord/);
     await expect(page.locator('#system-DISCORD_GUILD_ID')).toHaveAttribute('readonly', '');
     await expect(page.locator('#system-discord-fields .chip-info').first()).toHaveText('aus .env');
     await expect(page.locator('#system-DISCORD_BOT_TOKEN')).toHaveValue('');
@@ -506,5 +520,158 @@ test('the System page shows the configuration and the Discord guide', async ({ p
     await waitForDialog(page, '#discordGuideModal');
     await expect(page.locator('#system-guide .setup-guide-step')).toHaveCount(5);
     await expect(page.locator('#system-guide #guide-step-2 code')).toContainText('/auth/discord/callback');
+    await page.keyboard.press('Escape');
+    await expect(page.locator('#discordGuideModal')).toBeHidden();
+
+    // The category is part of the address and survives a reload
+    await page.reload();
+    await expect(page.locator('#system-panel-discord')).toBeVisible();
+
+    // Unsaved input marks its category, stays across a category switch and is asked about on leaving
+    await page.click('#system-nav a[href="#system/server"]');
+    await page.fill('#system-SERVER_NAME', 'Nicht gespeichert');
+    await expect(page.locator('#system-nav-dot-server')).toBeVisible();
+    await page.click('#system-nav a[href="#system/overview"]');
+    await page.click('#system-nav a[href="#system/server"]');
+    await expect(page.locator('#system-SERVER_NAME')).toHaveValue('Nicht gespeichert');
+    await page.click('#system-section a[href="#admin"]');
+    await waitForDialog(page, '#confirmModal');
+    await expect(page.locator('#confirm-modal-text')).toHaveText('Ungespeicherte Änderungen verwerfen?');
+    await page.click('#confirmModal [data-bs-dismiss="modal"]');
+    await expect(page.locator('#confirmModal')).toBeHidden();
+    await expect(page).toHaveURL(/#system\/server$/);
+    await expect(page.locator('#system-SERVER_NAME')).toHaveValue('Nicht gespeichert');
+    await page.click('#system-section a[href="#admin"]');
+    await waitForDialog(page, '#confirmModal');
+    await page.click('#confirm-modal-ok');
+    await expect(page.locator('#admin-section')).toBeVisible();
     expect(errors).toEqual([]);
+});
+
+// The leave guard must not rewrite the browser history: Back walks the visited pages
+test('the Back button walks through the System categories and out of the page', async ({ page }) => {
+    const errors = watchErrors(page);
+    await loginAs(page, 'admin');
+    await navigate(page, 'admin');
+    const before = await page.evaluate(() => history.length);
+    await page.click('#admin-section a[href="#system"]');
+    await expect(page.locator('#system-panel-overview')).toBeVisible();
+    await page.click('#system-nav a[href="#system/discord"]');
+    await expect(page.locator('#system-panel-discord')).toBeVisible();
+    await page.click('#system-nav a[href="#system/server"]');
+    await expect(page.locator('#system-panel-server')).toBeVisible();
+    // Three clicks, three entries
+    expect(await page.evaluate(() => history.length)).toBe(before + 3);
+
+    await page.goBack();
+    await expect(page).toHaveURL(/#system\/discord$/);
+    await expect(page.locator('#system-panel-discord')).toBeVisible();
+    await page.goBack();
+    await expect(page).toHaveURL(/#system$/);
+    await expect(page.locator('#system-panel-overview')).toBeVisible();
+    await page.goBack();
+    await expect(page).toHaveURL(/#admin$/);
+    await expect(page.locator('#admin-section')).toBeVisible();
+    await page.goForward();
+    await expect(page.locator('#system-panel-overview')).toBeVisible();
+
+    // With unsaved input Back asks; "Abbrechen" keeps page, address and the marked navbar link
+    await page.click('#system-nav a[href="#system/server"]');
+    await page.fill('#system-SERVER_NAME', 'Nicht gespeichert');
+    // Back to another category is free ...
+    await page.goBack();
+    await expect(page).toHaveURL(/#system$/);
+    await expect(page.locator('#system-panel-overview')).toBeVisible();
+    await expect(page.locator('#system-nav-dot-server')).toBeVisible();
+    // ... Back out of the page asks
+    await page.goBack();
+    await waitForDialog(page, '#confirmModal');
+    await page.click('#confirmModal [data-bs-dismiss="modal"]');
+    await expect(page.locator('#confirmModal')).toBeHidden();
+    await expect(page).toHaveURL(/#system$/);
+    await expect(page.locator('#system-section')).toBeVisible();
+    await expect(page.locator('#main-navbar .nav-link.active')).toHaveAttribute('data-section', 'admin-section');
+    await page.click('#system-nav a[href="#system/server"]');
+    await expect(page.locator('#system-SERVER_NAME')).toHaveValue('Nicht gespeichert');
+
+    // "Verwerfen" leaves through a link without adding an entry for the question
+    const asked = await page.evaluate(() => history.length);
+    await page.click('#system-section a[href="#admin"]');
+    await waitForDialog(page, '#confirmModal');
+    await page.click('#confirm-modal-ok');
+    await expect(page.locator('#admin-section')).toBeVisible();
+    expect(await page.evaluate(() => history.length)).toBeLessThanOrEqual(asked + 1);
+    await page.goBack();
+    await expect(page).toHaveURL(/#system\/server$/);
+    // The discarded value is gone
+    await expect(page.locator('#system-SERVER_NAME')).not.toHaveValue('Nicht gespeichert');
+    expect(errors).toEqual([]);
+});
+
+test('on a phone the System categories are a scrolling row and the page does not scroll sideways', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await loginAs(page, 'admin');
+    await page.evaluate(() => { window.location.hash = '#system/discord'; });
+    await expect(page.locator('#system-panel-discord')).toBeVisible();
+    await expect(page.locator('#system-nav .settings-nav-sub').first()).toBeHidden();
+    const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+    expect(overflow).toBeLessThanOrEqual(0);
+});
+
+// ── System category „KI" ──
+
+test('the System category „KI" shows the provider, and the connection test reports „Verbunden"', async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== 'desktop', 'same panel on the phone');
+    const errors = watchErrors(page);
+    await loginAs(page, 'admin');
+    await page.evaluate(() => { window.location.hash = '#system/ai'; });
+    await expect(page.locator('#system-panel-ai')).toBeVisible();
+    await expect(page.locator('#system-nav a[aria-current="page"]')).toHaveText(/KI/);
+    await expect(page.locator('#system-AI_PROVIDER')).toBeVisible();
+    await page.click('#ai-test-button');
+    await expect(page.locator('#ai-test-result')).toContainText('Verbunden');
+    expect(errors).toEqual([]);
+});
+
+test('switching „Auf der Webseite" off removes the bubble for members', async ({ browser }, testInfo) => {
+    test.skip(testInfo.project.name !== 'desktop', 'one switch for everybody; once is enough');
+    // An own server: the switch is shared state, the other tests keep their bubble
+    const stamp = `${process.pid}-${Date.now()}`;
+    const server = await startServer('dev/start.js', {
+        DEV_SQLITE_PATH: path.join(os.tmpdir(), `dems-e2e-ai-${stamp}.sqlite`),
+        DEV_UPLOAD_DIR: path.join(os.tmpdir(), `dems-e2e-ai-uploads-${stamp}`)
+    });
+    const contexts = [];
+    try {
+        const open = async (persona) => {
+            const context = await browser.newContext({ baseURL: server.baseUrl, viewport: { width: 1440, height: 900 }, colorScheme: 'dark' });
+            contexts.push(context);
+            const page = await context.newPage();
+            await loginAs(page, persona);
+            return page;
+        };
+        const openEventPage = async (page) => {
+            await page.evaluate(() => { window.location.hash = '#event/dev-event-open'; });
+            await expect(page.locator('#detail-title')).not.toHaveText('');
+        };
+
+        const member = await open('member');
+        await openEventPage(member);
+        await expect(member.locator('#assistant-toggle')).toBeVisible();
+
+        const admin = await open('admin');
+        await admin.evaluate(() => { window.location.hash = '#system/ai'; });
+        await expect(admin.locator('#ai-memberWeb')).toBeChecked();
+        await admin.locator('#ai-memberWeb').uncheck();
+        await admin.click('#ai-save-settings');
+        await expect(admin.getByText('KI-Einstellungen gespeichert.')).toBeVisible();
+
+        // The next page load knows: no bubble
+        await member.reload();
+        await expect(member.locator('#detail-title')).not.toHaveText('');
+        await expect(member.locator('#assistant-toggle')).toBeHidden();
+    } finally {
+        for (const context of contexts) await context.close();
+        await server.stop();
+    }
 });

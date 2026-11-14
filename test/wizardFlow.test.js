@@ -7,7 +7,7 @@ async function openWizard(routes = {}) {
     const frontend = await loadFrontendApp({ '/api/admin/roles': [], ...routes });
     frontend.state.currentUser = { id: 'u-admin', username: 'mori', roles: [], isAdmin: true };
     frontend.state.csrfToken = 'test-token';
-    await frontend.app.showCreateEventModal();
+    await frontend.app.openEventEditor();
     return frontend;
 }
 
@@ -88,7 +88,7 @@ test('opening the wizard again clears the marks of the last attempt', async () =
     const { app, element } = await openWizard();
     app.wizardNext();
     assert.ok(element('wstep-1').classList.contains('has-error'));
-    await app.showCreateEventModal();
+    await app.openEventEditor();
     assert.equal(element('wstep-1').classList.contains('has-error'), false);
     assert.equal(element('event-title-feedback').textContent, '');
 });
@@ -207,7 +207,7 @@ async function editStoredEvent(saved = { id: 'evt-raid', notifiedCount: 0 }) {
     });
     frontend.state.currentUser = { id: 'u-admin', username: 'mori', roles: [], isAdmin: true };
     frontend.state.csrfToken = 'test-token';
-    await frontend.app.editEvent('evt-raid');
+    await frontend.app.openEventEditor({ eventId: 'evt-raid' });
     // The picker double ignores setDate -> hold the loaded start like flatpickr does
     frontend.state.startDatePicker.selectedDates = [new Date(STORED_EVENT.startDate)];
     return frontend;
@@ -265,7 +265,7 @@ test('a new event never shows the switch, also after editing another one', async
     app.wizardGoTo(5);
     assert.equal(notifyShown(element), true);
 
-    await app.showCreateEventModal();
+    await app.openEventEditor();
     element('event-title').value = 'Neu';
     moveStart(state, '2026-12-05T18:00:00.000Z');
     app.wizardGoTo(5);
@@ -282,7 +282,7 @@ test('a switch turned off stays off when the admin goes back and forth', async (
     assert.equal(notifyShown(element), true);
     assert.equal(element('event-notify-participants').checked, false);
 
-    await app.editEvent('evt-raid');
+    await app.openEventEditor({ eventId: 'evt-raid' });
     assert.equal(element('event-notify-participants').checked, true);
 });
 
@@ -329,4 +329,28 @@ test('the audit log marks a change notice as information', async () => {
     await app.loadAuditLog();
     const html = element('audit-log-entries').innerHTML;
     assert.match(html, /chip-info[^>]*>NOTIFY_EVENT_CHANGE/, html);
+});
+
+test('the assistant notes are collected and emptied by a reset', async () => {
+    const { app, element } = await openWizard();
+    element('event-ai-notes').value = 'Treffpunkt: Lobby';
+    assert.equal(app.collectEventDraft().aiNotes, 'Treffpunkt: Lobby');
+    await app.fillWizard({ title: 'A', aiNotes: 'Mitbringen: Headset' });
+    assert.equal(element('event-ai-notes').value, 'Mitbringen: Headset');
+    await app.resetWizard();
+    assert.equal(element('event-ai-notes').value, '');
+});
+
+test('the assistant notes field shows while the AI info is unknown or an assistant is on, else it hides', async () => {
+    const shownFor = async (aiInfo) => {
+        const frontend = await loadFrontendApp({ '/api/admin/roles': [] });
+        frontend.state.currentUser = { id: 'u-admin', username: 'mori', roles: [], isAdmin: true };
+        frontend.state.aiInfo = aiInfo;
+        await frontend.app.openEventEditor();
+        return !isHidden(frontend.element('event-ai-notes-group'));
+    };
+    assert.equal(await shownFor(undefined), true);
+    assert.equal(await shownFor({ adminAssistant: false, memberAssistant: true }), true);
+    assert.equal(await shownFor({ adminAssistant: true, memberAssistant: false }), true);
+    assert.equal(await shownFor({ adminAssistant: false, memberAssistant: false }), false);
 });

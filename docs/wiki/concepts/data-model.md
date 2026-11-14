@@ -3,13 +3,13 @@ id: data-model
 title: Data model — collections and document shapes
 type: concept
 tags: [data-model, schema, collections, events, registrations, users, postgresql]
-sources: [routes/admin.js, utils/registrationService.js, utils/userProfile.js, utils/sessionStore.js, routes/events.js, utils/eventUtils.js, bot/registration.js, utils/checkin.js, bot/threadSync.js, dev/seedData.js, utils/eventTemplates.js, utils/botSettings.js]
+sources: [routes/admin.js, utils/registrationService.js, utils/userProfile.js, utils/sessionStore.js, routes/events.js, utils/eventUtils.js, bot/registration.js, utils/checkin.js, bot/threadSync.js, dev/seedData.js, utils/eventTemplates.js, utils/botSettings.js, ai/settings.js, ai/usage.js]
 depends_on: [data-layer]
 see_also: [registration-flow, event-lifecycle, maintenance-mode, glossary]
 ---
 # Data model — collections and document shapes
 
-> TL;DR: Fourteen schemaless collections. `events`, `registrations`, `comments`, `auditLogs`, `polls`, `eventTemplates` use auto ids; `pollVotes` uses `<pollId>_<userId>`; `users` uses the Discord user id; `botMessages/templates`, `botSettings/config`, `maintenanceSettings/config`, `systemSettings/config`, `privacyPolicy/current` are singleton documents; `devMeta/seed` exists only in dev mock mode. All dates are ISO-8601 strings. Shapes are defined by the code that writes them (no schema file) — the producers are listed per collection.
+> TL;DR: Sixteen schemaless collections. `events`, `registrations`, `comments`, `auditLogs`, `polls`, `eventTemplates` use auto ids; `pollVotes` uses `<pollId>_<userId>`; `users` uses the Discord user id; `aiUsage` uses the local day `YYYY-MM-DD`; `botMessages/templates`, `botSettings/config`, `maintenanceSettings/config`, `systemSettings/config`, `privacyPolicy/current`, `aiSettings/config` are singleton documents; `devMeta/seed` exists only in dev mock mode. All dates are ISO-8601 strings. Shapes are defined by the code that writes them (no schema file) — the producers are listed per collection.
 
 ```mermaid
 erDiagram
@@ -28,6 +28,7 @@ erDiagram
 | Field | Type | Meaning |
 |---|---|---|
 | `title`, `description` | string | description is Markdown (EasyMDE), ≤5000 chars |
+| `aiNotes` | string | extra details only the AI assistant reads, default `''`, ≤ 4000 chars (`checkEventFields`); admin-only in answers (`ADMIN_EVENT_FIELDS` in `toPublicEvent`: only `GET /api/events/:id` for an admin carries it); shared by series (`SERIES_FIELDS`) and templates (`TEMPLATE_FIELDS`), copied by duplicates; editor field `#event-ai-notes` on step 1 |
 | `status` | `draft` \| `active` \| `archived` \| `cancelled` | only `active` is listed and accepts registrations; `draft`/`archived` answer 404 to non-admins (`isEventVisibleTo`) |
 | `startDate`, `endDate` | ISO string or `''` | |
 | `registrationDeadline`, `unregisterDeadline` | ISO string or `''` | optional Anmeldeschluss / Abmeldeschluss (W-03); `''` or missing = none; must lie before the end; series dates keep the distance to their start |
@@ -81,7 +82,7 @@ Read in full by the admin member overview (W-15, `GET /api/admin/members`, `util
 
 ## auditLogs (auto id) — `utils/eventUtils.js#addAuditLog`
 
-`{ action, adminId, details, targetId, timestamp }`. Actions: `CREATE_EVENT`, `UPDATE_EVENT`, `NOTIFY_EVENT_CHANGE`, `UPDATE_EVENT_STATUS`, `CANCEL_EVENT`, `START_EVENT`, `END_EVENT`, `DELETE_EVENT`, `DELETE_SERIES`, `DUPLICATE_EVENT`, `GENERATE_CHECKIN`, `EXPORT_REGISTRATIONS`, `MESSAGE_PARTICIPANTS` (W-09), `UPDATE_REGISTRATION_STATUS`, `MOVE_REGISTRATION_SLOT`, `CREATE_POLL`, `UPDATE_POLL`, `CLOSE_POLL`, `ANNOUNCE_POLL`, `DELETE_POLL`, `DECIDE_POLL`, `ANNOUNCE_EVENT`, `SYNC_DISCORD_EVENT`, `UPDATE_TEMPLATES` (bot messages), `CREATE_EVENT_TEMPLATE`, `UPDATE_EVENT_TEMPLATE`, `DELETE_EVENT_TEMPLATE` (W-10), `UPDATE_BOT_SETTINGS`, `UPDATE_SYSTEM_SETTINGS` (#138, details `{ keys }`), `UPDATE_PRIVACY_POLICY` (#138, details `{ version }`), `UPDATE_MAINTENANCE`, `PANIC_MODE_ACTIVATED`, `PANIC_MODE_DEACTIVATED`.
+`{ action, adminId, details, targetId, timestamp }`. Actions: `CREATE_EVENT`, `UPDATE_EVENT`, `NOTIFY_EVENT_CHANGE`, `UPDATE_EVENT_STATUS`, `CANCEL_EVENT`, `START_EVENT`, `END_EVENT`, `DELETE_EVENT`, `DELETE_SERIES`, `DUPLICATE_EVENT`, `GENERATE_CHECKIN`, `EXPORT_REGISTRATIONS`, `MESSAGE_PARTICIPANTS` (W-09), `UPDATE_REGISTRATION_STATUS`, `MOVE_REGISTRATION_SLOT`, `CREATE_POLL`, `UPDATE_POLL`, `CLOSE_POLL`, `ANNOUNCE_POLL`, `DELETE_POLL`, `DECIDE_POLL`, `ANNOUNCE_EVENT`, `SYNC_DISCORD_EVENT`, `UPDATE_TEMPLATES` (bot messages), `CREATE_EVENT_TEMPLATE`, `UPDATE_EVENT_TEMPLATE`, `DELETE_EVENT_TEMPLATE` (W-10), `UPDATE_BOT_SETTINGS`, `UPDATE_SYSTEM_SETTINGS` (#138, details `{ keys }`), `UPDATE_AI_SETTINGS` (details `{ keys }`, never values), `UPDATE_PRIVACY_POLICY` (#138, details `{ version }`), `UPDATE_MAINTENANCE`, `PANIC_MODE_ACTIVATED`, `PANIC_MODE_DEACTIVATED`.
 
 ## polls (auto id) — written by `routes/admin.js` and `utils/pollStore.js`
 
@@ -97,7 +98,11 @@ Read in full by the admin member overview (W-15, `GET /api/admin/members`, `util
 
 ## eventTemplates (auto id) — written by `routes/admin.js` (`/api/admin/event-templates`, W-10)
 
-`{ name (unique ignoring case, ≤ 80), settings, createdAt, createdBy, updatedAt, updatedBy }` — shared by all admins, at most 50. `settings` holds only `TEMPLATE_FIELDS` of `utils/eventTemplates.js` with event shapes (see the events table): `title`, `description`, `bannerUrl`, `accentColor`, `category`, `location`, `maxParticipants`, `accessMode`, `requiredRoles`, `approvalMode`, `allowGuests`, `allowTentative`, `slots`, `assignRoleId`, `formFields`, `reminderHours` (`[{ hours }]`, no `sent`), `checkinMessage`, `autoCreateChannels`, `channelConfig`, `customBotMessages`. Never dates, deadlines, status, series fields, Discord ids, announcements or the check-in code. Applying a template in the wizard copies the settings once; events keep no link to it. An uploaded banner in `settings.bannerUrl` counts as used for the banner clean-up. Not wiped by the admin system reset.
+`{ name (unique ignoring case, ≤ 80), settings, createdAt, createdBy, updatedAt, updatedBy }` — shared by all admins, at most 50. `settings` holds only `TEMPLATE_FIELDS` of `utils/eventTemplates.js` with event shapes (see the events table): `title`, `description`, `aiNotes`, `bannerUrl`, `accentColor`, `category`, `location`, `maxParticipants`, `accessMode`, `requiredRoles`, `approvalMode`, `allowGuests`, `allowTentative`, `slots`, `assignRoleId`, `formFields`, `reminderHours` (`[{ hours }]`, no `sent`), `checkinMessage`, `autoCreateChannels`, `channelConfig`, `customBotMessages`. Never dates, deadlines, status, series fields, Discord ids, announcements or the check-in code. Applying a template in the wizard copies the settings once; events keep no link to it. An uploaded banner in `settings.bannerUrl` counts as used for the banner clean-up. Not wiped by the admin system reset.
+
+## aiUsage (id = local day `YYYY-MM-DD` in `TIMEZONE`) — written by `ai/usage.js`
+
+`{ memberQuestions, adminRequests, inputTokens, outputTokens, errors }` — counters only, never question or answer text. `pruneUsage` deletes documents older than 90 days (at start and every 6 h); `questionsToday` feeds the daily limit of `ai/limits.js`.
 
 ## Singletons
 
@@ -105,6 +110,7 @@ Read in full by the admin member overview (W-15, `GET /api/admin/members`, `util
 |---|---|
 | `botMessages/templates` | `registration`, `accepted`, `rejected` (template strings, ≤2000) |
 | `botSettings/config` | `statusType`, `activityType`, `activityText`, `dmNotifications`, `reminderEnabled`, `eventStartNotifications`, `autoChannelCreation`, `announcementThreads` (B-14), `autoUpdatePresence`, `autoStatusCalendarEvents`, `announceChannel`, `welcomeMessage`, `waitlistConfirmation` (B-15, default true), `waitlistConfirmHours` (B-15, whole hours 1–72, default 12), `updatedAt` |
+| `aiSettings/config` | `memberWeb`, `memberDiscord`, `adminAssistant`, `teaserEnabled` (bool, default true), `teaserText` (1–120), `assistantName` (1–40), `extraInstructions` (≤1000), `memberQuestionsPerHour` (1–200, default 20), `dailyQuestionLimit` (0–100000, default 500, 0 = no limit), `updatedAt` — `ai/settings.js` (defaults for missing keys, cached until the next save); the connection itself (provider, key, model) lives in `systemSettings/config` |
 | `maintenanceSettings/config` | `warningEnabled`, `warningText`, `loginDisabled`, `registrationDisabled`, `plannedMaintenance`, `plannedMaintenanceStart/End/Text`, `panicMode`, `panicActivatedAt`, `panicActivatedBy`, `updatedAt`, `updatedBy` |
 | `systemSettings/config` | `values` (`{ KEY: string }`: the database-backed configuration of `utils/systemConfig.js#MANAGED_KEYS` plus the generated `SESSION_SECRET`; secrets in plain text, never returned by the API), `setupCompletedAt` (ISO or missing), `setupSource` (`wizard` \| `env`), `updatedAt`, `updatedBy` — see [configuration](../ops/configuration.md) (#138) |
 | `privacyPolicy/current` | `markdown` (≤ 50000; `''` = no policy), `version` (int, +1 per changed text, kept when removed, so a later policy is new for everyone), `updatedAt`, `updatedBy` — `utils/privacyPolicy.js` (#138) |

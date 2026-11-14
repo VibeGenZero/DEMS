@@ -9,6 +9,7 @@ import { STEP_FIELDS } from './wizard-checks.js';
 const FIELD_INPUTS = {
     title: 'event-title',
     bannerUrl: 'event-banner-url',
+    aiNotes: 'event-ai-notes',
     startDate: 'event-start-date',
     endDate: 'event-end-date',
     registrationDeadline: 'event-registration-deadline',

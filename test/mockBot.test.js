@@ -177,3 +177,10 @@ test('a member lookup returns the member or false', async () => {
 test('the simulated bot logs in again at once (#138)', async () => {
     assert.deepEqual(await bot.restartBot('any-token'), { ok: true, guildName: GUILD.name });
 });
+
+test('switching the event assistant for Discord is logged instead of reaching Discord', async () => {
+    let result;
+    const output = await captureLogs(async () => { result = await bot.refreshAskFeature(); });
+    assert.equal(result, true);
+    assert.ok(output.includes('Befehle und Ankündigungen aktualisiert (Event-Assistent)'), output);
+});

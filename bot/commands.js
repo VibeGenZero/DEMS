@@ -2,7 +2,7 @@
  * Slash commands of the bot: registering them with Discord, the event
  * autocomplete and the answers to /events, /register and /unregister.
  * The admin commands /event create and /poll create live in bot/adminCommands.js (B-13),
- * /polls and /event info in bot/infoCommands.js (B-12).
+ * /polls and /event info in bot/infoCommands.js (B-12), /ask in bot/ask.js.
  */
 const { ActionRowBuilder, EmbedBuilder, MessageFlags, REST, Routes, SlashCommandBuilder } = require('discord.js');
 const { db, collection, doc, getDoc, getDocs, query, where } = require('../firebaseAdmin');
@@ -11,10 +11,11 @@ const { summarizePlaces, formatPlaces } = require('../utils/capacity');
 const { debugLog } = require('../utils/debugLog');
 const { fitsIntoDiscordModal, getModalFieldLimit } = require('../utils/formFields');
 const { getSlots, buildRoster } = require('../utils/slotService');
-const { client } = require('./client');
+const { client, state } = require('./client');
+const { isFeatureOn } = require('../ai/settings');
 
 const { getTimezone } = require('../utils/timezone');
-const { buildSlotButton } = require('./messages');
+const { buildSlotButton, refreshEventAnnouncements } = require('./messages');
 const {
     resolveInteractionRoles, checkRegistrationConditions, handleEventRegisterButton, replyWithFailure
 } = require('./registration');
@@ -23,6 +24,7 @@ const {
     handleTemplateAutocomplete, handleEventCreateCommand, handlePollCreateCommand
 } = require('./adminCommands');
 const { handlePollsCommand, handleEventInfoAutocomplete, handleEventInfoCommand } = require('./infoCommands');
+const { handleAskCommand } = require('./ask');
 
 // Discord allows at most five buttons per action row
 const BUTTONS_PER_ROW = 5;
@@ -53,9 +55,36 @@ function buildEventCommand(name, germanName, description) {
 }
 
 /**
+ * /ask (German /frage): a question to the event assistant about one event.
+ *
+ * @returns {SlashCommandBuilder} -> The command definition.
+ */
+function buildAskCommand() {
+    return new SlashCommandBuilder()
+        .setName('ask')
+        .setNameLocalizations({ de: 'frage' })
+        .setDescription('Stelle eine Frage zu einem Event')
+        .setDescriptionLocalizations({ de: 'Stelle eine Frage zu einem Event' })
+        .addStringOption(opt => opt
+            .setName('event')
+            .setDescription('Name des Events')
+            .setDescriptionLocalizations({ de: 'Name des Events' })
+            .setRequired(true)
+            .setAutocomplete(true))
+        .addStringOption(opt => opt
+            .setName('question')
+            .setNameLocalizations({ de: 'frage' })
+            .setDescription('Deine Frage')
+            .setDescriptionLocalizations({ de: 'Deine Frage' })
+            .setRequired(true)
+            .setMaxLength(500));
+}
+
+/**
  * Definitions of all slash commands as Discord expects them.
  *
- * @returns {Object[]} -> JSON bodies of /events, /register (/anmelden), /unregister (/abmelden), /my-events (/meine-events)
+ * @returns {Object[]} -> JSON bodies of /events, /register (/anmelden), /unregister (/abmelden), /my-events (/meine-events),
+ *   /polls (/abstimmungen), /ask (/frage) while the event assistant is on for Discord,
  *   and the admin commands /event create (/event erstellen) and /poll create (/abstimmung erstellen).
  */
 function buildSlashCommands() {
@@ -75,6 +104,7 @@ function buildSlashCommands() {
             .setNameLocalizations({ de: 'abstimmungen' })
             .setDescription('Zeigt die offenen Terminabstimmungen')
             .setDescriptionLocalizations({ de: 'Zeigt die offenen Terminabstimmungen' }),
+        ...(isFeatureOn('memberDiscord') ? [buildAskCommand()] : []),
         // Admin commands (B-13): visible to everybody, the bot checks the admin role
         new SlashCommandBuilder()
             .setName('event')
@@ -135,11 +165,39 @@ async function registerSlashCommands() {
 }
 
 /**
- * Offer events while a member types the event option of /register or /unregister.
+ * Register the commands again and redraw the announcements of active events
+ * after the event assistant was switched for Discord (switch, provider or
+ * model changed), so /ask and „Frage stellen“ appear or disappear.
+ *
+ * @returns {Promise<boolean>} -> True when done; false while not ready or on errors (logged).
+ */
+async function refreshAskFeature() {
+    if (!state.isReady) return false;
+    try {
+        await registerSlashCommands();
+        const snapshot = await getDocs(query(collection(db, 'events'), where('status', '==', 'active')));
+        for (const eventDoc of snapshot.docs) {
+            const { announcements } = eventDoc.data();
+            if (Array.isArray(announcements) && announcements.length > 0) await refreshEventAnnouncements(eventDoc.id);
+        }
+        return true;
+    } catch (err) {
+        console.error('refreshAskFeature failed:', err.message);
+        return false;
+    }
+}
+
+/**
+ * Offer events while a member types the event option of /register, /unregister, /event or /ask.
  *
  * @param {Object} interaction -> Autocomplete interaction.
  */
 async function handleAutocomplete(interaction) {
+    // /ask offers the events of /event info: active and not over
+    if (interaction.commandName === 'ask') {
+        await handleEventInfoAutocomplete(interaction);
+        return;
+    }
     // /event erstellen offers templates (B-13), /event info events (B-12)
     if (interaction.commandName === 'event') {
         if (interaction.options.getSubcommand() === 'info') await handleEventInfoAutocomplete(interaction);
@@ -257,6 +315,11 @@ async function handleRegisterCommand(interaction, eventId) {
  * @param {Object} interaction -> Chat input command interaction.
  */
 async function handleChatCommand(interaction) {
+    // A question to the event assistant
+    if (interaction.commandName === 'ask') {
+        await handleAskCommand(interaction);
+        return;
+    }
     // Open date polls (B-12)
     if (interaction.commandName === 'polls') {
         await handlePollsCommand(interaction);
@@ -393,6 +456,7 @@ async function handleChatCommand(interaction) {
 module.exports = {
     buildSlashCommands,
     registerSlashCommands,
+    refreshAskFeature,
     handleAutocomplete,
     handleRegisterCommand,
     handleChatCommand

@@ -124,7 +124,8 @@ const answersOf = (interaction) => interaction.calls
     .filter(([name]) => ['reply', 'editReply', 'update'].includes(name))
     .map(([, payload]) => payload.content || '');
 
-test('after the registration deadline the announcement keeps only the link', async () => {
+// Mock mode turns the mock AI provider on: „Frage stellen“ stays while the event is active and not over
+test('after the registration deadline the announcement keeps only the question and the link', async () => {
     const closed = { title: 'Zu', status: 'active', approvalMode: 'instant', startDate: inTwoDays(), registrationDeadline: passed() };
     // Every button of the V2 announcement: slot buttons beside their blocks, then the last row (B-05)
     const labels = (event) => {
@@ -134,9 +135,9 @@ test('after the registration deadline the announcement keeps only the link', asy
             return part.type === 1 ? part.components.map(button => button.label) : [];
         });
     };
-    assert.deepEqual(labels(closed), ['Zum Event']);
-    assert.deepEqual(labels({ ...closed, slots: SLOTS, maxParticipants: 2 }), ['Zum Event']);
-    assert.deepEqual(labels({ ...closed, registrationDeadline: inTwoDays() }), ['Anmelden', 'Zum Event']);
+    assert.deepEqual(labels(closed), ['Frage stellen', 'Zum Event']);
+    assert.deepEqual(labels({ ...closed, slots: SLOTS, maxParticipants: 2 }), ['Frage stellen', 'Zum Event']);
+    assert.deepEqual(labels({ ...closed, registrationDeadline: inTwoDays() }), ['Anmelden', 'Frage stellen', 'Zum Event']);
 });
 
 test('the register button and modals answer that registration is closed', async () => {
@@ -322,8 +323,9 @@ test('/register and /unregister carry German names for German clients', () => {
     const { buildSlashCommands } = require('../bot/commands');
     const commands = Object.fromEntries(buildSlashCommands().map(command => [command.name, command]));
 
-    // polls is B-12 (test/infoCommands.test.js), event and poll the admin commands of B-13 (test/adminCommands.test.js)
-    assert.deepEqual(Object.keys(commands), ['events', 'register', 'unregister', 'my-events', 'polls', 'event', 'poll']);
+    // polls is B-12 (test/infoCommands.test.js), ask the event assistant (test/askCommand.test.js; on in mock mode),
+    // event and poll the admin commands of B-13 (test/adminCommands.test.js)
+    assert.deepEqual(Object.keys(commands), ['events', 'register', 'unregister', 'my-events', 'polls', 'ask', 'event', 'poll']);
     assert.equal(commands['my-events'].name_localizations.de, 'meine-events');
     assert.equal(commands['my-events'].description_localizations.de, 'Zeigt deine kommenden Anmeldungen');
     assert.equal(commands.register.name_localizations.de, 'anmelden');

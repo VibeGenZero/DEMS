@@ -8,6 +8,7 @@ const {
 const FULL_EVENT = {
     title: 'Raid-Abend',
     description: 'Wir raiden.',
+    aiNotes: 'Treffpunkt: Raid-Kanal',
     bannerUrl: 'https://example.com/banner.png',
     accentColor: '#8b5cf6',
     category: 'Raid',
@@ -53,6 +54,7 @@ test('a template keeps exactly the recurring event settings', () => {
     assert.equal(error, undefined);
     assert.deepEqual(Object.keys(settings).sort(), [...TEMPLATE_FIELDS].sort());
     assert.equal(settings.title, 'Raid-Abend');
+    assert.equal(settings.aiNotes, 'Treffpunkt: Raid-Kanal');
     assert.equal(settings.maxParticipants, 12);
     assert.deepEqual(settings.requiredRoles, ['r1']);
     assert.equal(settings.autoCreateChannels, true);
@@ -155,6 +157,14 @@ test('template checks allow an empty title and skip date, status and deadline ru
         registrationDeadline: 'kein Datum'
     }, { template: true });
     assert.deepEqual(errors, []);
+});
+
+test('event and template checks refuse aiNotes over 4000 characters', async () => {
+    const sentence = 'Die Zusatzinfos für den Event-Assistenten dürfen höchstens 4000 Zeichen lang sein.';
+    assert.ok((await checkEventFields({ title: 'A', startDate: '2099-01-01T00:00:00.000Z', aiNotes: 'x'.repeat(4001) })).includes(sentence));
+    assert.ok((await checkEventFields({ aiNotes: 'x'.repeat(4001) }, { template: true })).includes(sentence));
+    assert.deepEqual(await checkEventFields({ aiNotes: 'x'.repeat(4000) }, { template: true }), []);
+    assert.ok((await checkEventFields({ aiNotes: 5 }, { template: true })).includes(sentence));
 });
 
 test('template checks keep the event rules for title length, banner, colour and enums', async () => {

@@ -13,7 +13,7 @@ const SHORTEN_SERIES_MESSAGE = '„Wiederholen bis“ kann nur verlängert werde
 const CHANGEABLE_STATUSES = ['draft', 'active'];
 // Settings the following dates take from the edited one; status, dates, check-in and origin stay per date
 const SERIES_FIELDS = [
-    'title', 'description', 'bannerUrl', 'accentColor', 'location', 'category', 'maxParticipants', 'slots',
+    'title', 'description', 'aiNotes', 'bannerUrl', 'accentColor', 'location', 'category', 'maxParticipants', 'slots',
     'allowGuests', 'allowTentative', 'accessMode', 'requiredRoles', 'approvalMode', 'assignRoleId', 'formFields', 'reminderHours',
     'checkinMessage', 'customBotMessages', 'autoCreateChannels', 'channelConfig', 'announceChannelId'
 ];

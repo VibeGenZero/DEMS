@@ -243,6 +243,23 @@
             </div>
           </div>
 
+          <div class="setup-step is-hidden" id="setup-step-ai">
+            <h2 class="setup-step-title">KI (optional)</h2>
+            <p class="text-secondary">DEMS kann Fragen von Mitgliedern zu Events beantworten und dir beim Erstellen von Events helfen. Du kannst das auch später unter System › KI einrichten.</p>
+            <div class="setup-fields" id="setup-ai-fields"></div>
+            <div class="setup-field">
+              <button type="button" class="btn btn-secondary btn-sm" id="setup-ai-test" data-click="testSetupAi">
+                <i class="bi bi-plug me-1" aria-hidden="true"></i>Verbindung testen
+              </button>
+              <span class="ms-2" id="setup-ai-test-result" role="status"></span>
+            </div>
+            <div class="setup-actions">
+              <button type="button" class="btn btn-secondary" data-click="setupBack" data-setup-step="security">Zurück</button>
+              <button type="button" class="btn btn-ghost" data-click="skipSetupAi">Überspringen</button>
+              <button type="button" class="btn btn-primary" data-click="submitSetupAi">Weiter</button>
+            </div>
+          </div>
+
           <div class="setup-step is-hidden" id="setup-step-privacy">
             <h2 class="setup-step-title">Datenschutzerklärung (optional)</h2>
             <p class="text-secondary">Schreib hier die Datenschutzerklärung deiner Community (Markdown). Sie erscheint öffentlich unter „Datenschutz“, und jedes Mitglied muss sie beim ersten Login akzeptieren. Du kannst sie auch später unter Admin &gt; System anlegen oder ändern.</p>
@@ -251,7 +268,7 @@
             <p class="setup-hint">Vorschau</p>
             <div class="setup-privacy-preview rendered-markdown" id="setup-privacy-preview"></div>
             <div class="setup-actions">
-              <button type="button" class="btn btn-secondary" data-click="setupBack" data-setup-step="security">Zurück</button>
+              <button type="button" class="btn btn-secondary" data-click="setupBack" data-setup-step="ai">Zurück</button>
               <button type="button" class="btn btn-primary" id="setup-complete-submit" data-click="completeSetup">
                 <i class="bi bi-check2-circle me-2" aria-hidden="true"></i>Einrichtung abschließen
               </button>
@@ -564,6 +581,45 @@
           </div>
         </div><!-- /event-page -->
       </div><!-- /container -->
+
+      <!-- Event assistant: chat bubble bottom right (events/assistant.js mounts it for an active event) -->
+      <div id="event-assistant" class="assistant is-hidden">
+        <div id="assistant-teaser" class="assistant-teaser is-hidden">
+          <button type="button" class="btn-close assistant-teaser-close" data-click="closeAssistantTeaser" aria-label="Hinweis schließen"></button>
+          <strong id="assistant-teaser-name" class="assistant-teaser-name">Event-Assistent</strong>
+          <span id="assistant-teaser-text"></span>
+        </div>
+        <button id="assistant-toggle" type="button" class="assistant-fab" data-click="toggleAssistant" aria-label="Event-Assistent öffnen" aria-expanded="false" aria-controls="assistant-panel">
+          <i class="bi bi-chat-dots" aria-hidden="true"></i>
+        </button>
+        <section id="assistant-panel" class="assistant-panel is-hidden" role="dialog" aria-label="Event-Assistent">
+          <header class="assistant-head">
+            <span class="assistant-head-icon" aria-hidden="true"><i class="bi bi-stars"></i></span>
+            <div class="assistant-head-text">
+              <strong id="assistant-name">Event-Assistent</strong>
+              <small id="assistant-event-title" class="assistant-head-event"></small>
+            </div>
+            <button type="button" class="btn btn-ghost btn-icon btn-sm assistant-close" data-click="toggleAssistant" aria-label="Event-Assistent schließen">
+              <i class="bi bi-x-lg" aria-hidden="true"></i>
+            </button>
+          </header>
+          <div id="assistant-messages" class="assistant-messages" aria-live="polite"></div>
+          <fieldset id="assistant-suggestions" class="assistant-suggestions">
+            <legend class="visually-hidden">Vorschläge</legend>
+            <button type="button" class="chip chip-sm" data-click="askSuggestedQuestion" data-question="Wann geht es los?">Wann geht es los?</button>
+            <button type="button" class="chip chip-sm" data-click="askSuggestedQuestion" data-question="Was sind die Regeln?">Was sind die Regeln?</button>
+            <button type="button" class="chip chip-sm" data-click="askSuggestedQuestion" data-question="Darf ich mitmachen?">Darf ich mitmachen?</button>
+          </fieldset>
+          <form id="assistant-form" class="assistant-form">
+            <label for="assistant-input" class="visually-hidden">Deine Frage</label>
+            <input id="assistant-input" type="text" class="form-control assistant-input" maxlength="500" autocomplete="off" placeholder="Frage eingeben …">
+            <button id="assistant-send" type="button" class="btn btn-primary btn-icon assistant-send" data-click="sendAssistantQuestion" aria-label="Frage senden">
+              <i class="bi bi-arrow-right" aria-hidden="true"></i>
+            </button>
+          </form>
+          <p class="assistant-note">KI-Antworten können Fehler enthalten. Im Zweifel gilt die Eventbeschreibung.</p>
+        </section>
+      </div>
     </section>
 
     <!-- ── PROFILE SECTION ── -->
@@ -896,7 +952,11 @@
             <button class="btn btn-secondary" data-click="showImportDiscordEventsModal">
               <i class="bi bi-discord me-1"></i>Import aus Discord
             </button>
-            <button class="btn btn-accent" data-click="showCreateEventModal">
+            <!-- Only while the admin assistant is on (admin/dashboard.js) -->
+            <button class="btn btn-secondary is-hidden" id="admin-create-ai" data-click="createEventWithAi">
+              <i class="bi bi-stars me-1" aria-hidden="true"></i>Mit KI erstellen
+            </button>
+            <button class="btn btn-accent" data-click="showCreateEvent">
               <i class="bi bi-plus-circle me-1"></i>Neues Event
             </button>
           </div>
@@ -998,57 +1058,683 @@
         <div class="section-header d-flex justify-content-between align-items-center flex-wrap gap-3">
           <div>
             <h2><i class="bi bi-sliders me-2"></i>System</h2>
-            <p class="text-secondary mb-0">Discord-Anwendung, Adresse und Sicherheit. Werte aus .env sind gesperrt und nur dort änderbar.</p>
+            <p class="text-secondary mb-0">Einstellungen der Installation. Werte aus .env sind gesperrt und nur dort änderbar.</p>
           </div>
           <a class="btn btn-outline-light" href="#admin"><i class="bi bi-arrow-left me-1"></i>Zum Dashboard</a>
         </div>
-        <div class="system-grid">
-          <div class="glass-card system-card" id="system-update-card">
-            <h3 class="system-card-title"><i class="bi bi-arrow-repeat me-2" aria-hidden="true"></i>Version</h3>
-            <div id="system-update-body"></div>
+        <div class="settings-layout">
+          <nav class="settings-nav" id="system-nav" aria-label="System-Kategorien"></nav>
+          <div class="settings-panels">
+            <section class="settings-panel is-hidden" id="system-panel-overview" aria-labelledby="system-panel-overview-title">
+              <h3 class="settings-panel-title" id="system-panel-overview-title" tabindex="-1">Übersicht</h3>
+              <div class="glass-card system-card" id="system-update-card">
+                <h4 class="system-card-title"><i class="bi bi-arrow-repeat me-2" aria-hidden="true"></i>Version</h4>
+                <div id="system-update-body"></div>
+              </div>
+              <div class="glass-card system-card">
+                <h4 class="system-card-title"><i class="bi bi-activity me-2" aria-hidden="true"></i>Status</h4>
+                <div class="system-status-list" id="system-status-list"></div>
+              </div>
+            </section>
+            <section class="settings-panel is-hidden" id="system-panel-discord" aria-labelledby="system-panel-discord-title">
+              <div class="system-card-head">
+                <h3 class="settings-panel-title" id="system-panel-discord-title" tabindex="-1">Discord</h3>
+                <button type="button" class="btn btn-secondary btn-sm" data-click="showDiscordGuideDialog">
+                  <i class="bi bi-signpost-split me-1" aria-hidden="true"></i>Anleitung anzeigen
+                </button>
+              </div>
+              <div class="glass-card system-card">
+                <div class="setup-fields" id="system-discord-fields"></div>
+                <div class="setup-actions">
+                  <button type="button" class="btn btn-primary" id="system-save-discord" data-click="saveSystemSettings" data-group="discord">
+                    <i class="bi bi-check2 me-1" aria-hidden="true"></i>Speichern
+                  </button>
+                </div>
+              </div>
+            </section>
+            <section class="settings-panel is-hidden" id="system-panel-server" aria-labelledby="system-panel-server-title">
+              <h3 class="settings-panel-title" id="system-panel-server-title" tabindex="-1">Server</h3>
+              <div class="glass-card system-card">
+                <div class="setup-fields" id="system-server-fields"></div>
+                <div class="setup-actions">
+                  <button type="button" class="btn btn-primary" id="system-save-server" data-click="saveSystemSettings" data-group="server">
+                    <i class="bi bi-check2 me-1" aria-hidden="true"></i>Speichern
+                  </button>
+                </div>
+              </div>
+            </section>
+            <section class="settings-panel is-hidden" id="system-panel-security" aria-labelledby="system-panel-security-title">
+              <h3 class="settings-panel-title" id="system-panel-security-title" tabindex="-1">Sicherheit</h3>
+              <div class="glass-card system-card">
+                <div class="setup-fields" id="system-security-fields"></div>
+                <div class="setup-actions">
+                  <button type="button" class="btn btn-primary" id="system-save-security" data-click="saveSystemSettings" data-group="security">
+                    <i class="bi bi-check2 me-1" aria-hidden="true"></i>Speichern
+                  </button>
+                </div>
+              </div>
+            </section>
+            <section class="settings-panel is-hidden" id="system-panel-ai" aria-labelledby="system-panel-ai-title">
+              <h3 class="settings-panel-title" id="system-panel-ai-title" tabindex="-1">KI</h3>
+              <p class="text-secondary" id="ai-load-note" role="status"></p>
+              <div class="glass-card system-card">
+                <div class="system-card-head"><h4 class="system-card-title">Anbieter</h4></div>
+                <div class="setup-fields" id="system-ai-fields"></div>
+                <datalist id="system-ai-models"></datalist>
+                <div class="setup-actions">
+                  <button type="button" class="btn btn-ghost" id="ai-models-button" data-click="loadAiModels">
+                    <i class="bi bi-list-ul me-1" aria-hidden="true"></i>Modelle laden
+                  </button>
+                  <button type="button" class="btn btn-ghost" id="ai-test-button" data-click="testAiConnection">
+                    <i class="bi bi-plug me-1" aria-hidden="true"></i>Verbindung testen
+                  </button>
+                  <span id="ai-test-result" role="status"></span>
+                  <button type="button" class="btn btn-primary" id="system-save-ai" data-click="saveSystemSettings" data-group="ai">
+                    <i class="bi bi-check2 me-1" aria-hidden="true"></i>Speichern
+                  </button>
+                </div>
+              </div>
+              <div class="glass-card system-card">
+                <div class="system-card-head"><h4 class="system-card-title">Event-Assistent für Mitglieder</h4></div>
+                <div class="setup-fields">
+                  <div class="form-check form-switch setup-field">
+                    <input class="form-check-input" type="checkbox" role="switch" id="ai-memberWeb" data-change="aiSettingChanged">
+                    <label class="form-check-label" for="ai-memberWeb">Auf der Webseite</label>
+                    <div class="setup-hint">Mitglieder fragen im Event-Fenster.</div>
+                  </div>
+                  <div class="form-check form-switch setup-field">
+                    <input class="form-check-input" type="checkbox" role="switch" id="ai-memberDiscord" data-change="aiSettingChanged">
+                    <label class="form-check-label" for="ai-memberDiscord">In Discord</label>
+                    <div class="setup-hint">Der Befehl /frage und der Knopf „Frage stellen“ an Ankündigungen.</div>
+                  </div>
+                  <div class="setup-field">
+                    <label class="form-label" for="ai-assistantName">Name des Assistenten</label>
+                    <input class="form-control" id="ai-assistantName" type="text" maxlength="40" autocomplete="off" data-input="aiSettingChanged">
+                  </div>
+                  <div class="form-check form-switch setup-field">
+                    <input class="form-check-input" type="checkbox" role="switch" id="ai-teaserEnabled" data-change="aiSettingChanged">
+                    <label class="form-check-label" for="ai-teaserEnabled">Hinweis bei Events anzeigen</label>
+                    <div class="setup-hint">Ein kurzer Hinweis lädt zum Fragen ein.</div>
+                  </div>
+                  <div class="setup-field">
+                    <label class="form-label" for="ai-teaserText">Hinweistext</label>
+                    <input class="form-control" id="ai-teaserText" type="text" maxlength="120" autocomplete="off" data-input="aiSettingChanged">
+                  </div>
+                  <div class="setup-field">
+                    <label class="form-label" for="ai-memberQuestionsPerHour">Fragen pro Mitglied und Stunde</label>
+                    <input class="form-control" id="ai-memberQuestionsPerHour" type="number" min="1" max="200" step="1" data-input="aiSettingChanged">
+                  </div>
+                  <div class="setup-field">
+                    <label class="form-label" for="ai-dailyQuestionLimit">Fragen pro Tag insgesamt</label>
+                    <input class="form-control" id="ai-dailyQuestionLimit" type="number" min="0" max="100000" step="1" data-input="aiSettingChanged">
+                    <div class="setup-hint">0 = kein Limit</div>
+                  </div>
+                </div>
+                <div class="system-card-head"><h4 class="system-card-title">KI für Admins</h4></div>
+                <div class="setup-fields">
+                  <div class="form-check form-switch setup-field">
+                    <input class="form-check-input" type="checkbox" role="switch" id="ai-adminAssistant" data-change="aiSettingChanged">
+                    <label class="form-check-label" for="ai-adminAssistant">Assistent im Event-Editor</label>
+                    <div class="setup-hint">Hilft Admins beim Erstellen von Events.</div>
+                  </div>
+                </div>
+                <div class="system-card-head"><h4 class="system-card-title">Verhalten</h4></div>
+                <div class="setup-fields">
+                  <div class="setup-field">
+                    <label class="form-label" for="ai-extraInstructions">Zusatzanweisungen</label>
+                    <textarea class="form-control" id="ai-extraInstructions" rows="4" maxlength="1000" data-input="aiSettingChanged"></textarea>
+                    <div class="setup-hint">Gilt für alle Antworten, z. B. Ton oder Anrede. <span id="ai-extraInstructions-count">0 / 1000</span></div>
+                  </div>
+                </div>
+                <div class="setup-actions">
+                  <button type="button" class="btn btn-primary" id="ai-save-settings" data-click="saveAiSettings">
+                    <i class="bi bi-check2 me-1" aria-hidden="true"></i>KI-Einstellungen speichern
+                  </button>
+                </div>
+              </div>
+              <div class="glass-card system-card">
+                <div class="system-card-head"><h4 class="system-card-title">Nutzung</h4></div>
+                <div class="table-responsive">
+                  <table class="table">
+                    <thead><tr><th scope="col"></th><th scope="col">Fragen</th><th scope="col">Admin-Anfragen</th><th scope="col">Tokens (ein)</th><th scope="col">Tokens (aus)</th></tr></thead>
+                    <tbody id="ai-usage-body"></tbody>
+                  </table>
+                </div>
+              </div>
+              <div class="glass-card system-card">
+                <div class="system-card-head"><h4 class="system-card-title">Datenschutz-Hinweis</h4></div>
+                <p class="text-secondary mb-0">Bei einem Cloud-Anbieter werden Fragen und Event-Inhalte an diesen Anbieter gesendet. Ergänze das in deiner Datenschutzerklärung. Mit einem lokalen Ollama verlässt nichts den Server. Namen und Discord-IDs der Mitglieder werden nie mitgesendet.</p>
+              </div>
+            </section>
+            <section class="settings-panel is-hidden" id="system-panel-privacy" aria-labelledby="system-panel-privacy-title">
+              <h3 class="settings-panel-title" id="system-panel-privacy-title" tabindex="-1">Datenschutz</h3>
+              <div class="glass-card system-card">
+                <p class="text-secondary mb-0">Öffentlich unter „Datenschutz“. Jede Änderung ist eine neue Fassung: Alle Mitglieder müssen ihr beim nächsten Besuch erneut zustimmen. Leerer Text = keine Datenschutzerklärung. <span id="system-privacy-version"></span></p>
+                <div class="system-privacy-editor">
+                  <div>
+                    <label class="form-label" for="system-privacy-text">Text (Markdown)</label>
+                    <textarea class="form-control setup-privacy-text" id="system-privacy-text" rows="14" maxlength="50000" data-input="previewSystemPrivacy"></textarea>
+                  </div>
+                  <div>
+                    <p class="form-label">Vorschau</p>
+                    <div class="setup-privacy-preview rendered-markdown" id="system-privacy-preview"></div>
+                  </div>
+                </div>
+                <div class="setup-actions">
+                  <button type="button" class="btn btn-primary" data-click="saveSystemPrivacy">
+                    <i class="bi bi-check2 me-1" aria-hidden="true"></i>Datenschutzerklärung speichern
+                  </button>
+                </div>
+              </div>
+            </section>
           </div>
-          <div class="glass-card system-card">
-            <div class="system-card-head">
-              <h3 class="system-card-title"><i class="bi bi-discord me-2" aria-hidden="true"></i>Discord</h3>
-              <button type="button" class="btn btn-secondary btn-sm" data-click="showDiscordGuideDialog">
-                <i class="bi bi-signpost-split me-1" aria-hidden="true"></i>Anleitung anzeigen
+        </div>
+      </div>
+    </section>
+
+    <!-- Event editor: the wizard as a page (#event-editor/new, #event-editor/<id>; admin/editor-page.js) -->
+    <section id="event-editor-section" class="app-section is-hidden">
+      <div class="container-fluid section-container editor-page">
+        <div class="editor-topbar">
+          <button type="button" class="btn btn-ghost btn-sm" data-click="closeEventEditor" aria-label="Zurück">
+            <i class="bi bi-arrow-left" aria-hidden="true"></i><span class="editor-topbar-label ms-1">Zurück</span>
+          </button>
+          <h2 class="editor-title" id="event-editor-title">Neues Event</h2>
+          <div class="editor-topbar-actions">
+            <span class="editor-saved is-hidden" id="event-editor-saved" role="status"></span>
+            <div class="editor-topbar-extra" id="event-editor-topbar-extra">
+              <button type="button" class="btn btn-ghost btn-sm is-hidden" id="event-editor-assist-toggle" data-click="toggleEditorAssist" aria-expanded="false" aria-controls="event-editor-assist" aria-label="KI-Assistent">
+                <i class="bi bi-stars" aria-hidden="true"></i><span class="editor-topbar-label ms-1">KI-Assistent</span>
               </button>
             </div>
-            <div class="setup-fields" id="system-discord-fields"></div>
-          </div>
-          <div class="glass-card system-card">
-            <h3 class="system-card-title"><i class="bi bi-hdd-network me-2" aria-hidden="true"></i>Server</h3>
-            <div class="setup-fields" id="system-server-fields"></div>
-          </div>
-          <div class="glass-card system-card">
-            <h3 class="system-card-title"><i class="bi bi-shield-lock me-2" aria-hidden="true"></i>Sicherheit</h3>
-            <div class="setup-fields" id="system-security-fields"></div>
-          </div>
-        </div>
-        <div class="setup-actions">
-          <button type="button" class="btn btn-primary" data-click="saveSystemSettings">
-            <i class="bi bi-check2 me-1" aria-hidden="true"></i>Speichern
-          </button>
-        </div>
-
-        <div class="glass-card system-card system-privacy-card">
-          <h3 class="system-card-title"><i class="bi bi-file-earmark-lock me-2" aria-hidden="true"></i>Datenschutzerklärung</h3>
-          <p class="text-secondary mb-0">Öffentlich unter „Datenschutz“. Jede Änderung ist eine neue Fassung: Alle Mitglieder müssen ihr beim nächsten Besuch erneut zustimmen. Leerer Text = keine Datenschutzerklärung. <span id="system-privacy-version"></span></p>
-          <div class="system-privacy-editor">
-            <div>
-              <label class="form-label" for="system-privacy-text">Text (Markdown)</label>
-              <textarea class="form-control setup-privacy-text" id="system-privacy-text" rows="14" maxlength="50000" data-input="previewSystemPrivacy"></textarea>
-            </div>
-            <div>
-              <p class="form-label">Vorschau</p>
-              <div class="setup-privacy-preview rendered-markdown" id="system-privacy-preview"></div>
-            </div>
-          </div>
-          <div class="setup-actions">
-            <button type="button" class="btn btn-primary" data-click="saveSystemPrivacy">
-              <i class="bi bi-check2 me-1" aria-hidden="true"></i>Datenschutzerklärung speichern
+            <button type="button" class="btn btn-accent btn-sm" id="event-editor-save" data-click="saveEventFromTopbar" aria-label="Speichern">
+              <i class="bi bi-save" aria-hidden="true"></i><span class="editor-topbar-label ms-1">Speichern</span>
             </button>
           </div>
+        </div>
+
+        <!-- Wizard Step Indicator and the switch between editing and preview -->
+        <div class="wizard-head">
+          <div class="wizard-nav">
+            <div class="wizard-step-item active" id="wstep-1" data-click="wizardGoTo" data-step="1">
+              <div class="wizard-step-bubble">1</div>
+              <div class="wizard-step-label">Grundlagen</div>
+            </div>
+            <div class="wizard-step-connector"></div>
+            <div class="wizard-step-item" id="wstep-2" data-click="wizardGoTo" data-step="2">
+              <div class="wizard-step-bubble">2</div>
+              <div class="wizard-step-label">Datum & Zeit</div>
+            </div>
+            <div class="wizard-step-connector"></div>
+            <div class="wizard-step-item" id="wstep-3" data-click="wizardGoTo" data-step="3">
+              <div class="wizard-step-bubble">3</div>
+              <div class="wizard-step-label">Teilnehmer</div>
+            </div>
+            <div class="wizard-step-connector"></div>
+            <div class="wizard-step-item" id="wstep-4" data-click="wizardGoTo" data-step="4">
+              <div class="wizard-step-bubble">4</div>
+              <div class="wizard-step-label">Formular</div>
+            </div>
+            <div class="wizard-step-connector"></div>
+            <div class="wizard-step-item" id="wstep-5" data-click="wizardGoTo" data-step="5">
+              <div class="wizard-step-bubble">5</div>
+              <div class="wizard-step-label">Erweitert</div>
+            </div>
+          </div>
+          <div class="nav nav-pills wizard-mode" id="wizard-mode" role="tablist" aria-label="Ansicht des Assistenten">
+            <button type="button" class="nav-link active" id="wizard-mode-edit" role="tab" aria-selected="true"
+              data-click="setWizardMode" data-mode="edit"><i class="bi bi-pencil me-1"></i>Bearbeiten</button>
+            <button type="button" class="nav-link" id="wizard-mode-preview" role="tab" aria-selected="false"
+              data-click="setWizardMode" data-mode="preview"><i class="bi bi-eye me-1"></i>Vorschau</button>
+          </div>
+        </div>
+
+        <div class="editor-body" id="event-editor-body">
+          <div class="editor-form">
+            <!-- Shown when unsaved input from an earlier visit was put back (admin/editor-page.js) -->
+            <div class="editor-restored is-hidden" id="event-editor-restored" role="status">
+              <span>Ungespeicherter Entwurf wiederhergestellt</span>
+              <button type="button" class="btn btn-secondary btn-sm" data-click="discardEditorDraft">Verwerfen</button>
+            </div>
+            <form id="event-form">
+              <input type="hidden" id="event-edit-id" value="">
+
+              <!-- ── Step 1: Grundlagen ── -->
+              <div class="wizard-page" id="wizard-page-1">
+                <!-- Only for a new event with at least one template (admin/wizard-templates.js, W-10) -->
+                <div class="wizard-template-area is-hidden" id="wizard-template-area">
+                  <label class="form-label" for="event-template-select"><i class="bi bi-bookmark me-1"></i>Aus Vorlage starten</label>
+                  <div class="input-group">
+                    <select class="form-select" id="event-template-select" data-change="applyTemplate">
+                      <option value="">Vorlage wählen …</option>
+                    </select>
+                    <button type="button" class="btn btn-outline-danger" id="event-template-delete" data-click="askDeleteTemplate"
+                      aria-label="Vorlage löschen" title="Vorlage löschen" disabled><i class="bi bi-trash"></i></button>
+                  </div>
+                  <div class="wizard-template-confirm is-hidden" id="wizard-template-delete-confirm" role="alert">
+                    <span id="wizard-template-delete-text"></span>
+                    <button type="button" class="btn btn-sm btn-secondary" data-click="cancelDeleteTemplate">Abbrechen</button>
+                    <button type="button" class="btn btn-sm btn-danger" data-click="deleteTemplate"><i class="bi bi-trash me-1"></i>Löschen</button>
+                  </div>
+                  <div class="form-text">Übernimmt alle Einstellungen der Vorlage. Datum und Status trägst du selbst ein.</div>
+                </div>
+                <div class="mb-3">
+                  <label class="form-label" for="event-title">Titel <span class="text-danger">*</span></label>
+                  <input type="text" class="form-control" id="event-title" maxlength="200" placeholder="Event-Name">
+                  <div class="invalid-feedback" id="event-title-feedback"></div>
+                </div>
+                <div class="mb-3" id="event-description-group">
+                  <div class="editor-field-head">
+                    <label class="form-label">Beschreibung</label>
+                    <button type="button" class="btn btn-ghost btn-sm is-hidden" id="event-description-improve" data-click="improveDescription">
+                      <i class="bi bi-stars me-1" aria-hidden="true"></i>Mit KI verbessern
+                    </button>
+                  </div>
+                  <textarea class="form-control" id="event-description" rows="4"
+                    placeholder="Beschreibe das Event..."></textarea>
+                </div>
+                <div class="mb-3" id="event-ai-notes-group">
+                  <div class="editor-field-head">
+                    <label class="form-label" for="event-ai-notes">Zusatzinfos für den Event-Assistenten</label>
+                    <button type="button" class="btn btn-ghost btn-sm is-hidden" id="event-ai-notes-suggest" data-click="suggestAiNotes">
+                      <i class="bi bi-stars me-1" aria-hidden="true"></i>Vorschlag von KI
+                    </button>
+                  </div>
+                  <textarea class="form-control" id="event-ai-notes" rows="4" maxlength="4000"></textarea>
+                  <div class="invalid-feedback" id="event-ai-notes-feedback"></div>
+                  <div class="form-text">Nur die KI liest dieses Feld und kann die Infos an Mitglieder weitergeben. Keine Geheimnisse eintragen.</div>
+                </div>
+                <div class="mb-3">
+                  <label class="form-label" for="event-banner-url"><i class="bi bi-image me-1"></i>Banner</label>
+                  <div class="input-group">
+                    <input type="text" inputmode="url" class="form-control" id="event-banner-url"
+                      placeholder="https://example.com/banner.jpg" data-input="updateBannerPreview">
+                    <button type="button" class="btn btn-outline-danger is-hidden" id="event-banner-clear" data-click="clearBanner"
+                      aria-label="Banner entfernen" title="Banner entfernen"><i class="bi bi-x-lg"></i></button>
+                    <button type="button" class="btn btn-outline-secondary" id="event-banner-upload" data-click="pickBannerFile"><i class="bi bi-upload me-1"></i>Bild hochladen</button>
+                  </div>
+                  <input type="file" class="is-hidden" id="event-banner-file" accept="image/png,image/jpeg,image/webp,image/gif"
+                    data-change="uploadBanner" aria-label="Banner-Bild auswählen">
+                  <div class="invalid-feedback" id="event-banner-url-feedback"></div>
+                  <small class="text-muted">Bild hochladen (PNG, JPEG, WebP, GIF, max. 5 MB) oder direkte URL eintragen</small>
+                  <div class="mt-2 is-hidden" id="banner-preview-container">
+                    <img id="banner-preview" class="banner-preview" src="" alt="Banner Vorschau">
+                  </div>
+                </div>
+                <div class="mb-3">
+                  <label class="form-label small text-muted"><i class="bi bi-palette me-1"></i>Akzentfarbe (optional)</label>
+                  <div class="d-flex align-items-center gap-3">
+                    <input type="color" class="form-control form-control-color accent-color-input" id="event-accent-color"
+                      value="#8b5cf6">
+                    <small class="text-muted">Hintergrundfarbe wenn kein Banner-Bild gesetzt ist.</small>
+                  </div>
+                </div>
+                <div class="mb-3 position-relative">
+                  <label class="form-label small text-muted"><i class="bi bi-geo-alt me-1"></i>Ort (optional)</label>
+                  <input type="text" class="form-control form-control-sm" id="event-location-text"
+                    placeholder="z.B. #gaming-voice oder Teamspeak Server"
+                    autocomplete="off" data-input="handleLocationInput">
+                  <div id="location-suggestions" class="location-dropdown is-hidden"></div>
+                  <input type="hidden" id="event-location-channel-id">
+                  <input type="hidden" id="event-location-channel-type">
+                  <small class="text-muted mt-1 d-block">Tippe # für Discord-Channel-Vorschläge.</small>
+                </div>
+              </div>
+
+              <!-- ── Step 2: Datum & Zeit ── -->
+              <div class="wizard-page is-hidden" id="wizard-page-2">
+                <div class="row g-3 mb-3">
+                  <div class="col-md-6">
+                    <label class="form-label" for="event-start-date"><i class="bi bi-calendar-event me-1"></i>Startdatum <span class="text-danger" id="event-start-required">*</span></label>
+                    <input type="text" class="form-control" id="event-start-date" placeholder="Datum & Uhrzeit wählen"
+                      readonly>
+                    <div class="invalid-feedback" id="event-start-date-feedback"></div>
+                  </div>
+                  <div class="col-md-6">
+                    <label class="form-label" for="event-end-date"><i class="bi bi-calendar-event me-1"></i>Enddatum</label>
+                    <input type="text" class="form-control" id="event-end-date" placeholder="Datum & Uhrzeit wählen"
+                      readonly>
+                    <div class="invalid-feedback" id="event-end-date-feedback"></div>
+                  </div>
+                </div>
+                <div class="row g-3 mb-3">
+                  <div class="col-md-6">
+                    <label class="form-label" for="event-registration-deadline"><i class="bi bi-alarm me-1"></i>Anmeldeschluss</label>
+                    <input type="text" class="form-control" id="event-registration-deadline" placeholder="Optional: Datum & Uhrzeit"
+                      readonly aria-describedby="event-registration-deadline-hint">
+                    <div class="form-text" id="event-registration-deadline-hint">Leer = Anmeldung bis zum Ende des Events.</div>
+                    <div class="invalid-feedback" id="event-registration-deadline-feedback"></div>
+                  </div>
+                  <div class="col-md-6">
+                    <label class="form-label" for="event-unregister-deadline"><i class="bi bi-door-closed me-1"></i>Abmeldeschluss</label>
+                    <input type="text" class="form-control" id="event-unregister-deadline" placeholder="Optional: Datum & Uhrzeit"
+                      readonly aria-describedby="event-unregister-deadline-hint">
+                    <div class="form-text" id="event-unregister-deadline-hint">Leer = Abmelden jederzeit möglich. Danach hilft nur ein Admin.</div>
+                    <div class="invalid-feedback" id="event-unregister-deadline-feedback"></div>
+                  </div>
+                </div>
+                <div class="row g-3 mb-3">
+                  <div class="col-md-6">
+                    <label class="form-label">Kategorie</label>
+                    <select class="form-select" id="event-category">
+                      <option value="">Keine Kategorie</option>
+                      <option value="Tournament">Tournament</option>
+                      <option value="Community">Community</option>
+                      <option value="Workshop">Workshop</option>
+                      <option value="Gamenight">Gamenight</option>
+                      <option value="Meeting">Meeting</option>
+                      <option value="Sonstiges">Sonstiges</option>
+                    </select>
+                  </div>
+                  <div class="col-md-6">
+                    <label class="form-label">Status</label>
+                    <select class="form-select" id="event-status" data-change="updateStartRequired">
+                      <option value="active">Aktiv</option>
+                      <option value="draft">Entwurf</option>
+                      <option value="archived">Archiviert</option>
+                    </select>
+                  </div>
+                </div>
+                <!-- Recurring -->
+                <div class="mb-3">
+                  <div class="form-check mb-2">
+                    <input class="form-check-input" type="checkbox" id="event-recurring"
+                      data-change="toggleVisible" data-target="recurring-options">
+                    <label class="form-check-label" for="event-recurring"><i class="bi bi-arrow-repeat me-1"></i>Wiederkehrendes Event</label>
+                  </div>
+                  <div class="is-hidden" id="recurring-options">
+                    <div class="row g-3">
+                      <div class="col-md-6">
+                        <label class="form-label">Intervall</label>
+                        <select class="form-select" id="event-recurring-interval">
+                          <option value="weekly">Wöchentlich</option>
+                          <option value="biweekly">Alle 2 Wochen</option>
+                          <option value="monthly">Monatlich</option>
+                        </select>
+                      </div>
+                      <div class="col-md-6">
+                        <label class="form-label">Wiederholen bis</label>
+                        <input type="date" class="form-control" id="event-recurring-until">
+                        <div class="invalid-feedback" id="event-recurring-until-feedback"></div>
+                        <div class="form-text is-hidden" id="event-recurring-until-hint">Ein späteres Datum legt neue Termine an.</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- ── Step 3: Teilnehmer & Zugang ── -->
+              <div class="wizard-page is-hidden" id="wizard-page-3">
+                <div class="row g-3 mb-3">
+                  <div class="col-md-6">
+                    <label class="form-label">Max. Teilnehmer</label>
+                    <input type="number" class="form-control" id="event-max" min="0" value="0"
+                      placeholder="0 = unbegrenzt">
+                    <div class="invalid-feedback" id="event-max-feedback"></div>
+                    <small class="text-muted">0 = unbegrenzt</small>
+                  </div>
+                  <div class="col-md-6">
+                    <label class="form-label" for="event-reminder"><i class="bi bi-alarm me-1"></i>Erinnerungen (Stunden vor Start)</label>
+                    <input type="text" class="form-control" id="event-reminder" value="" inputmode="decimal"
+                      placeholder="z. B. 24, 1">
+                    <div class="invalid-feedback" id="event-reminder-feedback"></div>
+                    <small class="text-muted">Mehrere mit Komma trennen, leer = keine Erinnerung</small>
+                  </div>
+                </div>
+                <div class="mb-3">
+                  <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" id="event-use-slots" data-change="toggleSlotEditor">
+                    <label class="form-check-label" for="event-use-slots"><i class="bi bi-diagram-3 me-1"></i>Rollen-Slots verwenden</label>
+                  </div>
+                  <div class="is-hidden" id="slot-editor-area">
+                    <div id="slot-editor-rows" class="slot-editor-rows"></div>
+                    <div class="invalid-feedback" id="slot-editor-feedback"></div>
+                    <div class="d-flex flex-wrap gap-2 mt-2">
+                      <button type="button" class="btn btn-sm btn-outline-light" data-click="addSlotRow"><i class="bi bi-plus-lg me-1"></i>Slot</button>
+                      <button type="button" class="btn btn-sm btn-outline-secondary" data-click="applySlotPreset" data-preset="mmo-raid"><i class="bi bi-magic me-1"></i>Vorlage: MMO-Raid</button>
+                    </div>
+                    <small class="text-muted d-block mt-1">Max. 10 Slots. Die Teilnehmerzahl ergibt sich aus der Summe der Plätze.</small>
+                  </div>
+                </div>
+                <div class="row g-3 mb-3">
+                  <div class="col-md-6">
+                    <label class="form-label">Zugang</label>
+                    <select class="form-select" id="event-access">
+                      <option value="open">Jeder darf teilnehmen</option>
+                      <option value="role-required">Rollen-Requirement</option>
+                    </select>
+                  </div>
+                  <div class="col-md-6">
+                    <label class="form-label">Genehmigung</label>
+                    <select class="form-select" id="event-approval">
+                      <option value="manual">Manuelle Prüfung</option>
+                      <option value="instant">Instant Access</option>
+                    </select>
+                  </div>
+                  <div class="col-md-6">
+                    <label class="form-label">Gäste-Tickets</label>
+                    <div class="form-check form-switch mt-1">
+                      <input class="form-check-input" type="checkbox" id="event-allow-guests" checked>
+                      <label class="form-check-label" for="event-allow-guests">Gäste zulassen</label>
+                    </div>
+                    <small class="text-muted is-hidden" id="event-guests-slot-hint">Bei Slot-Events nicht verfügbar</small>
+                  </div>
+                </div>
+                <div class="mb-3">
+                  <label class="form-label">Ersatzbank</label>
+                  <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" id="event-allow-tentative">
+                    <label class="form-check-label" for="event-allow-tentative">„Vielleicht“ erlauben</label>
+                  </div>
+                  <small class="text-muted">Mitglieder können unverbindlich zusagen. Die Ersatzbank belegt keine Plätze und rückt nicht automatisch nach.</small>
+                </div>
+                <div class="mb-3 is-hidden" id="role-requirement-area">
+                  <label class="form-label">Erforderliche Rollen</label>
+                  <div id="role-checkboxes" class="d-flex flex-wrap gap-2">
+                    <!-- Populated dynamically -->
+                  </div>
+                  <div class="invalid-feedback" id="role-checkboxes-feedback"></div>
+                </div>
+                <div class="mb-3">
+                  <label class="form-label">Rolle bei Annahme zuweisen</label>
+                  <select class="form-select" id="event-assign-role">
+                    <option value="">Keine Rolle zuweisen</option>
+                    <!-- Populated dynamically -->
+                  </select>
+                </div>
+              </div>
+
+              <!-- ── Step 4: Anmeldeformular ── -->
+              <div class="wizard-page is-hidden" id="wizard-page-4">
+                <!-- One card: the explanation, the field rows and the button that adds one -->
+                <div class="mb-3">
+                  <p class="text-muted small mb-3">
+                    <i class="bi bi-ui-checks me-1"></i>
+                    Optionale Felder, die Teilnehmer beim Anmelden ausfüllen müssen.
+                  </p>
+                  <div id="form-fields-builder">
+                    <!-- Dynamic field rows -->
+                  </div>
+                  <div class="invalid-feedback" id="form-fields-feedback"></div>
+                  <button type="button" class="btn btn-sm btn-outline-light mt-2" data-click="addFormField">
+                    <i class="bi bi-plus me-1"></i>Feld hinzufügen
+                  </button>
+                </div>
+              </div>
+
+              <!-- ── Step 5: Erweitert ── -->
+              <div class="wizard-page is-hidden" id="wizard-page-5">
+                <!-- Auto Voice/Text Channels -->
+                <div class="mb-3">
+                  <div class="form-check mb-2">
+                    <input class="form-check-input" type="checkbox" id="event-auto-create-channels"
+                      data-change="toggleVisible" data-target="channel-config-options">
+                    <label class="form-check-label" for="event-auto-create-channels"><i class="bi bi-headset me-1"></i>Auto-Voice/Text Channels generieren</label>
+                  </div>
+                  <!-- Bot center lock "Auto Channel-Erstellung" (admin/wizard-bot.js, B-02) -->
+                  <div class="small text-muted ms-4 mb-2 is-hidden" id="event-channels-locked"><i class="bi bi-lock me-1"></i>In der Bot-Zentrale ausgeschaltet.</div>
+                  <small class="text-muted d-block ms-4 mb-2">Erstellt einen privaten Kanal für dieses Event in Discord,
+                    auf den nur angenommene Teilnehmer zugreifen können.</small>
+                  <div id="channel-config-options" class="ms-4 mt-3 is-hidden">
+                    <div class="mb-2">
+                      <label class="form-label small text-muted">Kanal-Typ</label>
+                      <select class="form-select form-select-sm" id="event-channel-type">
+                        <option value="voice">Voice Channel (mit Text-Chat)</option>
+                        <option value="text">Nur Text Channel</option>
+                        <option value="both">Beides (Voice & Text separat)</option>
+                      </select>
+                    </div>
+                    <div class="row g-2">
+                      <div class="col-md-6">
+                        <label class="form-label small text-muted">Voice Channel Name (optional)</label>
+                        <input type="text" class="form-control form-control-sm" id="event-voice-name"
+                          placeholder="Standard: Event Titel">
+                      </div>
+                      <div class="col-md-6">
+                        <label class="form-label small text-muted">Text Channel Name (optional)</label>
+                        <input type="text" class="form-control form-control-sm" id="event-text-name"
+                          placeholder="Standard: Event Titel">
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <!-- Announcement channel of the event (admin/wizard-announce.js, B-11) -->
+                <div class="mb-3">
+                  <label class="form-label" for="event-announce-channel"><i class="bi bi-megaphone me-1"></i>Ankündigungskanal</label>
+                  <select class="form-select form-select-sm" id="event-announce-channel">
+                    <option value="">Standard aus der Bot-Zentrale</option>
+                  </select>
+                  <small class="text-muted d-block mt-1">Wohin „Ankündigen“ dieses Event postet.</small>
+                </div>
+                <!-- Custom Bot Messages -->
+                <div class="mb-3">
+                  <div class="form-check mb-2">
+                    <input class="form-check-input" type="checkbox" id="event-custom-msg-toggle"
+                      data-change="toggleVisible" data-target="custom-msg-options">
+                    <label class="form-check-label" for="event-custom-msg-toggle"><i class="bi bi-robot me-1"></i>Eigene Bot-Nachrichten</label>
+                  </div>
+                  <div class="is-hidden" id="custom-msg-options">
+                    <div class="mb-3">
+                      <label class="form-label">Registrierungs-Nachricht</label>
+                      <textarea class="form-control" id="event-msg-registration" rows="2"
+                        placeholder="Standard verwenden..."></textarea>
+                      <small class="text-muted d-block mt-1">Variablen: {user.name}, {user.mention}, {event.title},
+                        {event.url}, {slot.name}, {slot.emoji}</small>
+                    </div>
+                    <div class="mb-3">
+                      <label class="form-label">Angenommen-Nachricht</label>
+                      <textarea class="form-control" id="event-msg-accepted" rows="2"
+                        placeholder="Standard verwenden..."></textarea>
+                      <small class="text-muted d-block mt-1">Zusätzlich: {role.name}, {role.mention}, {slot.name}, {slot.emoji}</small>
+                    </div>
+                    <div class="mb-3">
+                      <label class="form-label">Abgelehnt-Nachricht</label>
+                      <textarea class="form-control" id="event-msg-rejected" rows="2"
+                        placeholder="Standard verwenden..."></textarea>
+                    </div>
+                  </div>
+                </div>
+                <!-- Check-in Message -->
+                <div class="mb-3">
+                  <label class="form-label"><i class="bi bi-chat-text me-1"></i>Check-in Nachricht (optional)</label>
+                  <textarea class="form-control" id="event-checkin-message" rows="4"
+                    placeholder="z.B. Server-Zugangsdaten, Voice-Channel-Links, etc. (Markdown unterstützt)"></textarea>
+                  <small class="text-muted">Wird Benutzern nach erfolgreichem Check-in angezeigt. Markdown
+                    unterstützt.</small>
+                </div>
+              </div>
+
+            </form>
+
+            <!-- Wizard footer: steps, save and "Als Vorlage speichern" -->
+            <div class="editor-footer">
+          <div class="wizard-footer-start">
+            <button type="button" class="btn btn-secondary" data-click="closeEventEditor">Abbrechen</button>
+            <button type="button" class="btn btn-outline-secondary" id="wizard-btn-template" data-click="openTemplateSave">
+              <i class="bi bi-bookmark-plus me-1"></i>Als Vorlage speichern
+            </button>
+          </div>
+          <div class="d-flex flex-wrap justify-content-end gap-2 align-items-center">
+            <span class="text-muted small me-2" id="wizard-step-counter">Schritt 1 von 5</span>
+            <button type="button" class="btn btn-outline-secondary is-hidden" id="wizard-btn-back" data-click="wizardBack">
+              <i class="bi bi-arrow-left me-1"></i>Zurück
+            </button>
+            <button type="button" class="btn btn-accent" id="wizard-btn-next" data-click="wizardNext">
+              Weiter<i class="bi bi-arrow-right ms-1"></i>
+            </button>
+            <!-- Only when editing a series date with later dates (admin/wizard-series.js, W-11) -->
+            <div class="is-hidden" id="wizard-series-scope" role="radiogroup" aria-label="Änderung gilt für">
+              <div class="form-check form-check-inline mb-0">
+                <input class="form-check-input" type="radio" name="event-series-scope" id="event-scope-this" value="this" checked>
+                <label class="form-check-label small" for="event-scope-this">Nur dieser Termin</label>
+              </div>
+              <div class="form-check form-check-inline mb-0">
+                <input class="form-check-input" type="radio" name="event-series-scope" id="event-scope-following" value="following">
+                <label class="form-check-label small" for="event-scope-following" id="event-scope-following-label">Dieser und alle folgenden Termine</label>
+              </div>
+            </div>
+            <!-- Only when editing moved start, end or location (admin/wizard-notify.js, W-04) -->
+            <div class="form-check form-switch mb-0 is-hidden" id="wizard-notify">
+              <input class="form-check-input" type="checkbox" id="event-notify-participants" checked>
+              <label class="form-check-label small" for="event-notify-participants">Teilnehmer benachrichtigen</label>
+            </div>
+            <button type="button" class="btn btn-accent is-hidden" id="wizard-btn-save" data-click="saveEvent">
+              <i class="bi bi-save me-1"></i>Speichern
+            </button>
+          </div>
+          <!-- Name of the new template; saving does not save the event (admin/wizard-templates.js, W-10) -->
+          <div class="wizard-template-save is-hidden" id="wizard-template-save">
+            <label class="form-label small mb-1" for="event-template-name">Name der Vorlage</label>
+            <div class="wizard-template-save-row">
+              <input type="text" class="form-control" id="event-template-name" maxlength="80" placeholder="z. B. Raid-Abend"
+                data-input="resetTemplateWarning">
+              <button type="button" class="btn btn-secondary" data-click="closeTemplateSave">Abbrechen</button>
+              <button type="button" class="btn btn-accent" data-click="saveTemplate"><i class="bi bi-bookmark-check me-1"></i>Vorlage speichern</button>
+            </div>
+            <div class="wizard-template-warning is-hidden" id="wizard-template-warning" role="alert"></div>
+          </div>
+        </div>
+          </div>
+
+          <aside class="editor-preview-column" aria-label="Vorschau">
+            <!-- Preview of the unsaved input (admin/wizard-preview.js); inert: its links lead nowhere -->
+            <div class="is-hidden" id="wizard-preview">
+              <section class="wizard-preview-block">
+                <h6 class="section-label mb-2">In der Event-Übersicht</h6>
+                <div class="wizard-preview-card" id="wizard-preview-card" inert></div>
+              </section>
+              <section class="wizard-preview-block">
+                <h6 class="section-label mb-2">In Discord</h6>
+                <div id="wizard-preview-discord" inert></div>
+              </section>
+            </div>
+        
+          </aside>
+
+          <!-- Side panel of the AI assistant (admin/editor-assist.js): fills the form, saves nothing -->
+          <aside class="editor-assist is-hidden" id="event-editor-assist" aria-label="KI-Assistent">
+            <header class="assistant-head">
+              <span class="assistant-head-icon" aria-hidden="true"><i class="bi bi-stars"></i></span>
+              <div class="assistant-head-text">
+                <strong>KI-Assistent</strong>
+                <small class="assistant-head-event">Füllt das Formular aus, speichert nichts</small>
+              </div>
+              <button type="button" class="btn btn-ghost btn-icon btn-sm" data-click="toggleEditorAssist" aria-label="KI-Assistent schließen">
+                <i class="bi bi-x-lg" aria-hidden="true"></i>
+              </button>
+            </header>
+            <div id="editor-assist-messages" class="assistant-messages" aria-live="polite">
+              <div class="assistant-message is-bot">Beschreib dein Event in eigenen Worten – ich fülle das Formular aus. Gespeichert wird erst, wenn du speicherst.</div>
+            </div>
+            <div class="editor-assist-form">
+              <label for="editor-assist-input" class="visually-hidden">Deine Nachricht an den KI-Assistenten</label>
+              <textarea id="editor-assist-input" class="form-control editor-assist-input" rows="3" maxlength="2000" placeholder="z. B. Raid am Samstag 20 Uhr, 20 Plätze, nur Raider …"></textarea>
+              <button id="editor-assist-send" type="button" class="btn btn-primary btn-icon assistant-send" data-click="sendEditorAssist" aria-label="Nachricht senden">
+                <i class="bi bi-arrow-right" aria-hidden="true"></i>
+              </button>
+            </div>
+            <p class="assistant-note">KI-Vorschläge können Fehler enthalten. Prüf das Formular vor dem Speichern.</p>
+          </aside>
         </div>
       </div>
     </section>
@@ -1304,450 +1990,6 @@
             </div>
           </div>
         </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Create / Edit Event Modal (Wizard) -->
-  <div class="modal fade" id="eventModal" tabindex="-1">
-    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
-      <div class="modal-content">
-
-        <div class="modal-header border-0 pb-0">
-          <h5 class="modal-title" id="eventModalTitle">Neues Event erstellen</h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-        </div>
-
-        <!-- Wizard Step Indicator and the switch between editing and preview -->
-        <div class="px-4 pt-3 wizard-head">
-          <div class="wizard-nav">
-            <div class="wizard-step-item active" id="wstep-1" data-click="wizardGoTo" data-step="1">
-              <div class="wizard-step-bubble">1</div>
-              <div class="wizard-step-label">Grundlagen</div>
-            </div>
-            <div class="wizard-step-connector"></div>
-            <div class="wizard-step-item" id="wstep-2" data-click="wizardGoTo" data-step="2">
-              <div class="wizard-step-bubble">2</div>
-              <div class="wizard-step-label">Datum & Zeit</div>
-            </div>
-            <div class="wizard-step-connector"></div>
-            <div class="wizard-step-item" id="wstep-3" data-click="wizardGoTo" data-step="3">
-              <div class="wizard-step-bubble">3</div>
-              <div class="wizard-step-label">Teilnehmer</div>
-            </div>
-            <div class="wizard-step-connector"></div>
-            <div class="wizard-step-item" id="wstep-4" data-click="wizardGoTo" data-step="4">
-              <div class="wizard-step-bubble">4</div>
-              <div class="wizard-step-label">Formular</div>
-            </div>
-            <div class="wizard-step-connector"></div>
-            <div class="wizard-step-item" id="wstep-5" data-click="wizardGoTo" data-step="5">
-              <div class="wizard-step-bubble">5</div>
-              <div class="wizard-step-label">Erweitert</div>
-            </div>
-          </div>
-          <div class="nav nav-pills wizard-mode" id="wizard-mode" role="tablist" aria-label="Ansicht des Assistenten">
-            <button type="button" class="nav-link active" id="wizard-mode-edit" role="tab" aria-selected="true"
-              data-click="setWizardMode" data-mode="edit"><i class="bi bi-pencil me-1"></i>Bearbeiten</button>
-            <button type="button" class="nav-link" id="wizard-mode-preview" role="tab" aria-selected="false"
-              data-click="setWizardMode" data-mode="preview"><i class="bi bi-eye me-1"></i>Vorschau</button>
-          </div>
-        </div>
-
-        <div class="modal-body">
-          <form id="event-form">
-            <input type="hidden" id="event-edit-id" value="">
-
-            <!-- ── Step 1: Grundlagen ── -->
-            <div class="wizard-page" id="wizard-page-1">
-              <!-- Only for a new event with at least one template (admin/wizard-templates.js, W-10) -->
-              <div class="wizard-template-area is-hidden" id="wizard-template-area">
-                <label class="form-label" for="event-template-select"><i class="bi bi-bookmark me-1"></i>Aus Vorlage starten</label>
-                <div class="input-group">
-                  <select class="form-select" id="event-template-select" data-change="applyTemplate">
-                    <option value="">Vorlage wählen …</option>
-                  </select>
-                  <button type="button" class="btn btn-outline-danger" id="event-template-delete" data-click="askDeleteTemplate"
-                    aria-label="Vorlage löschen" title="Vorlage löschen" disabled><i class="bi bi-trash"></i></button>
-                </div>
-                <div class="wizard-template-confirm is-hidden" id="wizard-template-delete-confirm" role="alert">
-                  <span id="wizard-template-delete-text"></span>
-                  <button type="button" class="btn btn-sm btn-secondary" data-click="cancelDeleteTemplate">Abbrechen</button>
-                  <button type="button" class="btn btn-sm btn-danger" data-click="deleteTemplate"><i class="bi bi-trash me-1"></i>Löschen</button>
-                </div>
-                <div class="form-text">Übernimmt alle Einstellungen der Vorlage. Datum und Status trägst du selbst ein.</div>
-              </div>
-              <div class="mb-3">
-                <label class="form-label" for="event-title">Titel <span class="text-danger">*</span></label>
-                <input type="text" class="form-control" id="event-title" maxlength="200" placeholder="Event-Name">
-                <div class="invalid-feedback" id="event-title-feedback"></div>
-              </div>
-              <div class="mb-3">
-                <label class="form-label">Beschreibung</label>
-                <textarea class="form-control" id="event-description" rows="4"
-                  placeholder="Beschreibe das Event..."></textarea>
-              </div>
-              <div class="mb-3">
-                <label class="form-label" for="event-banner-url"><i class="bi bi-image me-1"></i>Banner</label>
-                <div class="input-group">
-                  <input type="text" inputmode="url" class="form-control" id="event-banner-url"
-                    placeholder="https://example.com/banner.jpg" data-input="updateBannerPreview">
-                  <button type="button" class="btn btn-outline-danger is-hidden" id="event-banner-clear" data-click="clearBanner"
-                    aria-label="Banner entfernen" title="Banner entfernen"><i class="bi bi-x-lg"></i></button>
-                  <button type="button" class="btn btn-outline-secondary" id="event-banner-upload" data-click="pickBannerFile"><i class="bi bi-upload me-1"></i>Bild hochladen</button>
-                </div>
-                <input type="file" class="is-hidden" id="event-banner-file" accept="image/png,image/jpeg,image/webp,image/gif"
-                  data-change="uploadBanner" aria-label="Banner-Bild auswählen">
-                <div class="invalid-feedback" id="event-banner-url-feedback"></div>
-                <small class="text-muted">Bild hochladen (PNG, JPEG, WebP, GIF, max. 5 MB) oder direkte URL eintragen</small>
-                <div class="mt-2 is-hidden" id="banner-preview-container">
-                  <img id="banner-preview" class="banner-preview" src="" alt="Banner Vorschau">
-                </div>
-              </div>
-              <div class="mb-3">
-                <label class="form-label small text-muted"><i class="bi bi-palette me-1"></i>Akzentfarbe (optional)</label>
-                <div class="d-flex align-items-center gap-3">
-                  <input type="color" class="form-control form-control-color accent-color-input" id="event-accent-color"
-                    value="#8b5cf6">
-                  <small class="text-muted">Hintergrundfarbe wenn kein Banner-Bild gesetzt ist.</small>
-                </div>
-              </div>
-              <div class="mb-3 position-relative">
-                <label class="form-label small text-muted"><i class="bi bi-geo-alt me-1"></i>Ort (optional)</label>
-                <input type="text" class="form-control form-control-sm" id="event-location-text"
-                  placeholder="z.B. #gaming-voice oder Teamspeak Server"
-                  autocomplete="off" data-input="handleLocationInput">
-                <div id="location-suggestions" class="location-dropdown is-hidden"></div>
-                <input type="hidden" id="event-location-channel-id">
-                <input type="hidden" id="event-location-channel-type">
-                <small class="text-muted mt-1 d-block">Tippe # für Discord-Channel-Vorschläge.</small>
-              </div>
-            </div>
-
-            <!-- ── Step 2: Datum & Zeit ── -->
-            <div class="wizard-page is-hidden" id="wizard-page-2">
-              <div class="row g-3 mb-3">
-                <div class="col-md-6">
-                  <label class="form-label" for="event-start-date"><i class="bi bi-calendar-event me-1"></i>Startdatum <span class="text-danger" id="event-start-required">*</span></label>
-                  <input type="text" class="form-control" id="event-start-date" placeholder="Datum & Uhrzeit wählen"
-                    readonly>
-                  <div class="invalid-feedback" id="event-start-date-feedback"></div>
-                </div>
-                <div class="col-md-6">
-                  <label class="form-label" for="event-end-date"><i class="bi bi-calendar-event me-1"></i>Enddatum</label>
-                  <input type="text" class="form-control" id="event-end-date" placeholder="Datum & Uhrzeit wählen"
-                    readonly>
-                  <div class="invalid-feedback" id="event-end-date-feedback"></div>
-                </div>
-              </div>
-              <div class="row g-3 mb-3">
-                <div class="col-md-6">
-                  <label class="form-label" for="event-registration-deadline"><i class="bi bi-alarm me-1"></i>Anmeldeschluss</label>
-                  <input type="text" class="form-control" id="event-registration-deadline" placeholder="Optional: Datum & Uhrzeit"
-                    readonly aria-describedby="event-registration-deadline-hint">
-                  <div class="form-text" id="event-registration-deadline-hint">Leer = Anmeldung bis zum Ende des Events.</div>
-                  <div class="invalid-feedback" id="event-registration-deadline-feedback"></div>
-                </div>
-                <div class="col-md-6">
-                  <label class="form-label" for="event-unregister-deadline"><i class="bi bi-door-closed me-1"></i>Abmeldeschluss</label>
-                  <input type="text" class="form-control" id="event-unregister-deadline" placeholder="Optional: Datum & Uhrzeit"
-                    readonly aria-describedby="event-unregister-deadline-hint">
-                  <div class="form-text" id="event-unregister-deadline-hint">Leer = Abmelden jederzeit möglich. Danach hilft nur ein Admin.</div>
-                  <div class="invalid-feedback" id="event-unregister-deadline-feedback"></div>
-                </div>
-              </div>
-              <div class="row g-3 mb-3">
-                <div class="col-md-6">
-                  <label class="form-label">Kategorie</label>
-                  <select class="form-select" id="event-category">
-                    <option value="">Keine Kategorie</option>
-                    <option value="Tournament">Tournament</option>
-                    <option value="Community">Community</option>
-                    <option value="Workshop">Workshop</option>
-                    <option value="Gamenight">Gamenight</option>
-                    <option value="Meeting">Meeting</option>
-                    <option value="Sonstiges">Sonstiges</option>
-                  </select>
-                </div>
-                <div class="col-md-6">
-                  <label class="form-label">Status</label>
-                  <select class="form-select" id="event-status" data-change="updateStartRequired">
-                    <option value="active">Aktiv</option>
-                    <option value="draft">Entwurf</option>
-                    <option value="archived">Archiviert</option>
-                  </select>
-                </div>
-              </div>
-              <!-- Recurring -->
-              <div class="mb-3 glass-card is-tinted p-3">
-                <div class="form-check mb-2">
-                  <input class="form-check-input" type="checkbox" id="event-recurring"
-                    data-change="toggleVisible" data-target="recurring-options">
-                  <label class="form-check-label" for="event-recurring"><i class="bi bi-arrow-repeat me-1"></i>Wiederkehrendes Event</label>
-                </div>
-                <div class="is-hidden" id="recurring-options">
-                  <div class="row g-3">
-                    <div class="col-md-6">
-                      <label class="form-label">Intervall</label>
-                      <select class="form-select" id="event-recurring-interval">
-                        <option value="weekly">Wöchentlich</option>
-                        <option value="biweekly">Alle 2 Wochen</option>
-                        <option value="monthly">Monatlich</option>
-                      </select>
-                    </div>
-                    <div class="col-md-6">
-                      <label class="form-label">Wiederholen bis</label>
-                      <input type="date" class="form-control" id="event-recurring-until">
-                      <div class="invalid-feedback" id="event-recurring-until-feedback"></div>
-                      <div class="form-text is-hidden" id="event-recurring-until-hint">Ein späteres Datum legt neue Termine an.</div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <!-- ── Step 3: Teilnehmer & Zugang ── -->
-            <div class="wizard-page is-hidden" id="wizard-page-3">
-              <div class="row g-3 mb-3">
-                <div class="col-md-6">
-                  <label class="form-label">Max. Teilnehmer</label>
-                  <input type="number" class="form-control" id="event-max" min="0" value="0"
-                    placeholder="0 = unbegrenzt">
-                  <div class="invalid-feedback" id="event-max-feedback"></div>
-                  <small class="text-muted">0 = unbegrenzt</small>
-                </div>
-                <div class="col-md-6">
-                  <label class="form-label" for="event-reminder"><i class="bi bi-alarm me-1"></i>Erinnerungen (Stunden vor Start)</label>
-                  <input type="text" class="form-control" id="event-reminder" value="" inputmode="decimal"
-                    placeholder="z. B. 24, 1">
-                  <div class="invalid-feedback" id="event-reminder-feedback"></div>
-                  <small class="text-muted">Mehrere mit Komma trennen, leer = keine Erinnerung</small>
-                </div>
-              </div>
-              <div class="mb-3">
-                <div class="form-check form-switch">
-                  <input class="form-check-input" type="checkbox" id="event-use-slots" data-change="toggleSlotEditor">
-                  <label class="form-check-label" for="event-use-slots"><i class="bi bi-diagram-3 me-1"></i>Rollen-Slots verwenden</label>
-                </div>
-                <div class="is-hidden" id="slot-editor-area">
-                  <div id="slot-editor-rows" class="slot-editor-rows"></div>
-                  <div class="invalid-feedback" id="slot-editor-feedback"></div>
-                  <div class="d-flex flex-wrap gap-2 mt-2">
-                    <button type="button" class="btn btn-sm btn-outline-light" data-click="addSlotRow"><i class="bi bi-plus-lg me-1"></i>Slot</button>
-                    <button type="button" class="btn btn-sm btn-outline-secondary" data-click="applySlotPreset" data-preset="mmo-raid"><i class="bi bi-magic me-1"></i>Vorlage: MMO-Raid</button>
-                  </div>
-                  <small class="text-muted d-block mt-1">Max. 10 Slots. Die Teilnehmerzahl ergibt sich aus der Summe der Plätze.</small>
-                </div>
-              </div>
-              <div class="row g-3 mb-3">
-                <div class="col-md-4">
-                  <label class="form-label">Zugang</label>
-                  <select class="form-select" id="event-access">
-                    <option value="open">Jeder darf teilnehmen</option>
-                    <option value="role-required">Rollen-Requirement</option>
-                  </select>
-                </div>
-                <div class="col-md-4">
-                  <label class="form-label">Genehmigung</label>
-                  <select class="form-select" id="event-approval">
-                    <option value="manual">Manuelle Prüfung</option>
-                    <option value="instant">Instant Access</option>
-                  </select>
-                </div>
-                <div class="col-md-4">
-                  <label class="form-label">Gäste-Tickets</label>
-                  <div class="form-check form-switch mt-1">
-                    <input class="form-check-input" type="checkbox" id="event-allow-guests" checked>
-                    <label class="form-check-label" for="event-allow-guests">Gäste zulassen</label>
-                  </div>
-                  <small class="text-muted is-hidden" id="event-guests-slot-hint">Bei Slot-Events nicht verfügbar</small>
-                </div>
-              </div>
-              <div class="mb-3">
-                <label class="form-label">Ersatzbank</label>
-                <div class="form-check form-switch">
-                  <input class="form-check-input" type="checkbox" id="event-allow-tentative">
-                  <label class="form-check-label" for="event-allow-tentative">„Vielleicht“ erlauben</label>
-                </div>
-                <small class="text-muted">Mitglieder können unverbindlich zusagen. Die Ersatzbank belegt keine Plätze und rückt nicht automatisch nach.</small>
-              </div>
-              <div class="mb-3 is-hidden" id="role-requirement-area">
-                <label class="form-label">Erforderliche Rollen</label>
-                <div id="role-checkboxes" class="d-flex flex-wrap gap-2">
-                  <!-- Populated dynamically -->
-                </div>
-                <div class="invalid-feedback" id="role-checkboxes-feedback"></div>
-              </div>
-              <div class="mb-3">
-                <label class="form-label">Rolle bei Annahme zuweisen</label>
-                <select class="form-select" id="event-assign-role">
-                  <option value="">Keine Rolle zuweisen</option>
-                  <!-- Populated dynamically -->
-                </select>
-              </div>
-            </div>
-
-            <!-- ── Step 4: Anmeldeformular ── -->
-            <div class="wizard-page is-hidden" id="wizard-page-4">
-              <p class="text-muted small mb-3">
-                <i class="bi bi-ui-checks me-1"></i>
-                Optionale Felder, die Teilnehmer beim Anmelden ausfüllen müssen.
-              </p>
-              <div id="form-fields-builder">
-                <!-- Dynamic field rows -->
-              </div>
-              <div class="invalid-feedback" id="form-fields-feedback"></div>
-              <button type="button" class="btn btn-sm btn-outline-light mt-2" data-click="addFormField">
-                <i class="bi bi-plus me-1"></i>Feld hinzufügen
-              </button>
-            </div>
-
-            <!-- ── Step 5: Erweitert ── -->
-            <div class="wizard-page is-hidden" id="wizard-page-5">
-              <!-- Auto Voice/Text Channels -->
-              <div class="mb-3 glass-card is-tinted p-3">
-                <div class="form-check mb-2">
-                  <input class="form-check-input" type="checkbox" id="event-auto-create-channels"
-                    data-change="toggleVisible" data-target="channel-config-options">
-                  <label class="form-check-label" for="event-auto-create-channels"><i class="bi bi-headset me-1"></i>Auto-Voice/Text Channels generieren</label>
-                </div>
-                <!-- Bot center lock "Auto Channel-Erstellung" (admin/wizard-bot.js, B-02) -->
-                <div class="small text-muted ms-4 mb-2 is-hidden" id="event-channels-locked"><i class="bi bi-lock me-1"></i>In der Bot-Zentrale ausgeschaltet.</div>
-                <small class="text-muted d-block ms-4 mb-2">Erstellt einen privaten Kanal für dieses Event in Discord,
-                  auf den nur angenommene Teilnehmer zugreifen können.</small>
-                <div id="channel-config-options" class="ms-4 mt-3 is-hidden">
-                  <div class="mb-2">
-                    <label class="form-label small text-muted">Kanal-Typ</label>
-                    <select class="form-select form-select-sm" id="event-channel-type">
-                      <option value="voice">Voice Channel (mit Text-Chat)</option>
-                      <option value="text">Nur Text Channel</option>
-                      <option value="both">Beides (Voice & Text separat)</option>
-                    </select>
-                  </div>
-                  <div class="row g-2">
-                    <div class="col-md-6">
-                      <label class="form-label small text-muted">Voice Channel Name (optional)</label>
-                      <input type="text" class="form-control form-control-sm" id="event-voice-name"
-                        placeholder="Standard: Event Titel">
-                    </div>
-                    <div class="col-md-6">
-                      <label class="form-label small text-muted">Text Channel Name (optional)</label>
-                      <input type="text" class="form-control form-control-sm" id="event-text-name"
-                        placeholder="Standard: Event Titel">
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <!-- Announcement channel of the event (admin/wizard-announce.js, B-11) -->
-              <div class="mb-3 glass-card is-tinted p-3">
-                <label class="form-label" for="event-announce-channel"><i class="bi bi-megaphone me-1"></i>Ankündigungskanal</label>
-                <select class="form-select form-select-sm" id="event-announce-channel">
-                  <option value="">Standard aus der Bot-Zentrale</option>
-                </select>
-                <small class="text-muted d-block mt-1">Wohin „Ankündigen“ dieses Event postet.</small>
-              </div>
-              <!-- Custom Bot Messages -->
-              <div class="mb-3 glass-card is-tinted p-3">
-                <div class="form-check mb-2">
-                  <input class="form-check-input" type="checkbox" id="event-custom-msg-toggle"
-                    data-change="toggleVisible" data-target="custom-msg-options">
-                  <label class="form-check-label" for="event-custom-msg-toggle"><i class="bi bi-robot me-1"></i>Eigene Bot-Nachrichten</label>
-                </div>
-                <div class="is-hidden" id="custom-msg-options">
-                  <div class="mb-3">
-                    <label class="form-label">Registrierungs-Nachricht</label>
-                    <textarea class="form-control" id="event-msg-registration" rows="2"
-                      placeholder="Standard verwenden..."></textarea>
-                    <small class="text-muted d-block mt-1">Variablen: {user.name}, {user.mention}, {event.title},
-                      {event.url}, {slot.name}, {slot.emoji}</small>
-                  </div>
-                  <div class="mb-3">
-                    <label class="form-label">Angenommen-Nachricht</label>
-                    <textarea class="form-control" id="event-msg-accepted" rows="2"
-                      placeholder="Standard verwenden..."></textarea>
-                    <small class="text-muted d-block mt-1">Zusätzlich: {role.name}, {role.mention}, {slot.name}, {slot.emoji}</small>
-                  </div>
-                  <div class="mb-3">
-                    <label class="form-label">Abgelehnt-Nachricht</label>
-                    <textarea class="form-control" id="event-msg-rejected" rows="2"
-                      placeholder="Standard verwenden..."></textarea>
-                  </div>
-                </div>
-              </div>
-              <!-- Check-in Message -->
-              <div class="mb-3">
-                <label class="form-label"><i class="bi bi-chat-text me-1"></i>Check-in Nachricht (optional)</label>
-                <textarea class="form-control" id="event-checkin-message" rows="4"
-                  placeholder="z.B. Server-Zugangsdaten, Voice-Channel-Links, etc. (Markdown unterstützt)"></textarea>
-                <small class="text-muted">Wird Benutzern nach erfolgreichem Check-in angezeigt. Markdown
-                  unterstützt.</small>
-              </div>
-            </div>
-
-          </form>
-
-          <!-- Preview of the unsaved input (admin/wizard-preview.js); inert: its links lead nowhere -->
-          <div class="is-hidden" id="wizard-preview">
-            <section class="wizard-preview-block">
-              <h6 class="section-label mb-2">In der Event-Übersicht</h6>
-              <div class="wizard-preview-card" id="wizard-preview-card" inert></div>
-            </section>
-            <section class="wizard-preview-block">
-              <h6 class="section-label mb-2">In Discord</h6>
-              <div id="wizard-preview-discord" inert></div>
-            </section>
-          </div>
-        </div>
-
-        <!-- Wizard Footer -->
-        <div class="modal-footer border-0 justify-content-between">
-          <div class="wizard-footer-start">
-            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Abbrechen</button>
-            <button type="button" class="btn btn-outline-secondary" id="wizard-btn-template" data-click="openTemplateSave">
-              <i class="bi bi-bookmark-plus me-1"></i>Als Vorlage speichern
-            </button>
-          </div>
-          <div class="d-flex flex-wrap justify-content-end gap-2 align-items-center">
-            <span class="text-muted small me-2" id="wizard-step-counter">Schritt 1 von 5</span>
-            <button type="button" class="btn btn-outline-secondary is-hidden" id="wizard-btn-back" data-click="wizardBack">
-              <i class="bi bi-arrow-left me-1"></i>Zurück
-            </button>
-            <button type="button" class="btn btn-accent" id="wizard-btn-next" data-click="wizardNext">
-              Weiter<i class="bi bi-arrow-right ms-1"></i>
-            </button>
-            <!-- Only when editing a series date with later dates (admin/wizard-series.js, W-11) -->
-            <div class="is-hidden" id="wizard-series-scope" role="radiogroup" aria-label="Änderung gilt für">
-              <div class="form-check form-check-inline mb-0">
-                <input class="form-check-input" type="radio" name="event-series-scope" id="event-scope-this" value="this" checked>
-                <label class="form-check-label small" for="event-scope-this">Nur dieser Termin</label>
-              </div>
-              <div class="form-check form-check-inline mb-0">
-                <input class="form-check-input" type="radio" name="event-series-scope" id="event-scope-following" value="following">
-                <label class="form-check-label small" for="event-scope-following" id="event-scope-following-label">Dieser und alle folgenden Termine</label>
-              </div>
-            </div>
-            <!-- Only when editing moved start, end or location (admin/wizard-notify.js, W-04) -->
-            <div class="form-check form-switch mb-0 is-hidden" id="wizard-notify">
-              <input class="form-check-input" type="checkbox" id="event-notify-participants" checked>
-              <label class="form-check-label small" for="event-notify-participants">Teilnehmer benachrichtigen</label>
-            </div>
-            <button type="button" class="btn btn-accent is-hidden" id="wizard-btn-save" data-click="saveEvent">
-              <i class="bi bi-save me-1"></i>Speichern
-            </button>
-          </div>
-          <!-- Name of the new template; saving does not save the event (admin/wizard-templates.js, W-10) -->
-          <div class="wizard-template-save is-hidden" id="wizard-template-save">
-            <label class="form-label small mb-1" for="event-template-name">Name der Vorlage</label>
-            <div class="wizard-template-save-row">
-              <input type="text" class="form-control" id="event-template-name" maxlength="80" placeholder="z. B. Raid-Abend"
-                data-input="resetTemplateWarning">
-              <button type="button" class="btn btn-secondary" data-click="closeTemplateSave">Abbrechen</button>
-              <button type="button" class="btn btn-accent" data-click="saveTemplate"><i class="bi bi-bookmark-check me-1"></i>Vorlage speichern</button>
-            </div>
-            <div class="wizard-template-warning is-hidden" id="wizard-template-warning" role="alert"></div>
-          </div>
-        </div>
-
       </div>
     </div>
   </div>

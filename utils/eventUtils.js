@@ -141,16 +141,21 @@ async function completePromotion(event, promotion, { announce = true } = {}) {
 // Event fields only admins may see; members would otherwise check in without being there
 const PRIVATE_EVENT_FIELDS = ['checkinCode'];
 
+// Event fields only admins read in an answer (no secret store: the AI may pass them on to members)
+const ADMIN_EVENT_FIELDS = ['aiNotes'];
+
 /**
  * Event data for answers outside the admin area.
  *
  * @param {string} eventId -> The event document ID.
  * @param {Object} event -> The event document data.
- * @returns {Object} -> `{ id, ...event }` without PRIVATE_EVENT_FIELDS.
+ * @param {Object|null} [viewer] -> Session user; admins keep ADMIN_EVENT_FIELDS.
+ * @returns {Object} -> `{ id, ...event }` without PRIVATE_EVENT_FIELDS, and without ADMIN_EVENT_FIELDS unless the viewer is an admin.
  */
-function toPublicEvent(eventId, event) {
+function toPublicEvent(eventId, event, viewer = null) {
     const publicEvent = { id: eventId, ...event };
     for (const field of PRIVATE_EVENT_FIELDS) delete publicEvent[field];
+    if (!(viewer && viewer.isAdmin)) for (const field of ADMIN_EVENT_FIELDS) delete publicEvent[field];
     return publicEvent;
 }
 

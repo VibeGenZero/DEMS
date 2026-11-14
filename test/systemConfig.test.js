@@ -24,12 +24,12 @@ beforeEach(async () => {
 
 test('the managed keys are the database-backed configuration, nothing else', () => {
     assert.deepEqual(Object.keys(config.MANAGED_KEYS).sort(), [
-        'ADMIN_RESET_PASSWORD', 'BASE_URL', 'DISCORD_ADMIN_ROLE_ID', 'DISCORD_ANNOUNCE_CHANNEL_ID',
+        'ADMIN_RESET_PASSWORD', 'AI_API_KEY', 'AI_BASE_URL', 'AI_MODEL', 'AI_MODEL_ADMIN', 'AI_PROVIDER', 'BASE_URL', 'DISCORD_ADMIN_ROLE_ID', 'DISCORD_ANNOUNCE_CHANNEL_ID',
         'DISCORD_BOT_TOKEN', 'DISCORD_CLIENT_ID', 'DISCORD_CLIENT_SECRET', 'DISCORD_EVENT_CATEGORY_ID',
         'DISCORD_GUILD_ID', 'DISCORD_THREAD_SYNC', 'SERVER_NAME', 'TIMEZONE'
     ]);
     const secrets = Object.entries(config.MANAGED_KEYS).filter(([, meta]) => meta.secret).map(([key]) => key).sort();
-    assert.deepEqual(secrets, ['ADMIN_RESET_PASSWORD', 'DISCORD_BOT_TOKEN', 'DISCORD_CLIENT_SECRET']);
+    assert.deepEqual(secrets, ['ADMIN_RESET_PASSWORD', 'AI_API_KEY', 'DISCORD_BOT_TOKEN', 'DISCORD_CLIENT_SECRET']);
     assert.equal(config.MANAGED_KEYS.DISCORD_THREAD_SYNC.applies, 'restart');
     assert.equal(config.MANAGED_KEYS.DISCORD_BOT_TOKEN.applies, 'bot');
     assert.equal(config.MANAGED_KEYS.DISCORD_GUILD_ID.applies, 'bot');
@@ -151,6 +151,8 @@ test('the settings list masks secrets and names the source of each key', async (
     assert.equal(list.length, Object.keys(config.MANAGED_KEYS).length);
     assert.deepEqual(byKey.DISCORD_BOT_TOKEN, { key: 'DISCORD_BOT_TOKEN', group: 'discord', secret: true, value: null, isSet: true, source: 'db', locked: false, applies: 'bot' });
     assert.deepEqual(byKey.ADMIN_RESET_PASSWORD, { key: 'ADMIN_RESET_PASSWORD', group: 'security', secret: true, value: null, isSet: true, source: 'env', locked: true, applies: 'live' });
+    assert.deepEqual(byKey.AI_API_KEY, { key: 'AI_API_KEY', group: 'ai', secret: true, value: null, isSet: false, source: 'none', locked: false, applies: 'live' });
+    assert.equal(byKey.AI_PROVIDER.group, 'ai');
     assert.equal(byKey.DISCORD_CLIENT_SECRET.isSet, false);
     assert.equal(byKey.DISCORD_CLIENT_SECRET.source, 'none');
     assert.equal(byKey.SERVER_NAME.value, 'Gilde');

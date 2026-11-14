@@ -5,7 +5,7 @@ import { state } from '../core/state.js';
 import { registerActions } from '../core/actions.js';
 import { animateFromTo, countUpAll } from '../core/motion.js';
 import { glideTabs } from '../core/tab-glider.js';
-import { escapeHtml, showToast } from '../core/ui.js';
+import { escapeHtml, showToast, toggleElement } from '../core/ui.js';
 import { ADMIN_SORT_KEYS, ADMIN_TABS, DEFAULT_ADMIN_SORT, adminTabCounts, buildAdminRows } from './event-rows.js';
 import { renderAdminEmpty, renderAdminLoadError, renderAdminTable, renderAdminTableSkeleton, renderAdminTabs } from './event-table.js';
 
@@ -39,6 +39,7 @@ const AUDIT_CHIPS = {
 export async function showAdminSection() {
     const section = document.getElementById('admin-section');
     section.style.display = 'block';
+    toggleElement(document.getElementById('admin-create-ai'), !!(state.aiInfo && state.aiInfo.adminAssistant));
     await Promise.all([loadAdminStats(), loadAdminEvents()]);
 }
 

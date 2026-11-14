@@ -237,6 +237,62 @@ function helpersBlock() {
     ].join(''));
 }
 
+function settingsNavBlock() {
+    const entry = (label, subtitle, icon, { current = false, changed = false } = {}) => `
+        <a class="settings-nav-item" href="#debug"${current ? ' aria-current="page"' : ''}>
+            <i class="bi ${icon}" aria-hidden="true"></i>
+            <span class="settings-nav-text"><span class="settings-nav-label">${label}</span><span class="settings-nav-sub">${subtitle}</span></span>
+            <span class="settings-nav-dot${changed ? '' : ' is-hidden'}"><span class="visually-hidden">ungespeicherte Änderungen</span></span>
+        </a>`;
+    return block('settings-nav', 'Einstellungs-Navigation', '.settings-layout > .settings-nav + .settings-panels | .settings-nav-item [aria-current="page"] | .settings-nav-dot', `
+        <div class="settings-layout">
+            <nav class="settings-nav" aria-label="Beispiel-Kategorien">
+                ${entry('Übersicht', 'Version, Status', 'bi-speedometer2', { current: true })}
+                ${entry('Discord', 'Bot, Rollen, Kanäle', 'bi-discord', { changed: true })}
+                ${entry('Server', 'Adresse, Zeitzone', 'bi-hdd-network')}
+            </nav>
+            <div class="settings-panels"><section class="settings-panel"><h3 class="settings-panel-title">Übersicht</h3>
+                <p class="text-secondary mb-0">Eine Kategorie pro Ansicht. Der Punkt zeigt ungespeicherte Änderungen. Unter 992 px wird die Liste zur scrollbaren Zeile.</p>
+            </section></div>
+        </div>`);
+}
+
+function assistantBlock() {
+    // Static copy of the event page bubble (events/assistant.js): .is-static keeps it in the flow
+    const chips = ['Wann geht es los?', 'Was sind die Regeln?', 'Darf ich mitmachen?']
+        .map(question => `<button type="button" class="chip chip-sm">${question}</button>`).join('');
+    return block('assistant', 'Event-Assistent', '.assistant (.is-static nur hier) > .assistant-teaser, .assistant-fab, .assistant-panel; .assistant-message.is-bot | .is-user | .is-warning, .assistant-source', `
+        <div class="assistant is-static">
+            <div class="assistant-teaser">
+                <button type="button" class="btn-close assistant-teaser-close" aria-label="Hinweis schließen"></button>
+                <strong class="assistant-teaser-name">Event-Assistent</strong>
+                <span>Fragen zum Event? Frag mich einfach.</span>
+            </div>
+            <button type="button" class="assistant-fab" aria-label="Event-Assistent öffnen" aria-expanded="true"><i class="bi bi-chat-dots" aria-hidden="true"></i></button>
+            <section class="assistant-panel" aria-label="Event-Assistent (Beispiel)">
+                <header class="assistant-head">
+                    <span class="assistant-head-icon" aria-hidden="true"><i class="bi bi-stars"></i></span>
+                    <div class="assistant-head-text"><strong>Event-Assistent</strong><small class="assistant-head-event">Antwortet zu: ${LONG_LABEL}</small></div>
+                    <button type="button" class="btn btn-ghost btn-icon btn-sm" aria-label="Schließen"><i class="bi bi-x-lg" aria-hidden="true"></i></button>
+                </header>
+                <div class="assistant-messages">
+                    <div class="assistant-message is-bot">Hi! Ich beantworte Fragen zu diesem Event. Was möchtest du wissen?</div>
+                    <div class="assistant-message is-user">Welche Rolle brauche ich?</div>
+                    <div class="assistant-message is-bot"><p>Du brauchst die Rolle <strong>Raider</strong>. Die hast du schon, du kannst dich also direkt anmelden.</p><span class="chip chip-sm chip-accent assistant-source"><i class="bi bi-journal-text" aria-hidden="true"></i>Quelle: Teilnahmebedingungen</span></div>
+                    <div class="assistant-message is-user">Und wann startet es?</div>
+                    <div class="assistant-message is-bot is-warning">Du hast in dieser Stunde schon viele Fragen gestellt.</div>
+                    <div class="assistant-message is-bot"><span class="assistant-typing" aria-hidden="true"><span></span><span></span><span></span></span></div>
+                </div>
+                <div class="assistant-suggestions">${chips}</div>
+                <div class="assistant-form">
+                    <input type="text" class="form-control assistant-input" placeholder="Frage eingeben …" aria-label="Frage (Beispiel)">
+                    <button type="button" class="btn btn-primary btn-icon assistant-send" aria-label="Frage senden"><i class="bi bi-arrow-right" aria-hidden="true"></i></button>
+                </div>
+                <p class="assistant-note">KI-Antworten können Fehler enthalten. Im Zweifel gilt die Eventbeschreibung.</p>
+            </section>
+        </div>`);
+}
+
 /**
  * Render one block per component.
  *
@@ -247,7 +303,7 @@ export function renderDebugComponents(container) {
     container.innerHTML = [
         buttonBlock(), cardBlock(), chipBlock(), tabsBlock(), dialogBlock(),
         toastBlock(), emptyStateBlock(), skeletonBlock(), avatarBlock(), dateTileBlock(), capacityBlock(),
-        dataTableBlock(), menuBlock(), helpersBlock()
+        dataTableBlock(), menuBlock(), settingsNavBlock(), assistantBlock(), helpersBlock()
     ].join('');
 }
 

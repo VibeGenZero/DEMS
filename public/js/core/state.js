@@ -13,6 +13,7 @@ export const state = {
     registrationDeadlinePicker: null,
     unregisterDeadlinePicker: null,
     serverName: 'DEMS', // Default, will be loaded from API
+    aiInfo: { memberAssistant: false, assistantName: '', teaserText: '', adminAssistant: false }, // From /api/server-info
     serverIconUrl: null, // Icon of the Discord server for the login card
     selectedSlotId: null,
     selectedAltSlotIds: [],

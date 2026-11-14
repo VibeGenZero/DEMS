@@ -314,6 +314,8 @@ function createFakeElement(registry, id = '', classNames = []) {
         getAttribute: (name) => (attributes.has(name) ? attributes.get(name) : null),
         appendChild: register,
         prepend: register,
+        /** Take the element out of the page: getElementById no longer finds it (its own id only, not the ids inside it). */
+        remove() { if (this.id && registry.get(this.id) === this) registry.delete(this.id); },
         insertAdjacentElement: (_position, child) => register(child),
         // Not laid out: no box, no offset parent (a hidden element in a browser)
         offsetParent: null,
@@ -384,15 +386,19 @@ async function loadFrontendModules(entryFile, context) {
  * @param {boolean|string} [options.confirm] -> Answer of the confirm dialog: true (default) confirms, false dismisses, 'too-early' clicks the confirm button while the dialog still fades in and dismisses it afterwards.
  * @param {boolean} [options.reducedMotion] -> true answers matchMedia('(prefers-reduced-motion: reduce)') with a match.
  * @param {boolean} [options.prefersLight] -> true answers matchMedia('(prefers-color-scheme: light)') with a match.
+ * @param {boolean} [options.wide] -> true answers matchMedia('(min-width: 1200px)') with a match (event editor with the preview column).
+ * @param {boolean} [options.timers] -> true keeps setTimeout callbacks and runs them with `advance(ms)` of the result; by default timeouts never fire.
  * @param {boolean} [options.animationFrames] -> true runs requestAnimationFrame callbacks at once; by default they never run.
- * @returns {Promise<Object>} -> `{ app, state, element, toasts, dialogs, requests, location, fire, root, setSystemLight }`: app holds every export of every module, state is core/state.js (`state.currentUser = persona` logs a user in), element(id) returns the fake element or null, toasts lists the shown messages, dialogs lists the confirm dialogs shown (`{ text, label, danger }`; the dialog answers at once), requests the fetch calls `{ url, method, headers, body }`, location is window.location, fire(type) runs the recorded document listeners, root is document.documentElement, setSystemLight(bool) changes the system colour scheme and tells the matchMedia listeners.
+ * A route may also answer with streamAnswer(chunks, { status }) for a streamed body (event stream).
+ * @returns {Promise<Object>} -> `{ app, state, element, toasts, dialogs, requests, location, fire, root, setSystemLight, window }`: window is the vm context (the page globals: a test may replace `marked` or `DOMPurify` there); app holds every export of every module, state is core/state.js (`state.currentUser = persona` logs a user in), element(id) returns the fake element or null, toasts lists the shown messages, dialogs lists the confirm dialogs shown (`{ text, label, danger }`; the dialog answers at once), requests the fetch calls `{ url, method, headers, body }`, location is window.location, fire(type) runs the recorded document listeners, root is document.documentElement, setSystemLight(bool) changes the system colour scheme and tells the matchMedia listeners.
  */
-async function loadFrontendApp(routes, { storage = {}, confirm = true, reducedMotion = false, prefersLight = false, animationFrames = false } = {}) {
+async function loadFrontendApp(routes, { storage = {}, confirm = true, reducedMotion = false, prefersLight = false, animationFrames = false, wide = false, timers = false } = {}) {
     const registry = new Map();
     registerHtmlIds(registry, fs.readFileSync(path.join(REPO_ROOT, 'public', 'index.html'), 'utf8'));
     const toasts = [];
     const dialogs = [];
     const requests = [];
+    const historyCalls = [];
     const animations = [];
     const container = createFakeElement(registry);
     const listeners = [];
@@ -424,6 +430,7 @@ async function loadFrontendApp(routes, { storage = {}, confirm = true, reducedMo
         const route = routes[url];
         const body = typeof route === 'function' ? await route(options) : route;
         if (body instanceof HttpAnswer) return { ok: body.status < 400, status: body.status, json: async () => body.body };
+        if (body instanceof StreamAnswer) return body.toResponse(options.signal);
         return { ok: true, status: 200, json: async () => body };
     };
     const noop = () => {};
@@ -432,6 +439,7 @@ async function loadFrontendApp(routes, { storage = {}, confirm = true, reducedMo
     const mediaListeners = [];
     const matchMedia = (query) => {
         const answer = () => (/prefers-reduced-motion:\s*reduce/.test(query) && reducedMotion)
+            || (/min-width:\s*1200px/.test(query) && wide)
             || (/prefers-color-scheme:\s*light/.test(query) && systemLight)
             || (/prefers-color-scheme:\s*dark/.test(query) && !systemLight);
         return {
@@ -441,6 +449,26 @@ async function loadFrontendApp(routes, { storage = {}, confirm = true, reducedMo
             removeEventListener: noop
         };
     };
+    // Timeouts that wait for advance(); only with the option `timers`
+    let clock = 0;
+    let timerId = 0;
+    const waiting = new Map();
+    const setTimer = (callback, delay = 0) => {
+        if (!timers) return 0;
+        waiting.set(++timerId, { callback, at: clock + Number(delay || 0) });
+        return timerId;
+    };
+    const clearTimer = (id) => { waiting.delete(id); };
+    /** Let `ms` milliseconds pass: due timeouts run in order, promises they start are awaited. */
+    const advance = async (ms) => {
+        clock += ms;
+        for (;;) {
+            const due = [...waiting.entries()].filter(([, entry]) => entry.at <= clock).sort((a, b) => a[1].at - b[1].at)[0];
+            if (!due) break;
+            waiting.delete(due[0]);
+            await due[1].callback();
+        }
+    };
     const setSystemLight = (light) => {
         systemLight = light;
         for (const entry of mediaListeners.filter(item => item.type === 'change' && /prefers-color-scheme/.test(item.query))) {
@@ -449,14 +477,25 @@ async function loadFrontendApp(routes, { storage = {}, confirm = true, reducedMo
     };
     const context = vm.createContext({
         document, fetch, console,
-        location: { hash: '', search: '' },
-        history: { replaceState: noop, pushState: noop },
+        // replaceState and location.replace with a hash move the address like the browser does and are
+        // recorded in historyCalls (leave guard of the router); no hashchange is fired
+        location: { hash: '', search: '', replace: (url) => { historyCalls.push(`replace ${url}`); context.location.hash = url; } },
+        history: {
+            replaceState: (data, title, url) => {
+                if (typeof url !== 'string' || !url.startsWith('#')) return;
+                historyCalls.push(`replaceState ${url}`);
+                context.location.hash = url;
+            },
+            pushState: noop
+        },
         addEventListener: noop,
         localStorage: createStorage(storage),
         sessionStorage: createStorage({}),
         // isValidBannerUrl() parses with URL, as the browser does
         URL, URLSearchParams, AbortController,
-        setTimeout: noop, clearTimeout: noop, setInterval: () => 0, clearInterval: noop,
+        // Streamed answers (streamAnswer) are decoded like in the browser
+        TextDecoder, TextEncoder,
+        setTimeout: setTimer, clearTimeout: clearTimer, setInterval: () => 0, clearInterval: noop,
         matchMedia,
         getComputedStyle: () => ({ getPropertyValue: () => '' }),
         requestAnimationFrame: (callback) => { if (animationFrames) callback(0); return 0; },
@@ -509,7 +548,15 @@ async function loadFrontendApp(routes, { storage = {}, confirm = true, reducedMo
             constructor() { this.text = ''; this.codemirror = { refresh: noop }; }
             value(text) { if (text === undefined) return this.text; this.text = text; }
         },
-        flatpickr: () => ({ setDate: noop, clear: noop, selectedDates: [] })
+        // Keeps the date it is given, like the real picker; no calendar, no onChange
+        flatpickr: () => {
+            const picker = {
+                selectedDates: [],
+                setDate(value) { picker.selectedDates = value ? [new Date(value)] : []; },
+                clear() { picker.selectedDates = []; }
+            };
+            return picker;
+        }
     });
     context.window = context;
     const app = {};
@@ -520,7 +567,7 @@ async function loadFrontendApp(routes, { storage = {}, confirm = true, reducedMo
         }
     }
     const fire = (type) => listeners.filter(entry => entry.type === type).forEach(entry => entry.listener({ type }));
-    return { app, state: app.state, element: (id) => registry.get(id) || null, toasts, dialogs, requests, animations, location: context.location, localStorage: context.localStorage, fire, root, setSystemLight };
+    return { app, state: app.state, element: (id) => registry.get(id) || null, toasts, dialogs, requests, historyCalls, advance, animations, location: context.location, localStorage: context.localStorage, fire, root, setSystemLight, window: context };
 }
 
 /** Answer of a loadFrontendApp() route with its own status, e.g. an API error. */
@@ -540,6 +587,69 @@ class HttpAnswer {
  */
 function httpAnswer(status, body) {
     return new HttpAnswer(status, body);
+}
+
+/** Answer of a loadFrontendApp() route whose body arrives in chunks; see streamAnswer(). */
+class StreamAnswer {
+    constructor(chunks, status) {
+        this.chunks = chunks;
+        this.status = status;
+    }
+
+    /**
+     * The fetch response for one request.
+     *
+     * @param {AbortSignal} [signal] -> Signal of the request: aborting it rejects the pending and every later read().
+     * @returns {Object} -> `{ ok, status, headers: { get }, body: { getReader }, json }`.
+     */
+    toResponse(signal) {
+        const encoder = new TextEncoder();
+        const queue = [...this.chunks];
+        const abortError = () => Object.assign(new Error('The operation was aborted.'), { name: 'AbortError' });
+        const aborted = new Promise((_, reject) => {
+            if (signal) signal.addEventListener('abort', () => reject(abortError()), { once: true });
+        });
+        aborted.catch(() => {});
+        const bytes = (chunk) => (typeof chunk === 'string' ? encoder.encode(chunk) : chunk);
+        const ok = this.status < 400;
+        return {
+            ok,
+            status: this.status,
+            headers: { get: (name) => (String(name).toLowerCase() === 'content-type' ? (ok ? 'text/event-stream; charset=utf-8' : 'application/json; charset=utf-8') : null) },
+            body: {
+                getReader: () => ({
+                    async read() {
+                        if (signal && signal.aborted) throw abortError();
+                        if (queue.length === 0) return { done: true, value: undefined };
+                        const chunk = await Promise.race([queue.shift(), aborted]);
+                        return { done: false, value: bytes(chunk) };
+                    },
+                    async cancel() { queue.length = 0; },
+                    releaseLock() {}
+                })
+            },
+            json: async () => JSON.parse((await Promise.all(this.chunks)).map(chunk => (typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString('utf8'))).join(''))
+        };
+    }
+}
+
+/**
+ * Route answer with a streamed body for loadFrontendApp(), like a fetch Response
+ * whose body is read with `response.body.getReader()`.
+ *
+ * Each chunk is one read(): a string goes out as UTF-8 bytes, a Uint8Array as
+ * it is (so a test can split a multi-byte character), a promise of either holds
+ * the stream at that point until it resolves. Aborting the request's signal
+ * rejects the waiting and every later read() with an AbortError. `headers.get('content-type')`
+ * answers `text/event-stream` for a status below 400, else JSON; `json()` parses
+ * the joined chunks (an error answer).
+ *
+ * @param {Array<string|Uint8Array|Promise<string|Uint8Array>>} chunks -> Body parts in order.
+ * @param {Object} [options] -> `{ status = 200 }`.
+ * @returns {StreamAnswer}
+ */
+function streamAnswer(chunks, { status = 200 } = {}) {
+    return new StreamAnswer(chunks, status);
 }
 
 /**
@@ -597,6 +707,7 @@ module.exports = {
     dispatchInteraction,
     loadFrontendApp,
     httpAnswer,
+    streamAnswer,
     loadFrontendModules,
     frontendSources,
     isHidden

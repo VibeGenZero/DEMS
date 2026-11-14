@@ -34,7 +34,7 @@ async function editDate(event, saved = { id: event.id, notifiedCount: 0, updated
     });
     frontend.state.currentUser = { id: 'u-admin', username: 'mori', roles: [], isAdmin: true };
     frontend.state.csrfToken = 'test-token';
-    await frontend.app.editEvent(event.id);
+    await frontend.app.openEventEditor({ eventId: event.id });
     // The picker double ignores setDate -> hold the loaded start like flatpickr does
     frontend.state.startDatePicker.selectedDates = [new Date(event.startDate)];
     return frontend;
@@ -74,7 +74,7 @@ test('the last date of a series, a single event and a new event get no choice', 
     assert.equal(single.element('event-recurring').disabled, false);
 
     const fresh = await editDate(stored('s2'));
-    await fresh.app.showCreateEventModal();
+    await fresh.app.openEventEditor();
     fresh.element('event-title').value = 'Neu';
     fresh.app.wizardGoTo(5);
     assert.equal(scopeShown(fresh.element), false);
@@ -145,7 +145,7 @@ test('the scope goes back to "Nur dieser Termin" when the wizard opens again', a
     app.wizardGoTo(5);
     element('event-scope-this').checked = false;
     element('event-scope-following').checked = true;
-    await app.editEvent('s2');
+    await app.openEventEditor({ eventId: 's2' });
     app.wizardGoTo(5);
     assert.equal(element('event-scope-this').checked, true);
     assert.equal(element('event-scope-following').checked, false);

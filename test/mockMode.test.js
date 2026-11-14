@@ -98,3 +98,12 @@ test('dev/start.js refuses to start in production', () => {
     assert.equal(result.status, 1);
     assert.match(result.stderr, /DEV_MOCK=true ist in Produktion \(NODE_ENV=production\) nicht erlaubt/);
 });
+
+test('mock mode switches the mock AI provider on unless already set', () => {
+    const print = `require(${repoPath('dev/mockMode')}); console.log(JSON.stringify([process.env.AI_PROVIDER, process.env.AI_MODEL]))`;
+    const fresh = runNode(print, { DEV_MOCK: 'true', AI_PROVIDER: '', AI_MODEL: '' });
+    assert.equal(fresh.status, 0, fresh.stderr);
+    assert.deepEqual(parseLastLine(fresh.stdout), ['mock', 'mock-1']);
+    const set = runNode(print, { DEV_MOCK: 'true', AI_PROVIDER: 'ollama', AI_MODEL: 'llama' });
+    assert.deepEqual(parseLastLine(set.stdout), ['ollama', 'llama']);
+});

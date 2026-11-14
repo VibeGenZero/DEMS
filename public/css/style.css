@@ -15,8 +15,17 @@ body {
   background: var(--bg-primary);
   color: var(--text-primary);
   font-family: var(--font-body);
-  overflow-x: hidden;
   min-height: 100vh;
+}
+
+/* Nothing scrolls sideways. Only the page (html) is the scroller: "hidden" on body too would make
+   body a scroll container that never scrolls, and position: sticky inside it would never stick. */
+html {
+  overflow-x: hidden;
+}
+
+body {
+  overflow-x: clip;
 }
 
 ::selection {
@@ -3427,6 +3436,301 @@ a.info-version-badge:focus-visible {
 }
 
 /* ═══════════════════════════════════════════ */
+/* EVENT EDITOR PAGE                           */
+/* admin/editor-page.js: top bar, the wizard   */
+/* in a form column, the preview beside it     */
+/* from 1200 px (EDITOR_WIDE_QUERY)            */
+/* ═══════════════════════════════════════════ */
+/* Sticky parts sit right below the fixed navbar (--navbar-height, tokens.css) */
+.editor-page {
+  --editor-sticky-top: var(--navbar-height);
+}
+
+/* Room between the step row (with the mode tabs on small screens) and the form */
+.editor-page .wizard-head {
+  margin-bottom: var(--space-24);
+}
+
+/* From tablet width the editor keeps a side gutter and a readable width; the steps sit compact in the middle */
+@media (min-width: 768px) {
+  .editor-page {
+    max-width: 85rem;
+    margin-inline: auto;
+    padding-inline: var(--space-24);
+  }
+
+  .editor-page .wizard-head .wizard-nav {
+    max-width: 55rem;
+    margin-inline: auto;
+  }
+}
+
+/* Stays below the fixed navbar while the form scrolls */
+.editor-topbar {
+  position: sticky;
+  top: var(--editor-sticky-top);
+  z-index: var(--z-sticky);
+  display: flex;
+  align-items: center;
+  gap: var(--space-12);
+  margin-bottom: var(--space-16);
+  padding: var(--space-12) 0;
+  background: var(--bg-primary);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.editor-title {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  font-size: var(--font-size-xl);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.editor-topbar-actions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-8);
+}
+
+/* Further buttons of the top bar (AI assistant) sit in the same row */
+.editor-topbar-extra {
+  display: contents;
+}
+
+.editor-saved {
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.editor-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-24);
+  align-items: start;
+}
+
+/* No box of its own: every group of fields in a step is a card (below) */
+.editor-form {
+  min-width: 0;
+}
+
+/* A group of fields of a step, the template chooser and the footer bar as quiet cards;
+   hidden groups (.is-hidden, display: none) show no outline */
+.editor-form .wizard-page > .mb-3,
+.editor-form .wizard-page > .row,
+.editor-form .wizard-page > .wizard-template-area,
+.editor-footer {
+  margin: 0 0 var(--space-16);
+  padding: var(--space-16);
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+}
+
+/* A card that is a Bootstrap row: no extra space on top, stacked columns (phones) get a
+   row gap instead; its columns bring half a gutter of their own, so the card pads that
+   much less and its fields line up with the fields of every other card */
+.editor-form .wizard-page > .row {
+  --bs-gutter-y: 0;
+  row-gap: var(--space-16);
+  padding-inline: calc(var(--space-16) - var(--bs-gutter-x) * 0.5);
+}
+
+/* More air between label, field and help text */
+.editor-form .form-label {
+  margin-bottom: var(--space-8);
+}
+
+.editor-form .form-text,
+.editor-form small.text-muted {
+  display: block;
+  margin-top: var(--space-8);
+  line-height: 1.45;
+}
+
+@media (min-width: 768px) {
+  .editor-form .wizard-page > .mb-3,
+  .editor-form .wizard-page > .row,
+  .editor-form .wizard-page > .wizard-template-area,
+  .editor-footer {
+    padding: var(--space-24);
+  }
+
+  .editor-form .wizard-page > .row {
+    padding-inline: calc(var(--space-24) - var(--bs-gutter-x) * 0.5);
+  }
+}
+
+/* Unsaved input of an earlier visit is back in the form */
+.editor-restored {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-8);
+  margin-bottom: var(--space-16);
+  padding: var(--space-8) var(--space-12);
+  color: var(--info);
+  background: var(--info-bg);
+  border: 1px solid var(--info-border);
+  border-radius: var(--radius-sm);
+}
+
+.editor-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-12);
+}
+
+.editor-preview-column,
+.editor-assist {
+  min-width: 0;
+}
+
+/* AI assistant (admin/editor-assist.js): a floating panel; from 1200 px the column in the preview's place */
+.editor-assist {
+  position: fixed;
+  right: var(--space-16);
+  bottom: var(--space-16);
+  z-index: var(--z-banner);
+  display: flex;
+  flex-direction: column;
+  width: min(24rem, calc(100vw - 2 * var(--space-16)));
+  height: min(38rem, calc(100dvh - var(--navbar-height) - 2 * var(--space-16)));
+  overflow: hidden;
+  color: var(--text-primary);
+  background: var(--bg-card);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+}
+
+.editor-assist-form {
+  display: flex;
+  flex: none;
+  align-items: flex-end;
+  gap: var(--space-8);
+  padding: var(--space-8) var(--space-12);
+  border-top: 1px solid var(--border-subtle);
+}
+
+/* 16 px text: a smaller one makes phones zoom into the field */
+.editor-assist-input {
+  flex: 1;
+  min-width: 0;
+  resize: none;
+  font-size: var(--font-size-md);
+}
+
+.editor-assist-questions {
+  margin: var(--space-8) 0 0;
+  padding-left: var(--space-16);
+}
+
+.editor-assist-undo {
+  margin-top: var(--space-8);
+}
+
+/* Label and AI helper button of a field in one row */
+.editor-field-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-8);
+}
+
+.editor-field-head .form-label {
+  margin-bottom: var(--space-8);
+}
+
+/* A field the AI filled, until the admin edits it or saves */
+.is-ai-filled {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--radius);
+}
+
+.ai-mark {
+  margin-top: var(--space-4);
+}
+
+@media (min-width: 1200px) {
+  /* The form gets most of the width beside a narrow preview; the assistant takes the preview's place */
+  .editor-body {
+    grid-template-columns: minmax(0, 1fr) 22.5rem;
+  }
+
+  .editor-body.is-assist-open {
+    grid-template-columns: minmax(0, 1fr) 25rem;
+  }
+
+  .editor-body.is-assist-open .editor-preview-column {
+    display: none;
+  }
+
+  /* The narrow column shows the preview a little smaller */
+  #wizard-preview-card,
+  #wizard-preview-discord {
+    zoom: 0.8;
+  }
+
+  .editor-assist {
+    position: sticky;
+    top: calc(var(--editor-sticky-top) + var(--space-64) + var(--space-8));
+    right: auto;
+    bottom: auto;
+    z-index: auto;
+    width: 25rem;
+    height: calc(100vh - var(--editor-sticky-top) - var(--space-64) - var(--space-24));
+    border-color: var(--border-subtle);
+    border-radius: var(--radius);
+    box-shadow: none;
+  }
+
+  .editor-preview-column {
+    position: sticky;
+    top: calc(var(--editor-sticky-top) + var(--space-64) + var(--space-8));
+    max-height: calc(100vh - var(--editor-sticky-top) - var(--space-64) - var(--space-24));
+    padding: var(--space-16);
+    overflow-y: auto;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius);
+  }
+
+  /* The preview has its own column: nothing to switch */
+  .editor-page .wizard-mode {
+    display: none;
+  }
+}
+
+@media (max-width: 575.98px) {
+
+  /* Icons only; the buttons keep their names for screen readers */
+  .editor-topbar-label {
+    display: none;
+  }
+
+  /* All five steps stay reachable in one scrolling row */
+  .editor-page .wizard-head .wizard-nav {
+    flex: 1 1 100%;
+    overflow-x: auto;
+  }
+
+  .editor-page .wizard-step-item {
+    flex: none;
+  }
+}
+
+/* ═══════════════════════════════════════════ */
 /* EVENT TEMPLATES IN THE WIZARD (W-10)        */
 /* admin/wizard-templates.js                   */
 /* ═══════════════════════════════════════════ */
@@ -4752,13 +5056,7 @@ a.info-version-badge:focus-visible {
   }
 }
 
-/* System page (admin/system.js, #138): three cards side by side from 992 px */
-.system-grid {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: var(--space-24);
-}
-
+/* System page (admin/system.js, #138): the cards of one category panel (layout: .settings-layout) */
 .system-card {
   display: flex;
   flex-direction: column;
@@ -4779,11 +5077,20 @@ a.info-version-badge:focus-visible {
   font-size: var(--font-size-xl);
 }
 
-@media (min-width: 992px) {
-  .system-grid {
-    grid-template-columns: repeat(3, 1fr);
-    align-items: start;
-  }
+/* Facts of the overview: label left, chip right */
+.system-status-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+}
+
+.system-status-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-8);
+  color: var(--text-secondary);
 }
 
 /* Privacy policy page and consent dialog (pages/privacy.js, #138) */
@@ -4810,10 +5117,6 @@ a.info-version-badge:focus-visible {
 }
 
 /* Privacy editor of the System page: text and preview side by side from 992 px */
-.system-privacy-card {
-  margin-top: var(--space-32);
-}
-
 .system-privacy-editor {
   display: grid;
   grid-template-columns: 1fr;

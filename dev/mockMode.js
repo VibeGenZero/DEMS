@@ -52,6 +52,9 @@ function applyMockEnvironment() {
 
     // Comment ↔ thread sync (B-16) on, so the mock log shows it; DISCORD_THREAD_SYNC=false turns it off
     if (!env.DISCORD_THREAD_SYNC) env.DISCORD_THREAD_SYNC = 'true';
+    // AI assistant on with the mock provider, so the features can be tried without a key
+    if (!env.AI_PROVIDER) env.AI_PROVIDER = 'mock';
+    if (!env.AI_MODEL) env.AI_MODEL = 'mock-1';
     if (!env.SESSION_SECRET) env.SESSION_SECRET = 'dems-dev-mock-secret';
     if (!env.ADMIN_RESET_PASSWORD) env.ADMIN_RESET_PASSWORD = 'dev';
 

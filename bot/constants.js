@@ -55,6 +55,10 @@ const ADMIN_RETRY_PREFIX = 'admin_retry';
 // „Platz annehmen“ / „Doch nicht“ in the waitlist offer DM (B-15)
 const OFFER_CONFIRM_PREFIX = 'offer_confirm';
 const OFFER_DECLINE_PREFIX = 'offer_decline';
+// „Frage stellen“ on announcements and its modal (event assistant)
+const ASK_BUTTON_PREFIX = 'event_ask';
+const ASK_MODAL_PREFIX = 'event_ask_modal';
+const ASK_QUESTION_FIELD_ID = 'question';
 
 // Names listed per slot in the announcement
 const ROSTER_NAMES_MAX = 5;
@@ -66,6 +70,9 @@ const POLL_NAMES_MAX = 5;
 const POLL_DESCRIPTION_MAX_LENGTH = 1000;
 
 module.exports = {
+    ASK_BUTTON_PREFIX,
+    ASK_MODAL_PREFIX,
+    ASK_QUESTION_FIELD_ID,
     TENTATIVE_BUTTON_PREFIX,
     TENTATIVE_MODAL_PREFIX,
     OFFER_CONFIRM_PREFIX,

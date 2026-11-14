@@ -6,7 +6,7 @@
  * Seed data: dev/seedData.js (dev mock mode).
  */
 const { test, expect } = require('@playwright/test');
-const { loginAs, navigate, waitForDialog } = require('./helpers');
+const { loginAs, navigate, waitForDialog, closeEditor } = require('./helpers');
 
 /** Record every violation of the policy the page reports, from its first script on. */
 async function watchPolicy(page) {
@@ -66,9 +66,9 @@ test('an admin walks through every page without one refused style', async ({ pag
     await navigate(page, 'admin');
     await page.locator('[data-click="loadAuditLog"]').click();
     await expect(page.locator('#audit-log-entries .chip').first()).toBeVisible();
-    await page.locator('[data-click="showCreateEventModal"]').first().click();
-    await waitForDialog(page, '#eventModal');
-    await expect(page.locator('#eventModal .EasyMDEContainer')).toBeVisible();
+    await page.locator('[data-click="showCreateEvent"]').first().click();
+    await expect(page.locator('#event-editor-section')).toBeVisible();
+    await expect(page.locator('#event-editor-section .EasyMDEContainer')).toBeVisible();
     // The first step wants a title before it lets the admin go on
     await page.locator('#event-title').fill('E2E-Stile');
     await page.locator('#wizard-btn-next').click();
@@ -76,17 +76,18 @@ test('an admin walks through every page without one refused style', async ({ pag
     await expect(page.locator('#wizard-page-1')).toBeHidden();
     await page.locator('#wizard-page-2 input:visible').first().click();
     await expect(page.locator('.flatpickr-calendar.open')).toBeVisible();
-    // A click beside the calendar closes it (Escape would close the whole dialog)
-    await page.locator('#wizard-step-counter').click();
+    // A click beside the calendar closes it; on a touch screen the picker only listens to touches
+    const title = page.locator('#event-editor-title');
+    if (await page.evaluate(() => 'ontouchstart' in window)) await title.tap();
+    else await title.click();
     await expect(page.locator('.flatpickr-calendar.open')).toHaveCount(0);
     // An active event needs a start date; a draft may go on without one
     await page.locator('#event-status').selectOption('draft');
     await page.locator('#wizard-btn-next').click();
     await expect(page.locator('#wizard-page-3')).toBeVisible();
-    await page.locator('#eventModal [data-click="wizardGoTo"][data-step="5"]').click();
+    await page.locator('#event-editor-section [data-click="wizardGoTo"][data-step="5"]').click();
     await expect(page.locator('#wizard-page-5')).toBeVisible();
-    await page.locator('#eventModal [data-bs-dismiss="modal"]').first().click();
-    await expect(page.locator('#eventModal')).toBeHidden();
+    await closeEditor(page);
 
     const row = page.locator('#admin-events-table tbody tr', { hasText: 'Community-Spieleabend' });
     await row.locator('[data-bs-toggle="dropdown"]').click();
@@ -112,6 +113,11 @@ test('a member opens event, polls and profile without one refused style', async 
     const slotBar = page.locator('#detail-roster .capacity-progress-bar').first();
     await expect(slotBar).toHaveAttribute('data-style-width', /^\d+$/);
     expect(await slotBar.evaluate(element => element.style.width)).toMatch(/^\d+%$/);
+    // The open chat of the event assistant with a streamed answer and its source chip
+    await page.click('#assistant-toggle');
+    await page.locator('#assistant-suggestions [data-question="Was sind die Regeln?"]').click();
+    await expect(page.locator('#assistant-messages .assistant-source').last()).toHaveText('Quelle: Beschreibung');
+    await page.click('#assistant-panel .assistant-close');
     await navigate(page, 'polls');
     await page.locator('#polls-open .poll-card').first().click();
     await expect(page.locator('#poll-detail-section')).toBeVisible();

@@ -39,6 +39,7 @@ function buildNewEvent(input, createdBy) {
     return {
         title: input.title,
         description: input.description,
+        aiNotes: input.aiNotes || '',
         maxParticipants: slots.length > 0 ? sumCapacity(slots) : (parseInt(input.maxParticipants) || 0),
         accessMode: input.accessMode || 'open',
         requiredRoles: input.requiredRoles || [],

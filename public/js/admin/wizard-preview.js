@@ -59,9 +59,11 @@ export function cancelWizardPreview() {
  * @param {Object} draft -> Input of collectEventDraft().
  * @param {string} editId -> Id of the edited event, '' for a new one.
  * @param {Date} [now] -> Reference time for the card and the message.
+ * @param {Object} [options]
+ * @param {boolean} [options.keep] -> Leave the drawn message in place until the new one arrives (a redraw while typing) instead of the skeleton.
  * @returns {Promise<void>} -> Resolves when the message is drawn, dropped or replaced by the unavailable hint.
  */
-export async function renderWizardPreview(draft, editId, now = new Date()) {
+export async function renderWizardPreview(draft, editId, now = new Date(), { keep = false } = {}) {
     const sequence = ++previewSequence;
     const cardEl = document.getElementById('wizard-preview-card');
     const discordEl = document.getElementById('wizard-preview-discord');
@@ -70,7 +72,7 @@ export async function renderWizardPreview(draft, editId, now = new Date()) {
         applyBannerColors(cardEl);
     };
     drawCard(null);
-    discordEl.innerHTML = DISCORD_LOADING;
+    if (!keep || !discordEl.innerHTML) discordEl.innerHTML = DISCORD_LOADING;
     try {
         const res = await fetch('/api/admin/events/preview', {
             method: 'POST',

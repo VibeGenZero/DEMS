@@ -32,7 +32,7 @@ test('a published policy is public and every member accepts it before using DEMS
     // Admin publishes the policy on the System page and accepts it right away
     await page.goto(`${base()}/auth/dev-login/admin`);
     await expect(page.locator('#events-section')).toBeVisible();
-    await page.goto(`${base()}/#system`);
+    await page.goto(`${base()}/#system/privacy`);
     await expect(page.locator('#system-section')).toBeVisible();
     await page.fill('#system-privacy-text', '# Datenschutz\n\nWir speichern nur, was Events brauchen.');
     await expect(page.locator('#system-privacy-preview h1')).toHaveText('Datenschutz');

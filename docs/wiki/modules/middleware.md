@@ -3,7 +3,7 @@ id: middleware
 title: middleware/ — auth guards, maintenance gates, validators
 type: module
 tags: [middleware, auth, admin, maintenance, validation]
-sources: [middleware/auth.js, middleware/maintenance.js, middleware/validators.js]
+sources: [middleware/auth.js, middleware/maintenance.js, middleware/validators.js, middleware/rateLimits.js]
 part_of: [architecture]
 depends_on: [data-layer]
 see_also: [maintenance-mode, auth-session]
@@ -45,6 +45,10 @@ The Discord registration path calls `isRegistrationBlocked()` directly (`checkRe
 | `validateBotMessages` | `registration`, `accepted`, `rejected` ≤2000 chars each |
 
 Validation is hand-written (no library). Errors are joined into one German `error` string with status 400. `validateEvent` logs the full body on failure.
+
+## middleware/rateLimits.js
+
+`createApiLimiter({ env, skip })` → the limiter of `/api/*` (`express-rate-limit`, window 15 min): `apiLimitKey(req)` counts a logged-in user as `user:<id>`, everybody else as `ip:<address>` (`ipKeyGenerator`); `apiLimitFor(req, env)` = `RATE_LIMIT_MAX_USER` (default 1000) or `RATE_LIMIT_MAX` (default 200), read on every request, nonsense → default; the 429 answers `tooManyRequestsMessage(msLeft)` („Zu viele Anfragen. Bitte warte etwa N Minuten …“). Mounted after the session middleware, so the session is known; `skip` = dev mock mode.
 
 ## Gotchas
 

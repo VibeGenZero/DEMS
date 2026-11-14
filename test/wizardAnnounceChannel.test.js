@@ -18,7 +18,7 @@ async function openWizard({ botSettings = { announceChannel: '120000000000000002
     });
     frontend.state.currentUser = { id: 'u-admin', username: 'mori', roles: [], isAdmin: true };
     frontend.state.csrfToken = 'test-token';
-    await frontend.app.showCreateEventModal();
+    await frontend.app.openEventEditor();
     return frontend;
 }
 

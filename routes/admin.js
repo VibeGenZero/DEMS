@@ -74,6 +74,7 @@ router.use(requireAuth, requireAdmin);
 
 // Database-backed configuration and privacy policy, the "System" view (#138)
 router.use(require('./adminSystem'));
+router.use(require('./adminAi'));
 
 /**
  * GET /api/admin/roles — Get all guild roles
@@ -369,7 +370,7 @@ const optedOutNote = (optedOut) => (optedOut > 0 ? `; ${optedOut} opted out` : '
  */
 function buildEventUpdates(body, slots, oldEvent) {
     const {
-        title, description, maxParticipants, accessMode, requiredRoles,
+        title, description, aiNotes, maxParticipants, accessMode, requiredRoles,
         approvalMode, assignRoleId, formFields,
         startDate, endDate, bannerUrl, category, status, reminderHours, checkinMessage,
         customBotMessages, autoCreateChannels, channelConfig, allowGuests, allowTentative,
@@ -380,6 +381,7 @@ function buildEventUpdates(body, slots, oldEvent) {
     return {
         title,
         description,
+        aiNotes: aiNotes || '',
         maxParticipants: slots.length > 0 ? sumCapacity(slots) : (parseInt(maxParticipants) || 0),
         accessMode: accessMode || 'open',
         requiredRoles: requiredRoles || [],
