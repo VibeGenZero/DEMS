@@ -8,7 +8,7 @@ const { safeEqual } = require('../middleware/auth');
 const { addAuditLog } = require('../utils/eventUtils');
 const { buildBotInviteUrl } = require('../utils/botPermissions');
 const systemConfig = require('../utils/systemConfig');
-const { SNOWFLAKE, normalizeSystemValue, botLoginError } = require('../utils/systemValues');
+const { SNOWFLAKE, normalizeSystemValue, dropsStoredAiKey, botLoginError } = require('../utils/systemValues');
 const { savePrivacyPolicy } = require('../utils/privacyPolicy');
 const { getUpdateStatus } = require('../utils/updateCheck');
 const { selectStoreKind } = require('../db/config');
@@ -83,6 +83,8 @@ router.put('/system/settings', async (req, res) => {
             if (result.error) return res.status(400).json({ error: result.error });
             if (!result.skip) changes[key] = result.value;
         }
+        // A key from .env stays; a stored one never follows a new provider or address
+        if (!systemConfig.isLocked('AI_API_KEY') && dropsStoredAiKey(changes)) changes.AI_API_KEY = '';
 
         // A new token or guild: log in with it first, keep the old values when Discord refuses
         let bot = null;

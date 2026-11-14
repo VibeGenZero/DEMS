@@ -185,6 +185,11 @@ async function prepareEventQuestion({ eventId, user, question, history = [], cli
                 });
                 const answer = splitSource(result.text);
                 if (filter) filter.finish();
+                // Only a „Quelle:“ line, or nothing: no answer to show on either channel
+                if (!answer.text.trim()) {
+                    await count({ usage: result.usage, failed: true });
+                    throw new AskRefusal(503, UNAVAILABLE);
+                }
                 await count({ usage: result.usage });
                 return answer;
             } catch (err) {

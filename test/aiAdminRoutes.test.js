@@ -226,3 +226,17 @@ test('routes: member 403; feature off 404; mock mode answers a patch with the ti
     }
     assert.equal((await admin.send('POST', '/api/admin/ai/event-draft', { message: 'Wieder da' })).status, 200);
 });
+
+test('a new AI address without a new key removes the stored key; another model keeps it', async () => {
+    const admin = await loginAs('admin');
+    const keySet = async () => (await (await admin.request('/api/admin/system/settings')).json()).settings.find(entry => entry.key === 'AI_API_KEY').isSet;
+    const save = (values) => admin.send('PUT', '/api/admin/system/settings', { password: 'dev', values });
+    assert.equal((await save({ AI_API_KEY: 'key-fuer-den-alten-host' })).status, 200);
+    assert.equal((await save({ AI_MODEL_ADMIN: 'mock-2' })).status, 200);
+    assert.equal(await keySet(), true);
+    const moved = await save({ AI_BASE_URL: 'http://127.0.0.1:9/v1', AI_API_KEY: '' });
+    assert.equal(moved.status, 200);
+    assert.ok((await moved.json()).changed.includes('AI_API_KEY'));
+    assert.equal(await keySet(), false);
+    assert.equal((await save({ AI_BASE_URL: '', AI_MODEL_ADMIN: '' })).status, 200);
+});

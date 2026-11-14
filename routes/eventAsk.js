@@ -3,7 +3,8 @@ const { requireAuth } = require('../middleware/auth');
 const { isFeatureOn } = require('../ai/settings');
 const { prepareEventQuestion, AskRefusal } = require('../ai/memberAssistant');
 
-const NOT_FOUND = 'Event nicht gefunden.';
+// The member is looking at the event when the assistant goes off: say what is off (same sentence as Discord)
+const SWITCHED_OFF = 'Der Event-Assistent ist gerade ausgeschaltet.';
 const UNAVAILABLE = 'Der Event-Assistent ist gerade nicht erreichbar. Bitte versuche es später noch einmal.';
 
 /** One server-sent event, terminated by a blank line. */
@@ -24,7 +25,7 @@ function createAskRouter({ prepare = prepareEventQuestion, featureOn = () => isF
         let finished = false;
         res.on('close', () => { if (!finished) controller.abort(); });
         try {
-            if (!featureOn()) return res.status(404).json({ error: NOT_FOUND });
+            if (!featureOn()) return res.status(404).json({ error: SWITCHED_OFF });
             const { id, roles, isAdmin } = req.session.user;
             const body = req.body && typeof req.body === 'object' ? req.body : {};
             prepared = await prepare({

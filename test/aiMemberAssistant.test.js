@@ -223,3 +223,13 @@ test('a caller abort still counts the question', async () => {
     assert.equal(ok.source, 'Termin');
     assert.equal((await usageRows())[0].memberQuestions, 2);
 });
+
+test('an answer that is only a source line is refused as not reachable, never an empty answer', async () => {
+    const client = fakeClient('Quelle: Beschreibung');
+    await assert.rejects(answerEventQuestion({ eventId: 'ev-1', user: member, question: 'Wann?', client }),
+        refusal(503, 'Der Event-Assistent ist gerade nicht erreichbar. Bitte versuche es später noch einmal.'));
+    const [row] = await usageRows();
+    assert.equal(row.errors, 1);
+    // The busy mark is free again
+    assert.equal((await answerEventQuestion({ eventId: 'ev-1', user: member, question: 'Wann?', client: fakeClient() })).text, 'Um 20 Uhr.');
+});

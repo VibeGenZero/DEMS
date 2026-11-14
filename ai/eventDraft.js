@@ -50,6 +50,7 @@ const REFUSALS = Object.freeze({
 });
 const EMPTY_REPLY = 'Ich konnte daraus keine Änderungen ableiten. Beschreib es bitte etwas genauer.';
 const DEFAULT_REPLY = 'Entwurf ist im Formular.';
+const NOT_ALLOWED_NOTE = 'Felder wie Status oder Banner setze ich nicht – die änderst du selbst.';
 const JSON_REPAIR = 'Antworte nur mit einem JSON-Objekt.';
 
 const DRAFT_RULES = [
@@ -292,16 +293,28 @@ function readAnswer(text, form, guild, timezone) {
 }
 
 /**
+ * Dates of the patch before now: a manual save allows them (editing a past
+ * event), the AI must not invent them („Samstag“ read as last week's).
+ */
+function pastDateErrors(patch, now) {
+    return DATE_FIELDS
+        .filter(field => typeof patch[field] === 'string' && patch[field] && Date.parse(patch[field]) < now.getTime())
+        .map(field => ({ message: `${FIELD_LABELS[field]} liegt in der Vergangenheit.`, fields: [field] }));
+}
+
+/**
  * Errors of the merged draft the patch is responsible for: an error about a
  * field the patch sets, or one nobody can attribute that the form alone does
- * not have. A missing title or start of an unfinished form does not count.
+ * not have, plus dates of the patch in the past. A missing title or start of
+ * an unfinished form does not count.
  */
-async function patchErrors(form, patch) {
+async function patchErrors(form, patch, now) {
     const keys = Object.keys(patch);
     if (!keys.length) return [];
     const [before, after] = await Promise.all([draftErrors(form), draftErrors({ ...form, ...patch })]);
     const existing = new Set(before.map(error => error.message));
-    return after.filter(error => (error.fields ? error.fields.some(field => keys.includes(field)) : !existing.has(error.message)));
+    const own = after.filter(error => (error.fields ? error.fields.some(field => keys.includes(field)) : !existing.has(error.message)));
+    return [...own, ...pastDateErrors(patch, now)];
 }
 
 /**
@@ -310,10 +323,12 @@ async function patchErrors(form, patch) {
  *
  * @returns {Promise<string[]>} -> Removed fields in order.
  */
-async function removeFailingFields(form, patch) {
+async function removeFailingFields(form, patch, now) {
     const removed = [];
     for (;;) {
-        const errors = await patchErrors(form, patch);
+        // A date in the past goes first and alone: checked against it, a good deadline would fail too
+        const past = pastDateErrors(patch, now);
+        const errors = past.length ? past : await patchErrors(form, patch, now);
         const keys = Object.keys(patch);
         if (!errors.length || !keys.length) return removed;
         let blamed = errors.map(error => error.fields && error.fields.find(field => keys.includes(field))).filter(Boolean);
@@ -337,6 +352,8 @@ function finalReply(answer, removed) {
         const labels = named.map(field => (Object.hasOwn(answer.patch, field) ? `${FIELD_LABELS[field]} (teilweise)` : FIELD_LABELS[field]));
         reply = `${reply} Nicht übernommen: ${labels.join(', ')}.`;
     }
+    // A reply like „Event aktiviert.“ must not stand when the status was never set
+    if (answer.dropped.some(entry => entry.reason === 'not_allowed')) reply = `${reply} ${NOT_ALLOWED_NOTE}`;
     return reply;
 }
 
@@ -407,7 +424,7 @@ async function draftEvent({ message, draft, history = [], adminId, client, now =
         let answer = readAnswer(first, form, guild, timezone);
         let repair = answer ? null : JSON_REPAIR;
         if (answer) {
-            const errors = await patchErrors(form, answer.patch);
+            const errors = await patchErrors(form, answer.patch, now);
             if (errors.length) repair = `Dein Entwurf hat diese Fehler. Korrigiere sie und antworte wieder mit einem JSON-Objekt:\n${[...new Set(errors.map(error => error.message))].map(sentence => `- ${sentence}`).join('\n')}`;
         }
         if (repair) {
@@ -415,7 +432,7 @@ async function draftEvent({ message, draft, history = [], adminId, client, now =
             answer = readAnswer(second, form, guild, timezone) || answer;
         }
         if (!answer) answer = { patch: {}, dropped: [], reply: '', questions: [] };
-        const removed = await removeFailingFields(form, answer.patch);
+        const removed = await removeFailingFields(form, answer.patch, now);
         return { patch: answer.patch, reply: finalReply(answer, removed), questions: answer.questions };
     });
 }

@@ -2,7 +2,7 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { PROVIDERS, isAiConfigured, getAiClient, testConnection } = require('../ai/client');
 const { create: createMock } = require('../ai/providers/mock');
-const { normalizeSystemValue } = require('../utils/systemValues');
+const { normalizeSystemValue, dropsStoredAiKey } = require('../utils/systemValues');
 
 const setDevMock = (value) => {
     const before = process.env.DEV_MOCK;
@@ -168,7 +168,9 @@ test('normalizeSystemValue checks the AI keys', () => {
     assert.deepEqual(normalizeSystemValue('AI_BASE_URL', ''), { value: '' });
     assert.deepEqual(normalizeSystemValue('AI_BASE_URL', 'https://x.test/v1'), { value: 'https://x.test/v1' });
     const urlError = { error: 'Die KI-Adresse muss mit http:// oder https:// beginnen.' };
-    assert.deepEqual(normalizeSystemValue('AI_BASE_URL', 'https://x.test/v1/'), urlError);
+    // Provider docs show the address with a trailing slash (Ollama): accepted and stripped
+    assert.deepEqual(normalizeSystemValue('AI_BASE_URL', 'http://localhost:11434/v1/'), { value: 'http://localhost:11434/v1' });
+    assert.deepEqual(normalizeSystemValue('AI_BASE_URL', 'https://x.test/v1//'), { value: 'https://x.test/v1' });
     assert.deepEqual(normalizeSystemValue('AI_BASE_URL', 'ftp://x'), urlError);
     assert.deepEqual(normalizeSystemValue('AI_MODEL', '  m  '), { value: 'm' });
     assert.equal(normalizeSystemValue('AI_MODEL_ADMIN', 'x'.repeat(300)).value.length, 200);
@@ -208,4 +210,31 @@ test('testConnection reports success and failure without leaking details', async
     assert.equal(bad.ok, false);
     assert.equal(bad.code, 'unreachable');
     assert.equal(typeof bad.error, 'string');
+});
+
+test('a stored AI key is dropped when the provider or the address changes without a new key', () => {
+    const env = { AI_PROVIDER: 'openai', AI_BASE_URL: '', AI_API_KEY: 'sk-alt' };
+    assert.equal(dropsStoredAiKey({ AI_PROVIDER: 'ollama' }, env), true);
+    assert.equal(dropsStoredAiKey({ AI_PROVIDER: '' }, env), true, 'switching the AI off removes the key');
+    assert.equal(dropsStoredAiKey({ AI_BASE_URL: 'http://fremder-host:11434/v1' }, env), true);
+    assert.equal(dropsStoredAiKey({ AI_PROVIDER: 'ollama', AI_API_KEY: 'neu' }, env), false, 'a new key replaces it anyway');
+    assert.equal(dropsStoredAiKey({ AI_PROVIDER: 'openai', AI_MODEL: 'gpt-x' }, env), false, 'same provider, other model');
+    assert.equal(dropsStoredAiKey({ AI_MODEL_ADMIN: 'gpt-y' }, env), false);
+    assert.equal(dropsStoredAiKey({ AI_BASE_URL: 'https://api.test/v1' }, { ...env, AI_BASE_URL: 'https://api.test/v1/' }), false, 'a slash is no new address');
+    assert.equal(dropsStoredAiKey({ AI_PROVIDER: 'ollama' }, { ...env, AI_API_KEY: '' }), false, 'nothing stored, nothing to drop');
+});
+
+test('the connection test counts an answer without text as connected (reasoning models spend the few tokens on thinking)', async () => {
+    const http = require('http');
+    const fake = http.createServer((req, res) => {
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({ choices: [{ message: { content: '' }, finish_reason: 'length' }], usage: { prompt_tokens: 9, completion_tokens: 5 } }));
+    });
+    await new Promise(resolve => fake.listen(0, '127.0.0.1', resolve));
+    try {
+        const result = await testConnection({ provider: 'ollama', baseUrl: `http://127.0.0.1:${fake.address().port}/v1`, model: 'qwen3' });
+        assert.equal(result.ok, true, JSON.stringify(result));
+    } finally {
+        await new Promise(resolve => fake.close(resolve));
+    }
 });

@@ -15,7 +15,7 @@ const { DEFAULT_TIMEZONE } = require('../utils/timezone');
 const systemConfig = require('../utils/systemConfig');
 const setupState = require('../utils/setupState');
 const { savePrivacyPolicy, PRIVACY_MAX_LENGTH } = require('../utils/privacyPolicy');
-const { SNOWFLAKE, RESET_PASSWORD_MIN, SYSTEM_VALUE_ERRORS, normalizeSystemValue, botLoginError } = require('../utils/systemValues');
+const { SNOWFLAKE, RESET_PASSWORD_MIN, SYSTEM_VALUE_ERRORS, normalizeSystemValue, dropsStoredAiKey, botLoginError } = require('../utils/systemValues');
 const { providerList, answerConnectionTest, answerModelList } = require('./aiConnection');
 
 const UNLOCK_WINDOW_MS = 15 * 60 * 1000;
@@ -311,6 +311,8 @@ function createSetupRouter(deps = {}) {
             const ai = aiChanges(body);
             if (ai.error) return res.status(400).json({ error: ai.error });
             Object.assign(changes, ai.changes);
+            // A stored key never follows a new provider or address
+            if (!systemConfig.isLocked('AI_API_KEY') && dropsStoredAiKey(changes)) changes.AI_API_KEY = '';
             const privacyMarkdown = text(body.privacyMarkdown);
             if (privacyMarkdown.length > PRIVACY_MAX_LENGTH) return res.status(400).json({ error: MESSAGES.privacy });
 

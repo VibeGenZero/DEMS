@@ -100,6 +100,9 @@ async function testConnection(overrides = null) {
         return { ok: true, ms: Date.now() - started };
     } catch (err) {
         const code = err instanceof AiError ? err.code : 'unreachable';
+        // The provider answered with success but no text: reasoning models spend the few
+        // test tokens on thinking. Address, key and model work, which is all this tests.
+        if (code === 'empty_answer') return { ok: true, ms: Date.now() - started };
         return { ok: false, code, error: AI_ERROR_MESSAGES[code] };
     }
 }

@@ -89,7 +89,8 @@ test('with the website assistant switched off: 404 and server-info says so', asy
         const member = await loginAs('member');
         const res = await member.send('POST', `/api/events/${OPEN}/ask`, { question: 'Hallo?' });
         assert.equal(res.status, 404);
-        assert.equal((await res.json()).error, 'Event nicht gefunden.');
+        // The member is looking at the event: the sentence says what is off, not that the event is gone
+        assert.equal((await res.json()).error, 'Der Event-Assistent ist gerade ausgeschaltet.');
         const info = await (await createClient(server.baseUrl).request('/api/server-info')).json();
         assert.equal(info.ai.memberAssistant, false);
         assert.equal(info.ai.teaserText, '');

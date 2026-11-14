@@ -91,9 +91,12 @@ function normalizeSystemValue(key, raw) {
         case 'AI_PROVIDER':
             if (value && !AI_PROVIDER_IDS.includes(value) && !(value === 'mock' && process.env.DEV_MOCK === 'true')) return { error: SYSTEM_VALUE_ERRORS.AI_PROVIDER };
             return { value };
-        case 'AI_BASE_URL':
-            if (value && !/^https?:\/\/[^\s/]\S*[^\s/]$|^https?:\/\/[^\s/]$/i.test(value)) return { error: SYSTEM_VALUE_ERRORS.AI_BASE_URL };
-            return { value };
+        case 'AI_BASE_URL': {
+            // Provider docs show the address with a trailing slash (Ollama); the client adds its own paths
+            const address = value.replace(/\/+$/, '');
+            if (address && !/^https?:\/\/[^\s/]\S*$/i.test(address)) return { error: SYSTEM_VALUE_ERRORS.AI_BASE_URL };
+            return { value: address };
+        }
         case 'AI_MODEL':
         case 'AI_MODEL_ADMIN':
             return { value: value.slice(0, AI_MODEL_MAX) };
@@ -117,6 +120,24 @@ function botLoginError(code) {
     return BOT_LOGIN_ERRORS[code] || BOT_LOGIN_FAILED;
 }
 
+const sameAddress = (a, b) => String(a || '').trim().replace(/\/+$/, '') === String(b || '').trim().replace(/\/+$/, '');
+
+/**
+ * Whether a save must remove the stored AI key: a key belongs to the provider
+ * and the address it was entered for, so changing either without typing a new
+ * key drops it instead of sending it to the new host. Switching the AI off
+ * (empty provider) removes it too.
+ *
+ * @param {Object} changes -> Normalized values about to be saved (an empty key is not in it).
+ * @param {Object} [env] -> Current values (process.env).
+ * @returns {boolean}
+ */
+function dropsStoredAiKey(changes, env = process.env) {
+    if (Object.hasOwn(changes, 'AI_API_KEY') || !String(env.AI_API_KEY || '').trim()) return false;
+    const changed = (key) => Object.hasOwn(changes, key) && !sameAddress(changes[key], env[key]);
+    return changed('AI_PROVIDER') || changed('AI_BASE_URL');
+}
+
 module.exports = {
     SNOWFLAKE,
     RESET_PASSWORD_MIN,
@@ -124,5 +145,6 @@ module.exports = {
     normalizeBaseUrl,
     isKnownTimezone,
     normalizeSystemValue,
+    dropsStoredAiKey,
     botLoginError
 };

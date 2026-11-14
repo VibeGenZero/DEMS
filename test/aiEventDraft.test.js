@@ -314,7 +314,10 @@ test('an empty result explains itself in German', async () => {
     const client = scriptedClient({ patch: { status: 'active' }, reply: 'Okay.', questions: [] });
     const result = await draftCall({ client });
     assert.equal(client.calls.length, 1);
-    assert.deepEqual(plain(result), { patch: {}, reply: 'Ich konnte daraus keine Änderungen ableiten. Beschreib es bitte etwas genauer.', questions: [] });
+    // The status was asked for and dropped: the reply says why nothing changed
+    assert.deepEqual(plain(result), { patch: {}, reply: 'Ich konnte daraus keine Änderungen ableiten. Beschreib es bitte etwas genauer. Felder wie Status oder Banner setze ich nicht – die änderst du selbst.', questions: [] });
+    const quiet = scriptedClient({ patch: {}, reply: 'Okay.', questions: [] });
+    assert.equal((await draftCall({ client: quiet })).reply, 'Ich konnte daraus keine Änderungen ableiten. Beschreib es bitte etwas genauer.');
 });
 
 test('questions are passed through, at most three', async () => {
@@ -430,4 +433,34 @@ test('rewriteText refuses an unknown kind and an empty description', async () =>
     const failing = scriptedClient(new AiError('rate_limited'));
     await assert.rejects(rewriteText({ kind: 'suggest-ai-notes', draft: {}, adminId: 'admin-1', client: failing, now: NOW }),
         refusal(503, AI_ERROR_MESSAGES.rate_limited));
+});
+
+test('dates the model puts in the past are repaired once, then removed and named', async () => {
+    // NOW is Friday 2026-11-13; „Samstag" turned into last week's Saturday
+    const past = { title: 'Raid', startDate: '2026-11-07T20:00', registrationDeadline: '2026-11-06T18:00' };
+    const client = scriptedClient(
+        { patch: past, reply: 'Entwurf ist im Formular.', questions: [] },
+        { patch: { ...past, registrationDeadline: '2026-11-20T18:00' }, reply: 'Korrigiert.', questions: [] }
+    );
+    const result = await draftCall({ client });
+    assert.equal(client.calls.length, 2);
+    const repairText = client.calls[1].messages.at(-1).text;
+    assert.ok(repairText.includes('Beginn liegt in der Vergangenheit.'), repairText);
+    assert.ok(repairText.includes('Anmeldeschluss liegt in der Vergangenheit.'), repairText);
+    assert.deepEqual(plain(result.patch), { title: 'Raid', registrationDeadline: '2026-11-20T17:00:00.000Z' });
+    assert.equal(result.reply, 'Korrigiert. Nicht übernommen: Beginn.');
+});
+
+test('a past date already in the form is no error of a patch that leaves it alone', async () => {
+    const client = scriptedClient({ patch: { title: 'Neuer Titel' }, reply: 'Titel geändert.', questions: [] });
+    const result = await draftCall({ client, draft: { ...EMPTY_DRAFT, title: 'Alt', startDate: '2026-10-01T18:00:00.000Z' } });
+    assert.equal(client.calls.length, 1);
+    assert.deepEqual(plain(result.patch), { title: 'Neuer Titel' });
+});
+
+test('forbidden or unknown keys of the model are named in the reply', async () => {
+    const client = scriptedClient({ patch: { title: 'Raid', status: 'active', checkinCode: '1234', foo: 1 }, reply: 'Event aktiviert.', questions: [] });
+    const result = await draftCall({ client });
+    assert.deepEqual(plain(result.patch), { title: 'Raid' });
+    assert.equal(result.reply, 'Event aktiviert. Felder wie Status oder Banner setze ich nicht – die änderst du selbst.');
 });
