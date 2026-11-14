@@ -127,6 +127,12 @@ test('on a phone the editor has one column, the preview behind its tab, and does
     await expect(page.locator('#wizard-page-1')).toBeVisible();
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
     expect(overflow).toBeLessThanOrEqual(0);
+    // The section cards must not make the phone narrower: slot names stay readable
+    await page.locator('#wstep-3').click();
+    await page.locator('#event-use-slots').check();
+    const slotName = page.locator('#slot-editor-rows .slot-name-input').first();
+    await expect(slotName).toBeVisible();
+    expect((await slotName.boundingBox()).width).toBeGreaterThanOrEqual(120);
     await closeEditor(page);
     expect(errors).toEqual([]);
 });
@@ -389,5 +395,47 @@ test('the AI assistant fills the title, marks it, and „Rückgängig" takes it 
     await expect(page.locator('#event-title')).not.toHaveClass(/is-ai-filled/);
     await expect(page.locator('#ai-mark-title')).toHaveCount(0);
     await expect(page.locator('#editor-assist-undo')).toHaveCount(0);
+    expect(errors).toEqual([]);
+});
+
+test('the assistant takes the place of the preview and the form keeps most of the width', async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== 'desktop', 'wide layout');
+    const errors = watchErrors(page);
+    await loginAs(page, 'admin');
+    await page.evaluate(() => { window.location.hash = '#event-editor/dev-event-role'; });
+    await expect(page.locator('#event-editor-section')).toBeVisible();
+    const form = page.locator('.editor-form');
+    await expect(page.locator('.editor-preview-column')).toBeVisible();
+    expect((await form.boundingBox()).width).toBeGreaterThan(800);
+    await page.click('#event-editor-assist-toggle');
+    await expect(page.locator('.editor-preview-column')).toBeHidden();
+    expect((await form.boundingBox()).width).toBeGreaterThan(800);
+    await page.setViewportSize({ width: 1200, height: 800 });
+    expect((await form.boundingBox()).width).toBeGreaterThan(600);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
+    await page.click('#event-editor-assist-toggle');
+    await expect(page.locator('.editor-preview-column')).toBeVisible();
+    expect(errors).toEqual([]);
+});
+
+test('every visible group of every step is a card, and an AI mark stays inside its card', async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== 'desktop', 'same cards on the phone');
+    const errors = watchErrors(page);
+    await loginAs(page, 'admin');
+    await page.evaluate(() => { window.location.hash = '#event-editor/dev-event-bigform'; });
+    await expect(page.locator('#event-editor-section')).toBeVisible();
+    for (const step of [1, 2, 3, 4, 5]) {
+        await page.locator('#wstep-' + step).click();
+        await expect(page.locator('#wizard-page-' + step)).toBeVisible();
+        const loose = await page.locator('#wizard-page-' + step).evaluate((pageEl) => [...pageEl.children]
+            .filter(child => child.offsetParent !== null && child.tagName !== 'INPUT')
+            .filter(child => getComputedStyle(child).borderTopWidth === '0px')
+            .map(child => child.id || child.className || child.tagName));
+        expect(loose, 'step ' + step).toEqual([]);
+    }
+    // The description card holds its own „von KI“ mark (mock provider: „Mit KI verbessern“ always answers)
+    await page.locator('#wstep-1').click();
+    await page.click('#event-description-improve');
+    await expect(page.locator('#event-description-group #ai-mark-description')).toBeVisible();
     expect(errors).toEqual([]);
 });

@@ -3448,7 +3448,21 @@ a.info-version-badge:focus-visible {
 
 /* Room between the step row (with the mode tabs on small screens) and the form */
 .editor-page .wizard-head {
-  margin-bottom: var(--space-16);
+  margin-bottom: var(--space-24);
+}
+
+/* From tablet width the editor keeps a side gutter and a readable width; the steps sit compact in the middle */
+@media (min-width: 768px) {
+  .editor-page {
+    max-width: 85rem;
+    margin-inline: auto;
+    padding-inline: var(--space-24);
+  }
+
+  .editor-page .wizard-head .wizard-nav {
+    max-width: 55rem;
+    margin-inline: auto;
+  }
 }
 
 /* Stays below the fixed navbar while the form scrolls */
@@ -3500,12 +3514,56 @@ a.info-version-badge:focus-visible {
   align-items: start;
 }
 
+/* No box of its own: every group of fields in a step is a card (below) */
 .editor-form {
   min-width: 0;
-  padding: var(--space-24);
+}
+
+/* A group of fields of a step, the template chooser and the footer bar as quiet cards;
+   hidden groups (.is-hidden, display: none) show no outline */
+.editor-form .wizard-page > .mb-3,
+.editor-form .wizard-page > .row,
+.editor-form .wizard-page > .wizard-template-area,
+.editor-footer {
+  margin: 0 0 var(--space-16);
+  padding: var(--space-16);
   background: var(--bg-card);
   border: 1px solid var(--border-subtle);
-  border-radius: var(--radius);
+  border-radius: var(--radius-lg);
+}
+
+/* A card that is a Bootstrap row: no extra space on top, stacked columns (phones) get a
+   row gap instead; its columns bring half a gutter of their own, so the card pads that
+   much less and its fields line up with the fields of every other card */
+.editor-form .wizard-page > .row {
+  --bs-gutter-y: 0;
+  row-gap: var(--space-16);
+  padding-inline: calc(var(--space-16) - var(--bs-gutter-x) * 0.5);
+}
+
+/* More air between label, field and help text */
+.editor-form .form-label {
+  margin-bottom: var(--space-8);
+}
+
+.editor-form .form-text,
+.editor-form small.text-muted {
+  display: block;
+  margin-top: var(--space-8);
+  line-height: 1.45;
+}
+
+@media (min-width: 768px) {
+  .editor-form .wizard-page > .mb-3,
+  .editor-form .wizard-page > .row,
+  .editor-form .wizard-page > .wizard-template-area,
+  .editor-footer {
+    padding: var(--space-24);
+  }
+
+  .editor-form .wizard-page > .row {
+    padding-inline: calc(var(--space-24) - var(--bs-gutter-x) * 0.5);
+  }
 }
 
 /* Unsaved input of an earlier visit is back in the form */
@@ -3529,9 +3587,6 @@ a.info-version-badge:focus-visible {
   align-items: center;
   justify-content: space-between;
   gap: var(--space-12);
-  margin-top: var(--space-24);
-  padding-top: var(--space-16);
-  border-top: 1px solid var(--border-subtle);
 }
 
 .editor-preview-column,
@@ -3539,7 +3594,7 @@ a.info-version-badge:focus-visible {
   min-width: 0;
 }
 
-/* AI assistant (admin/editor-assist.js): a floating panel; from 1200 px the third column */
+/* AI assistant (admin/editor-assist.js): a floating panel; from 1200 px the column in the preview's place */
 .editor-assist {
   position: fixed;
   right: var(--space-16);
@@ -3608,9 +3663,23 @@ a.info-version-badge:focus-visible {
 }
 
 @media (min-width: 1200px) {
-  /* Form, preview, and the assistant column once it is shown */
+  /* The form gets most of the width beside a narrow preview; the assistant takes the preview's place */
   .editor-body {
-    grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0, 1fr) 22.5rem;
+  }
+
+  .editor-body.is-assist-open {
+    grid-template-columns: minmax(0, 1fr) 25rem;
+  }
+
+  .editor-body.is-assist-open .editor-preview-column {
+    display: none;
+  }
+
+  /* The narrow column shows the preview a little smaller */
+  #wizard-preview-card,
+  #wizard-preview-discord {
+    zoom: 0.8;
   }
 
   .editor-assist {
@@ -3619,7 +3688,7 @@ a.info-version-badge:focus-visible {
     right: auto;
     bottom: auto;
     z-index: auto;
-    width: 22rem;
+    width: 25rem;
     height: calc(100vh - var(--editor-sticky-top) - var(--space-64) - var(--space-24));
     border-color: var(--border-subtle);
     border-radius: var(--radius);
@@ -3630,7 +3699,7 @@ a.info-version-badge:focus-visible {
     position: sticky;
     top: calc(var(--editor-sticky-top) + var(--space-64) + var(--space-8));
     max-height: calc(100vh - var(--editor-sticky-top) - var(--space-64) - var(--space-24));
-    padding: var(--space-24);
+    padding: var(--space-16);
     overflow-y: auto;
     background: var(--bg-secondary);
     border: 1px solid var(--border-subtle);
@@ -3644,9 +3713,6 @@ a.info-version-badge:focus-visible {
 }
 
 @media (max-width: 575.98px) {
-  .editor-form {
-    padding: var(--space-16);
-  }
 
   /* Icons only; the buttons keep their names for screen readers */
   .editor-topbar-label {

@@ -1289,7 +1289,7 @@
           </div>
         </div>
 
-        <div class="editor-body">
+        <div class="editor-body" id="event-editor-body">
           <div class="editor-form">
             <!-- Shown when unsaved input from an earlier visit was put back (admin/editor-page.js) -->
             <div class="editor-restored is-hidden" id="event-editor-restored" role="status">
@@ -1436,7 +1436,7 @@
                   </div>
                 </div>
                 <!-- Recurring -->
-                <div class="mb-3 glass-card is-tinted p-3">
+                <div class="mb-3">
                   <div class="form-check mb-2">
                     <input class="form-check-input" type="checkbox" id="event-recurring"
                       data-change="toggleVisible" data-target="recurring-options">
@@ -1497,21 +1497,21 @@
                   </div>
                 </div>
                 <div class="row g-3 mb-3">
-                  <div class="col-md-4">
+                  <div class="col-md-6">
                     <label class="form-label">Zugang</label>
                     <select class="form-select" id="event-access">
                       <option value="open">Jeder darf teilnehmen</option>
                       <option value="role-required">Rollen-Requirement</option>
                     </select>
                   </div>
-                  <div class="col-md-4">
+                  <div class="col-md-6">
                     <label class="form-label">Genehmigung</label>
                     <select class="form-select" id="event-approval">
                       <option value="manual">Manuelle Prüfung</option>
                       <option value="instant">Instant Access</option>
                     </select>
                   </div>
-                  <div class="col-md-4">
+                  <div class="col-md-6">
                     <label class="form-label">Gäste-Tickets</label>
                     <div class="form-check form-switch mt-1">
                       <input class="form-check-input" type="checkbox" id="event-allow-guests" checked>
@@ -1546,23 +1546,26 @@
 
               <!-- ── Step 4: Anmeldeformular ── -->
               <div class="wizard-page is-hidden" id="wizard-page-4">
-                <p class="text-muted small mb-3">
-                  <i class="bi bi-ui-checks me-1"></i>
-                  Optionale Felder, die Teilnehmer beim Anmelden ausfüllen müssen.
-                </p>
-                <div id="form-fields-builder">
-                  <!-- Dynamic field rows -->
+                <!-- One card: the explanation, the field rows and the button that adds one -->
+                <div class="mb-3">
+                  <p class="text-muted small mb-3">
+                    <i class="bi bi-ui-checks me-1"></i>
+                    Optionale Felder, die Teilnehmer beim Anmelden ausfüllen müssen.
+                  </p>
+                  <div id="form-fields-builder">
+                    <!-- Dynamic field rows -->
+                  </div>
+                  <div class="invalid-feedback" id="form-fields-feedback"></div>
+                  <button type="button" class="btn btn-sm btn-outline-light mt-2" data-click="addFormField">
+                    <i class="bi bi-plus me-1"></i>Feld hinzufügen
+                  </button>
                 </div>
-                <div class="invalid-feedback" id="form-fields-feedback"></div>
-                <button type="button" class="btn btn-sm btn-outline-light mt-2" data-click="addFormField">
-                  <i class="bi bi-plus me-1"></i>Feld hinzufügen
-                </button>
               </div>
 
               <!-- ── Step 5: Erweitert ── -->
               <div class="wizard-page is-hidden" id="wizard-page-5">
                 <!-- Auto Voice/Text Channels -->
-                <div class="mb-3 glass-card is-tinted p-3">
+                <div class="mb-3">
                   <div class="form-check mb-2">
                     <input class="form-check-input" type="checkbox" id="event-auto-create-channels"
                       data-change="toggleVisible" data-target="channel-config-options">
@@ -1596,7 +1599,7 @@
                   </div>
                 </div>
                 <!-- Announcement channel of the event (admin/wizard-announce.js, B-11) -->
-                <div class="mb-3 glass-card is-tinted p-3">
+                <div class="mb-3">
                   <label class="form-label" for="event-announce-channel"><i class="bi bi-megaphone me-1"></i>Ankündigungskanal</label>
                   <select class="form-select form-select-sm" id="event-announce-channel">
                     <option value="">Standard aus der Bot-Zentrale</option>
@@ -1604,7 +1607,7 @@
                   <small class="text-muted d-block mt-1">Wohin „Ankündigen“ dieses Event postet.</small>
                 </div>
                 <!-- Custom Bot Messages -->
-                <div class="mb-3 glass-card is-tinted p-3">
+                <div class="mb-3">
                   <div class="form-check mb-2">
                     <input class="form-check-input" type="checkbox" id="event-custom-msg-toggle"
                       data-change="toggleVisible" data-target="custom-msg-options">

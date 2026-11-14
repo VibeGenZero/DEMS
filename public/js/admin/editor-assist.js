@@ -54,6 +54,9 @@ export const AI_FIELD_INPUTS = Object.freeze({
     unregisterDeadline: 'event-unregister-deadline'
 });
 
+// Fields whose mark target is a card of the editor (style.css): the chip goes inside it
+const CARD_TARGETS = new Set(['description']);
+
 // mounted: the editor run this panel belongs to (`{ changed }`, changed = editorChanged of the page);
 // conversation: turns `{ role, text }` of this run; running: a request is on its way;
 // undo: form before the last patch and the button that offers it; marks: field -> { element, chip, clear }
@@ -98,7 +101,9 @@ function markField(field) {
     chip.className = 'chip chip-sm chip-accent ai-mark';
     chip.innerHTML = '<i class="bi bi-stars" aria-hidden="true"></i>von KI';
     element.classList.add('is-ai-filled');
-    element.insertAdjacentElement('afterend', chip);
+    // A target that is a whole card holds its mark inside; a single field gets it right below
+    if (CARD_TARGETS.has(field)) element.appendChild(chip);
+    else element.insertAdjacentElement('afterend', chip);
     const clear = () => unmarkField(field);
     for (const type of ['input', 'change']) element.addEventListener(type, clear);
     marks.set(field, { element, chip, clear });
@@ -287,6 +292,8 @@ function suggestAiNotes() {
 
 function setPanelOpen(open) {
     toggleElement(byId('event-editor-assist'), open);
+    // From 1200 px the assistant takes the place of the preview (style.css)
+    byId('event-editor-body').classList.toggle('is-assist-open', open);
     byId('event-editor-assist-toggle').setAttribute('aria-expanded', String(open));
     if (open) byId('editor-assist-input').focus();
 }
@@ -364,6 +371,7 @@ export function unmountEditorAssist() {
     for (const element of messages) element.remove();
     messages = [];
     toggleElement(byId('event-editor-assist'), false);
+    byId('event-editor-body').classList.remove('is-assist-open');
     byId('event-editor-assist-toggle').setAttribute('aria-expanded', 'false');
     byId('editor-assist-input').value = '';
 }
