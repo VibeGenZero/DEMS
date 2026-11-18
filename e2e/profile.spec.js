@@ -95,7 +95,9 @@ test('the raider tells both dates of the series apart and is checked in', async 
     expect(errors).toEqual([]);
 });
 
-test('the admin sees the slot, a new member an invitation to the overview', async ({ page }) => {
+// The empty plan ("Noch nichts geplant") is covered by test/profileView.test.js:
+// every persona has a place in the seed data, the newbie as Chiara's guest (#110)
+test('the admin sees the slot, a new member the place as a guest', async ({ page }) => {
     const errors = watchErrors(page);
     await loginAs(page, 'admin');
     await navigate(page, 'profile');
@@ -104,10 +106,8 @@ test('the admin sees the slot, a new member an invitation to the overview', asyn
     await page.context().clearCookies();
     await loginAs(page, 'newbie');
     await navigate(page, 'profile');
-    await expect(page.locator('#profile-upcoming')).toContainText('Noch nichts geplant');
+    await expect(row(page, 'Workshop: Streaming-Setup')).toContainText('Gast');
     await expect(page.locator('#profile-history-block')).toBeHidden();
-    await page.locator('#profile-upcoming a.btn', { hasText: 'Events ansehen' }).click();
-    await expect(page.locator('#events-section')).toBeVisible();
     expect(errors).toEqual([]);
 });
 
