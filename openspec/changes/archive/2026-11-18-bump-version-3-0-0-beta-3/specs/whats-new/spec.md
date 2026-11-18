@@ -7,7 +7,7 @@ The release notes SHALL list every published release, newest first, each with ve
 
 #### Scenario: History is kept
 - **WHEN** the release notes are requested
-- **THEN** they contain the current version `3.0.0-beta.3` first and the older releases down to 1.1.0 after it
+- **THEN** they contain the current version (the version in `package.json`) first and the older releases down to 1.1.0 after it
 
 #### Scenario: Pre-release version
 - **WHEN** the newest release carries a pre-release suffix, e.g. `3.0.0-beta.3`
