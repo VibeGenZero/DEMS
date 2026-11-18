@@ -110,9 +110,12 @@ jobs:
           echo "$status" | grep -q '"required":true'
           docker compose -f compose.yaml -f compose.build.yaml logs dems | grep -q 'Setup-PIN: [0-9]\{8\}'
 
-  # Pushes the image to Docker Hub once tests and the image check are green.
-  # main -> edge + edge-<commit> (test environment only); tag X -> X + sha-<commit> +
+  # Pushes the image to GitHub Packages (ghcr.io) and Docker Hub once tests and the image
+  # check are green, with the same tags in both registries.
+  # main -> edge + edge-<commit> (test environment only); release X -> X + sha-<commit> +
   # latest (release) or beta (pre-release), plus the GitHub release from updates.json.
+  # A release is a pushed tag X, or a push to main whose package.json names a version X
+  # that has no tag yet (a merged version bump): then the release creates the tag.
   publish:
     needs: [test, docker-build]
     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/'))
@@ -120,57 +123,86 @@ jobs:
     timeout-minutes: 30
     permissions:
       contents: write
+      packages: write
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
         with:
           node-version: 24
-      # A tag must match package.json, package-lock.json and updates.json
-      - name: Choose the image tags
-        id: meta
-        run: |
-          short="${GITHUB_SHA::7}"
-          if [ "$GITHUB_REF_TYPE" = tag ]; then
-            node scripts/release.js check "$GITHUB_REF_NAME"
-            version="$GITHUB_REF_NAME"
-            channel=$(node scripts/release.js channel "$version")
-            tags="$IMAGE:$version,$IMAGE:sha-$short,$IMAGE:$channel"
-          else
-            # Own commit tag: the tag run of the same commit pushes the release commit tag in parallel
-            version=edge
-            channel=edge
-            tags="$IMAGE:edge,$IMAGE:edge-$short"
-          fi
-          {
-            echo "version=$version"
-            echo "channel=$channel"
-            echo "tags=$tags"
-            echo "created=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-          } >> "$GITHUB_OUTPUT"
-          echo "Tags: $tags"
-      # Forks and repositories without the secrets skip the upload, they do not fail
+      # Forks and repositories without the secrets skip Docker Hub, they do not fail;
+      # GitHub Packages needs only the built-in GITHUB_TOKEN
       - name: Check the Docker Hub secrets
         id: secrets
         env:
           DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
         run: |
           if [ -z "$DOCKERHUB_TOKEN" ]; then
-            echo "::notice::DOCKERHUB_TOKEN fehlt, das Image wird nicht hochgeladen."
+            echo "::notice::DOCKERHUB_TOKEN fehlt, das Image geht nur nach GitHub Packages."
             echo "ok=false" >> "$GITHUB_OUTPUT"
           else
             echo "ok=true" >> "$GITHUB_OUTPUT"
           fi
+      # A release version must match package.json, package-lock.json and updates.json
+      - name: Choose the image tags
+        id: meta
+        env:
+          DOCKERHUB: ${{ steps.secrets.outputs.ok }}
+        run: |
+          short="${GITHUB_SHA::7}"
+          # Lower-case owner/repo: ghcr.io/vibegenzero/dems, in a fork the fork's own package
+          ghcr="ghcr.io/${GITHUB_REPOSITORY,,}"
+          images="$ghcr"
+          if [ "$DOCKERHUB" = true ]; then images="$IMAGE $ghcr"; fi
+          # Every image with every given tag, comma separated
+          image_tags() {
+            local list="" image tag
+            for image in $images; do
+              for tag in "$@"; do list="$list${list:+,}$image:$tag"; done
+            done
+            echo "$list"
+          }
+          # Own commit tag: a tag run of the same commit may push the release commit tag in parallel
+          edge=$(image_tags edge "edge-$short")
+          if [ "$GITHUB_REF_TYPE" = tag ]; then
+            version="$GITHUB_REF_NAME"
+          else
+            # Empty unless package.json names a version without a tag that is newer than every tag
+            version=$(git ls-remote --tags --refs origin | node scripts/release.js pending)
+          fi
+          if [ -n "$version" ]; then
+            node scripts/release.js check "$version"
+            channel=$(node scripts/release.js channel "$version")
+            release=true
+            tags=$(image_tags "$version" "sha-$short" "$channel")
+          else
+            version=edge
+            channel=edge
+            release=false
+            tags="$edge"
+          fi
+          {
+            echo "version=$version"
+            echo "channel=$channel"
+            echo "release=$release"
+            echo "tags=$tags"
+            echo "edge=$edge"
+            echo "created=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          } >> "$GITHUB_OUTPUT"
+          echo "Tags: $tags"
+          if [ "$release" = true ]; then echo "::notice::Release $version wird veröffentlicht."; fi
       - uses: docker/setup-qemu-action@v4
-        if: steps.secrets.outputs.ok == 'true'
       - uses: docker/setup-buildx-action@v4
-        if: steps.secrets.outputs.ok == 'true'
       - uses: docker/login-action@v4
         if: steps.secrets.outputs.ok == 'true'
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
       - name: Build and push the image
-        if: steps.secrets.outputs.ok == 'true'
         uses: docker/build-push-action@v7
         with:
           context: .
@@ -188,11 +220,32 @@ jobs:
             org.opencontainers.image.created=${{ steps.meta.outputs.created }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+      # A release commit of main also moves edge; same layers from the cache, edge channel baked in
+      - name: Build and push the edge image
+        if: steps.meta.outputs.release == 'true' && github.ref_type == 'branch'
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          target: runtime
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.edge }}
+          build-args: |
+            DEMS_CHANNEL=edge
+            DEMS_COMMIT=${{ github.sha }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/VibeGenZero/DEMS
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=edge
+            org.opencontainers.image.created=${{ steps.meta.outputs.created }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      # The tag GITHUB_TOKEN creates here starts no further workflow run, so no second release run
       - name: Create the GitHub release
-        if: steps.secrets.outputs.ok == 'true' && github.ref_type == 'tag'
+        if: steps.meta.outputs.release == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ github.ref_name }}
+          TAG: ${{ steps.meta.outputs.version }}
           CHANNEL: ${{ steps.meta.outputs.channel }}
         run: |
           if gh release view "$TAG" > /dev/null 2>&1; then
@@ -201,4 +254,8 @@ jobs:
           fi
           node scripts/release.js notes "$TAG" > notes.md
           if [ "$CHANNEL" = beta ]; then flag=--prerelease; else flag=--latest; fi
-          gh release create "$TAG" --verify-tag --title "DEMS $TAG" --notes-file notes.md "$flag"
+          if [ "$GITHUB_REF_TYPE" = tag ]; then
+            gh release create "$TAG" --verify-tag --title "DEMS $TAG" --notes-file notes.md "$flag"
+          else
+            gh release create "$TAG" --target "$GITHUB_SHA" --title "DEMS $TAG" --notes-file notes.md "$flag"
+          fi

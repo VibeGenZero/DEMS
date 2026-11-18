@@ -47,7 +47,7 @@ docker compose -f compose.yaml -f compose.build.yaml up -d --build    # build fr
 
 Single container: the `runtime` image also runs without compose and PostgreSQL (`docker run -d -p 3000:3000 -v dems-data:/app/data moritakahashi/dems`). `db/config.js` then picks SQLite at `/app/data/dems.sqlite`, and the startup log tells the user to mount the volume — see [data-layer](../modules/data-layer.md).
 
-Published image: public Docker Hub repository `moritakahashi/dems`, pushed by the `publish` job of the CI: `edge` + `edge-<7>` (every push to `main`), the version + `sha-<7>` + `latest` (releases) or `beta` (pre-releases) on a git tag; edge and release builds never share a tag, because the `main` run and the tag run of one commit run in parallel. See [ci](ci.md) and [deployment](deployment.md).
+Published image: public Docker Hub repository `moritakahashi/dems` and, with the same tags, GitHub Packages `ghcr.io/vibegenzero/dems`, pushed by the `publish` job of the CI: `edge` + `edge-<7>` (every push to `main`), the version + `sha-<7>` + `latest` (releases) or `beta` (pre-releases) when a merge to `main` bumps the version (or on a pushed git tag); edge and release builds never share a tag, because a `main` run and a tag run of one commit can run in parallel. See [ci](ci.md) and [deployment](deployment.md).
 
 Installs built from source before: `compose.yaml` now pulls the published image and `--build` alone builds nothing; keep building with `docker compose -f compose.yaml -f compose.build.yaml up -d --build`.
 
