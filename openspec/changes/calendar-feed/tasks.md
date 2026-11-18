@@ -42,7 +42,7 @@
 
 - [x] 7.1 Run `npm run wiki` and verify `npm run wiki:check` reports a valid, current graph.
 - [x] 7.2 Run `npm test` and `npm run test:e2e` and verify both are green.
-- [ ] 7.3 Manual check: in dev mock mode subscribe to the link (`webcal://localhost:3000/...`) in Apple Calendar or Outlook, verify the marks and that a moved date updates the same entry after a refresh; note the result (and that Google needs a public HTTPS installation) in the PR description (Verifikation).
+- [x] 7.3 Manual check: in dev mock mode subscribe to the link (`webcal://localhost:3000/...`) in Apple Calendar or Outlook, verify the marks and that a moved date updates the same entry after a refresh; note the result (and that Google needs a public HTTPS installation) in the PR description (Verifikation).
 
 ## Workflow follow-up
 
