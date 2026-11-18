@@ -1,6 +1,17 @@
 {
-    "version": "3.2.0",
+    "version": "3.3.0",
     "releases": [
+        {
+            "version": "3.3.0",
+            "date": "2026-11-18",
+            "news": [
+                {
+                    "title": "📅 Deine Events im eigenen Kalender",
+                    "content": "Im Profil unter „Einstellungen“ richtest du dir ein Kalender-Abo ein: Mit einem Klick landen alle Events, für die du angemeldet bist, in Google, Apple oder Outlook Kalender – auch Gast-Plätze. Verschiebt sich ein Termin oder wird abgesagt, zieht dein Kalender beim nächsten Abgleich nach. Warteliste, „Vielleicht“ und offene Anfragen stehen markiert als vorläufig drin. Der Link ist geheim: Teile ihn nicht – und falls doch, erneuerst du ihn mit einem Klick.",
+                    "highlight": true
+                }
+            ]
+        },
         {
             "version": "3.2.0",
             "date": "2026-11-14",

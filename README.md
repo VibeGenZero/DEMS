@@ -20,6 +20,7 @@ DEMS plant die Events deiner Discord-Community: Mitglieder melden sich mit Disco
 *   „Vielleicht“ sagen, ohne einen Platz zu belegen, und Gäste mitbringen.
 *   Check-in per Code auf der Event-Seite oder per Button in Discord.
 *   Profil mit kommenden Events, Verlauf und Statistik; Erinnerungs-DMs, die jeder selbst ein- und ausschalten kann.
+*   Kalender-Abo: die eigenen Events in Google, Apple oder Outlook Kalender, mit Verschiebungen und Absagen.
 *   Terminabstimmungen, Kommentare zu jedem Event (auf Wunsch gespiegelt in einen Discord-Thread) und ein Neuigkeiten-Dialog nach jedem Update.
 
 **Für Admins**
