@@ -77,4 +77,33 @@ function createApiLimiter({ env = process.env, skip = false } = {}) {
     });
 }
 
-module.exports = { apiLimitFor, apiLimitKey, tooManyRequestsMessage, createApiLimiter };
+// Calendar feed (routes/calendar.js): calendar apps poll hourly at most, and a
+// calendar service fetches many members' links from one address
+const CALENDAR_TOKEN_LIMIT = 30;
+const CALENDAR_ADDRESS_LIMIT = 600;
+const CALENDAR_REFUSAL = 'Zu viele Abrufe dieses Kalenders. Bitte versuche es später erneut.';
+
+/**
+ * The limiters of GET /calendar/:file, in this order: a brake per address
+ * against scanning, then a budget per link. Both answer 429 as plain text,
+ * because calendar apps show the body.
+ *
+ * @param {Object} [options]
+ * @param {number} [options.tokenLimit] -> Fetches per link and window (tests lower it).
+ * @param {number} [options.addressLimit] -> Fetches per address and window.
+ * @param {boolean} [options.skipAddress] -> True switches the address brake off (dev mock mode); the link budget stays.
+ * @returns {Array<Function>} -> Express middlewares for a route with the parameter `file`.
+ */
+function createCalendarLimiters({ tokenLimit = CALENDAR_TOKEN_LIMIT, addressLimit = CALENDAR_ADDRESS_LIMIT, skipAddress = false } = {}) {
+    const refuse = (req, res) => res.status(429).type('text/plain; charset=utf-8').send(CALENDAR_REFUSAL);
+    const common = { windowMs: WINDOW_MS, standardHeaders: true, legacyHeaders: false, handler: refuse };
+    return [
+        rateLimit({ ...common, limit: addressLimit, keyGenerator: (req) => `calendar-ip:${ipKeyGenerator(req.ip || '')}`, skip: () => skipAddress }),
+        rateLimit({ ...common, limit: tokenLimit, keyGenerator: (req) => `calendar:${String(req.params.file || '')}` })
+    ];
+}
+
+module.exports = {
+    apiLimitFor, apiLimitKey, tooManyRequestsMessage, createApiLimiter,
+    createCalendarLimiters, CALENDAR_TOKEN_LIMIT, CALENDAR_ADDRESS_LIMIT
+};

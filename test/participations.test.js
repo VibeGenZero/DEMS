@@ -20,7 +20,7 @@ test('a registration with two guests becomes three participations', () => {
     assert.deepEqual(greta, {
         id: 'r1#g1', registrationId: 'r1', eventId: 'ev1', status: 'accepted', createdAt: '2026-11-01T18:00:00.000Z',
         source: 'web', userId: 'g1', userName: 'Greta', userAvatar: 'https://cdn/greta.png',
-        checkedIn: false, checkedInAt: null, asGuest: true, hostUserId: 'host'
+        checkedIn: false, checkedInAt: null, asGuest: true, hostUserId: 'host', hostUserName: 'Hanna'
     });
     assert.equal(second.id, 'r1#g2');
     assert.equal(second.userName, 'g2', 'no profile name -> the id');

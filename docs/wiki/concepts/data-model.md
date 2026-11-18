@@ -3,13 +3,13 @@ id: data-model
 title: Data model — collections and document shapes
 type: concept
 tags: [data-model, schema, collections, events, registrations, users, postgresql]
-sources: [routes/admin.js, utils/registrationService.js, utils/userProfile.js, utils/sessionStore.js, routes/events.js, utils/eventUtils.js, bot/registration.js, utils/checkin.js, bot/threadSync.js, dev/seedData.js, utils/eventTemplates.js, utils/botSettings.js, ai/settings.js, ai/usage.js]
+sources: [routes/admin.js, utils/calendarFeedStore.js, utils/registrationService.js, utils/userProfile.js, utils/sessionStore.js, routes/events.js, utils/eventUtils.js, bot/registration.js, utils/checkin.js, bot/threadSync.js, dev/seedData.js, utils/eventTemplates.js, utils/botSettings.js, ai/settings.js, ai/usage.js]
 depends_on: [data-layer]
 see_also: [registration-flow, event-lifecycle, maintenance-mode, glossary]
 ---
 # Data model — collections and document shapes
 
-> TL;DR: Sixteen schemaless collections. `events`, `registrations`, `comments`, `auditLogs`, `polls`, `eventTemplates` use auto ids; `pollVotes` uses `<pollId>_<userId>`; `users` uses the Discord user id; `aiUsage` uses the local day `YYYY-MM-DD`; `botMessages/templates`, `botSettings/config`, `maintenanceSettings/config`, `systemSettings/config`, `privacyPolicy/current`, `aiSettings/config` are singleton documents; `devMeta/seed` exists only in dev mock mode. All dates are ISO-8601 strings. Shapes are defined by the code that writes them (no schema file) — the producers are listed per collection.
+> TL;DR: Seventeen schemaless collections. `events`, `registrations`, `comments`, `auditLogs`, `polls`, `eventTemplates` use auto ids; `pollVotes` uses `<pollId>_<userId>`; `users` and `calendarFeeds` use the Discord user id; `aiUsage` uses the local day `YYYY-MM-DD`; `botMessages/templates`, `botSettings/config`, `maintenanceSettings/config`, `systemSettings/config`, `privacyPolicy/current`, `aiSettings/config` are singleton documents; `devMeta/seed` exists only in dev mock mode. All dates are ISO-8601 strings. Shapes are defined by the code that writes them (no schema file) — the producers are listed per collection.
 
 ```mermaid
 erDiagram
@@ -17,6 +17,7 @@ erDiagram
   events ||--o{ comments : "eventId"
   users ||--o{ registrations : "userId"
   users ||--o{ comments : "userId"
+  users ||--o| calendarFeeds : "userId"
   registrations }o--o{ users : "guests[] / pendingGuests[].userId"
   auditLogs }o--|| users : "adminId"
   polls ||--o{ pollVotes : "pollId"
@@ -95,6 +96,10 @@ Read in full by the admin member overview (W-15, `GET /api/admin/members`, `util
 ## sessions (id = SHA-256 of the session id) — written by `utils/sessionStore.js`
 
 `{ data (JSON text of the express-session data: cookie, user, csrfToken, oauthState), expiresAt (ISO), updatedAt }`. Expired documents are deleted when read and every 6 h (`pruneExpired`). Not seeded, and neither `npm run dev:reset` nor the admin system reset wipes them — logins survive both.
+
+## calendarFeeds (id = Discord user id) — written by `utils/calendarFeedStore.js`
+
+`{ userId, token, createdAt }` — the member's calendar subscription (`GET /calendar/<token>.ics`, see [routes-user](../modules/routes-user.md#calendar-subscription)). `token` = 32 random bytes as base64url (43 characters), stored in plain text so the profile can show the link again; renewing overwrites the document with a new token, ending deletes it. Kept apart from `users` on purpose: admin answers spread `users` documents, the secret must never travel with them. Deleted with the account (`DELETE /api/user/account`, same batch) and by the admin system reset together with the target `users`; `npm run dev:reset` wipes it (`SEED_COLLECTIONS`), no seed documents.
 
 ## eventTemplates (auto id) — written by `routes/admin.js` (`/api/admin/event-templates`, W-10)
 

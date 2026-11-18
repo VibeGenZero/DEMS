@@ -3,7 +3,7 @@ id: security
 title: Security model and open audit findings
 type: concept
 tags: [security, csp, helmet, csrf, xss, rate-limit, audit, https]
-sources: [server.js, SECURITY.md, routes/setup.js, utils/setupState.js, docs/security/SECURITY_AUDIT_2026-04-22.md, ISSUE.md, routes/events.js, routes/user.js, utils/eventUtils.js, bot/threadSync.js, public/js/core/ui.js, public/js/core/actions.js]
+sources: [server.js, routes/calendar.js, utils/calendarFeedStore.js, SECURITY.md, routes/setup.js, utils/setupState.js, docs/security/SECURITY_AUDIT_2026-04-22.md, ISSUE.md, routes/events.js, routes/user.js, utils/eventUtils.js, bot/threadSync.js, public/js/core/ui.js, public/js/core/actions.js]
 depends_on: [server]
 see_also: [auth-session, known-issues, deployment]
 ---
@@ -21,13 +21,14 @@ see_also: [auth-session, known-issues, deployment]
 |---|---|
 | Security headers + CSP | `helmet(...)` in `server.js` (directive list there) |
 | CORS | `cors({ origin: BASE_URL, credentials: true })` |
-| Rate limits | `/api/` per logged-in user 1000 / 15 min, otherwise per IP 200 / 15 min (`middleware/rateLimits.js`, mounted after the session; `RATE_LIMIT_MAX_USER`, `RATE_LIMIT_MAX`; the 429 names the wait in minutes and the page shows it once per 30 s, `core/rate-limit-notice.js`), `/auth/` 30 / 15 min (both off in dev mock mode); failed check-ins 10 / 15 min per member (`checkinLimiter`, on in mock mode too); member search `GET /api/user/search` 60 / min per member (`searchLimiter` in `routes/user.js`, on in mock mode too) |
+| Rate limits | `/api/` per logged-in user 1000 / 15 min, otherwise per IP 200 / 15 min (`middleware/rateLimits.js`, mounted after the session; `RATE_LIMIT_MAX_USER`, `RATE_LIMIT_MAX`; the 429 names the wait in minutes and the page shows it once per 30 s, `core/rate-limit-notice.js`), `/auth/` 30 / 15 min (both off in dev mock mode); failed check-ins 10 / 15 min per member (`checkinLimiter`, on in mock mode too); member search `GET /api/user/search` 60 / min per member (`searchLimiter` in `routes/user.js`, on in mock mode too); calendar feed `GET /calendar/<token>.ics` outside `/api`: 30 / 15 min per link (on in mock mode too) and 600 / 15 min per address (off in mock mode), `createCalendarLimiters` |
 | CSRF | double-submit token, see [auth-session](auth-session.md) |
 | AuthZ | `requireAuth`, `requireAdmin`; the whole event API needs a login (no public preview); `draft`/`archived` events answer 404 to non-admins; comment delete = owner or admin |
 | XSS | frontend `escapeHtml()` for interpolated values, values for actions in `data-*` attributes (escaped with `escapeHtml`, read via `dataset`), never in handler code — the CSP blocks inline handlers, `renderMarkdownSafe()` = marked + DOMPurify for descriptions |
 | Secrets | `.env` never in the image (`.dockerignore`); `checkinCode` removed from every event answer outside `/api/admin` (`toPublicEvent` in `utils/eventUtils.js`); the token of the comment-sync webhook (B-16) lives only in memory (`bot/threadSync.js`), never in the database or an answer |
 | Mirrored comments (B-16) | web comments go into Discord with `allowedMentions: { parse: [] }` (no `@everyone`, role or user pings) and the suffix „(Web)“; comments from Discord are plain text rendered with `escapeHtml` and marked „Discord“ |
 | Uploads (W-12) | banners only via `POST /api/admin/uploads/banner` (admin + CSRF); type read from the magic bytes (PNG, JPEG, GIF, WebP — never SVG), ≤ 5 MB, random `<uuid>.<ext>` name; served read-only under `/uploads/banners/` only for that name pattern, with the image content type and helmet's `nosniff`, so a polyglot file is never run as HTML |
+| Calendar subscription | `GET /calendar/<token>.ics` is public on purpose (calendar apps send no cookie): the 256-bit random token (`crypto.randomBytes(32)`, base64url) is the only key, checked against `^[A-Za-z0-9_-]{43}$` before any query; unknown, renewed and ended links all answer the same 404. The token is stored in plain text in `calendarFeeds/<userId>` (not in `users`, whose documents admin code spreads) so the profile can show the link again — a hash would force members to renew and re-subscribe whenever they lose it, and a leaked database exposes more than an event list anyway. Only the owner's `GET /api/user/calendar` answers it (`test/calendarFeedServer.test.js` checks the admin member answers). The feed skips the privacy gate on purpose: it is the member's own data for their own calendar, set up after consent; a new policy version applies on the next website visit. It carries no event description and no other member's data |
 | Setup mode (#138) | see [First-run setup](#first-run-setup-138): only the wizard answers until it is completed, its steps need the setup PIN |
 | Dev mode | `DEV_MOCK=true` + `NODE_ENV=production` → refuses to start |
 | Container | runs as user `node`; production compose pins `NODE_ENV=production` |

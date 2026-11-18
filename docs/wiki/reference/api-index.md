@@ -17,6 +17,7 @@ see_also: [request-lifecycle, add-api-endpoint]
 |---|---|---|
 | GET | `/healthz` | — |
 | GET | `/uploads/banners/<uuid>.<png\|jpg\|gif\|webp>` (W-12, uploaded banners, read-only, no session; other names 404) | — |
+| GET | `/calendar/<token>.ics` (calendar subscription of one member, iCalendar; no session, the secret in the path is the key; own rate limits; unknown links 404) | — |
 | GET | `/api/csrf-token` | — |
 | GET | `/api/maintenance/status` | — |
 | GET | `/api/privacy` (#138: current privacy policy `{ markdown, version, updatedAt }`, 404 without one) | — |
@@ -83,6 +84,7 @@ Only in setup mode (afterwards 409 `Die Einrichtung ist bereits abgeschlossen.`)
 | GET | `/api/user/profile` | U |
 | GET | `/api/user/search?q=` | U |
 | GET / PUT | `/api/user/settings` | U |
+| GET / POST / DELETE | `/api/user/calendar` (calendar subscription: show, set up or renew, end) | U |
 | DELETE | `/api/user/account` | U |
 
 ## /api/admin — [routes-admin](../modules/routes-admin.md) (all A)

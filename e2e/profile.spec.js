@@ -143,3 +143,39 @@ test('the member switches waitlist DMs off and the choice stays after a reload (
     await expect(page.locator('#toast-message')).toHaveText('Warteliste per DM an.');
     expect(errors).toEqual([]);
 });
+
+test('the member subscribes to the calendar, fetches it and renews the link', async ({ page }, testInfo) => {
+    // Both projects share the database: each one renews the link of its own persona
+    const persona = testInfo.project.name === 'desktop' ? 'raider' : 'member';
+    const errors = watchErrors(page);
+    await loginAs(page, persona);
+    await navigate(page, 'profile');
+    const block = page.locator('#calendar-feed-block');
+    await expect(block).toContainText('Kalender-Abo');
+
+    // A run before may have left a subscription; start from none
+    if (await page.locator('#calendar-feed-on').isVisible()) {
+        await block.getByRole('button', { name: 'Abo beenden' }).click();
+        await page.locator('#confirm-modal-ok').click();
+    }
+    await block.getByRole('button', { name: 'Kalender-Abo einrichten' }).click();
+    const urlInput = page.locator('#calendar-feed-url');
+    await expect(urlInput).toHaveValue(/\/calendar\/[A-Za-z0-9_-]{43}\.ics$/);
+    const firstUrl = await urlInput.inputValue();
+    await expect(page.locator('#calendar-feed-webcal')).toHaveAttribute('href', firstUrl.replace(/^https?:\/\//, 'webcal://'));
+    await expect(page.locator('#calendar-feed-google')).toHaveAttribute('href', /^https:\/\/calendar\.google\.com\/calendar\/r\?cid=webcal%3A%2F%2F/);
+
+    // A calendar app fetches the link without the session cookie
+    const feedPath = new URL(firstUrl).pathname;
+    const feed = await page.request.get(feedPath, { headers: { cookie: '' } });
+    expect(feed.status()).toBe(200);
+    expect(feed.headers()['content-type']).toBe('text/calendar; charset=utf-8');
+    expect(await feed.text()).toContain('BEGIN:VCALENDAR');
+
+    await block.getByRole('button', { name: 'Link erneuern' }).click();
+    await page.locator('#confirm-modal-ok').click();
+    await expect(urlInput).not.toHaveValue(firstUrl);
+    expect((await page.request.get(feedPath)).status()).toBe(404);
+    expect((await page.request.get(new URL(await urlInput.inputValue()).pathname)).status()).toBe(200);
+    expect(errors).toEqual([]);
+});

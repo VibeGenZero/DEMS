@@ -3,14 +3,14 @@ id: routes-user
 title: routes/user.js — profile, badges, settings, account
 type: module
 tags: [api, user, profile, badges, settings, guests, gdpr]
-sources: [routes/user.js, utils/profileEvents.js, utils/notificationPrefs.js, utils/userProfile.js]
+sources: [routes/user.js, utils/profileEvents.js, utils/notificationPrefs.js, utils/userProfile.js, utils/calendarFeed.js, utils/calendarFeedStore.js, routes/calendar.js]
 part_of: [architecture]
 depends_on: [middleware, data-layer]
 see_also: [api-index, data-model]
 ---
 # routes/user.js — profile, badges, settings, account
 
-> TL;DR: Mounted at `/api/user`, every route needs a logged-in user. Provides the user's registrations, a profile with stats, computed badges and the member's events split into upcoming and history, a user search for guest invitations, the settings (`acceptInvitations` and the DM choices of W-16) and full account deletion.
+> TL;DR: Mounted at `/api/user`, every route needs a logged-in user. Provides the user's registrations, a profile with stats, computed badges and the member's events split into upcoming and history, a user search for guest invitations, the settings (`acceptInvitations` and the DM choices of W-16), the member's calendar subscription and full account deletion.
 
 ## Endpoints
 
@@ -22,7 +22,10 @@ see_also: [api-index, data-model]
 | GET | `/search?q=` | ≥2 chars; users matching `displayName`/`username`, excluding self and users with `acceptInvitations === false`; max 10 |
 | GET | `/settings` | `{ acceptInvitations, notifications: { reminders, changes, waitlist } }`; every value defaults to true (`normalizeNotificationPrefs`) |
 | PUT | `/settings` | body `{ acceptInvitations?, notifications?: { reminders?, changes?, waitlist? } }`; changes only boolean values it receives (text, numbers and unknown kinds are ignored, a missing `acceptInvitations` no longer resets it), answers the new settings like `GET`; 404 without a users document |
-| DELETE | `/account` | batch-deletes own registrations + `users/{id}`, promotes waitlists, deletes own date poll votes (`deleteUserPollVotes`), destroys session |
+| GET | `/calendar` | own calendar subscription: `{ enabled: false }` or `{ enabled: true, url, webcalUrl, googleUrl, createdAt }` (links from `buildCalendarFeedUrls` in `utils/eventUrl.js`); see "Calendar subscription" |
+| POST | `/calendar` | sets the subscription up or renews it: a new token every time, the old link answers 404 at once; answers like `GET` |
+| DELETE | `/calendar` | ends the subscription → `{ enabled: false }` |
+| DELETE | `/account` | batch-deletes own registrations + `users/{id}` + `calendarFeeds/{id}`, promotes waitlists, deletes own date poll votes (`deleteUserPollVotes`), destroys session |
 
 ## Profile lists (`utils/profileEvents.js`)
 
@@ -34,6 +37,26 @@ see_also: [api-index, data-model]
 | `upcoming` | everything else: running events, events without a date, drafts | next start first; without a start last; equal starts by `createdAt` |
 
 An entry is `{ id, status, checkedIn, createdAt, slot, waitlistPosition, event }`; `waitlistPosition` is `{ position, total }` for an upcoming waitlisted registration of an active event (one `loadEventRegistrations` per such event, W-05), else `null`. `event` is `{ id, title, startDate, endDate, status, category, location, checkinEnabled }` or `null` for a deleted event: `location` is the text only, `checkinEnabled` is true when the switch is on and a code exists. `slot` is `{ name, emoji, wish }`: the slot taken (`wish: false`), for a pending or waitlisted registration without a slot its main role (`wish: true`), else `null`.
+
+## Calendar subscription
+
+A member's personal iCalendar feed for Google, Apple and Outlook Calendar (OpenSpec `calendar-subscription`). The stored feed is `calendarFeeds/<userId>` = `{ userId, token, createdAt }` (`utils/calendarFeedStore.js`, see [data-model](../concepts/data-model.md)); the feed itself is `GET /calendar/<token>.ics` in `routes/calendar.js`, outside `/api` and without a session (see [server](server.md)).
+
+| Link | Value |
+|---|---|
+| `url` | `<BASE_URL>/calendar/<token>.ics` |
+| `webcalUrl` | the same with `webcal://` (Apple Calendar, Outlook) |
+| `googleUrl` | `https://calendar.google.com/calendar/r?cid=<webcalUrl, encoded>` — Google fetches the feed itself, so it only works for an installation on public HTTPS |
+
+Content (`buildFeedEntries` in `utils/calendarFeed.js`, pure): one entry per participation (`loadUserParticipations`: own registrations and guest places, one per event), earliest start first. Left out: `rejected`, deleted events, drafts, events without a readable start, events that started more than 30 days ago. Entry: `UID` `<eventId>@<host of BASE_URL>` (a moved date updates the same calendar entry), start, end (`eventEndTime`: end, else start + 2 h), location text, event link (`buildEventUrl`), `LAST-MODIFIED` from `updatedAt`. Status and title mark:
+
+| Registration | `STATUS` | Title |
+|---|---|---|
+| `accepted` | `CONFIRMED` | plain title |
+| `pending` / `waitlisted` / `offered` / `tentative` | `TENTATIVE` | „[Ausstehend]“ / „[Warteliste]“ / „[Nachrücken bestätigen]“ / „[Vielleicht]“ + title |
+| any, event `cancelled` | `CANCELLED` | „[Abgesagt]“ + title |
+
+The description says „Status: …“, for a guest place „Du bist Gast von <Name>.“ (`hostUserName` of the participation), then the event link; the event description is not included. The iCalendar text comes from `utils/icalendar.js` (escaping, folding at 75 octets without splitting a character, CRLF; no dependency).
 
 ## Badges (computed on every `/profile` call, never stored)
 

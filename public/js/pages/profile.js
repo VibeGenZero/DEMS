@@ -12,6 +12,7 @@ import { applyStyleData, showConfirmDialog, showToast, toggleElement } from '../
 import {
     renderBadgeList, renderBadgeSkeleton, renderHistoryRow, renderProfileCard, renderProfileSkeleton, renderUpcomingRow
 } from './profile-view.js';
+import { loadCalendarSubscription } from './profile-calendar.js';
 
 // History rows shown at first and added by each "Weitere anzeigen"
 const HISTORY_PAGE_SIZE = 5;
@@ -61,7 +62,7 @@ export async function showProfileSection() {
         badgesEl.innerHTML = '';
     }
 
-    await loadAccountSettings();
+    await Promise.all([loadAccountSettings(), loadCalendarSubscription()]);
     showDebugCard();
 }
 

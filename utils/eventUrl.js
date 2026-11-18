@@ -44,4 +44,19 @@ function buildSiteUrl(page) {
     return `${baseUrl}/#${page}`;
 }
 
-module.exports = { buildEventUrl, buildPollUrl, buildSiteUrl };
+/**
+ * Build the links of a member's calendar subscription.
+ *
+ * @param {string} token -> Feed secret (utils/calendarFeed.js).
+ * @returns {{ url: string, webcalUrl: string, googleUrl: string }} -> The feed file, the same as `webcal://` for Apple and Outlook, and the Google Calendar subscribe link.
+ * @example
+ * buildCalendarFeedUrls('abc').webcalUrl; // 'webcal://dms.example.org/calendar/abc.ics'
+ */
+function buildCalendarFeedUrls(token) {
+    const baseUrl = process.env.BASE_URL || DEFAULT_BASE_URL;
+    const url = `${baseUrl}/calendar/${token}.ics`;
+    const webcalUrl = url.replace(/^https?:\/\//i, 'webcal://');
+    return { url, webcalUrl, googleUrl: `https://calendar.google.com/calendar/r?cid=${encodeURIComponent(webcalUrl)}` };
+}
+
+module.exports = { buildEventUrl, buildPollUrl, buildSiteUrl, buildCalendarFeedUrls };

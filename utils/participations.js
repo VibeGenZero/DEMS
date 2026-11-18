@@ -55,7 +55,9 @@ function guestParticipation(registration, guestId) {
         checkedIn,
         checkedInAt,
         asGuest: true,
-        hostUserId: registration.userId
+        hostUserId: registration.userId,
+        // Name of the inviting member, for texts like „Du bist Gast von …“
+        hostUserName: registration.userName || ''
     };
 }
 

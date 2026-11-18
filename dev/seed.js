@@ -31,6 +31,7 @@ const SEED_COLLECTIONS = [
     'botMessages',
     'botSettings',
     'maintenanceSettings',
+    'calendarFeeds',
     'devMeta'
 ];
 

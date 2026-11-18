@@ -2,7 +2,7 @@ const { test, afterEach } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');
 const path = require('path');
-const { buildEventUrl, buildSiteUrl } = require('../utils/eventUrl');
+const { buildEventUrl, buildSiteUrl, buildCalendarFeedUrls } = require('../utils/eventUrl');
 
 const REPO_ROOT = path.join(__dirname, '..');
 const originalBaseUrl = process.env.BASE_URL;
@@ -41,4 +41,20 @@ test('no server code links an event to the list route #events/<id>', () => {
     const files = ['bot.js', ...jsFilesIn('bot'), 'server.js', ...jsFilesIn('routes'), ...jsFilesIn('utils'), ...jsFilesIn('dev')];
     const offenders = files.filter(file => fs.readFileSync(path.join(REPO_ROOT, file), 'utf8').includes('#events/${'));
     assert.deepEqual(offenders, []);
+});
+
+test('calendar feed links come as https, webcal and Google subscribe link', () => {
+    process.env.BASE_URL = 'https://dms.example.org';
+    const token = 'A'.repeat(43);
+    const urls = buildCalendarFeedUrls(token);
+    assert.equal(urls.url, `https://dms.example.org/calendar/${token}.ics`);
+    assert.equal(urls.webcalUrl, `webcal://dms.example.org/calendar/${token}.ics`);
+    assert.equal(urls.googleUrl, `https://calendar.google.com/calendar/r?cid=${encodeURIComponent(urls.webcalUrl)}`);
+});
+
+test('calendar feed links of a plain-HTTP installation still get a webcal variant', () => {
+    process.env.BASE_URL = 'http://localhost:3000';
+    const urls = buildCalendarFeedUrls('tok');
+    assert.equal(urls.url, 'http://localhost:3000/calendar/tok.ics');
+    assert.equal(urls.webcalUrl, 'webcal://localhost:3000/calendar/tok.ics');
 });
