@@ -18,7 +18,7 @@ The registrations dialog SHALL have a button "Nachricht an Teilnehmer", and the 
 - **THEN** it has no entry "Nachricht an Teilnehmer …"
 
 ### Requirement: Two recipient groups
-The admin SHALL choose "Nur Angenommene" (default) or "Alle Anmeldungen". "Nur Angenommene" SHALL reach every accepted registration and their accepted guests; "Alle Anmeldungen" SHALL additionally reach pending and waitlisted registrations and their accepted guests. Rejected registrations and open guest invitations SHALL never be reached. Every user SHALL receive at most one DM, even when they are both a member and a guest.
+The admin SHALL choose "Nur Angenommene" (default) or "Alle Anmeldungen". "Nur Angenommene" SHALL reach every accepted registration and their accepted guests; "Alle Anmeldungen" SHALL additionally reach pending, waitlisted, offered and tentative registrations and their accepted guests. Rejected registrations and open guest invitations SHALL never be reached. Every user SHALL receive at most one DM, even when they are both a member and a guest.
 
 #### Scenario: Accepted only
 - **WHEN** an event has 3 accepted registrations (one with an accepted guest), 2 pending, 1 waitlisted and 1 rejected, and the admin picks "Nur Angenommene"
@@ -31,6 +31,10 @@ The admin SHALL choose "Nur Angenommene" (default) or "Alle Anmeldungen". "Nur A
 #### Scenario: Member is also a guest
 - **WHEN** an accepted member is also the accepted guest of another accepted registration
 - **THEN** they are addressed once
+
+#### Scenario: Bench is reached
+- **WHEN** an event has 2 accepted and 3 tentative registrations and the admin picks "Alle Anmeldungen"
+- **THEN** 5 people are addressed; with "Nur Angenommene" 2
 
 ### Requirement: Counter, preview and confirmation
 The dialog SHALL show the number of people the chosen group reaches ("an 12 Personen") and update it when the group changes, and SHALL show a preview of the DM exactly as it will be sent. Sending SHALL ask "Nachricht an <n> Personen senden?" before anything goes out. With nobody to reach, the send button SHALL be disabled with the note "Niemand in dieser Auswahl".

@@ -101,7 +101,7 @@ test('a ctrl click opens the event in a new tab', async ({ page, context }, test
     test.skip(testInfo.project.name !== 'desktop', 'no modifier keys on the phone');
     await loginAs(page, 'member');
     await expect(overviewCard(page)).toBeVisible();
-    const [tab] = await Promise.all([context.waitForEvent('page'), overviewCard(page).click({ modifiers: ['Control'] })]);
+    const [tab] = await Promise.all([context.waitForEvent('page'), overviewCard(page).click({ modifiers: ['ControlOrMeta'] })]);
     await tab.waitForLoadState();
     expect(tab.url()).toMatch(/#event\/dev-event-open$/);
     await expect(page).toHaveURL(/#events$/);

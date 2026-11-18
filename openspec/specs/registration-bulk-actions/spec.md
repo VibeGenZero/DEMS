@@ -26,7 +26,7 @@ The system SHALL let admins send one request with the ids of up to 200 registrat
 - **THEN** that registration is not changed and counts as skipped
 
 ### Requirement: Each action applies only to fitting statuses
-Accept SHALL apply to pending and waitlisted registrations, waitlist to pending and accepted ones, and reject to pending, waitlisted and accepted ones. A selected registration whose status the action does not apply to, including every rejected registration, SHALL stay unchanged and count as skipped.
+Accept SHALL apply to pending, waitlisted, offered and tentative registrations, waitlist to pending, accepted, offered and tentative ones, and reject to pending, waitlisted, accepted, offered and tentative ones. A selected registration whose status the action does not apply to, including every rejected registration, SHALL stay unchanged and count as skipped.
 
 #### Scenario: Mixed selection rejected
 - **WHEN** an admin rejects a selection of one pending, one accepted and one already rejected registration
@@ -35,6 +35,14 @@ Accept SHALL apply to pending and waitlisted registrations, waitlist to pending 
 #### Scenario: Accepting an accepted registration
 - **WHEN** an accepted registration is part of a selection that is accepted
 - **THEN** it stays as it is and counts as skipped
+
+#### Scenario: Accepting from the bench
+- **WHEN** an admin accepts a selection of two tentative registrations on an event with two free places
+- **THEN** both are accepted and get the accepted DM
+
+#### Scenario: Waitlisting from the bench
+- **WHEN** an admin waitlists a tentative registration
+- **THEN** it becomes waitlisted at the end of the waitlist
 
 ### Requirement: Accepting fills the event up to its capacity
 Accept SHALL handle the selected registrations in registration order, oldest first. On an event with a participant limit a registration SHALL be accepted only while its places (the member plus guests and open guest invitations) still fit next to the places every unselected pending or accepted registration holds; the others SHALL be put on or stay on the waitlist. An event without a limit SHALL accept all. The answer SHALL report how many went to the waitlist for lack of places.
@@ -113,3 +121,10 @@ Reject SHALL ask for confirmation naming the number of selected registrations; a
 #### Scenario: Reject asks first
 - **WHEN** an admin selects four rows and clicks "Ablehnen"
 - **THEN** a confirmation asks "4 Anmeldungen ablehnen?" and nothing is sent unless the admin confirms
+
+### Requirement: Tentative registrations take no place during bulk accept
+While a bulk accept fills the event, unselected tentative registrations SHALL NOT count as holding places. The dialog SHALL offer the row checkbox for tentative registrations too.
+
+#### Scenario: Unselected bench
+- **WHEN** an event has 10 places, 8 taken, three unselected tentative registrations, and an admin accepts two pending registrations
+- **THEN** both pending registrations are accepted
