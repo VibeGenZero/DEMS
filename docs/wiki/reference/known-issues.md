@@ -3,7 +3,7 @@ id: known-issues
 title: Known issues and pitfalls
 type: reference
 tags: [bugs, pitfalls, technical-debt, gotchas]
-sources: [public/js, bot.js, routes/events.js, routes/admin.js, utils/eventUtils.js, server.js, public/css/style.css]
+sources: [public/js, routes/calendar.js, bot.js, routes/events.js, routes/admin.js, utils/eventUtils.js, server.js, public/css/style.css]
 see_also: [security, frontend-app, bot, reminders-presence]
 ---
 # Known issues and pitfalls
@@ -24,3 +24,4 @@ None known right now. Add a row `| # | Issue | Location | Impact |` when you fin
 | 17 | `GET /api/events/:id` ignores `?status=` (frontend sends `?status=all`) | routes/events.js |
 | 21 | dev mock mode: reminder DMs not simulated; sample dates go stale → `npm run dev:reset` | [dev-mock-mode](../modules/dev-mock-mode.md) |
 | 22 | Windows with an antivirus that inspects HTTPS (Kaspersky, …): Node rejects its certificate, AI calls fail now and then with code `certificate` (admin: „Zertifikat … nicht anerkannt“, members: „nicht erreichbar“); start DEMS with `node --use-system-ca` | [ai-integration](../concepts/ai-integration.md) |
+| 23 | Calendar subscription: „In Google Kalender öffnen“ only works for an installation on public HTTPS — Google fetches the feed from its own servers, so `localhost`, LAN addresses and test setups fail there; Apple Calendar, Outlook and the copied link work locally. Calendar apps poll on their own schedule (Google often only every 8–24 h), so a change reaches the calendar late | [routes-user](../modules/routes-user.md#calendar-subscription) |

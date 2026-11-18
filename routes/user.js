@@ -12,6 +12,8 @@ const { buildProfileEvents } = require('../utils/profileEvents');
 const { NOTIFICATION_KINDS, normalizeNotificationPrefs } = require('../utils/notificationPrefs');
 const { currentPrivacyVersion } = require('../utils/privacyPolicy');
 const { savePrivacyAcceptance } = require('../utils/userProfile');
+const { getFeedOf, saveNewFeed, deleteFeed } = require('../utils/calendarFeedStore');
+const { buildCalendarFeedUrls } = require('../utils/eventUrl');
 
 /**
  * POST /api/user/privacy/accept — { version }: the member accepts the current privacy policy (#138)
@@ -418,6 +420,55 @@ router.put('/settings', requireAuth, async (req, res) => {
 });
 
 /**
+ * The member's calendar subscription as the profile shows it.
+ *
+ * @param {Object|null} feed -> Stored feed (utils/calendarFeedStore.js).
+ * @returns {Object} -> `{ enabled: false }` or `{ enabled: true, url, webcalUrl, googleUrl, createdAt }`.
+ */
+function calendarAnswer(feed) {
+    if (!feed) return { enabled: false };
+    return { enabled: true, ...buildCalendarFeedUrls(feed.token), createdAt: feed.createdAt };
+}
+
+/**
+ * GET /api/user/calendar — The own calendar subscription (link shown again on every visit)
+ */
+router.get('/calendar', requireAuth, async (req, res) => {
+    try {
+        res.json(calendarAnswer(await getFeedOf(req.session.user.id)));
+    } catch (err) {
+        console.error('Error loading calendar feed:', err);
+        res.status(500).json({ error: 'Fehler beim Laden des Kalender-Abos' });
+    }
+});
+
+/**
+ * POST /api/user/calendar — Set up the subscription, or renew it: a new
+ * secret every time, the old link stops working at once
+ */
+router.post('/calendar', requireAuth, async (req, res) => {
+    try {
+        res.json(calendarAnswer(await saveNewFeed(req.session.user.id)));
+    } catch (err) {
+        console.error('Error saving calendar feed:', err);
+        res.status(500).json({ error: 'Fehler beim Einrichten des Kalender-Abos' });
+    }
+});
+
+/**
+ * DELETE /api/user/calendar — End the subscription; the link answers 404 afterwards
+ */
+router.delete('/calendar', requireAuth, async (req, res) => {
+    try {
+        await deleteFeed(req.session.user.id);
+        res.json({ enabled: false });
+    } catch (err) {
+        console.error('Error deleting calendar feed:', err);
+        res.status(500).json({ error: 'Fehler beim Beenden des Kalender-Abos' });
+    }
+});
+
+/**
  * DELETE /api/user/account — Delete user account and all registrations
  */
 router.delete('/account', requireAuth, async (req, res) => {
@@ -437,8 +488,9 @@ router.delete('/account', requireAuth, async (req, res) => {
             if (OCCUPYING_STATUSES.includes(registration.status)) freedEventIds.add(registration.eventId);
         });
 
-        // Delete user document
+        // Delete user document and the calendar subscription (its link stops working)
         batch.delete(doc(db, 'users', userId));
+        batch.delete(doc(db, 'calendarFeeds', userId));
         await batch.commit();
 
         // Freed places go to the waitlist; announcements show the new numbers

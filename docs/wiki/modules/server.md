@@ -3,7 +3,7 @@ id: server
 title: server.js — Express app, misc endpoints, startup
 type: module
 tags: [express, server, startup, shutdown, endpoints, helmet, session]
-sources: [server.js, updates.json]
+sources: [server.js, updates.json, routes/calendar.js, middleware/rateLimits.js, utils/serverName.js]
 part_of: [architecture]
 depends_on: [middleware, data-layer, bot]
 see_also: [request-lifecycle, security, configuration]
@@ -26,6 +26,7 @@ see_also: [request-lifecycle, security, configuration]
 | Method | Path | Auth | Response |
 |---|---|---|---|
 | GET | `/uploads/banners/<name>` | none | uploaded banners (W-12): `BANNER_FILE` guard + `express.static(bannerDir())`, 7-day immutable cache; other names 404 |
+| GET | `/calendar/<token>.ics` | none (the secret in the path) | member's calendar subscription, `createCalendarRouter` from `routes/calendar.js`; mounted right after the banners, before `express.json`, the session middleware, CSRF, setup mode and the privacy gate, so a fetch reads and writes no session; own limiters `createCalendarLimiters` (`middleware/rateLimits.js`): 600 / 15 min per address (off in dev mock mode) and 30 / 15 min per link, 429 as plain text; unknown or malformed names 404 „Kalender nicht gefunden.“ as plain text; answer `text/calendar; charset=utf-8`, `Cache-Control: private, max-age=300`, `X-Robots-Tag: noindex`, Express ETag → 304; calendar name `<resolveServerName()> · Meine Events` — see [routes-user](routes-user.md#calendar-subscription) |
 | GET | `/healthz` | none | `{ status: 'ok' }` — registered before session/CSRF (Docker healthcheck) |
 | GET | `/api/csrf-token` | none | `{ token }` = `req.session.csrfToken`; the CSRF middleware mints it (and thereby the session) here when missing — the only place besides the login |
 | GET | `/api/maintenance/status` | none | public subset of `maintenanceSettings/config` (`active`, `warningEnabled`, `warningText`, `loginDisabled`, `registrationDisabled`, `plannedMaintenance*`, `panicMode`); `{ active: false }` when unset/error |

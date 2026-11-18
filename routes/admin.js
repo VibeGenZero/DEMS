@@ -1905,8 +1905,16 @@ router.delete('/reset', async (req, res) => {
         console.log(`⚠️ SYSTEM RESET by ${req.session.user.id}: Deleted ${totalDeleted} documents.`);
 
         // Deleted users must not keep a working login: end every session except the
-        // admins' (like panic mode), so the admin who ran the reset stays signed in
+        // admins' (like panic mode), so the admin who ran the reset stays signed in;
+        // their calendar subscriptions go with them, so no feed link keeps working
         if (targets.includes('users')) {
+            const feedSnap = await getDocs(collection(db, 'calendarFeeds'));
+            for (let i = 0; i < feedSnap.docs.length; i += 500) {
+                const batch = writeBatch(db);
+                feedSnap.docs.slice(i, i + 500).forEach(feedDoc => batch.delete(feedDoc.ref));
+                await batch.commit();
+                totalDeleted += Math.min(500, feedSnap.docs.length - i);
+            }
             const ended = await sharedSessionStore().destroyAll({ keepAdmins: true });
             console.log(`🔒 ${ended} Sessions nach dem Löschen der Nutzer beendet.`);
         }

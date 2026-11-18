@@ -12,7 +12,9 @@ const path = require('path');
 const helmet = require('helmet');
 const cors = require('cors');
 const rateLimit = require('express-rate-limit');
-const { startBot, whenBotSettled, startReminderScheduler, stopBot, getGuildName, getGuildIconUrl, fetchMemberRoleIds } = require('./bot');
+const { startBot, whenBotSettled, startReminderScheduler, stopBot, getGuildIconUrl, fetchMemberRoleIds } = require('./bot');
+const { resolveServerName } = require('./utils/serverName');
+const { createCalendarRouter } = require('./routes/calendar');
 const { startPollScheduler, stopPollScheduler } = require('./utils/pollStore');
 const { startArchiveScheduler, stopArchiveScheduler } = require('./utils/eventArchive');
 const { startOfferScheduler, stopOfferScheduler } = require('./utils/waitlistOffers');
@@ -104,6 +106,12 @@ app.use('/uploads/banners',
     (req, res, next) => (BANNER_FILE.test(req.path.slice(1)) ? next() : res.status(404).end()),
     (req, res, next) => express.static(bannerDir(), { index: false, dotfiles: 'deny', maxAge: '7d', immutable: true })(req, res, next),
     (req, res) => res.status(404).end());
+
+// ── Calendar subscription (GET /calendar/<token>.ics) ──────────────────
+// Public: calendar apps fetch it without a session or CSRF token. Before the
+// session middleware, the setup and privacy gates and outside /api with own
+// limiters (calendar services fetch many members' links from one address)
+app.use('/calendar', createCalendarRouter({ skipAddressLimit: IS_MOCK_MODE }));
 
 // ── Middleware ───────────────────────────────────────────────────────────
 app.use(express.json());
@@ -279,8 +287,8 @@ app.get('/api/server-info', async (req, res) => {
         const guildId = process.env.DISCORD_GUILD_ID || '';
         // The icon comes from Discord even when SERVER_NAME overrides the name
         const iconUrl = guildId ? await getGuildIconUrl(guildId) : null;
-        // SERVER_NAME overrides the Discord name
-        const serverName = process.env.SERVER_NAME || (guildId ? await getGuildName(guildId) : '') || 'DEMS';
+        // SERVER_NAME overrides the Discord name (utils/serverName.js, shared with the calendar feed)
+        const serverName = await resolveServerName();
         info = { serverName, iconUrl, guildId, debugMode };
     } catch (err) {
         console.error('Error fetching server info:', err);

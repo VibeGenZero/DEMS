@@ -1,7 +1,7 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const express = require('express');
-const { apiLimitFor, apiLimitKey, tooManyRequestsMessage, createApiLimiter } = require('../middleware/rateLimits');
+const { apiLimitFor, apiLimitKey, tooManyRequestsMessage, createApiLimiter, createCalendarLimiters, CALENDAR_TOKEN_LIMIT, CALENDAR_ADDRESS_LIMIT } = require('../middleware/rateLimits');
 
 // The general /api limiter (middleware/rateLimits.js): per user once logged in,
 // per IP before; both limits can be set in the environment.
@@ -60,6 +60,56 @@ test('dev mock mode skips the limiter', async () => {
     const { url, close } = await serve(app);
     try {
         for (let i = 0; i < 3; i++) assert.equal((await fetch(`${url}/api/ping`)).status, 200);
+    } finally {
+        await close();
+    }
+});
+
+// The calendar feed limiters (calendar-subscription): own budgets, outside /api
+
+function calendarApp(options) {
+    const app = express();
+    app.get('/calendar/:file', ...createCalendarLimiters(options), (req, res) => res.type('text/calendar').send('BEGIN:VCALENDAR'));
+    return serve(app);
+}
+
+test('the feed allows 30 fetches per link and 600 per address in 15 minutes', () => {
+    assert.equal(CALENDAR_TOKEN_LIMIT, 30);
+    assert.equal(CALENDAR_ADDRESS_LIMIT, 600);
+});
+
+test('one link fetched too often is refused, other links still answer', async () => {
+    const { url, close } = await calendarApp({ tokenLimit: 3 });
+    try {
+        for (let i = 0; i < 3; i++) assert.equal((await fetch(`${url}/calendar/a.ics`)).status, 200);
+        const refused = await fetch(`${url}/calendar/a.ics`);
+        assert.equal(refused.status, 429);
+        assert.match(refused.headers.get('content-type'), /^text\/plain/);
+        assert.match(await refused.text(), /^Zu viele Abrufe/);
+        assert.equal((await fetch(`${url}/calendar/b.ics`)).status, 200);
+    } finally {
+        await close();
+    }
+});
+
+test('the address brake stops one address that fetches many links', async () => {
+    const { url, close } = await calendarApp({ addressLimit: 2 });
+    try {
+        assert.equal((await fetch(`${url}/calendar/a.ics`)).status, 200);
+        assert.equal((await fetch(`${url}/calendar/b.ics`)).status, 200);
+        assert.equal((await fetch(`${url}/calendar/c.ics`)).status, 429);
+    } finally {
+        await close();
+    }
+});
+
+test('dev mock mode skips the address brake but keeps the link budget', async () => {
+    const { url, close } = await calendarApp({ addressLimit: 1, tokenLimit: 2, skipAddress: true });
+    try {
+        assert.equal((await fetch(`${url}/calendar/a.ics`)).status, 200);
+        assert.equal((await fetch(`${url}/calendar/b.ics`)).status, 200);
+        assert.equal((await fetch(`${url}/calendar/a.ics`)).status, 200);
+        assert.equal((await fetch(`${url}/calendar/a.ics`)).status, 429);
     } finally {
         await close();
     }

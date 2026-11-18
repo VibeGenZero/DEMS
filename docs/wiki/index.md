@@ -65,6 +65,8 @@ sources: [scripts/wiki-graph.js, docs/wiki/graph.json, CLAUDE.md]
 | `routes/events.js` | routes-events, registration-flow, event-lifecycle |
 | `routes/admin.js` | routes-admin, event-lifecycle, maintenance-mode |
 | `routes/user.js` | routes-user |
+| `routes/calendar.js`, `utils/calendarFeed.js`, `utils/calendarFeedStore.js`, `utils/icalendar.js` | routes-user, server, data-model, security |
+| `utils/serverName.js` | server |
 | `routes/polls.js` | routes-polls, date-polls |
 | `middleware/*.js` | middleware, maintenance-mode, auth-session |
 | `utils/registrationService.js` | registration-flow, role-slots, utils |
@@ -109,6 +111,7 @@ sources: [scripts/wiki-graph.js, docs/wiki/graph.json, CLAUDE.md]
 | `utils/updateCheck.js` | utils, configuration, routes-admin |
 | `public/js/**`, `public/theme-boot.js` | frontend-app |
 | `public/js/pages/discord-guide.js` | frontend-app, deployment |
+| `public/js/pages/profile-calendar.js` | frontend-app, routes-user |
 | `public/index.html`, `public/css/tokens.css`, `public/css/components.css`, `public/css/style.css` | frontend-markup |
 | `dev/*` | dev-mock-mode |
 | `test/*` | testing |
