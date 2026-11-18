@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const path = require('path');
 const { spawnSync } = require('child_process');
 const { REPO_ROOT } = require('./helpers');
-const { checkRelease, releaseNotes, channelOf } = require('../scripts/release');
+const { checkRelease, releaseNotes, channelOf, pendingRelease, parseTagList } = require('../scripts/release');
 
 // The publish job (.github/workflows/ci.yml) runs scripts/release.js on a tag
 const files = (version, releases = [version]) => ({
@@ -54,16 +54,28 @@ test('the release notes list the news of the version and the pull commands', () 
             { version: '3.0.0-rc.1', news: [{ title: 'Alt', content: 'Alt' }] }
         ]
     };
-    const notes = releaseNotes({ updates, version: '3.0.0-rc.2', image: 'moritakahashi/dems' });
+    const images = ['moritakahashi/dems', 'ghcr.io/vibegenzero/dems'];
+    const notes = releaseNotes({ updates, version: '3.0.0-rc.2', images });
     assert.ok(notes.indexOf('### Erstens') < notes.indexOf('### Zweitens'));
     assert.ok(notes.indexOf('### Erstens') >= 0);
     assert.match(notes, /Eins/);
     assert.doesNotMatch(notes, /Alt/);
     assert.match(notes, /docker pull moritakahashi\/dems:3\.0\.0-rc\.2/);
     assert.match(notes, /moritakahashi\/dems:beta/);
+    // GitHub Packages carries the same tags as Docker Hub
+    assert.match(notes, /docker pull ghcr\.io\/vibegenzero\/dems:3\.0\.0-rc\.2/);
+    assert.match(notes, /ghcr\.io\/vibegenzero\/dems:beta/);
 
-    const final = releaseNotes({ updates: files('3.0.0').updates, version: '3.0.0', image: 'moritakahashi/dems' });
+    const final = releaseNotes({ updates: files('3.0.0').updates, version: '3.0.0', images });
     assert.match(final, /moritakahashi\/dems:latest/);
+    assert.match(final, /ghcr\.io\/vibegenzero\/dems:latest/);
+});
+
+test('the command line release notes name Docker Hub and GitHub Packages', () => {
+    const { version } = require('../package.json');
+    const notes = runCli('notes', version).stdout;
+    assert.match(notes, new RegExp(`docker pull moritakahashi/dems:${version.replace(/\./g, '\\.')}`));
+    assert.match(notes, new RegExp(`docker pull ghcr\\.io/vibegenzero/dems:${version.replace(/\./g, '\\.')}`));
 });
 
 const runCli = (...args) => spawnSync(process.execPath, [path.join(REPO_ROOT, 'scripts', 'release.js'), ...args], { cwd: REPO_ROOT, encoding: 'utf8' });
@@ -78,4 +90,42 @@ test('the command line fails on a wrong tag and passes on the current version', 
     assert.equal(right.status, 0, right.stderr);
     assert.equal(runCli('channel', version).stdout.trim(), channelOf(version));
     assert.match(runCli('notes', version).stdout, new RegExp(`dems:${version.replace(/\./g, '\\.')}`));
+});
+
+// A push to main whose package.json names a version without a tag is the release
+test('a version newer than every tag is pending, a tagged or older one is not', () => {
+    const tags = ['3.1.0', '3.2.0', '3.0.0-beta.3'];
+    assert.equal(pendingRelease({ version: '3.3.0', tags }), '3.3.0');
+    assert.equal(pendingRelease({ version: '3.3.0-rc.1', tags }), '3.3.0-rc.1');
+    assert.equal(pendingRelease({ version: '3.2.0', tags }), null, 'already tagged');
+    assert.equal(pendingRelease({ version: '3.1.5', tags }), null, 'older than the newest tag');
+    assert.equal(pendingRelease({ version: '3.2.0-rc.1', tags }), null, 'pre-release of a released version');
+});
+
+test('tags that are no versions are ignored, a version that is no tag name never releases', () => {
+    assert.equal(pendingRelease({ version: '1.0.0', tags: ['latest', 'nightly', 'v0.9'] }), '1.0.0');
+    assert.equal(pendingRelease({ version: '1.0.0', tags: [] }), '1.0.0');
+    assert.equal(pendingRelease({ version: 'v4.0.0', tags: ['3.2.0'] }), null, 'tags carry no "v"');
+    assert.equal(pendingRelease({ version: undefined, tags: [] }), null);
+});
+
+test('the tag list is read from git ls-remote output or plain names', () => {
+    const output = [
+        '180f387e4a1903f3108deff7abd9260cc7636050\trefs/tags/3.2.0',
+        '44b059156d633ab7a728c484731ab4d377bc0c8e\trefs/tags/3.0.0-beta.3^{}',
+        '3.1.0',
+        ''
+    ].join('\n');
+    assert.deepEqual(parseTagList(output), ['3.2.0', '3.0.0-beta.3', '3.1.0']);
+});
+
+test('the command line prints the pending version from a tag list on stdin', () => {
+    const { version } = require('../package.json');
+    const pending = spawnSync(process.execPath, [path.join(REPO_ROOT, 'scripts', 'release.js'), 'pending'], { cwd: REPO_ROOT, encoding: 'utf8', input: 'abc\trefs/tags/0.0.1\n' });
+    assert.equal(pending.status, 0, pending.stderr);
+    assert.equal(pending.stdout.trim(), version);
+
+    const tagged = spawnSync(process.execPath, [path.join(REPO_ROOT, 'scripts', 'release.js'), 'pending'], { cwd: REPO_ROOT, encoding: 'utf8', input: `abc\trefs/tags/${version}\n` });
+    assert.equal(tagged.status, 0, tagged.stderr);
+    assert.equal(tagged.stdout, '');
 });

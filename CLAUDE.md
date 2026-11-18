@@ -70,6 +70,7 @@ When you change behaviour that a wiki node describes, update that node in the sa
 - Branches `feature/…`, `fix/…`, `chore/…`. Commit messages: English imperative subject + why in the body. PR titles/descriptions in German (Problem / Ursache / Änderung / Verifikation).
 - Larger features: spec in `docs/superpowers/specs/`, plan in `docs/superpowers/plans/`.
 - Spec-driven changes with OpenSpec (`openspec/`, CLI `openspec`, installed globally): `/opsx:propose "<idea>"` → `/opsx:apply` → `/opsx:archive`; current specs in `openspec/specs/`, open changes in `openspec/changes/`. Project context and rules: `openspec/config.yaml`.
+- Releases: bump the version (`npm version <v> --no-git-tag-version` + entry in `updates.json`) in the PR; merging it to `main` publishes the image, tag and GitHub release automatically. Do not push the tag by hand (details: `docs/wiki/ops/deployment.md`).
 
 ## Top traps (details: `docs/wiki/reference/known-issues.md`)
 

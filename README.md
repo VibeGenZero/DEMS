@@ -42,7 +42,7 @@ DEMS plant die Events deiner Discord-Community: Mitglieder melden sich mit Disco
 
 ### Was du brauchst
 
-*   Einen Server mit [Docker](https://docs.docker.com/get-docker/) (inkl. Compose), z. B. einen kleinen VPS. Das Image [`moritakahashi/dems`](https://hub.docker.com/r/moritakahashi/dems) liegt öffentlich auf Docker Hub und läuft auf `amd64` und `arm64`.
+*   Einen Server mit [Docker](https://docs.docker.com/get-docker/) (inkl. Compose), z. B. einen kleinen VPS. Das Image [`moritakahashi/dems`](https://hub.docker.com/r/moritakahashi/dems) liegt öffentlich auf Docker Hub und läuft auf `amd64` und `arm64`. Dasselbe Image mit denselben Tags gibt es bei GitHub Packages als [`ghcr.io/vibegenzero/dems`](https://github.com/VibeGenZero/DEMS/pkgs/container/dems).
 *   Eine Domain mit **HTTPS** davor, z. B. über Caddy, Traefik oder den Proxy deines Hosters. Ohne HTTPS funktionieren Login und Einrichtung nicht.
 *   Eine Discord-Anwendung im [Developer Portal](https://discord.com/developers/applications) und Rechte zum Verwalten deines Discord-Servers. Wie du sie anlegst, zeigt dir der Einrichtungsassistent Schritt für Schritt.
 
