@@ -138,7 +138,6 @@ function createPluginHost({
             runtime: 'off',
             registered: false,
             loadError: '',
-            registering: false,
             loading: null,
             ctx: null,
             routes: [],
@@ -158,12 +157,16 @@ function createPluginHost({
             || entry.manifest.permissions.some(permission => !known.has(permission));
     }
 
-    function contextHost(record) {
+    /**
+     * What one ctx shares with the host. Each ctx has its own open flag: a ctx
+     * whose register failed stays sealed, also while a retry runs with a new one.
+     */
+    function contextHost(record, attempt) {
         return {
             limiter,
             routes: record.routes,
             disableCallbacks: record.disableCallbacks,
-            isRegistering: () => record.registering,
+            isRegistering: () => attempt.open,
             recordCollection: async coll => {
                 const current = state.normalizeState(record.state || {}).collections;
                 if (current.includes(coll)) return;
@@ -183,15 +186,36 @@ function createPluginHost({
         }
     }
 
-    /** Require `server.js` and run `register(ctx)` once per process. */
+    /** Store that the last register attempt worked: an old register error is no longer shown. */
+    async function clearLoadError(record) {
+        const stored = state.normalizeState(record.state || {});
+        if (!stored.lastError && !stored.lastErrorAt) return;
+        try {
+            await persist(record, { lastError: '', lastErrorAt: '' });
+        } catch (err) {
+            console.error(`[plugin:${record.id}] Clearing the error failed:`, err.message);
+        }
+    }
+
+    /**
+     * Require `server.js` and run `register(ctx)`. The ctx is built once; only a
+     * retry after a failed register gets a fresh one (with fresh route and
+     * callback lists), so the failed ctx cannot add anything during the retry.
+     */
     async function register(record) {
         const { entry } = record;
+        if (record.loadError) {
+            record.loadError = '';
+            record.routes = [];
+            record.disableCallbacks = [];
+        }
         if (!entry.manifest.server) {
             record.registered = true;
             return;
         }
-        if (!record.ctx) record.ctx = createContext({ entry, host: contextHost(record) });
-        record.registering = true;
+        // register runs again only after a failed attempt, so a working plugin keeps its one ctx
+        const attempt = { open: true };
+        record.ctx = createContext({ entry, host: contextHost(record, attempt) });
         try {
             const mod = requireModule(path.join(entry.dir, entry.manifest.server));
             if (!mod || typeof mod.register !== 'function') throw new Error('server.js exportiert keine Funktion register(ctx).');
@@ -202,10 +226,13 @@ function createPluginHost({
             record.loadError = errorMessage(err);
             console.error(`[plugin:${record.id}] register failed: ${record.loadError}`);
         } finally {
-            record.registering = false;
+            attempt.open = false;
         }
-        if (record.registered) return;
-        // Drop what the failed register left behind; the plugin stays off until the next start
+        if (record.registered) {
+            await clearLoadError(record);
+            return;
+        }
+        // Drop what the failed register left behind; switching on again retries with a fresh ctx
         clearHooks(record.id);
         record.routes.length = 0;
         await runDisableCallbacks(record);
@@ -217,9 +244,9 @@ function createPluginHost({
         }
     }
 
-    /** Switch a loadable record on: register on first use, reuse it afterwards. */
+    /** Switch a loadable record on: register on first use (or after a failed one), reuse it afterwards. */
     async function load(record) {
-        if (!record.registered && !record.loadError) {
+        if (!record.registered) {
             if (!record.loading) record.loading = register(record).finally(() => { record.loading = null; });
             await record.loading;
         }

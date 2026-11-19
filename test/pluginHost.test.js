@@ -385,17 +385,76 @@ test('an onDisable callback that hangs or throws does not block switching off', 
     assert.ok(logs.error.some(line => line.includes('aufräumen kaputt')));
 });
 
-test('switching a failed plugin on again keeps the error until the next start', async () => {
+test('switching a failed plugin on again retries register and clears the error', async () => {
     const { officialDir, customDir } = roots();
-    writePlugin(customDir, 'throws', { server: serverSource('throws', "throw new Error('kaputt');") });
-    await enabledState('throws', { confirmedVersion: '1.0.0', confirmedPermissions: [] });
+    writePlugin(customDir, 'flaky', {
+        server: serverSource('flaky', `
+        if (!globalThis.__hostTest.ready) throw new Error('Kanal fehlt');
+        ctx.routes.get('/ok', { access: 'member' }, () => ({ ok: true }));`)
+    });
+    await enabledState('flaky', { confirmedVersion: '1.0.0', confirmedPermissions: [] });
     const host = createPluginHost({ officialDir, customDir });
     await host.start();
+    assert.equal(view(host, 'flaky').statusText, 'Fehler: Kanal fehlt');
 
-    assert.equal((await host.setEnabled('throws', false, { adminId: 'a' })).status, 'off');
-    const item = await host.setEnabled('throws', true, { adminId: 'a' });
-    assert.equal(item.status, 'error');
-    assert.equal(record('throws').registers, 1);
+    // Still broken: the retry fails again and keeps the plugin off
+    assert.equal((await host.setEnabled('flaky', true, { adminId: 'a' })).statusText, 'Fehler: Kanal fehlt');
+    assert.equal(record('flaky').registers, 2);
+    assert.equal(host.isEnabled('flaky'), false);
+
+    // The admin fixed the cause: off and on again loads it
+    globalThis.__hostTest.ready = true;
+    assert.equal((await host.setEnabled('flaky', false, { adminId: 'a' })).status, 'off');
+    const item = await host.setEnabled('flaky', true, { adminId: 'a' });
+    assert.equal(item.status, 'on');
+    assert.equal(item.lastError, '');
+    assert.equal(item.lastErrorAt, '');
+    assert.equal(record('flaky').registers, 3);
+    assert.equal(host.isEnabled('flaky'), true);
+    assert.deepEqual(host.routesOf('flaky').map(route => route.path), ['/ok']);
+    const stored = (await getDoc(doc(db, 'pluginState', 'flaky'))).data();
+    assert.equal(stored.lastError, '');
+    assert.equal(stored.lastErrorAt, '');
+});
+
+test('a retry after a hung register gets a fresh ctx; the hung one stays sealed', async () => {
+    const { officialDir, customDir } = roots();
+    writePlugin(customDir, 'slow', {
+        server: serverSource('slow', `
+        if (rec.registers === 1) {
+            rec.first = ctx;
+            await new Promise(() => {});
+        }
+        try {
+            rec.first.routes.get('/old', { access: 'member' }, () => ({}));
+            rec.oldOpen = true;
+        } catch {
+            rec.oldOpen = false;
+        }
+        ctx.routes.get('/new', { access: 'member' }, () => ({}));`)
+    });
+    await enabledState('slow', { confirmedVersion: '1.0.0', confirmedPermissions: [] });
+    const host = createPluginHost({ officialDir, customDir, registerTimeoutMs: 50 });
+    await host.start();
+    assert.equal(view(host, 'slow').status, 'error');
+
+    const item = await host.setEnabled('slow', true, { adminId: 'a' });
+    assert.equal(item.status, 'on');
+    assert.equal(record('slow').registers, 2);
+    assert.notEqual(record('slow').ctx, record('slow').first);
+    assert.equal(record('slow').oldOpen, false, 'the hung ctx cannot register during the retry');
+    assert.deepEqual(host.routesOf('slow').map(route => route.path), ['/new']);
+});
+
+test('a successful register at start clears an old error', async () => {
+    const { officialDir, customDir } = roots();
+    writePlugin(officialDir, 'healed');
+    await enabledState('healed', { lastError: 'alt', lastErrorAt: '2026-11-01T10:00:00.000Z' });
+    const host = createPluginHost({ officialDir, customDir });
+    await host.start();
+    assert.equal(view(host, 'healed').lastError, '');
+    await host.saveSettings('healed', {});
+    assert.equal((await getDoc(doc(db, 'pluginState', 'healed'))).data().lastError, '');
 });
 
 test('invalid, incompatible and unknown plugins cannot be switched', async () => {
