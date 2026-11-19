@@ -247,3 +247,30 @@ test('plugin data is deleted only while the plugin is off', async () => {
     assert.equal(entry.details, 'Daten von Plugin „Plugin offi“ gelöscht');
     assert.equal(entry.targetId, 'offi');
 });
+
+test('a failed plugin wipe fails the system reset with 500', async (t) => {
+    // The reset route of routes/admin.js in its own app; the host only fails the wipe
+    const pluginSdk = require('../plugin-sdk');
+    t.mock.method(pluginSdk, 'pluginHost', () => ({ wipeAllData: () => Promise.reject(new Error('Datenbank weg')) }));
+    const errors = t.mock.method(console, 'error', () => {});
+    const app = express();
+    app.use(express.json());
+    app.use((req, res, next) => {
+        req.session = { user: ADMIN };
+        next();
+    });
+    app.use('/api/admin', require('../routes/admin'));
+    const resetListener = await new Promise(resolve => {
+        const server = app.listen(0, '127.0.0.1', () => resolve(server));
+    });
+    t.after(() => new Promise(resolve => resetListener.close(resolve)));
+
+    const res = await fetch(`http://127.0.0.1:${resetListener.address().port}/api/admin/reset`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: PASSWORD, targets: ['pluginData'] })
+    });
+    assert.equal(res.status, 500);
+    assert.deepEqual(await res.json(), { error: 'System-Reset fehlgeschlagen.' });
+    assert.ok(errors.mock.calls.some(call => String(call.arguments[0]).startsWith('System reset error')));
+});

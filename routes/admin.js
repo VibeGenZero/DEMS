@@ -1962,12 +1962,10 @@ router.delete('/reset', async (req, res) => {
 
         // Plugin data has no collection of its own here; the host knows every plugin collection.
         // Deleted members take their plugin data with them. No hooks: nothing is left to clean up.
+        // A failed wipe answers 500 like every other target: the admin must not be told the
+        // data is gone while it is not (a retry is idempotent).
         if (targets.includes('pluginData') || targets.includes('users')) {
-            try {
-                totalDeleted += await pluginHost().wipeAllData();
-            } catch (pluginErr) {
-                console.error('Wiping the plugin data failed:', pluginErr.message);
-            }
+            totalDeleted += await pluginHost().wipeAllData();
         }
 
         res.json({ success: true, count: totalDeleted });
