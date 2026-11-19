@@ -36,4 +36,12 @@ class PluginHttpError extends Error {
     }
 }
 
-module.exports = { PluginDataError, PluginPermissionError, PluginHttpError };
+/** The plugin host refused an admin action (switch, settings, data delete); the message is German. */
+class PluginHostError extends Error {
+    constructor(message) {
+        super(message);
+        this.name = 'PluginHostError';
+    }
+}
+
+module.exports = { PluginDataError, PluginPermissionError, PluginHttpError, PluginHostError };
