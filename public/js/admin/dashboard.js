@@ -240,6 +240,7 @@ export async function performSystemReset() {
     if (document.getElementById('reset-comments').checked) targets.push('comments');
     if (document.getElementById('reset-auditLogs').checked) targets.push('auditLogs');
     if (document.getElementById('reset-polls').checked) targets.push('polls', 'pollVotes');
+    if (document.getElementById('reset-plugins').checked) targets.push('pluginData');
     if (document.getElementById('reset-users').checked) targets.push('users');
 
     if (targets.length === 0) {

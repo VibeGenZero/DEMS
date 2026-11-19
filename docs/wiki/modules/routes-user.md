@@ -3,7 +3,7 @@ id: routes-user
 title: routes/user.js — profile, badges, settings, account
 type: module
 tags: [api, user, profile, badges, settings, guests, gdpr]
-sources: [routes/user.js, utils/profileEvents.js, utils/notificationPrefs.js, utils/userProfile.js, utils/calendarFeed.js, utils/calendarFeedStore.js, routes/calendar.js]
+sources: [routes/user.js, plugin-sdk/host.js, utils/profileEvents.js, utils/notificationPrefs.js, utils/userProfile.js, utils/calendarFeed.js, utils/calendarFeedStore.js, routes/calendar.js]
 part_of: [architecture]
 depends_on: [middleware, data-layer]
 see_also: [api-index, data-model]
@@ -25,7 +25,7 @@ see_also: [api-index, data-model]
 | GET | `/calendar` | own calendar subscription: `{ enabled: false }` or `{ enabled: true, url, webcalUrl, googleUrl, createdAt }` (links from `buildCalendarFeedUrls` in `utils/eventUrl.js`); see "Calendar subscription" |
 | POST | `/calendar` | sets the subscription up or renews it: a new token every time, the old link answers 404 at once; answers like `GET` |
 | DELETE | `/calendar` | ends the subscription → `{ enabled: false }` |
-| DELETE | `/account` | batch-deletes own registrations + `users/{id}` + `calendarFeeds/{id}`, promotes waitlists, deletes own date poll votes (`deleteUserPollVotes`), destroys session |
+| DELETE | `/account` | batch-deletes own registrations + `users/{id}` + `calendarFeeds/{id}`, promotes waitlists, deletes own date poll votes (`deleteUserPollVotes`), deletes the member's plugin documents (`pluginHost().purgeUser(userId)`: every document with `userId` = the member in every plugin collection, plugin on, off or orphaned), emits the plugin hook `member.deleted` `{ userId }` (`safeEmit`), destroys session; poll and plugin failures are logged and never fail the deletion |
 
 ## Profile lists (`utils/profileEvents.js`)
 

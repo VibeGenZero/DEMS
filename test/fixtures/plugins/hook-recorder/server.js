@@ -1,6 +1,7 @@
 /**
  * Test plugin: records every hook into its `log` collection and offers a few
- * routes the server tests call (access rules, errors, the logged-in user).
+ * routes the server tests call (access rules, errors, the logged-in user,
+ * documents owned by a member).
  */
 const HOOKS = [
     'event.created', 'event.published', 'event.updated', 'event.ended',
@@ -22,6 +23,9 @@ function register(ctx) {
         const entries = await ctx.data.list('log');
         return entries.sort((a, b) => a.seq - b.seq);
     });
+    // Documents with the reserved `userId` field: account deletion must purge them
+    ctx.routes.post('/owned', { access: 'member' }, ({ user }) => ctx.data.add('owned', { userId: user.id, note: 'gehört mir' }));
+    ctx.routes.get('/owned', { access: 'admin' }, () => ctx.data.list('owned'));
     ctx.routes.get('/me', { access: 'member' }, ({ user }) => ({ user }));
     ctx.routes.post('/me', { access: 'member' }, ({ user }) => ({ user }));
     ctx.routes.post('/boom', { access: 'member' }, () => {

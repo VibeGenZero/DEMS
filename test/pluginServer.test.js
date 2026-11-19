@@ -3,17 +3,19 @@ const { test, before, after } = require('node:test');
 const assert = require('node:assert/strict');
 const http = require('http');
 const { createClient } = require('./helpers');
-const { PLUGIN, IDLE_PLUGIN, startPluginServer, loginAt } = require('./pluginTestServer');
+const { PLUGIN, IDLE_PLUGIN, startPluginServer, loginAt, enableCustom } = require('./pluginTestServer');
 const { PERSONAS } = require('../dev/mockGuild');
 
 let server;
 let safeServer;
 
 before(async () => {
+    // The safe-mode server keeps the seeded state: its plugin is on in the database but must not run
     [server, safeServer] = await Promise.all([
-        startPluginServer(),
+        startPluginServer({}, { seed: false }),
         startPluginServer({ PLUGINS_SAFE_MODE: 'true' })
     ]);
+    await enableCustom(server.baseUrl, PLUGIN);
 });
 
 after(() => Promise.all([server.stop(), safeServer.stop()]));
@@ -186,4 +188,17 @@ test('safe mode starts no plugin code', async () => {
     assert.deepEqual(await route.json(), { error: 'Plugin nicht gefunden.' });
 
     assert.equal((await client.request(`/plugins/${PLUGIN}/client.js`)).status, 404);
+});
+
+test('safe mode shows in the admin list and refuses switching a plugin', async () => {
+    const admin = await loginAs('admin', safeServer.baseUrl);
+    const list = await admin.request('/api/admin/plugins');
+    assert.equal(list.status, 200);
+    const body = await list.json();
+    assert.equal(body.safeMode, true);
+    assert.deepEqual(body.plugins.map(plugin => [plugin.id, plugin.status]), [[PLUGIN, 'safe'], [IDLE_PLUGIN, 'safe']]);
+
+    const res = await admin.send('PUT', `/api/admin/plugins/${IDLE_PLUGIN}/enabled`, { enabled: true, trust: true, password: 'dev' });
+    assert.equal(res.status, 409);
+    assert.deepEqual(await res.json(), { error: 'Abgesicherter Modus aktiv – Plugins lassen sich nicht einschalten.' });
 });

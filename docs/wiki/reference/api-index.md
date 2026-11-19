@@ -3,7 +3,7 @@ id: api-index
 title: API index — every HTTP endpoint
 type: reference
 tags: [api, endpoints, rest, index, routes]
-sources: [server.js, routes/plugins.js, routes/pluginStatic.js, routes/setup.js, routes/auth.js, routes/events.js, routes/user.js, routes/admin.js, dev/devAuth.js]
+sources: [server.js, routes/plugins.js, routes/pluginStatic.js, routes/adminPlugins.js, routes/setup.js, routes/auth.js, routes/events.js, routes/user.js, routes/admin.js, dev/devAuth.js]
 depends_on: [routes-auth, routes-events, routes-admin, routes-user, server]
 see_also: [request-lifecycle, add-api-endpoint]
 ---
@@ -116,7 +116,10 @@ Only in setup mode (afterwards 409 `Die Einrichtung ist bereits abgeschlossen.`)
 | PUT / DELETE | `/api/admin/event-templates/:id` (W-10) |
 | GET / PUT | `/api/admin/bot-messages` |
 | GET | `/api/admin/audit-log` |
-| DELETE | `/api/admin/reset` |
+| DELETE | `/api/admin/reset` (`targets` incl. `pluginData`; `users` wipes plugin data too) |
+| GET | `/api/admin/plugins` (`{ safeMode, plugins }`, views + public `settingsValues`) |
+| PUT | `/api/admin/plugins/:id/enabled` (`{ enabled, trust?, password? }`; custom plugin on needs `trust` + reset password), `/plugins/:id/settings` (`{ values, password? }`; a secret needs the reset password) |
+| DELETE | `/api/admin/plugins/:id/data` (only while off; `{ deleted }`) |
 | GET | `/api/admin/bot/status`, `/bot/running-events` |
 | GET / PUT | `/api/admin/bot/settings` |
 | GET / PUT | `/api/admin/maintenance` |

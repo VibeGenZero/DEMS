@@ -1,6 +1,7 @@
 /**
  * Shared setup of the suites that run the real server (dev mock mode) with
- * the fixture plugins: `hook-recorder` switched on, its copy `idle-recorder` off.
+ * the fixture plugins: `hook-recorder` switched on (seeded or through the
+ * admin API), its copy `idle-recorder` off.
  */
 const assert = require('node:assert/strict');
 const fs = require('fs');
@@ -50,13 +51,14 @@ function seedEnabledState(dbPath) {
  * Start dev/start.js with its own database and the fixture plugins.
  *
  * @param {Object} [env] -> Extra environment variables.
+ * @param {{ seed?: boolean }} [options] -> `seed: false` starts with every plugin off (switch on with `enableCustom`).
  * @returns {Promise<Object>} -> See `startServer` in test/helpers.js.
  */
-async function startPluginServer(env = {}) {
+async function startPluginServer(env = {}, { seed = true } = {}) {
     const tmpDir = createTempDir('plugin-server');
     const dbPath = path.join(tmpDir, 'dev.sqlite');
     const pluginsDir = preparePluginsDir(tmpDir);
-    seedEnabledState(dbPath);
+    if (seed) seedEnabledState(dbPath);
     return startServer('dev/start.js', {
         DEV_SQLITE_PATH: dbPath,
         DEV_UPLOAD_DIR: path.join(tmpDir, 'uploads'),
@@ -79,4 +81,21 @@ async function loginAt(baseUrl, personaId) {
     return client;
 }
 
-module.exports = { PLUGIN, IDLE_PLUGIN, preparePluginsDir, seedEnabledState, startPluginServer, loginAt };
+/**
+ * Switch a custom plugin on through the admin API, as the admin would in
+ * System › Plugins (trust confirmed, dev reset password `dev`).
+ *
+ * @param {string} baseUrl -> Base URL of the server.
+ * @param {string} pluginId -> Id of the custom plugin.
+ * @returns {Promise<Object>} -> The plugin view of the answer.
+ */
+async function enableCustom(baseUrl, pluginId) {
+    const admin = await loginAt(baseUrl, 'admin');
+    const res = await admin.send('PUT', `/api/admin/plugins/${pluginId}/enabled`, { enabled: true, trust: true, password: 'dev' });
+    assert.equal(res.status, 200, await res.clone().text());
+    const { plugin } = await res.json();
+    assert.equal(plugin.status, 'on');
+    return plugin;
+}
+
+module.exports = { PLUGIN, IDLE_PLUGIN, preparePluginsDir, seedEnabledState, startPluginServer, loginAt, enableCustom };

@@ -461,6 +461,10 @@ function createPluginHost({
 
     return {
         start,
+        /** @returns {boolean} -> `PLUGINS_SAFE_MODE`: no plugin code runs, no plugin can be switched on. */
+        get safeMode() {
+            return safeMode;
+        },
         list,
         isEnabled,
         entryOf: id => {

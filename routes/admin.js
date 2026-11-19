@@ -43,6 +43,7 @@ const {
     buildNewEvent, createEventChannelsAllowed, announceEvent, createPoll, announcePoll
 } = require('../utils/adminActions');
 const { emitEventCreated, emitEventSaved, emitEventDeleted, safeStatusChange, validatePluginOrigin } = require('../plugin-sdk/coreHooks');
+const { pluginHost } = require('../plugin-sdk');
 
 // Statuses after which an event is over for good -> clean-up in Discord (B-10)
 const OVER_STATUSES = ['archived', 'cancelled'];
@@ -76,6 +77,8 @@ router.use(requireAuth, requireAdmin);
 // Database-backed configuration and privacy policy, the "System" view (#138)
 router.use(require('./adminSystem'));
 router.use(require('./adminAi'));
+// System › Plugins: switches, settings and data of the plugins
+router.use(require('./adminPlugins'));
 
 /**
  * GET /api/admin/roles — Get all guild roles
@@ -1891,7 +1894,8 @@ router.get('/audit-log', async (req, res) => {
 
 /**
  * DELETE /api/admin/reset — Full System Reset
- * Body: { password, targets: ['events', 'users', 'registrations', 'comments', 'auditLogs'] }
+ * Body: { password, targets: ['events', 'users', 'registrations', 'comments', 'auditLogs', 'polls', 'pollVotes', 'pluginData'] }
+ * `pluginData` (and `users`, whose members own it) wipes every plugin collection and setting; `pluginState` stays.
  */
 router.delete('/reset', async (req, res) => {
     try {
@@ -1954,6 +1958,16 @@ router.delete('/reset', async (req, res) => {
             }
             const ended = await sharedSessionStore().destroyAll({ keepAdmins: true });
             console.log(`🔒 ${ended} Sessions nach dem Löschen der Nutzer beendet.`);
+        }
+
+        // Plugin data has no collection of its own here; the host knows every plugin collection.
+        // Deleted members take their plugin data with them. No hooks: nothing is left to clean up.
+        if (targets.includes('pluginData') || targets.includes('users')) {
+            try {
+                totalDeleted += await pluginHost().wipeAllData();
+            } catch (pluginErr) {
+                console.error('Wiping the plugin data failed:', pluginErr.message);
+            }
         }
 
         res.json({ success: true, count: totalDeleted });
