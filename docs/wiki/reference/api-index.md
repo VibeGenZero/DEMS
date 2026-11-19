@@ -23,7 +23,7 @@ see_also: [request-lifecycle, add-api-endpoint]
 | GET | `/api/privacy` (#138: current privacy policy `{ markdown, version, updatedAt }`, 404 without one) | — |
 | GET | `/api/server-info` (`{ serverName, iconUrl, guildId, debugMode, ai: { memberAssistant, assistantName, teaserText, adminAssistant } }`; `ai` also in the error fallback, all off) | —
 | GET | `/api/updates` | — |
-| GET / HEAD | `/plugins/:pluginId/<client.js\|client.css\|assets/<name>>` (client files of switched-on plugins, `routes/pluginStatic.js`; allow-list, no session; anything else plain 404) | — |
+| GET / HEAD | `/plugins/:pluginId/<client.js\|client.css\|assets/<name>>` (client files of switched-on plugins, `routes/pluginStatic.js`; allow-list, creates no session; anything else plain 404) | — |
 | GET | `/api/plugins` (client list of switched-on plugins: `[{ id, name, version, official, permissions, client, css }]`; `[]` in safe mode or before the host is ready) | U |
 | any | `/api/plugins/:pluginId/{*splat}` (dispatcher for `ctx.routes.*`, `routes/plugins.js`; off or unknown plugin 404 `Plugin nicht gefunden.`, unknown route 404 `Nicht gefunden.`) | U or A, per route `access` |
 | GET | `/{*splat}` (SPA fallback) | — |

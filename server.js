@@ -180,7 +180,8 @@ app.use((req, res, next) => {
 
 // ── Static files ────────────────────────────────────────────────────────
 app.use(express.static(path.join(__dirname, 'public')));
-// Client files of switched-on plugins (allow-list, routes/pluginStatic.js); before the session, no session needed
+// Client files of switched-on plugins (allow-list, routes/pluginStatic.js); after session and CSRF,
+// before the role refresh; a file request creates no session (saveUninitialized: false)
 app.use('/plugins', createPluginStatic(() => pluginHost()));
 // Dev mock mode: banners of the dummy events (dev/banners, see dev/seedData.js)
 if (IS_MOCK_MODE) app.use('/dev-banners', express.static(path.join(__dirname, 'dev', 'banners')));

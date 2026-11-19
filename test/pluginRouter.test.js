@@ -36,7 +36,9 @@ const getHost = () => {
 };
 
 before(async () => {
-    const pluginDir = createTempDir('plugin-router');
+    // A dot-named parent folder (git worktree, ~/.local) must not hide the plugin files
+    const pluginDir = path.join(createTempDir('plugin-router'), '.worktrees', 'plugins', 'demo');
+    fs.mkdirSync(pluginDir, { recursive: true });
     fs.writeFileSync(path.join(pluginDir, 'client.js'), 'export function register() {}');
     fs.mkdirSync(path.join(pluginDir, 'assets'));
     fs.writeFileSync(path.join(pluginDir, 'assets', 'logo.png'), 'png');

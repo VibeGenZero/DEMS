@@ -17,7 +17,8 @@ let safeServer;
 
 /** Copy the fixture plugins into a temp dir; `idle-recorder` is a copy that stays off. */
 function preparePluginsDir(tmpDir) {
-    const pluginsDir = path.join(tmpDir, 'plugins');
+    // Below a dot-named folder, like a git worktree or ~/.local: plugin files must still be served
+    const pluginsDir = path.join(tmpDir, '.dems', 'plugins');
     fs.cpSync(FIXTURES, pluginsDir, { recursive: true });
     const idleDir = path.join(pluginsDir, IDLE_PLUGIN);
     fs.cpSync(path.join(pluginsDir, PLUGIN), idleDir, { recursive: true });

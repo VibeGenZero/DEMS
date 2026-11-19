@@ -6,8 +6,9 @@
  * name and a known extension. Paths with `..`, backslashes, NUL bytes or
  * encoded slashes are refused before anything touches the disk, and the
  * resolved file must stay inside the plugin folder (also after symlinks).
- * Everything else answers a plain 404 without a listing. Mounted before the
- * session middleware: a plugin file needs no session.
+ * Everything else answers a plain 404 without a listing. Mounted after the
+ * session and CSRF middleware, before the role refresh; a file request
+ * creates no session (`saveUninitialized: false`).
  */
 const fs = require('fs');
 const path = require('path');
@@ -104,7 +105,10 @@ function createPluginStatic(getHost) {
             if (!absPath.startsWith(pluginDir + path.sep) || !(await isInside(pluginDir, absPath))) return notFound();
 
             res.setHeader('Content-Type', allowed.type);
-            res.sendFile(absPath, { dotfiles: 'deny', headers: { 'Cache-Control': 'no-cache' } }, (err) => {
+            // root = plugin folder: send checks only the segments below it for dotfiles, so a
+            // dot-named parent (git worktree, ~/.local, PLUGINS_DIR=/srv/.dems/…) still works
+            const options = { root: pluginDir, dotfiles: 'deny', headers: { 'Cache-Control': 'no-cache' } };
+            res.sendFile(path.relative(pluginDir, absPath), options, (err) => {
                 if (err && !res.headersSent) {
                     res.removeHeader('Content-Type');
                     notFound();

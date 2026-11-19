@@ -65,7 +65,7 @@ sources: [scripts/wiki-graph.js, docs/wiki/graph.json, CLAUDE.md]
 | `routes/events.js` | routes-events, registration-flow, event-lifecycle |
 | `routes/admin.js` | routes-admin, event-lifecycle, maintenance-mode |
 | `routes/user.js` | routes-user |
-| `routes/plugins.js`, `routes/pluginStatic.js` | server, api-index |
+| `routes/plugins.js`, `routes/pluginStatic.js` | server, api-index, request-lifecycle |
 | `routes/calendar.js`, `utils/calendarFeed.js`, `utils/calendarFeedStore.js`, `utils/icalendar.js` | routes-user, server, data-model, security |
 | `utils/serverName.js` | server |
 | `routes/polls.js` | routes-polls, date-polls |
