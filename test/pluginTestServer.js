@@ -1,7 +1,8 @@
 /**
  * Shared setup of the suites that run the real server (dev mock mode) with
  * the fixture plugins: `hook-recorder` switched on (seeded or through the
- * admin API), its copy `idle-recorder` off.
+ * admin API), its copy `idle-recorder` off. The official plugins from
+ * `plugins/` are on too (dev mock mode).
  */
 const assert = require('node:assert/strict');
 const fs = require('fs');
@@ -12,6 +13,8 @@ const FIXTURES = path.join(__dirname, 'fixtures', 'plugins');
 const PLUGIN = 'hook-recorder';
 // A second, never switched on copy of the fixture
 const IDLE_PLUGIN = 'idle-recorder';
+// The official plugin from plugins/; dev mock mode switches it on in every plugin server
+const OFFICIAL_PLUGIN = 'event-submissions';
 
 /**
  * Copy the fixture plugins into a temp dir; `idle-recorder` is a copy that stays off.
@@ -98,4 +101,4 @@ async function enableCustom(baseUrl, pluginId) {
     return plugin;
 }
 
-module.exports = { PLUGIN, IDLE_PLUGIN, preparePluginsDir, seedEnabledState, startPluginServer, loginAt, enableCustom };
+module.exports = { PLUGIN, IDLE_PLUGIN, OFFICIAL_PLUGIN, preparePluginsDir, seedEnabledState, startPluginServer, loginAt, enableCustom };

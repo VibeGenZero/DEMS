@@ -3,7 +3,7 @@ const { test, before, after } = require('node:test');
 const assert = require('node:assert/strict');
 const http = require('http');
 const { createClient } = require('./helpers');
-const { PLUGIN, IDLE_PLUGIN, startPluginServer, loginAt, enableCustom } = require('./pluginTestServer');
+const { PLUGIN, IDLE_PLUGIN, OFFICIAL_PLUGIN, startPluginServer, loginAt, enableCustom } = require('./pluginTestServer');
 const { PERSONAS } = require('../dev/mockGuild');
 
 let server;
@@ -125,7 +125,10 @@ test('GET /api/plugins lists the client of every switched-on plugin', async () =
     const client = await loginAs('member');
     const res = await client.request('/api/plugins');
     assert.equal(res.status, 200);
-    assert.deepEqual(await res.json(), [{
+    const list = await res.json();
+    // Dev mock mode switches the official plugins on; the custom fixture follows them
+    assert.deepEqual(list.map(plugin => plugin.id), [OFFICIAL_PLUGIN, PLUGIN]);
+    assert.deepEqual(list.find(plugin => plugin.id === PLUGIN), {
         id: PLUGIN,
         name: 'Hook-Rekorder',
         version: '1.0.0',
@@ -133,7 +136,7 @@ test('GET /api/plugins lists the client of every switched-on plugin', async () =
         permissions: ['events:read', 'events:draft'],
         client: `/plugins/${PLUGIN}/client.js?v=1.0.0`,
         css: ''
-    }]);
+    });
 });
 
 test('the client file of a switched-on plugin is served as JavaScript', async () => {
@@ -196,7 +199,7 @@ test('safe mode shows in the admin list and refuses switching a plugin', async (
     assert.equal(list.status, 200);
     const body = await list.json();
     assert.equal(body.safeMode, true);
-    assert.deepEqual(body.plugins.map(plugin => [plugin.id, plugin.status]), [[PLUGIN, 'safe'], [IDLE_PLUGIN, 'safe']]);
+    assert.deepEqual(body.plugins.map(plugin => [plugin.id, plugin.status]), [[OFFICIAL_PLUGIN, 'safe'], [PLUGIN, 'safe'], [IDLE_PLUGIN, 'safe']]);
 
     const res = await admin.send('PUT', `/api/admin/plugins/${IDLE_PLUGIN}/enabled`, { enabled: true, trust: true, password: 'dev' });
     assert.equal(res.status, 409);

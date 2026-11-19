@@ -2,7 +2,7 @@
 // system reset through the real server (dev mock mode, fixture plugins).
 const { test, before, after } = require('node:test');
 const assert = require('node:assert/strict');
-const { PLUGIN, IDLE_PLUGIN, startPluginServer, loginAt } = require('./pluginTestServer');
+const { PLUGIN, IDLE_PLUGIN, OFFICIAL_PLUGIN, startPluginServer, loginAt } = require('./pluginTestServer');
 const { PERSONAS } = require('../dev/mockGuild');
 
 const TRUST_SENTENCE = 'Bitte bestätige, dass du dem Code dieses Plugins vertraust.';
@@ -56,10 +56,12 @@ test('the admin list shows every plugin with its status and public setting value
     const body = await res.json();
     assert.equal(body.safeMode, false);
     assert.deepEqual(body.plugins.map(plugin => [plugin.id, plugin.status, plugin.official]), [
+        // Dev mock mode switches the official plugins on
+        [OFFICIAL_PLUGIN, 'on', true],
         [PLUGIN, 'on', false],
         [IDLE_PLUGIN, 'off', false]
     ]);
-    assert.deepEqual(body.plugins[0].settingsValues, {});
+    assert.deepEqual(body.plugins.find(plugin => plugin.id === PLUGIN).settingsValues, {});
 });
 
 test('a bad switch request answers 400, an unknown plugin 404', async () => {

@@ -1,0 +1,15 @@
+{
+  "id": "event-submissions",
+  "name": "Event einreichen",
+  "version": "1.0.0",
+  "sdk": 1,
+  "description": "Mitglieder reichen Event-Ideen ein, das Team übernimmt oder lehnt ab.",
+  "author": "DEMS",
+  "server": "server.js",
+  "client": "client.js",
+  "permissions": ["events:read", "events:draft", "discord:dm", "discord:channel"],
+  "settings": [
+    { "key": "notifyChannel", "type": "channel", "label": "Kanal für neue Vorschläge",
+      "help": "Leer lassen, wenn das Team nicht benachrichtigt werden soll." }
+  ]
+}
