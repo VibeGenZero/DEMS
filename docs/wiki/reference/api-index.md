@@ -3,7 +3,7 @@ id: api-index
 title: API index — every HTTP endpoint
 type: reference
 tags: [api, endpoints, rest, index, routes]
-sources: [server.js, routes/setup.js, routes/auth.js, routes/events.js, routes/user.js, routes/admin.js, dev/devAuth.js]
+sources: [server.js, routes/plugins.js, routes/pluginStatic.js, routes/setup.js, routes/auth.js, routes/events.js, routes/user.js, routes/admin.js, dev/devAuth.js]
 depends_on: [routes-auth, routes-events, routes-admin, routes-user, server]
 see_also: [request-lifecycle, add-api-endpoint]
 ---
@@ -23,6 +23,9 @@ see_also: [request-lifecycle, add-api-endpoint]
 | GET | `/api/privacy` (#138: current privacy policy `{ markdown, version, updatedAt }`, 404 without one) | — |
 | GET | `/api/server-info` (`{ serverName, iconUrl, guildId, debugMode, ai: { memberAssistant, assistantName, teaserText, adminAssistant } }`; `ai` also in the error fallback, all off) | —
 | GET | `/api/updates` | — |
+| GET / HEAD | `/plugins/:pluginId/<client.js\|client.css\|assets/<name>>` (client files of switched-on plugins, `routes/pluginStatic.js`; allow-list, no session; anything else plain 404) | — |
+| GET | `/api/plugins` (client list of switched-on plugins: `[{ id, name, version, official, permissions, client, css }]`; `[]` in safe mode or before the host is ready) | U |
+| any | `/api/plugins/:pluginId/{*splat}` (dispatcher for `ctx.routes.*`, `routes/plugins.js`; off or unknown plugin 404 `Plugin nicht gefunden.`, unknown route 404 `Nicht gefunden.`) | U or A, per route `access` |
 | GET | `/{*splat}` (SPA fallback) | — |
 
 ## /api/setup — setup wizard (#138, `routes/setup.js`, [security](../concepts/security.md#first-run-setup-138))
