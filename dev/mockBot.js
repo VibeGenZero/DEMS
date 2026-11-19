@@ -219,6 +219,11 @@ async function sendChannelMessage(channelId, payload, options = {}) {
     return { channelId, messageId: fakeSnowflake(), guildId: GUILD.id };
 }
 
+async function sendPluginChannelMessage(channelId, payload = {}) {
+    mockLog(`Plugin-Nachricht in ${describeChannel(channelId)}`, payload.content);
+    return true;
+}
+
 async function ensureAnnouncementThread(sent, title, existing = null) {
     // The mock cannot see deleted threads, so a stored one is always kept
     if (existing && existing.threadId) return existing;
@@ -455,6 +460,7 @@ module.exports = {
     getBotStatus,
     sendDM,
     sendChannelMessage,
+    sendPluginChannelMessage,
     ensureAnnouncementThread,
     refreshEventAnnouncements,
     refreshPollMessages,

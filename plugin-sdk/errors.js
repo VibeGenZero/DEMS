@@ -11,4 +11,29 @@ class PluginDataError extends Error {
     }
 }
 
-module.exports = { PluginDataError };
+/** A plugin used a part of `ctx` its manifest does not ask permission for. */
+class PluginPermissionError extends Error {
+    /**
+     * @param {string} permission -> The missing permission, e.g. `discord:dm`.
+     */
+    constructor(permission) {
+        super(`Dem Plugin fehlt die Berechtigung „${permission}“.`);
+        this.name = 'PluginPermissionError';
+        this.permission = permission;
+    }
+}
+
+/** Thrown by a plugin route handler (`ctx.httpError`) to answer with a status and a German message. */
+class PluginHttpError extends Error {
+    /**
+     * @param {number} status -> HTTP status of the answer.
+     * @param {string} message -> German text of `{ error }`.
+     */
+    constructor(status, message) {
+        super(message);
+        this.name = 'PluginHttpError';
+        this.status = Number(status);
+    }
+}
+
+module.exports = { PluginDataError, PluginPermissionError, PluginHttpError };

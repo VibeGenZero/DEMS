@@ -80,6 +80,31 @@ async function sendChannelMessage(channelId, payload, options = {}) {
 }
 
 /**
+ * Post a plugin's classic text message (Plugin SDK `ctx.discord`). Plugin
+ * text never pings: `allowedMentions` is always `{ parse: [] }`, whatever the
+ * payload says.
+ *
+ * @param {string} channelId -> Target text channel (from the plugin's `channel` setting).
+ * @param {{ content: string, components?: Array }} payload -> Text and optional link button row.
+ * @returns {Promise<boolean>} -> True when posted; false while not ready or on any error.
+ */
+async function sendPluginChannelMessage(channelId, { content, components = [] } = {}) {
+    if (!state.isReady) return false;
+    try {
+        const channel = await client.channels.fetch(channelId);
+        if (!channel || !channel.send) {
+            console.error('Plugin message: channel not found or not a text channel:', channelId);
+            return false;
+        }
+        await channel.send({ content, components, allowedMentions: { parse: [] } });
+        return true;
+    } catch (err) {
+        console.error('Failed to send plugin channel message:', err.message);
+        return false;
+    }
+}
+
+/**
  * Build an event announcement as a Components V2 message (B-05).
  *
  * Ping line above a container in the event colour: banner, title and
@@ -437,6 +462,7 @@ function recordsChanged(before, after) {
 module.exports = {
     sendDM,
     sendChannelMessage,
+    sendPluginChannelMessage,
     buildEventAnnouncement,
     canRegisterViaDiscord,
     buildSlotButton,

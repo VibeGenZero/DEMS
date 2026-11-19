@@ -11,7 +11,7 @@ const { parseTemplate } = require('./utils/template');
 const { wireClient, startBot, restartBot, whenBotSettled, stopBot } = require('./bot/lifecycle');
 const { client } = require('./bot/client');
 const {
-    sendDM, sendChannelMessage, buildEventAnnouncement, canRegisterViaDiscord,
+    sendDM, sendChannelMessage, sendPluginChannelMessage, buildEventAnnouncement, canRegisterViaDiscord,
     isGoneDiscordError, refreshEventAnnouncements
 } = require('./bot/messages');
 const { buildPollMessage, buildPollVoteReply, refreshPollMessages, markPollMessagesDeleted } = require('./bot/polls');
@@ -98,7 +98,8 @@ module.exports = {
     setScheduledEventStatus,
     removeRoleFromMembers,
     sendWaitlistOffer,
-    refreshAskFeature
+    refreshAskFeature,
+    sendPluginChannelMessage
 };
 
 // Dev mock mode: every call that would reach Discord goes to the simulated
