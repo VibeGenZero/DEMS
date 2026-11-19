@@ -724,6 +724,63 @@ function buildEventTemplates(clock) {
     };
 }
 
+/** Seeded submissions of „Event einreichen“, in the shape of plugins/event-submissions/server.js. */
+const SUBMISSION_ID = { TOM: 'dev-submission-tom', NEO: 'dev-submission-neo', LENA: 'dev-submission-lena' };
+
+function buildSubmissions(clock) {
+    const submission = (person, fields, daysAgo) => ({
+        userId: person.userId,
+        userName: person.displayName,
+        userAvatar: defaultAvatar(person.userId),
+        description: '',
+        wishedDate: '',
+        category: '',
+        status: 'open',
+        reason: '',
+        eventId: '',
+        createdAt: clock.offset(-daysAgo * DAY),
+        updatedAt: clock.offset(-daysAgo * DAY),
+        decidedBy: '',
+        decidedAt: '',
+        ...fields
+    });
+    return {
+        // Open -> the admin tab shows them, Tom can withdraw his
+        [SUBMISSION_ID.TOM]: submission(people.tom, {
+            title: 'Retro-Konsolenabend',
+            description: 'Alte Konsolen, **Couch-Koop** und Pizza.',
+            wishedDate: clock.offset(21 * DAY).slice(0, 10),
+            category: 'Gamenight'
+        }, 2),
+        [SUBMISSION_ID.NEO]: submission(people.neo, {
+            title: 'Einsteiger-Workshop',
+            description: 'Kann jemand die Grundlagen fürs Turnier erklären?',
+            category: 'Workshop'
+        }, 1),
+        // Rejected with a reason -> Lena sees it in her list
+        [SUBMISSION_ID.LENA]: submission(people.lena, {
+            title: 'Raid um 6 Uhr morgens',
+            status: 'rejected',
+            reason: 'Zu früh für die meisten im Team.',
+            decidedBy: people.mori.userId,
+            decidedAt: clock.offset(-3 * DAY),
+            updatedAt: clock.offset(-3 * DAY)
+        }, 5)
+    };
+}
+
+/**
+ * Plugin documents of the seed; dev/seed.js stores them in the plugin's
+ * namespaced collections and records those for the account purge.
+ *
+ * @param {Date} [now] -> Reference time; all dates are relative to it.
+ * @returns {Object} -> `{ [pluginId]: { [collection]: { [documentId]: data } } }`.
+ */
+function buildPluginSeedData(now = new Date()) {
+    const clock = createClock(now);
+    return { 'event-submissions': { submissions: buildSubmissions(clock) } };
+}
+
 function buildSeedData(now = new Date()) {
     const clock = createClock(now);
     return {
@@ -739,4 +796,4 @@ function buildSeedData(now = new Date()) {
     };
 }
 
-module.exports = { buildSeedData, EVENT_ID, SERIES_EVENT_IDS, CHECKIN_CODE, RAID_SLOT_ID, POLL_ID, EVENT_BANNERS };
+module.exports = { buildSeedData, buildPluginSeedData, SUBMISSION_ID, EVENT_ID, SERIES_EVENT_IDS, CHECKIN_CODE, RAID_SLOT_ID, POLL_ID, EVENT_BANNERS };
