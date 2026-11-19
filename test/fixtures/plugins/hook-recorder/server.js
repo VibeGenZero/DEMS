@@ -8,15 +8,19 @@ const HOOKS = [
 ];
 
 function register(ctx) {
+    // Handlers run one after another, so the counter keeps the emission order
+    // even when two hooks land in the same millisecond
+    let seq = 0;
     for (const name of HOOKS) {
         ctx.hooks.on(name, async payload => {
-            await ctx.data.add('log', { hook: name, payload, at: new Date().toISOString() });
+            seq += 1;
+            await ctx.data.add('log', { hook: name, payload, seq, at: new Date().toISOString() });
         });
     }
 
     ctx.routes.get('/log', { access: 'admin' }, async () => {
         const entries = await ctx.data.list('log');
-        return entries.sort((a, b) => a.at.localeCompare(b.at));
+        return entries.sort((a, b) => a.seq - b.seq);
     });
     ctx.routes.get('/me', { access: 'member' }, ({ user }) => ({ user }));
     ctx.routes.post('/me', { access: 'member' }, ({ user }) => ({ user }));

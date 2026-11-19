@@ -141,8 +141,9 @@ async function completePromotion(event, promotion, { announce = true } = {}) {
 // Event fields only admins may see; members would otherwise check in without being there
 const PRIVATE_EVENT_FIELDS = ['checkinCode'];
 
-// Event fields only admins read in an answer (no secret store: the AI may pass them on to members)
-const ADMIN_EVENT_FIELDS = ['aiNotes'];
+// Event fields only admins read in an answer (no secret store: the AI may pass them on to members);
+// `origin` is the plugin that created the event („Übernehmen“), members never see it
+const ADMIN_EVENT_FIELDS = ['aiNotes', 'origin'];
 
 /**
  * Event data for answers outside the admin area.

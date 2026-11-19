@@ -11,6 +11,7 @@ const { eventEndTime } = require('./eventListing');
 const { addAuditLog } = require('./eventUtils');
 const { notifyRegistrationsChanged } = require('./announcementRefresh');
 const { cleanupEvent, retryPendingCleanups } = require('./eventCleanup');
+const { safeStatusChange } = require('../plugin-sdk/coreHooks');
 
 const ARCHIVE_DELAY_MS = 24 * 60 * 60 * 1000;
 const ARCHIVE_INTERVAL_MS = 5 * 60 * 1000;
@@ -47,7 +48,9 @@ async function archiveEndedEvents({ now = new Date() } = {}) {
         const event = eventDoc.data();
         if (!isDueForArchive(event, now)) continue;
         try {
-            await updateDoc(doc(db, 'events', eventDoc.id), { status: 'archived', updatedAt: now.toISOString() });
+            const updates = { status: 'archived', updatedAt: now.toISOString() };
+            await updateDoc(doc(db, 'events', eventDoc.id), updates);
+            safeStatusChange({ eventId: eventDoc.id, before: event, after: { ...event, ...updates } });
             await addAuditLog('AUTO_ARCHIVE_EVENT', 'system', `Archived "${event.title}" 24 hours after its end`, eventDoc.id);
             notifyRegistrationsChanged(eventDoc.id);
             await cleanupEvent(eventDoc.id);

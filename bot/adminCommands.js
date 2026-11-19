@@ -22,6 +22,7 @@ const {
     ADMIN_EVENT_ACTIVATE_PREFIX, ADMIN_RETRY_PREFIX
 } = require('./constants');
 const { getTimezone } = require('../utils/timezone');
+const { emitEventCreated } = require('../plugin-sdk/coreHooks');
 
 const NOT_ADMIN = '⛔ Nur Admins können Events und Abstimmungen erstellen.';
 const TEMPLATE_GONE = 'Diese Vorlage gibt es nicht mehr.';
@@ -377,6 +378,7 @@ async function handleAdminEventModal(interaction, templateId = NO_TEMPLATE) {
     if (errors.length > 0) return refuseInput(interaction, errors.join(' '), retry);
 
     const ref = await addDoc(collection(db, 'events'), event);
+    emitEventCreated(ref.id, event);
     await addAuditLog('CREATE_EVENT', interaction.user.id, `Created event "${event.title}" in Discord`, ref.id);
 
     const places = event.maxParticipants > 0 ? String(event.maxParticipants) : 'unbegrenzt';

@@ -3,7 +3,7 @@ id: routes-admin
 title: routes/admin.js — admin API
 type: module
 tags: [api, admin, events, registrations, discord, bot-control, maintenance, audit-log, csv]
-sources: [routes/admin.js, routes/adminSystem.js, routes/adminAi.js, routes/aiConnection.js, ai/eventDraft.js, ai/draftFields.js, utils/systemValues.js, middleware/validators.js, utils/eventUtils.js, utils/capacity.js, utils/memberOverview.js, utils/insights.js, utils/participantMessage.js, utils/eventTemplates.js, utils/adminActions.js]
+sources: [routes/admin.js, plugin-sdk/coreHooks.js, routes/adminSystem.js, routes/adminAi.js, routes/aiConnection.js, ai/eventDraft.js, ai/draftFields.js, utils/systemValues.js, middleware/validators.js, utils/eventUtils.js, utils/capacity.js, utils/memberOverview.js, utils/insights.js, utils/participantMessage.js, utils/eventTemplates.js, utils/adminActions.js]
 part_of: [architecture]
 depends_on: [middleware, utils, data-layer, bot]
 see_also: [event-lifecycle, maintenance-mode, discord-integration, api-index]
@@ -92,3 +92,5 @@ grep `router.(get|post|put|delete)('/<path>` in `routes/admin.js`; the file is g
 - The event payload is whitelisted field by field in POST and PUT (`baseEvent`, `updates`) — adding an event field means editing both. See [add-event-field](../howto/add-event-field.md).
 - Uploaded banners (W-12) are shared by reference: series and `POST /events/:id/duplicate` copy the path, so a route that drops a banner never deletes the file itself but calls `releaseBanners` (`utils/bannerStore.js`), which deletes it only when no stored event and no event template (W-10) uses it. Unsaved uploads are removed by the startup sweep after 24 h.
 - Status, cancel, start, end and event updates call `notifyRegistrationsChanged`, so announcement buttons disappear on inactive events.
+- Plugin hooks (plugin SDK): every event write emits through `plugin-sdk/coreHooks.js` right after the write and before the answer — `emitEventCreated` (`POST /events` per created date, also `fromPoll` after the decision; duplicate; series extension), `emitEventSaved` in `applySavedEvent` (`event.updated` with `changed` = keys of `updates` whose JSON differs, without `updatedAt`, then the status hook; every saved series date), `safeStatusChange` in `/status`, `/start`, `/end`, `/cancel`, `emitEventDeleted` per deleted date (`{ eventId, origin }`, read before the delete). The helpers catch and log every error, so a plugin never changes a core answer; the reset emits nothing. Event lifecycle → hook table: [event-lifecycle](../concepts/event-lifecycle.md).
+- `pluginOrigin` is accepted only by `POST /events` (trap: whitelisted in POST only, on purpose); an invalid one answers 400 „Ungültige Plugin-Herkunft.“ before anything is written, also with `fromPoll`.

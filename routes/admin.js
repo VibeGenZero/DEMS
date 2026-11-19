@@ -42,6 +42,7 @@ const { cleanupEvent, restoreEventRole } = require('../utils/eventCleanup');
 const {
     buildNewEvent, createEventChannelsAllowed, announceEvent, createPoll, announcePoll
 } = require('../utils/adminActions');
+const { emitEventCreated, emitEventSaved, emitEventDeleted, safeStatusChange, validatePluginOrigin } = require('../plugin-sdk/coreHooks');
 
 // Statuses after which an event is over for good -> clean-up in Discord (B-10)
 const OVER_STATUSES = ['archived', 'cancelled'];
@@ -247,6 +248,16 @@ router.post('/events', validateEvent, async (req, res) => {
         }
         const { slots } = slotResult;
 
+        // A plugin may stamp its origin on a new event („Übernehmen“); only here, never on PUT
+        let origin = null;
+        if (req.body.pluginOrigin !== undefined) {
+            const checked = validatePluginOrigin(req.body.pluginOrigin);
+            if (!checked.ok) return res.status(400).json({ error: 'Ungültige Plugin-Herkunft.' });
+            origin = checked.origin;
+        }
+        // Only the first date carries it: the idea became one event, later dates are repeats
+        const withOrigin = (event) => (origin ? { ...event, origin } : event);
+
         // An event can be created from a date poll -> checked and decided together with the creation below
         const fromPoll = req.body.fromPoll && typeof req.body.fromPoll === 'object' ? req.body.fromPoll : null;
         // Voters get a DM with the event link -> the event must be visible to members
@@ -259,7 +270,7 @@ router.post('/events', validateEvent, async (req, res) => {
         /**
          * Write the event (or every instance of a series).
          *
-         * @returns {Promise<Object>} -> `{ eventId, body }` -> first event ID and the response body.
+         * @returns {Promise<Object>} -> `{ eventId, body, created }` -> first event ID, the response body and every stored event.
          */
         const writeEvents = async () => {
             if (recurring && startDate && recurringUntil) {
@@ -276,7 +287,7 @@ router.post('/events', validateEvent, async (req, res) => {
                 const shift = (offset) => (offset === null ? '' : new Date(currentStart.getTime() - offset).toISOString());
 
                 while (currentStart.toISOString().substring(0, 10) <= recurringUntil) {
-                    const instance = {
+                    const fields = {
                         ...baseEvent,
                         seriesId,
                         startDate: currentStart.toISOString(),
@@ -284,6 +295,7 @@ router.post('/events', validateEvent, async (req, res) => {
                         registrationDeadline: shift(registrationOffset),
                         unregisterDeadline: shift(unregisterOffset),
                     };
+                    const instance = createdEvents.length === 0 ? withOrigin(fields) : fields;
                     const ref = await addDoc(collection(db, 'events'), instance);
                     createdEvents.push({ id: ref.id, ...instance });
 
@@ -298,20 +310,28 @@ router.post('/events', validateEvent, async (req, res) => {
                 }
 
                 await addAuditLog('CREATE_EVENT', req.session.user.id, `Created ${createdEvents.length} recurring events "${title}"`, createdEvents[0]?.id);
-                return { eventId: createdEvents[0]?.id, body: { count: createdEvents.length, events: createdEvents } };
+                return {
+                    eventId: createdEvents[0]?.id,
+                    body: { count: createdEvents.length, events: createdEvents },
+                    created: createdEvents.map(({ id, ...data }) => ({ id, data }))
+                };
             }
 
-            const ref = await addDoc(collection(db, 'events'), baseEvent);
+            const event = withOrigin(baseEvent);
+            const ref = await addDoc(collection(db, 'events'), event);
             debugLog('admin.createEvent', { title: req.body.title, adminId: req.session?.user?.id });
             await addAuditLog('CREATE_EVENT', req.session.user.id, `Created event "${title}"`, ref.id);
             if (baseEvent.autoCreateChannels && baseEvent.status === 'active') {
                 createEventChannelsAllowed({ id: ref.id, ...baseEvent }).catch(console.error);
             }
-            return { eventId: ref.id, body: { id: ref.id, ...baseEvent } };
+            return { eventId: ref.id, body: { id: ref.id, ...event }, created: [{ id: ref.id, data: event }] };
         };
+        // Plugin hooks once the events are stored (and the poll decided); they never fail the answer
+        const emitCreated = (created) => created.forEach(({ id, data }) => emitEventCreated(id, data));
 
         if (!fromPoll) {
-            const { body } = await writeEvents();
+            const { body, created } = await writeEvents();
+            emitCreated(created);
             return res.json(body);
         }
 
@@ -324,6 +344,7 @@ router.post('/events', validateEvent, async (req, res) => {
         if (!decision.ok) {
             return res.status(decision.httpStatus).json({ error: decision.error });
         }
+        emitCreated(decision.created.created);
         await addAuditLog('DECIDE_POLL', req.session.user.id, `Decided poll "${decision.poll.title}" -> event ${decision.created.eventId}`, decision.poll.id);
         res.json(decision.created.body);
 
@@ -499,6 +520,8 @@ async function syncScheduledEventAfterChange(eventId, event, { bannerChanged = f
 }
 
 async function applySavedEvent({ eventId, oldEvent, updates, notify, adminId }) {
+    // event.updated and the status hook; they never fail the save
+    emitEventSaved(eventId, oldEvent, updates);
     // Following dates of a series keep their status -> it is not in their updates
     const status = updates.status || oldEvent.status;
     const isNowActive = status === 'active';
@@ -590,7 +613,10 @@ async function extendSeries({ seriesId, editedId, starts, newUntil, adminId }) {
             createdBy: adminId
         };
         delete created.updatedAt;
-        await addDoc(collection(db, 'events'), created);
+        // The origin belongs to the first date only, a repeat never carries it
+        delete created.origin;
+        const ref = await addDoc(collection(db, 'events'), created);
+        emitEventCreated(ref.id, created);
     }
     for (const date of all) {
         if (date.recurringUntil !== newUntil) await updateDoc(doc(db, 'events', date.id), { recurringUntil: newUntil });
@@ -717,7 +743,9 @@ router.put('/events/:id/status', async (req, res) => {
             return res.status(400).json({ error: 'Aktive Events brauchen ein Startdatum.' });
         }
 
-        await updateDoc(doc(db, 'events', req.params.id), { status, updatedAt: new Date().toISOString() });
+        const statusUpdate = { status, updatedAt: new Date().toISOString() };
+        await updateDoc(doc(db, 'events', req.params.id), statusUpdate);
+        safeStatusChange({ eventId: req.params.id, before: oldEvent, after: { ...oldEvent, ...statusUpdate } });
         await addAuditLog('UPDATE_EVENT_STATUS', req.session.user.id, `Changed status to ${status}`, req.params.id);
         notifyRegistrationsChanged(req.params.id);
         syncScheduledEventAfterChange(req.params.id, { ...oldEvent, status });
@@ -750,7 +778,9 @@ router.put('/events/:id/cancel', async (req, res) => {
         const event = eventSnap.data();
 
         // 1. Update status
-        await updateDoc(doc(db, 'events', eventId), { status: 'cancelled', updatedAt: new Date().toISOString() });
+        const cancelUpdate = { status: 'cancelled', updatedAt: new Date().toISOString() };
+        await updateDoc(doc(db, 'events', eventId), cancelUpdate);
+        safeStatusChange({ eventId, before: event, after: { ...event, ...cancelUpdate } });
         syncScheduledEventAfterChange(eventId, { ...event, status: 'cancelled' });
         // Channels and event role go (B-10); an event over already was cleaned up then
         if (!OVER_STATUSES.includes(event.status)) cleanupEvent(eventId).catch(console.error);
@@ -804,6 +834,7 @@ router.post('/events/:id/start', async (req, res) => {
         }
 
         await updateDoc(doc(col, eventId), updates);
+        safeStatusChange({ eventId, before: data, after: { ...data, ...updates } });
         await addAuditLog('START_EVENT', req.session.user.id, `Manually started event "${data.title}"`, eventId);
         notifyRegistrationsChanged(eventId);
         if (data.discordScheduledEventId) {
@@ -841,6 +872,7 @@ router.post('/events/:id/end', async (req, res) => {
         };
 
         await updateDoc(doc(col, eventId), updates);
+        safeStatusChange({ eventId, before: data, after: { ...data, ...updates } });
         await addAuditLog('END_EVENT', req.session.user.id, `Manually ended event "${data.title}"`, eventId);
         notifyRegistrationsChanged(eventId);
         if (data.discordScheduledEventId) {
@@ -875,6 +907,7 @@ router.delete('/events/:id', async (req, res) => {
         }
 
         await deleteDoc(doc(db, 'events', req.params.id));
+        if (event) emitEventDeleted(req.params.id, event);
         // Also delete all registrations for this event
         const regQ = query(collection(db, 'registrations'), where('eventId', '==', req.params.id));
         const regs = await getDocs(regQ);
@@ -926,6 +959,7 @@ router.delete('/events/series/:seriesId', async (req, res) => {
                 removeScheduledEvent(seriesEvent).catch(err => console.error('Discord server event delete error:', err.message));
             }
             await deleteDoc(doc(db, 'events', eventId));
+            emitEventDeleted(eventId, seriesEvent);
 
             const regQ = query(collection(db, 'registrations'), where('eventId', '==', eventId));
             const regs = await getDocs(regQ);
@@ -1094,8 +1128,11 @@ router.post('/events/:id/duplicate', async (req, res) => {
         };
         // Remove fields that shouldn't be copied
         delete duplicate.updatedAt;
+        // The copy is the admin's own event, not the plugin's („Übernehmen“ happened once)
+        delete duplicate.origin;
 
         const ref = await addDoc(collection(db, 'events'), duplicate);
+        emitEventCreated(ref.id, duplicate);
         await addAuditLog('DUPLICATE_EVENT', req.session.user.id, `Duplicated event "${original.title}"`, ref.id);
         res.json({ id: ref.id, ...duplicate });
     } catch (err) {
