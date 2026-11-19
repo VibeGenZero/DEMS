@@ -281,7 +281,7 @@ never delays another plugin.
 | `event.updated` | `{ event, changed: [field names] }` | `PUT /api/admin/events/:id` |
 | `event.ended` | `{ event }` | `POST …/end`, the auto-archive |
 | `event.cancelled` | `{ event }` | `PUT …/cancel` |
-| `event.deleted` | `{ eventId, origin }` | `DELETE …/:id`, series delete (once per date), the admin system reset (once per event, before the plugin data is wiped — so a plugin hears nothing afterwards) |
+| `event.deleted` | `{ eventId, origin }` | `DELETE …/:id`, series delete (once per date). The admin system reset emits **no** hooks: handlers run after the wipe and could write stale data back |
 | `member.deleted` | `{ userId }` | `DELETE /api/user/account`, after the core purge of `userId` documents |
 
 The builder finds every code path that changes these (web and Discord) — a test lists
@@ -294,8 +294,11 @@ except the event hooks (`events:read`); `member.deleted` reaches every enabled p
   data, the SDK deletes in every plugin collection (enabled, disabled or orphaned) the
   documents whose `userId` equals the member's id, then emits `member.deleted`. A
   failure is logged and does not fail the account deletion.
-- **Admin system reset** (`DELETE /api/admin/reset`): deletes all plugin collections
-  and plugin settings; `pluginState` (on/off) stays.
+- **Admin system reset** (`DELETE /api/admin/reset`): the reset dialog gets the target
+  „Plugin-Daten“ (`pluginData`, checked by default); it deletes all plugin collections
+  and plugin settings, `pluginState` (on/off) stays. The target `users` deletes the
+  plugin data too, because it belongs to the deleted members (Claude's call: a reset
+  of only comments or audit logs must not wipe plugin data).
 - **Orphaned plugins:** a `pluginState` entry or registered collections without a
   plugin folder → card „Verwaist“ in System › Plugins (no switch, no settings) with
   „Daten löschen“, which also removes the `pluginState` entry.
