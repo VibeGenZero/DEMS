@@ -8,7 +8,7 @@ import { avatar } from './components.js';
 import { showFirstLoginModal } from '../pages/profile.js';
 import { refreshPollBadge } from '../polls/polls.js';
 import { showNewsAfterLogin } from './updates.js';
-import { loadPlugins, unloadPluginTabs } from './plugins.js';
+import { unloadPluginTabs } from './plugins.js';
 
 // POST with CSRF token: the server no longer logs out on a plain GET
 export async function logout() {
@@ -31,8 +31,6 @@ export async function checkAuth() {
             if (data && data.id) {
                 state.currentUser = data;
                 showLoggedIn();
-                // Not awaited: the boot goes on while the clients load; failures are handled inside
-                loadPlugins();
                 // With a privacy policy to accept, the popups wait for the consent (#138, pages/privacy.js)
                 if (!data.privacyRequired) showLoginPopups(data.isNewUser);
             } else {

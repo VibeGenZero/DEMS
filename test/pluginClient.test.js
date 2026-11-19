@@ -348,10 +348,75 @@ test('the logout removes the plugin tabs', async () => {
     assert.equal(harness.element('nav-p-test'), null);
 });
 
-test('checkAuth loads the plugins after the login', async () => {
-    const harness = await loadFrontendApp({ '/auth/me': { ...MEMBER, csrfToken: 't' }, '/api/plugins': [] });
-    await harness.app.checkAuth();
-    // loadPlugins is not awaited by checkAuth; let its fetch run
-    await new Promise(resolve => setImmediate(resolve));
-    assert.equal(harness.requests.filter(entry => entry.url === '/api/plugins').length, 1);
+const POLICY = { markdown: '# Datenschutz', version: 3, updatedAt: '2026-11-09T10:00:00.000Z' };
+const flush = async () => {
+    for (let i = 0; i < 3; i++) await new Promise(resolve => setImmediate(resolve));
+};
+const pluginListCalls = (harness) => harness.requests.filter(entry => entry.url === '/api/plugins').length;
+
+test('the boot loads the plugins after the login when no consent is pending', async () => {
+    const harness = await loadFrontendApp({ '/api/csrf-token': { token: 't' }, '/auth/me': { ...MEMBER }, '/api/plugins': [] });
+    await harness.app.finishLoading();
+    await flush();
+    assert.equal(pluginListCalls(harness), 1);
+});
+
+test('with a pending privacy consent the plugins load only once it is accepted', async () => {
+    const harness = await loadFrontendApp({
+        '/api/csrf-token': { token: 't' },
+        '/auth/me': { ...MEMBER, privacyRequired: true, privacyVersion: 3 },
+        '/api/privacy': POLICY,
+        '/api/user/privacy/accept': { success: true, version: 3 },
+        // Behind the privacy gate, like the server
+        '/api/plugins': () => (harness.state.currentUser.privacyRequired
+            ? httpAnswer(403, { error: 'Bitte akzeptiere zuerst die Datenschutzerklärung.', privacyRequired: true })
+            : [ENTRY])
+    });
+    const booting = harness.app.finishLoading();
+    await flush();
+    assert.equal(pluginListCalls(harness), 0, 'no plugin request before the consent');
+    await harness.app.runAction('acceptPrivacy', {});
+    await booting;
+    await flush();
+    assert.equal(pluginListCalls(harness), 1);
+});
+
+test('a failed plugin list is asked again by the next loadPlugins', async () => {
+    let calls = 0;
+    const harness = await openApp({ '/api/plugins': () => (++calls === 1 ? httpAnswer(500, { error: 'x' }) : [ENTRY]) });
+    const importModule = async () => ({ register: (ui) => ui.addPage(recordingPage([])) });
+    await harness.app.loadPlugins({ importModule });
+    assert.equal(harness.element('nav-p-test'), null);
+    await harness.app.loadPlugins({ importModule });
+    assert.equal(calls, 2);
+    assert.ok(harness.element('nav-p-test'));
+    // Loaded once: no third request
+    await harness.app.loadPlugins({ importModule });
+    assert.equal(calls, 2);
+});
+
+test('a broken plugin after a slow one is no unhandled rejection', async () => {
+    const entries = [ENTRY, { ...ENTRY, id: 'fremd', name: 'Fremd', client: '/js/main.js' }];
+    const harness = await openApp({ '/api/plugins': entries });
+    const unhandled = [];
+    const onUnhandled = (reason) => unhandled.push(reason);
+    process.on('unhandledRejection', onUnhandled);
+    const original = console.error;
+    console.error = () => {};
+    try {
+        await harness.app.loadPlugins({
+            importModule: async () => {
+                // The first import is still pending while the second one fails
+                await flush();
+                return { register: (ui) => ui.addPage(recordingPage([])) };
+            }
+        });
+        await flush();
+    } finally {
+        console.error = original;
+        process.off('unhandledRejection', onUnhandled);
+    }
+    assert.deepEqual(unhandled, []);
+    assert.ok(harness.element('nav-p-test'));
+    assert.ok(harness.toasts.includes('Plugin „Fremd“ konnte nicht geladen werden.'));
 });

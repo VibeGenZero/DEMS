@@ -40,7 +40,9 @@ let loading = null;
 let shownPluginId = null;
 
 /**
- * Load every enabled plugin client once per page load (the logout reloads the page).
+ * Load every enabled plugin client once per page load (the logout reloads the
+ * page). A list that could not be fetched (e.g. 403 of the privacy gate) is
+ * asked for again by the next call.
  *
  * @param {Object} [options]
  * @param {Function} [options.importModule] -> `(url) => Promise<module>`; tests pass their own.
@@ -52,26 +54,33 @@ export function loadPlugins({ importModule = (url) => import(url) } = {}) {
 }
 
 async function loadAll(importModule) {
-    let entries;
-    try {
-        const res = await fetch('/api/plugins');
-        if (!res.ok) return;
-        entries = await res.json();
-    } catch (err) {
-        console.error('Plugins could not be listed:', err);
+    const entries = await fetchPluginList();
+    if (!entries) {
+        // Nothing was loaded: the next call may try again
+        loading = null;
         return;
     }
-    if (!Array.isArray(entries)) return;
     const valid = entries.filter(entry => entry && PLUGIN_ID.test(entry.id));
-    // Imports run side by side; mounting keeps the server's order (order of the tabs)
-    const imports = valid.map(entry => importClient(entry, importModule));
+    // Imports run side by side and settle at once (a later one may fail while an earlier one
+    // is pending); mounting keeps the server's order (order of the tabs)
+    const imports = valid.map(entry => importClient(entry, importModule).then(module => ({ module }), error => ({ error })));
     for (const [index, entry] of valid.entries()) {
-        try {
-            const module = await imports[index];
-            if (module) mountPluginModule(entry, module);
-        } catch (err) {
-            reportFailure(entry, err);
-        }
+        const { module, error } = await imports[index];
+        if (error) reportFailure(entry, error);
+        else if (module) mountPluginModule(entry, module);
+    }
+}
+
+// The list of GET /api/plugins; null when it could not be fetched
+async function fetchPluginList() {
+    try {
+        const res = await fetch('/api/plugins');
+        if (!res.ok) return null;
+        const entries = await res.json();
+        return Array.isArray(entries) ? entries : null;
+    } catch (err) {
+        console.error('Plugins could not be listed:', err);
+        return null;
     }
 }
 
@@ -127,7 +136,10 @@ export function mountPluginModule(entry, module) {
 
 function dropPlugin(pluginId) {
     pages.delete(pluginId);
-    removeTab(pluginId);
+    if (removeTab(pluginId)) {
+        placeNavMarker();
+        syncNavbarHeight();
+    }
 }
 
 /**
@@ -233,9 +245,11 @@ function addTab(id, { label, icon }, access) {
     syncNavbarHeight();
 }
 
+// Callers move the navbar marker and height afterwards; true when a tab was removed
 function removeTab(id) {
-    if (!tabs.delete(id)) return;
+    if (!tabs.delete(id)) return false;
     document.getElementById(`nav-p-${id}`)?.remove();
+    return true;
 }
 
 function setTabBadge(id, count) {

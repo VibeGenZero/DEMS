@@ -34,13 +34,34 @@ function pluginFolders(root) {
         .map(entry => ({ id: entry.name, dir: path.join(root, entry.name) }));
 }
 
-/** client.js and assets/*.js of a plugin, when they exist. */
-function clientScripts(dir) {
-    const assets = path.join(dir, 'assets');
-    const inAssets = fs.existsSync(assets)
-        ? fs.readdirSync(assets).filter(name => name.endsWith('.js')).map(name => path.join(assets, name))
-        : [];
-    return [path.join(dir, 'client.js'), ...inAssets].filter(exists);
+// Files the browser can load from /plugins/<id>/: the manifest's client (served as client.js) and assets/<name>.js
+const SERVED_ASSET = /^assets\/[A-Za-z0-9_-]+\.js$/;
+
+/**
+ * Read plugin.json and the entry file a field names.
+ *
+ * @returns {{ manifest: Object|null, problems: string[] }}
+ */
+function readManifest(dir, id) {
+    const file = path.join(dir, 'plugin.json');
+    if (!exists(file)) return { manifest: null, problems: [`${id}/plugin.json is missing`] };
+    try {
+        return { manifest: JSON.parse(fs.readFileSync(file, 'utf8')), problems: [] };
+    } catch (err) {
+        return { manifest: null, problems: [`${id}/plugin.json is no JSON: ${err.message}`] };
+    }
+}
+
+/** The file a manifest field (`client`, `server`) names; a problem when it is missing or outside the folder. */
+function manifestEntry(dir, id, manifest, field, problems) {
+    if (!manifest || manifest[field] === undefined) return null;
+    const value = manifest[field];
+    const file = typeof value === 'string' && value !== '' ? path.resolve(dir, value) : null;
+    if (!file || !inside(dir, file) || !exists(file)) {
+        problems.push(`${id}/plugin.json ${field} "${String(value)}" is missing or outside the plugin`);
+        return null;
+    }
+    return file;
 }
 
 /** Specifiers of every import in a module source; a computed dynamic import is reported as null. */
@@ -117,19 +138,60 @@ function splitTopLevel(body) {
     return parts;
 }
 
-/** Problems of the client scripts: imports, inline handlers and styles, action names, emojis. */
-function checkClientScripts(dir, id) {
-    const problems = [];
-    const scripts = clientScripts(dir).map(file => ({ file, source: fs.readFileSync(file, 'utf8') }));
-    const registered = new Set(scripts.flatMap(({ source }) => [...registeredActions(source)]));
-    for (const { file, source } of scripts) {
+/**
+ * Client scripts of a plugin: the manifest's client, every assets/*.js and
+ * every file they import. The client is served as /plugins/<id>/client.js,
+ * so its imports resolve from there, not from where it lies in the folder.
+ *
+ * @returns {Array<{ file: string, source: string }>}
+ */
+function collectClientScripts(dir, id, entry, problems) {
+    const assets = path.join(dir, 'assets');
+    const queue = [
+        ...(entry ? [{ file: entry, served: path.join(dir, 'client.js') }] : []),
+        ...(fs.existsSync(assets) ? fs.readdirSync(assets).filter(name => name.endsWith('.js')).map(name => ({ file: path.join(assets, name), served: path.join(assets, name) })) : [])
+    ].filter(item => exists(item.file));
+    const seen = new Set(queue.map(item => item.file));
+    const scripts = [];
+    while (queue.length > 0) {
+        const { file, served } = queue.shift();
+        const source = fs.readFileSync(file, 'utf8');
         const name = path.relative(dir, file).split(path.sep).join('/');
+        scripts.push({ file, name, source });
         for (const { specifier, index } of importsOf(source)) {
             const place = `${id}/${name}:${lineOf(source, index)}`;
-            if (specifier === null) problems.push(`${place} imports a computed path`);
-            else if (!specifier.startsWith('./') && !specifier.startsWith('../')) problems.push(`${place} imports "${specifier}" (only relative paths inside the plugin)`);
-            else if (!inside(dir, path.resolve(path.dirname(file), specifier.split('?')[0]))) problems.push(`${place} imports "${specifier}" from outside the plugin`);
+            if (specifier === null) {
+                problems.push(`${place} imports a computed path`);
+                continue;
+            }
+            if (!specifier.startsWith('./') && !specifier.startsWith('../')) {
+                problems.push(`${place} imports "${specifier}" (only relative paths inside the plugin)`);
+                continue;
+            }
+            const target = path.resolve(path.dirname(served), specifier.split('?')[0]);
+            const relative = path.relative(dir, target).split(path.sep).join('/');
+            if (!inside(dir, target)) {
+                problems.push(`${place} imports "${specifier}" from outside the plugin`);
+            } else if (relative !== 'client.js' && !SERVED_ASSET.test(relative)) {
+                problems.push(`${place} imports "${specifier}", which /plugins/${id}/ does not serve (client.js, assets/<name>.js)`);
+            } else {
+                const real = relative === 'client.js' ? entry : target;
+                if (real && exists(real) && !seen.has(real)) {
+                    seen.add(real);
+                    queue.push({ file: real, served: target });
+                }
+            }
         }
+    }
+    return scripts;
+}
+
+/** Problems of the client scripts: imports, inline handlers and styles, action names, emojis. */
+function checkClientScripts(dir, id, entry) {
+    const problems = [];
+    const scripts = collectClientScripts(dir, id, entry, problems);
+    const registered = new Set(scripts.flatMap(({ source }) => [...registeredActions(source)]));
+    for (const { name, source } of scripts) {
         source.split('\n').forEach((line, index) => {
             const place = `${id}/${name}:${index + 1}`;
             if (INLINE_HANDLER.test(line)) problems.push(`${place} has an inline event handler`);
@@ -177,11 +239,10 @@ function resolveLocal(from, specifier) {
     return [base, `${base}.js`, `${base}.json`, path.join(base, 'index.js')].find(exists) || null;
 }
 
-/** Problems of server.js and every file it requires: only Node built-ins and files inside the plugin. */
-function checkServerFiles(dir, id) {
+/** Problems of the manifest's server file and every file it requires: only Node built-ins and files inside the plugin. */
+function checkServerFiles(dir, id, entry) {
     const problems = [];
-    const start = path.join(dir, 'server.js');
-    const queue = exists(start) ? [start] : [];
+    const queue = entry ? [entry] : [];
     const seen = new Set(queue);
     while (queue.length > 0) {
         const file = queue.shift();
@@ -216,11 +277,14 @@ function checkServerFiles(dir, id) {
 
 /** Every problem of one plugin folder. */
 function checkPlugin({ id, dir }) {
-    const problems = [
-        ...checkClientScripts(dir, id),
+    const { manifest, problems } = readManifest(dir, id);
+    const client = manifestEntry(dir, id, manifest, 'client', problems);
+    const server = manifestEntry(dir, id, manifest, 'server', problems);
+    problems.push(
+        ...checkClientScripts(dir, id, client),
         ...checkClientCss(dir, id),
-        ...checkServerFiles(dir, id)
-    ];
+        ...checkServerFiles(dir, id, server)
+    );
     if (fs.existsSync(path.join(dir, 'node_modules'))) problems.push(`${id}/node_modules must not exist (official plugins have no dependencies)`);
     return problems;
 }
@@ -244,6 +308,7 @@ function writePlugin(id, files) {
 
 test('a plugin that follows the rules passes', (t) => {
     const { root, folder } = writePlugin('good-plugin', {
+        'plugin.json': JSON.stringify({ id: 'good-plugin', client: 'client.js', server: 'server.js' }),
         'client.js': [
             "import { view } from './assets/view.js';",
             'export function register(ui) {',
@@ -252,10 +317,10 @@ test('a plugin that follows the rules passes', (t) => {
             '}'
         ].join('\n'),
         'assets/view.js': [
-            "import { label } from '../labels.js';",
+            "import { label } from './labels.js';",
             'export const view = () => `<button data-click="p:good-plugin:submit">${label}</button><a data-click="p:good-plugin:withdraw"></a><b data-change="p:good-plugin:reload"></b>`;'
         ].join('\n'),
-        'labels.js': "export const label = 'Senden';",
+        'assets/labels.js': "export const label = 'Senden';",
         'client.css': '.good { color: var(--accent-text); padding: var(--space-12); z-index: 1; }',
         'server.js': "const fs = require('node:fs');\nconst path = require('path');\nconst rules = require('./rules');\nmodule.exports = { register() {} };",
         'rules.js': "const data = require('./data.json');\nmodule.exports = {};",
@@ -267,6 +332,7 @@ test('a plugin that follows the rules passes', (t) => {
 
 test('each check fires on a plugin that breaks it', (t) => {
     const { root, folder } = writePlugin('bad-plugin', {
+        'plugin.json': JSON.stringify({ id: 'bad-plugin', client: 'client.js', server: 'server.js' }),
         'client.js': [
             "import { escapeHtml } from '/js/core/ui.js';",
             "import { x } from '../other/x.js';",
@@ -307,4 +373,47 @@ test('each check fires on a plugin that breaks it', (t) => {
     ];
     for (const pattern of expected) assert.match(problems, pattern);
     assert.doesNotMatch(problems, /p:bad-plugin:go/);
+});
+
+test('the checks start from the files the manifest names', (t) => {
+    // The client is served as /plugins/<id>/client.js wherever it lies, so its imports resolve from the root
+    const { root, folder } = writePlugin('moved-plugin', {
+        'plugin.json': JSON.stringify({ id: 'moved-plugin', client: 'web/main.js', server: 'index.js' }),
+        'web/main.js': [
+            "import { view } from './assets/view.js';",
+            "import { other } from '../assets/view.js';",
+            "import { local } from './web/helper.js';",
+            'const a = `<button onclick="go()">x</button>`;'
+        ].join('\n'),
+        'web/helper.js': '',
+        'assets/view.js': 'const b = `<p style="color: red">x</p>`;',
+        'index.js': "const express = require('express');\nconst lib = require('./lib/db');",
+        'lib/db.js': "const db = require('../../../firebaseAdmin');"
+    });
+    t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+    const problems = checkPlugin(folder).join('\n');
+    for (const pattern of [
+        /web\/main\.js:2 imports "\.\.\/assets\/view\.js" from outside the plugin/,
+        /web\/main\.js:3 imports "\.\/web\/helper\.js", which \/plugins\/moved-plugin\/ does not serve/,
+        /web\/main\.js:4 has an inline event handler/,
+        /assets\/view\.js:1 has an inline style/,
+        /index\.js:1 loads "express"/,
+        /lib\/db\.js:1 loads "\.\.\/\.\.\/\.\.\/firebaseAdmin" from outside the plugin/
+    ]) assert.match(problems, pattern);
+});
+
+test('a manifest entry outside the folder and a missing manifest are problems', (t) => {
+    const { root, folder } = writePlugin('outside-plugin', {
+        'plugin.json': JSON.stringify({ id: 'outside-plugin', client: '../other/client.js', server: 'nope.js' }),
+        '../other/client.js': 'export function register() {}'
+    });
+    const { root: bareRoot, folder: bare } = writePlugin('bare-plugin', { 'client.js': '' });
+    t.after(() => {
+        fs.rmSync(root, { recursive: true, force: true });
+        fs.rmSync(bareRoot, { recursive: true, force: true });
+    });
+    const problems = checkPlugin(folder).join('\n');
+    assert.match(problems, /plugin\.json client "\.\.\/other\/client\.js" is missing or outside the plugin/);
+    assert.match(problems, /plugin\.json server "nope\.js" is missing or outside the plugin/);
+    assert.deepEqual(checkPlugin(bare), ['bare-plugin/plugin.json is missing']);
 });

@@ -6,6 +6,7 @@
 import { registerActions } from '../core/actions.js';
 import { logout, showLoginPopups } from '../core/auth.js';
 import { emptyState } from '../core/components.js';
+import { loadPlugins } from '../core/plugins.js';
 import { handleRoute } from '../core/router.js';
 import { state } from '../core/state.js';
 import { renderMarkdownSafe, showToast, toggleElement } from '../core/ui.js';
@@ -130,7 +131,8 @@ export function watchPrivacyAnswers() {
                 const data = await (typeof res.clone === 'function' ? res.clone() : res).json();
                 if (data && data.privacyRequired) {
                     state.currentUser.privacyRequired = true;
-                    requirePrivacyConsent().then(() => handleRoute());
+                    // loadPlugins: a list refused by the gate meanwhile is fetched now (a loaded one stays)
+                    requirePrivacyConsent().then(() => { loadPlugins(); handleRoute(); });
                 }
             } catch {
                 // not JSON: nothing to do
@@ -141,14 +143,19 @@ export function watchPrivacyAnswers() {
 }
 
 /**
- * After the login: the consent first, then the popups the login would show.
+ * After the login: the consent first, then the popups the login would show,
+ * then the plugin clients (their API sits behind the privacy gate).
  *
- * @returns {Promise<void>}
+ * @returns {Promise<void>} -> Resolves once the consent is settled; the plugins load on without being awaited.
  */
 export async function settlePrivacyConsent() {
-    if (!state.currentUser || !state.currentUser.privacyRequired) return;
-    await requirePrivacyConsent();
-    showLoginPopups(state.currentUser.isNewUser);
+    if (!state.currentUser) return;
+    if (state.currentUser.privacyRequired) {
+        await requirePrivacyConsent();
+        showLoginPopups(state.currentUser.isNewUser);
+    }
+    // Not awaited: the boot goes on while the clients load; failures are handled inside
+    loadPlugins();
 }
 
 registerActions({
