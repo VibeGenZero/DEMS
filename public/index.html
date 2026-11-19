@@ -1243,6 +1243,11 @@
                 <p class="text-secondary mb-0">Bei einem Cloud-Anbieter werden Fragen und Event-Inhalte an diesen Anbieter gesendet. Ergänze das in deiner Datenschutzerklärung. Mit einem lokalen Ollama verlässt nichts den Server. Namen und Discord-IDs der Mitglieder werden nie mitgesendet.</p>
               </div>
             </section>
+            <section class="settings-panel is-hidden" id="system-panel-plugins" aria-labelledby="system-panel-plugins-title">
+              <h3 class="settings-panel-title" id="system-panel-plugins-title" tabindex="-1">Plugins</h3>
+              <p class="text-secondary" id="plugins-privacy-hint">Plugins können Daten von Mitgliedern speichern. Erwähne eingeschaltete Plugins in deiner Datenschutzerklärung.</p>
+              <div class="plugin-list" id="plugins-list"></div>
+            </section>
             <section class="settings-panel is-hidden" id="system-panel-privacy" aria-labelledby="system-panel-privacy-title">
               <h3 class="settings-panel-title" id="system-panel-privacy-title" tabindex="-1">Datenschutz</h3>
               <div class="glass-card system-card">
@@ -2651,6 +2656,35 @@
         <div class="modal-footer border-0">
           <button type="button" class="btn btn-outline-light" data-bs-dismiss="modal">Abbrechen</button>
           <button type="button" class="btn btn-primary" data-click="confirmSystemSave">Speichern</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- System › Plugins (admin/system-plugins.js): trust confirmation before a custom plugin runs -->
+  <div class="modal fade" id="pluginTrustModal" tabindex="-1" aria-labelledby="plugin-trust-title">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header border-0">
+          <h5 class="modal-title" id="plugin-trust-title"><i class="bi bi-exclamation-triangle me-2" aria-hidden="true"></i>Nicht offizielles Plugin einschalten?</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Schließen"></button>
+        </div>
+        <div class="modal-body">
+          <p><span id="plugin-trust-name"></span> stammt nicht aus dem DEMS-Projekt. Es läuft mit vollem Zugriff auf DEMS,
+            den Discord-Bot und die Datenbank — die Berechtigungen unten zeigen, was es nutzen
+            möchte, verhindern aber nichts. Schalte es nur ein, wenn du dem Code vertraust.</p>
+          <p class="form-label">Berechtigungen</p>
+          <ul class="plugin-permissions" id="plugin-trust-permissions"></ul>
+          <div class="form-check mb-3">
+            <input class="form-check-input" type="checkbox" id="plugin-trust-check" data-change="pluginTrustInput">
+            <label class="form-check-label" for="plugin-trust-check">Ich vertraue dem Code dieses Plugins</label>
+          </div>
+          <label class="form-label" for="plugin-trust-password">Admin-Reset-Passwort</label>
+          <input type="password" class="form-control" id="plugin-trust-password" autocomplete="current-password" data-input="pluginTrustInput">
+        </div>
+        <div class="modal-footer border-0">
+          <button type="button" class="btn btn-outline-light" data-bs-dismiss="modal">Abbrechen</button>
+          <button type="button" class="btn btn-warning" id="plugin-trust-confirm" data-click="confirmPluginTrust" disabled>Einschalten</button>
         </div>
       </div>
     </div>

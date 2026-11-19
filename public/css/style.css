@@ -5093,6 +5093,40 @@ a.info-version-badge:focus-visible {
   color: var(--text-secondary);
 }
 
+/* ── System › Plugins ── */
+/* admin/system-plugins.js: one .system-card per plugin; switch top right, chips, permissions, settings */
+.plugin-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-16);
+}
+
+.plugin-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-8);
+}
+
+.plugin-section-title {
+  margin: 0 0 var(--space-8);
+  font-size: var(--font-size-md);
+}
+
+.plugin-permissions {
+  margin: 0;
+  padding-left: 0;
+  list-style: none;
+  color: var(--text-secondary);
+}
+
+.plugin-warning {
+  color: var(--warning);
+}
+
+.plugin-switch {
+  margin: 0;
+}
+
 /* Privacy policy page and consent dialog (pages/privacy.js, #138) */
 .privacy-container {
   max-width: 52rem;
