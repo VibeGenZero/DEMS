@@ -21,6 +21,7 @@ export const state = {
     flyingEventId: null, // Event whose overview card is flying (events/card-flight.js)
     currentPoll: null,
     pendingPollDecision: null,
+    pendingPluginOrigin: null, // { plugin, ref } of an event a plugin started (ui.openEventEditor), sent as pluginOrigin on the create
     botStatusRefreshInterval: null,
     botSettings: null, // Bot center switches the wizard needs (admin/wizard-bot.js, B-02)
     announceDefaultChannel: '', // Bot center announcement channel, for the wizard's default label (B-11)

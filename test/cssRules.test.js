@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('fs');
 const path = require('path');
 const { frontendSources, REPO_ROOT } = require('./helpers');
-const { readCss, parseRules, readTokens } = require('./cssSource');
+const { readCss, parseRules, readTokens, RAW_VALUE_CHECKS } = require('./cssSource');
 
 const CSS_DIR = path.join(REPO_ROOT, 'public', 'css');
 const INDEX_HTML = fs.readFileSync(path.join(REPO_ROOT, 'public', 'index.html'), 'utf8');
@@ -56,9 +56,6 @@ const MOVED = ['.btn-accent', '.btn-accent:hover', '.btn-discord', '.btn-discord
     '.admin-event-card', '.admin-event-card .admin-actions', '.series-admin-date-item', '.series-admin-card', '.series-badge',
     '.event-banner', '.series-dates-header', '.event-date-info', '.event-date-info i'
 ];
-// A colour written out: hex, rgb(), hsl() or a colour name (white-space is no colour)
-const RAW_COLOR = /#[0-9a-fA-F]{3,8}\b|\brgba?\(|\bhsla?\(|(?<![-\w])(white|black)(?![-\w])/;
-const withoutImportant = (value) => value.replace(/\s*!important$/, '');
 const describe = (rule, declaration) => `${rule.file}:${declaration.line} ${rule.selector} { ${declaration.property}: ${declaration.value} }`;
 // Upper limits that only go down: lower the number when you remove some,
 // never raise it. Before D-02 there were 57 !important in style.css.
@@ -154,27 +151,27 @@ test('every badge in the markup and the modules names its text colour', () => {
 });
 
 test('colour values only live in tokens.css', () => {
-    const raw = allRules().flatMap(rule => rule.declarations.filter(declaration => RAW_COLOR.test(declaration.value)).map(declaration => describe(rule, declaration)));
+    const raw = allRules().flatMap(rule => rule.declarations.filter(RAW_VALUE_CHECKS.colour).map(declaration => describe(rule, declaration)));
     assert.deepEqual(raw, []);
 });
 
 test('font sizes in px or rem only live in tokens.css', () => {
     const raw = allRules().flatMap(rule => rule.declarations
-        .filter(declaration => declaration.property === 'font-size' && /\d(px|rem)\b/.test(declaration.value))
+        .filter(RAW_VALUE_CHECKS.fontSize)
         .map(declaration => describe(rule, declaration)));
     assert.deepEqual(raw, []);
 });
 
 test('layers above local stacking use the z tokens', () => {
     const raw = allRules().flatMap(rule => rule.declarations
-        .filter(declaration => declaration.property === 'z-index' && /^-?\d+$/.test(withoutImportant(declaration.value)) && Math.abs(Number(withoutImportant(declaration.value))) >= 10)
+        .filter(RAW_VALUE_CHECKS.zIndex)
         .map(declaration => describe(rule, declaration)));
     assert.deepEqual(raw, []);
 });
 
 test('radii come from the radius tokens', () => {
     const raw = allRules().flatMap(rule => rule.declarations
-        .filter(declaration => declaration.property.startsWith('border') && declaration.property.endsWith('radius') && /\dpx\b/.test(declaration.value))
+        .filter(RAW_VALUE_CHECKS.radius)
         .map(declaration => describe(rule, declaration)));
     assert.deepEqual(raw, []);
 });

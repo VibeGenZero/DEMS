@@ -3,6 +3,7 @@
  */
 import { registerActions } from './actions.js';
 import { state } from './state.js';
+import { showPluginPage } from './plugins.js';
 import { placeNavMarker, syncNavbarHeight } from './tab-glider.js';
 import { showBotControlSection } from '../admin/bot-control.js';
 import { showAdminSection } from '../admin/dashboard.js';
@@ -171,9 +172,11 @@ export function handleRoute() {
     document.getElementById('event-detail-section')?.classList.remove('has-action-bar');
 
     // Only the navbar: the tabs component (.nav.nav-pills) uses .nav-link too
+    // A plugin page marks the tab of its plugin (data-section="p-<id>-section")
+    const navSection = (route === 'p' ? `p-${param}` : (NAV_ROUTE[route] || route)) + '-section';
     document.querySelectorAll('#main-navbar .nav-link').forEach(link => {
         link.classList.remove('active');
-        if (link.getAttribute('data-section') === (NAV_ROUTE[route] || route) + '-section') {
+        if (link.getAttribute('data-section') === navSection) {
             link.classList.add('active');
         }
     });
@@ -263,6 +266,9 @@ export function handleRoute() {
         case 'privacy':
             showPrivacySection();
             break;
+        case 'p':
+            // Access ('member' / 'admin') is checked by the page the plugin registered
+            return showPluginPage(param, parts.slice(2).join('/'));
         case 'debug':
             if (window.DEBUG_MODE) {
                 showDebugSection();

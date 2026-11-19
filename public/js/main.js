@@ -31,6 +31,7 @@ import './admin/wizard-templates.js';
 import './admin/wizard-bot.js';
 import './admin/wizard.js';
 import './core/auth.js';
+import './core/plugins.js';
 import './core/router.js';
 import './core/ui.js';
 import './events/checkin.js';
