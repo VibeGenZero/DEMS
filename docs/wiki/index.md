@@ -74,6 +74,7 @@ sources: [scripts/wiki-graph.js, docs/wiki/graph.json, CLAUDE.md]
 | `routes/calendar.js`, `utils/calendarFeed.js`, `utils/calendarFeedStore.js`, `utils/icalendar.js` | routes-user, server, data-model, security |
 | `utils/serverName.js` | server |
 | `utils/trustProxy.js`, `utils/ipAddress.js` | server, security, configuration |
+| `utils/requestPath.js` | server, auth-session, security |
 | `routes/polls.js` | routes-polls, date-polls |
 | `middleware/*.js` | middleware, maintenance-mode, auth-session |
 | `utils/registrationService.js` | registration-flow, role-slots, utils |

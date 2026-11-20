@@ -62,6 +62,12 @@ test('a member who has not accepted sees only the consent gate', async () => {
     assert.equal(events.status, 403);
     assert.deepEqual(await events.json(), GATE);
     assert.equal((await member.request('/api/user/profile')).status, 403);
+    // Another letter case reaches the same routers, so it meets the same gate
+    for (const pathname of ['/API/events', '/Api/user/settings']) {
+        const res = await member.request(pathname);
+        assert.equal(res.status, 403, pathname);
+        assert.deepEqual(await res.json(), GATE, pathname);
+    }
 
     // Still reachable: the policy, CSRF, server info, maintenance, news and the logout
     for (const pathname of ['/api/privacy', '/api/csrf-token', '/api/server-info', '/api/maintenance/status', '/api/updates']) {

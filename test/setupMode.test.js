@@ -34,6 +34,10 @@ test('the API answers 503 in setup mode, health check and public endpoints stay 
     assert.deepEqual(await events.json(), { error: 'DEMS ist noch nicht eingerichtet.', setupRequired: true });
     assert.equal((await client.request('/auth/me')).status, 503);
     assert.equal((await client.request('/auth/discord')).status, 503);
+    // Another letter case reaches the same routers, so it meets the same gate
+    for (const pathname of ['/API/events', '/Api/user/settings', '/AUTH/me']) {
+        assert.equal((await client.request(pathname)).status, 503, pathname);
+    }
 
     assert.equal((await client.request('/healthz')).status, 200);
     assert.equal((await client.request('/api/server-info')).status, 200);

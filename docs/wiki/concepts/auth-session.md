@@ -3,7 +3,7 @@ id: auth-session
 title: Authentication, session and CSRF
 type: concept
 tags: [auth, session, csrf, oauth2, admin, cookies, login]
-sources: [routes/auth.js, server.js, middleware/auth.js, middleware/privacy.js, utils/privacyPolicy.js, public/js/pages/privacy.js, utils/sessionStore.js, public/js/core/auth.js, public/js/core/boot.js, dev/devAuth.js]
+sources: [routes/auth.js, server.js, middleware/auth.js, middleware/privacy.js, utils/privacyPolicy.js, public/js/pages/privacy.js, utils/sessionStore.js, public/js/core/auth.js, public/js/core/boot.js, dev/devAuth.js, utils/requestPath.js]
 depends_on: [routes-auth, middleware]
 see_also: [security, maintenance-mode, request-lifecycle]
 ---
@@ -57,7 +57,7 @@ While a privacy policy exists (`privacyPolicy/current`, `utils/privacyPolicy.js`
 ## CSRF (double submit)
 
 - The token (32 random bytes hex) is minted only by `GET /api/csrf-token` (the SPA calls it at boot) and at login (`startUserSession`); every response for a session that has one sets the readable cookie `XSRF-TOKEN`. Requests without a session cookie create no session, so pages, assets and crawlers write nothing to the database.
-- POST/PUT/DELETE/PATCH on `/api/*` and `/auth/*` must send `X-CSRF-TOKEN` (or `X-XSRF-TOKEN`) equal to the session token → else 403 "Ungültiges CSRF-Token".
+- POST/PUT/DELETE/PATCH on `/api/*` and `/auth/*` must send `X-CSRF-TOKEN` (or `X-XSRF-TOKEN`) equal to the session token → else 403 "Ungültiges CSRF-Token". The check compares the lower-cased path (`isApiOrAuthPath`, `utils/requestPath.js`), so `/API/…` and `/Auth/logout` are checked too (audit 2026-11-20); the privacy gate does the same (`isApiPath`).
 - `/auth/*`: only `POST /auth/logout` mutates; it is protected like `/api/*`.
 - Frontend: `fetchCSRFToken()` at boot, header added manually in each `fetch`.
 

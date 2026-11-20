@@ -429,6 +429,23 @@ test('the event API answers only logged-in users', async () => {
     }
 });
 
+test('a path in other letter case does not skip the CSRF check', async () => {
+    const member = await loginAs('member');
+    for (const pathname of ['/API/user/calendar', '/Api/user/calendar', '/AUTH/logout', '/Auth/logout']) {
+        const res = await member.request(pathname, { method: 'POST' });
+        assert.equal(res.status, 403, pathname);
+        assert.equal((await res.json()).error, 'Ungültiges CSRF-Token. Bitte Seite neu laden.', pathname);
+    }
+    // The refused logouts left the session alone
+    assert.equal((await currentUser(member)).id, personaById('member').userId);
+});
+
+test('API routes answer only under their lower-case path', async () => {
+    const member = await loginAs('member');
+    assert.equal((await member.send('POST', '/API/user/calendar')).status, 404);
+    assert.equal((await member.send('POST', '/api/user/calendar')).status, 200);
+});
+
 test('the category list of all events is gone', async () => {
     // It also showed the categories of drafts and archived events to members
     const res = await (await loginAs('member')).request('/api/events/categories');
