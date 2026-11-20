@@ -117,8 +117,8 @@ const EMPTY_SCHEME = Object.freeze({
 
 const EMPTY_SOURCE = Object.freeze({
     tokens: Object.freeze({
-        dark: EMPTY_SCHEME,
-        light: EMPTY_SCHEME,
+        dark: Object.freeze({ ...EMPTY_SCHEME }),
+        light: Object.freeze({ ...EMPTY_SCHEME }),
     }),
     corners: 'standard',
     font: 'inter',

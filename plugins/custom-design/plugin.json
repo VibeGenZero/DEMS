@@ -6,6 +6,7 @@
   "description": "Farben, Ecken, Schrift und eigenes CSS für eure Community.",
   "author": "DEMS",
   "server": "server.js",
+  "client": "client.js",
   "permissions": ["theme"],
   "settings": []
 }

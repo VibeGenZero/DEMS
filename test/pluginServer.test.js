@@ -127,7 +127,7 @@ test('GET /api/plugins lists the client of every switched-on plugin', async () =
     assert.equal(res.status, 200);
     const list = await res.json();
     // Dev mock mode switches the official plugins on; the custom fixture follows them
-    assert.deepEqual(list.map(plugin => plugin.id), [OFFICIAL_PLUGIN, PLUGIN]);
+    assert.deepEqual(list.map(plugin => plugin.id), ['custom-design', OFFICIAL_PLUGIN, PLUGIN]);
     assert.deepEqual(list.find(plugin => plugin.id === PLUGIN), {
         id: PLUGIN,
         name: 'Hook-Rekorder',
