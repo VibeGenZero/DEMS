@@ -8,7 +8,12 @@ const { watchErrors, loginAs, openMenu, closeMenu } = require('./helpers');
 
 async function openPluginTab(page) {
     await openMenu(page);
-    const link = page.locator('#navContent a.nav-link[href="#p/event-submissions"]');
+    const link = page.locator('#nav-p-event-submissions-link');
+    await expect(link).toBeAttached();
+    const dropdownToggle = page.locator('#nav-plugins-toggle');
+    if (await dropdownToggle.isVisible()) {
+        await dropdownToggle.click();
+    }
     await expect(link).toBeVisible();
     await expect(link).toContainText('Event einreichen');
     await link.click();

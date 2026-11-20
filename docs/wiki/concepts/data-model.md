@@ -3,7 +3,7 @@ id: data-model
 title: Data model — collections and document shapes
 type: concept
 tags: [data-model, schema, collections, events, registrations, users, postgresql]
-sources: [routes/admin.js, plugin-sdk/state.js, plugin-sdk/data.js, utils/calendarFeedStore.js, utils/registrationService.js, utils/userProfile.js, utils/sessionStore.js, routes/events.js, utils/eventUtils.js, bot/registration.js, utils/checkin.js, bot/threadSync.js, dev/seedData.js, utils/eventTemplates.js, utils/botSettings.js, ai/settings.js, ai/usage.js]
+sources: [routes/admin.js, plugin-sdk/state.js, plugin-sdk/data.js, plugin-sdk/theme.js, plugins/custom-design/server.js, utils/calendarFeedStore.js, utils/registrationService.js, utils/userProfile.js, utils/sessionStore.js, routes/events.js, utils/eventUtils.js, bot/registration.js, utils/checkin.js, bot/threadSync.js, dev/seedData.js, utils/eventTemplates.js, utils/botSettings.js, ai/settings.js, ai/usage.js]
 depends_on: [data-layer]
 see_also: [registration-flow, event-lifecycle, maintenance-mode, glossary, plugin-sdk]
 ---
@@ -110,13 +110,14 @@ Read in full by the admin member overview (W-15, `GET /api/admin/members`, `util
 
 `{ memberQuestions, adminRequests, inputTokens, outputTokens, errors }` — counters only, never question or answer text. `pruneUsage` deletes documents older than 90 days (at start and every 6 h); `questionsToday` feeds the daily limit of `ai/limits.js`.
 
-## Plugin SDK collections — written by `plugin-sdk/state.js` and `plugin-sdk/data.js`
+## Plugin SDK collections — written by `plugin-sdk/state.js`, `plugin-sdk/data.js` and `plugin-sdk/theme.js`
 
 | Collection | Id | Shape |
 |---|---|---|
 | `pluginState` | plugin id | `{ enabled, enabledAt, enabledBy, confirmedVersion, confirmedPermissions[], collections[], lastError, lastErrorAt }` (`normalizeState` defaults missing fields); `confirmed*` only for custom plugins (the trust confirmation); `collections` = every `coll` the plugin wrote to, recorded before the first write so purge and „Daten löschen“ find it; an entry without a plugin folder = „Verwaist“. Kept by the system reset |
 | `pluginSettings` | plugin id | `{ values: { <setting key>: value } }`; secrets in plain text, answered only as `{ set }` (`readPublicSettings`); wiped by reset target `pluginData` / `users` and by „Daten löschen“ |
-| `plugin:<id>:<coll>` | auto or plugin-chosen (1–128 chars, no `/`) | whatever the plugin stores (`ctx.data`); reserved field `userId` (Discord id string) → deleted on account deletion (`purgeUser`); e.g. `plugin:event-submissions:submissions` |
+| `pluginThemes` | plugin id | `{ css, publishedAt, draft, draftAt }` (`plugin-sdk/theme.js`, written only through `ctx.theme` after `checkThemeCss`, unreachable via `ctx.data`); read by `GET /theme.css` (`css`) and `GET /theme-preview.css` (`draft` or `css`); wiped by reset target `pluginData` / `users` and by „Daten löschen“ |
+| `plugin:<id>:<coll>` | auto or plugin-chosen (1–128 chars, no `/`) | whatever the plugin stores (`ctx.data`); reserved field `userId` (Discord id string) → deleted on account deletion (`purgeUser`); e.g. `plugin:event-submissions:submissions`, `plugin:custom-design:designs` (`draft` and `published` sources `{ tokens: { dark, light }, corners, font, css, error?, updatedAt, updatedBy }`) |
 
 See [plugin-sdk](plugin-sdk.md).
 

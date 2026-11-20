@@ -3,7 +3,7 @@ id: plugin-sdk
 title: Plugin SDK — architecture, lifecycle, security model
 type: concept
 tags: [plugins, plugin-sdk, extensions, ctx, ui, hooks, permissions, trust, privacy, safe-mode, sdk-1]
-sources: [plugin-sdk, plugins/event-submissions, routes/plugins.js, routes/pluginStatic.js, routes/adminPlugins.js, public/js/core/plugins.js, public/js/admin/system-plugins.js, routes/user.js, server.js, test/pluginClientGuards.test.js, docs/superpowers/specs/2026-11-19-plugin-sdk-design.md]
+sources: [plugin-sdk, plugins/event-submissions, plugins/custom-design, routes/plugins.js, routes/pluginStatic.js, routes/pluginTheme.js, routes/adminPlugins.js, public/design-boot.js, public/js/core/plugins.js, public/js/core/pluginTheme.js, public/js/core/passwordDialog.js, public/js/admin/system-plugins.js, routes/user.js, server.js, test/pluginClientGuards.test.js, docs/superpowers/specs/2026-11-19-plugin-sdk-design.md, docs/superpowers/specs/2026-11-20-custom-design-plugin-design.md]
 depends_on: [server, data-layer]
 see_also: [write-plugin, security, frontend-app, bot, data-model, api-index, event-lifecycle]
 ---
@@ -22,15 +22,16 @@ Spec: [2026-11-19-plugin-sdk-design](../../superpowers/specs/2026-11-19-plugin-s
 | discovery | `plugin-sdk/discovery.js` | `discoverPlugins({ officialDir, customDir })`: every sub-folder with `plugin.json`; official first; a custom folder with an official id → „Ungültig: Die ID gehört einem offiziellen Plugin.“ |
 | host | `plugin-sdk/host.js` | lifecycle, on/off, admin views (`views.js`), settings validation, data delete, `purgeUser`, `wipeAllData`, `reportError`; one write chain per plugin (state writes are read-merge-write) |
 | state | `plugin-sdk/state.js` | `pluginState/<id>` and `pluginSettings/<id>` (see [data-model](data-model.md)) |
-| ctx | `plugin-sdk/context.js`, `data.js`, `discord.js` | the server API, built once per plugin (a fresh one only for a retry after a failed `register`) |
+| ctx | `plugin-sdk/context.js`, `data.js`, `discord.js`, `theme.js`, `themeCss.js` | the server API, built once per plugin (a fresh one only for a retry after a failed `register`); `theme.js` + `themeCss.js` store allow-list-filtered CSS in `pluginThemes` |
 | hooks | `plugin-sdk/hooks.js`, `plugin-sdk/coreHooks.js` | per-plugin queues; the core's emit helpers (`safeEmit`, `emitEventCreated`, …) and the `pluginOrigin` check |
 | errors | `plugin-sdk/errors.js` | `PluginPermissionError`, `PluginDataError`, `PluginHttpError` (`ctx.httpError`), `PluginHostError` (German messages) |
-| API | `routes/plugins.js` | `GET /api/plugins` (client list) + dispatcher `/api/plugins/<id>/…` (on/off checked per request) |
+| API | `routes/plugins.js` | `GET /api/plugins` (client list) + dispatcher `/api/plugins/<id>/…` (on/off checked per request; optional `password: true` admin reset password guard) |
+| theme CSS | `routes/pluginTheme.js`, `public/design-boot.js`, `public/js/core/pluginTheme.js` | `GET /theme.css` (public, ETag + `no-cache`) and `GET /theme-preview.css` (admin only, `no-store`) linked as `#custom-theme` in `<head>`, escape hatch `?design=standard` in `design-boot.js`, `ui.theme` + `#design-preview-bar` |
 | files | `routes/pluginStatic.js` | `/plugins/<id>/client.js`, `client.css`, `assets/<name>` of switched-on plugins only |
 | admin API | `routes/adminPlugins.js` | `GET /api/admin/plugins`, `PUT …/:id/enabled`, `PUT …/:id/settings`, `DELETE …/:id/data` — see [routes-admin](../modules/routes-admin.md) |
-| browser | `public/js/core/plugins.js` | `loadPlugins()` (after the privacy consent), the `ui` object, pages at `#p/<id>`, navbar tabs — see [frontend-app](../modules/frontend-app.md) |
+| browser | `public/js/core/plugins.js`, `public/js/core/passwordDialog.js` | `loadPlugins()` (after the privacy consent), the `ui` object, pages at `#p/<id>`, navbar tabs, core reset password dialog `#passwordModal` — see [frontend-app](../modules/frontend-app.md) |
 | admin UI | `public/js/admin/system-plugins.js` | System › Plugins (cards, switch, trust dialog `#pluginTrustModal`, settings, „Daten löschen“) |
-| reference plugin | `plugins/event-submissions/` | „Event einreichen“ (official) |
+| reference plugins | `plugins/event-submissions/`, `plugins/custom-design/` | „Event einreichen“ and „Design anpassen“ (official) |
 
 ```mermaid
 flowchart LR
@@ -73,6 +74,7 @@ A missing permission throws `PluginPermissionError` („Dem Plugin fehlt die Ber
 | `members:read` | `ctx.members.get` | „Mitgliedernamen und Avatare lesen“ |
 | `discord:dm` | `ctx.discord.sendDM` | „Direktnachrichten über den Bot senden“ |
 | `discord:channel` | `ctx.discord.sendChannelMessage` | „Nachrichten in Discord-Kanäle posten“ |
+| `theme` | `ctx.theme.saveDraft/discardDraft/publish/clear`, `ui.theme.showPreview/hidePreview/reload/isStandardMode` | „Aussehen der ganzen Seite ändern“ |
 | `network` | nothing in `ctx`; declares internet access | „Verbindungen ins Internet aufbauen“ |
 
 Routes, own data, own settings, `member.deleted`, the page/tab, `ctx.audit` and `ctx.log` need no permission. Not in SDK 1.0 (planned 1.1): Discord commands/buttons/modals, `ctx.schedule`, event page panel, registration and check-in hooks.
@@ -108,6 +110,7 @@ A new event counts as coming from `draft`, a stored one without status as `activ
 11. **Failure isolation.** Every plugin call is wrapped; start waits ≤ 5 s per plugin. Known limit: a synchronous endless loop blocks the whole process ([known-issues](../reference/known-issues.md)).
 12. **Static files.** Allow-list (`client.js`, `client.css`, `assets/<name>.{js,css,png,jpg,jpeg,webp,gif,json,woff2}`), no HTML/SVG, no listing, traversal and symlink escapes refused, `nosniff`.
 13. **Dependencies.** Official plugins use only Node built-ins and their own files (no `node_modules`, guard test). Custom plugins may bring their own — the operator's risk.
+14. **Themes (`theme` permission) — who guarantees what.** `ctx.theme` stores filtered stylesheets in the core-owned collection `pluginThemes/<id>` (unreachable via `ctx.data`). Every stylesheet is checked by `checkThemeCss` (`plugin-sdk/themeCss.js`: ≤ 50 000 characters, no backslashes, balanced `{}`/`()`, only allow-listed functions and at-rules — `url()`, `@import`, `@font-face` refused) both when saved and **again when served** by `GET /theme.css` and `GET /theme-preview.css`, so the SDK guarantees no plugin theme can make the browser load external resources even though the CSP has `img-src https:`. Because `ctx.theme` is not request-bound, **password checks and audit logging are the plugin's responsibility**, using the SDK's `password: true` route option (checked by `routes/plugins.js` against `ADMIN_RESET_PASSWORD` with `safeEqual` and stripped from `req.body` before the handler runs; prompted in the browser by `#passwordModal` via `ui.api.<method>(path, body, { password: true })`) and `ctx.audit`. `?design=standard` in the query or hash disables `#custom-theme` before the first paint (`public/design-boot.js`), and `PLUGINS_SAFE_MODE=true` serves an empty `/theme.css`.
 
 Admin-side rules (reset password for secrets, audit actions, secrets only as `{ set }`): [security](security.md).
 

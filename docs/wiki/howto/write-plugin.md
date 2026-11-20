@@ -3,7 +3,7 @@ id: write-plugin
 title: How to write a plugin
 type: howto
 tags: [howto, plugins, plugin-sdk, manifest, ctx, ui, hooks, settings, discord, privacy]
-sources: [plugins/event-submissions, plugin-sdk/manifest.js, plugin-sdk/context.js, plugin-sdk/data.js, plugin-sdk/discord.js, public/js/core/plugins.js, test/pluginClientGuards.test.js]
+sources: [plugins/event-submissions, plugins/custom-design, plugin-sdk/manifest.js, plugin-sdk/context.js, plugin-sdk/data.js, plugin-sdk/discord.js, plugin-sdk/theme.js, plugin-sdk/themeCss.js, public/js/core/plugins.js, public/js/core/pluginTheme.js, public/js/core/passwordDialog.js, test/pluginClientGuards.test.js]
 depends_on: [plugin-sdk]
 see_also: [security, frontend-app, bot, data-model, api-index, docker]
 ---
@@ -53,7 +53,7 @@ The browser can load only `client.js`, `client.css` and `assets/<name>` (one lev
 | `version` | `x.y.z`. Changing it on a custom plugin makes the admin confirm again |
 | `name` / `description` / `author` | required ≤ 40 / optional ≤ 200 / optional ≤ 60 characters, German |
 | `server` / `client` | optional relative file names inside the folder (no `..`, `\`, `:`, leading `/`); must exist |
-| `permissions` | list of known names: `events:read`, `events:draft`, `members:read`, `discord:dm`, `discord:channel`, `network`. Ask only for what you use; a new one on a custom plugin makes the admin confirm again |
+| `permissions` | list of known names: `events:read`, `events:draft`, `members:read`, `discord:dm`, `discord:channel`, `theme`, `network`. Ask only for what you use; a new one on a custom plugin makes the admin confirm again |
 | `settings` | list of `{ key, type, label, help?, required?, options? }`; `key` `^[a-zA-Z][a-zA-Z0-9]{0,31}$`, unique; `type` one of `text`, `textarea`, `number`, `boolean`, `select` (needs `options`: strings or `{ value, label }`), `channel`, `role`, `secret` |
 
 DEMS draws the settings form in System › Plugins and validates it: numbers finite, `select` only its options, `channel`/`role` Discord ids picked from the bot's lists, text ≤ 4000, `required` must be filled; `null`/`''` clears. A `secret` shows only „gesetzt“/„nicht gesetzt“ and needs the reset password to change.
@@ -82,10 +82,11 @@ module.exports = {
 |---|---|
 | `ctx.plugin` | `{ id, version, official }` |
 | `ctx.log.info/warn/error(...)` | console with prefix `[plugin:<id>]` |
-| `ctx.routes.get/post/put/delete(path, { access }, handler)` | mounted at `/api/plugins/<id><path>`; `access` `'member'` or `'admin'` is **required**; path Express syntax starting with `/`, no `*`/`?`/`#`; static paths before `/:id`; handler gets `{ user: { id, name, avatar, isAdmin, roles }, params, query, body }` and returns JSON (→ 200; `undefined` → `{ success: true }`) |
+| `ctx.routes.get/post/put/delete(path, { access, password? }, handler)` | mounted at `/api/plugins/<id><path>`; `access` `'member'` or `'admin'` is **required**; `password: true` (only with `access: 'admin'`) checks `req.body.password` against `ADMIN_RESET_PASSWORD` with `safeEqual` before calling `handler` (401 „Ungültiges Admin-Reset-Passwort.“ on failure) and strips `password` from `body`; path Express syntax starting with `/`, no `*`/`?`/`#`; static paths before `/:id`; handler gets `{ user: { id, name, avatar, isAdmin, roles }, params, query, body }` and returns JSON (→ 200; `undefined` → `{ success: true }`) |
 | `ctx.httpError(status, '<German>')` | `throw` it for a 4xx/5xx answer `{ error }`; any other throw → 500 „Im Plugin ist ein Fehler aufgetreten.“ + `lastError` |
 | `ctx.data.get(coll, id)`, `list(coll)`, `where(coll, field, op, value)`, `add(coll, obj)`, `set(coll, id, obj)`, `update(coll, id, patch)`, `delete(coll, id)` | own documents, returned as `{ id, ...data }` copies; `coll` `^[a-z][a-zA-Z0-9]{0,31}$`; ids 1–128 characters without `/`; ops `==`, `!=`, `<`, `<=`, `>`, `>=`, `in`; `update` of a missing document throws; no `limit`/`orderBy` — sort in memory; dates as ISO strings |
 | `ctx.settings.get()` | `{ key: value }` of the manifest's settings (secrets included; never return them) |
+| `ctx.theme.saveDraft(css)`, `discardDraft()`, `publish(css)`, `clear()` | `theme`; checks `css` with `checkThemeCss` (≤ 50 000 chars, no backslashes, allow-listed functions and at-rules only; throws 400 `PluginHttpError` with German reason + line number on failure) and stores it in `pluginThemes/<id>`, served at `/theme.css` (`publish`) and `/theme-preview.css` (`saveDraft`). The SDK guarantees the CSS filter; your routes own `access: 'admin'`, `password: true` and `ctx.audit` |
 | `ctx.events.get(id)`, `ctx.events.list({ upcoming })`, `ctx.events.url(id)` | `events:read`; public event shape + `origin`, **every status** (drafts too — do not show drafts to members); `list` sorted by start |
 | `ctx.members.get(userId)` | `members:read`; `{ id, name, avatar }` or `null` |
 | `ctx.discord.sendDM(userId, { text, link? })` | `discord:dm`; → `true`/`false` |
@@ -161,7 +162,8 @@ Official plugins write the action name literally (`data-click="p:event-submissio
 | `ui.addPage({ access, title, render, leave?, tab? })` | one page per plugin at `#p/<id>` and `#p/<id>/<param>`; `access` `'member'`/`'admin'` (admins only → other members are sent to the events); `render(container, param)` fills a fresh element inside `#plugin-section` (may be async); `leave()` when the page is left; `tab: { label ≤ 30, icon: 'bi-*' }` adds a navbar link (member tabs after the member links, admin tabs after the admin links) |
 | `ui.setTabBadge(count)` | number on the tab, 0 hides, > 99 shows „99+“ |
 | `ui.actions.register({ name: fn })` | names `^[A-Za-z][A-Za-z0-9]{0,39}$`, registered as `p:<id>:<name>`; use with `data-click`/`data-change`/`data-input`; the handler gets the element (read values from `element.dataset`) |
-| `ui.api.get/post/put/delete(path, body?)` | `fetch` to `/api/plugins/<id><path>` with the CSRF header; resolves the JSON, rejects with an `Error` carrying the German `error`; paths start with `/`, no `..`/`//`/`\` |
+| `ui.api.get/post/put/delete(path, body?, { password? })` | `fetch` to `/api/plugins/<id><path>` with the CSRF header; with `{ password: true }` on `post`/`put`/`delete` it opens the core `#passwordModal` (`showPasswordDialog`), sends the typed password as `body.password` without exposing it to the plugin, and rejects with `Error('Abgebrochen.')` on cancel; resolves the JSON, rejects with an `Error` carrying the German `error`; paths start with `/`, no `..`/`//`/`\` |
+| `ui.theme.showPreview()`, `hidePreview()`, `reload()`, `isStandardMode()` | `theme`, admins only: switches `#custom-theme` in this tab to `/theme-preview.css?v=<n>` and shows `#design-preview-bar` (`showPreview`), restores `/theme.css` (`hidePreview`), reloads `/theme.css?v=<n>` after publish/reset (`reload`), or reports whether `?design=standard` disabled custom themes (`isStandardMode`) |
 | `ui.openEventEditor({ prefill, ref })` | admins + `events:draft` only: opens a new event in the editor, prefilled with the editor's draft fields (`title`, `description`, `category`, `startDate`, …); `ref` (1–100 characters, e.g. your document id) comes back as `event.origin = { plugin: <id>, ref }` in the event hooks of that event (first series date only) |
 | `ui.navigate(param?)` | go to `#p/<id>` or `#p/<id>/<param>` |
 | `ui.helpers` | `escapeHtml`, `renderMarkdownSafe`, `markdownPreview`, `showToast(msg, 'success'\|'danger'\|'warning'\|'info')`, `showConfirmDialog`, `avatar`, `emptyState`, `relativeDay`, `applyStyleData`, `showElement`, `toggleElement` |
@@ -207,3 +209,14 @@ Checked by `test/pluginClientGuards.test.js` for official plugins; for custom pl
 | `client.css` | `.es-*` classes on tokens only |
 
 Tests to copy from: `test/eventSubmissionsRules.test.js` (pure rules), `test/eventSubmissionsQueue.test.js` (`register(fakeCtx)` with an async fake `ctx`), `test/eventSubmissionsServer.test.js` (routes and hooks on the dev server with personas), `test/eventSubmissionsView.test.js` (client and view in the fake DOM) and `e2e/plugins.spec.js` (browser smoke test).
+
+## Example 2: „Design anpassen“ (`plugins/custom-design/`)
+
+| File | Shows how to |
+|---|---|
+| `plugin.json` | permission `theme`, admin-only page |
+| `rules.js` | validate colour/corner/font/CSS sources, derive accent/glass/scrim tokens, compile dark (`:root:not([data-bs-theme="light"]), [data-bs-theme="dark"]`) and light (`[data-bs-theme="light"]`) rules, compute WCAG AA contrast warnings (`contrastWarnings`) |
+| `server.js` | store the editable source in `ctx.data` (`designs/draft` and `designs/published`) while `ctx.theme` stores the compiled, filtered stylesheet; keep filter errors on `draft.error` so typing is never lost; require `{ access: 'admin', password: true }` on `POST /publish-css` when free CSS changed; `ctx.audit` on publish and reset |
+| `assets/saver.js`, `assets/view.js`, `client.js`, `client.css` | debounced draft auto-save with `flush()` before preview/publish and on `leave()`, tab-local preview via `ui.theme.showPreview()`, password-gated publish via `ui.api.post('/publish-css', {}, { password: true })`, `.cd-*` classes using tokens only |
+
+Tests: `test/customDesignRules.test.js`, `test/customDesignServer.test.js`, `test/customDesignView.test.js`, `e2e/customDesign.spec.js`.

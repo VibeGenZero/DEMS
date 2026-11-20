@@ -67,8 +67,8 @@ sources: [scripts/wiki-graph.js, docs/wiki/graph.json, CLAUDE.md]
 | `routes/admin.js` | routes-admin, event-lifecycle, maintenance-mode |
 | `routes/user.js` | routes-user |
 | `plugin-sdk/*.js` | plugin-sdk, write-plugin |
-| `plugins/*` (official plugins, e.g. `plugins/event-submissions/`) | plugin-sdk, write-plugin |
-| `routes/plugins.js`, `routes/pluginStatic.js` | plugin-sdk, server, api-index, request-lifecycle |
+| `plugins/*` (official plugins, e.g. `plugins/event-submissions/`, `plugins/custom-design/`) | plugin-sdk, write-plugin |
+| `routes/plugins.js`, `routes/pluginStatic.js`, `routes/pluginTheme.js` | plugin-sdk, server, api-index, request-lifecycle, security |
 | `routes/adminPlugins.js` | plugin-sdk, routes-admin, security |
 | `plugin-sdk/coreHooks.js` (hook emission from the core, `pluginOrigin` check) | event-lifecycle, routes-admin, data-model, plugin-sdk |
 | `routes/calendar.js`, `utils/calendarFeed.js`, `utils/calendarFeedStore.js`, `utils/icalendar.js` | routes-user, server, data-model, security |
@@ -115,7 +115,7 @@ sources: [scripts/wiki-graph.js, docs/wiki/graph.json, CLAUDE.md]
 | `utils/reminders.js` | utils, reminders-presence |
 | `utils/semver.js` | utils, deployment |
 | `utils/updateCheck.js` | utils, configuration, routes-admin |
-| `public/js/**`, `public/theme-boot.js` | frontend-app |
+| `public/js/**`, `public/theme-boot.js`, `public/design-boot.js` | frontend-app, frontend-markup |
 | `public/js/core/plugins.js` | frontend-app, plugin-sdk, write-plugin |
 | `public/js/admin/system-plugins.js` | frontend-app, plugin-sdk |
 | `public/js/pages/discord-guide.js` | frontend-app, deployment |
