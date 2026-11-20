@@ -64,7 +64,7 @@ docker compose exec -u root dems chown -R node:node /app/data/plugins/my-plugin
 docker compose restart dems
 ```
 
-A plugin that breaks the start: add `PLUGINS_SAFE_MODE=true` to `.env`, `docker compose up -d`, switch it off, remove the line again. Read [write-plugin](../howto/write-plugin.md#7-install-operators) before installing one — custom plugins run with full access.
+A plugin that breaks the start: add `PLUGINS_SAFE_MODE=true` to `.env` and `docker compose up -d` (no plugin code runs), switch the broken plugin off in System › Plugins (in safe mode only switching off works), remove the line and `docker compose up -d` again. Read [write-plugin](../howto/write-plugin.md#7-install-operators) before installing one — custom plugins run with full access.
 
 ## .dockerignore
 

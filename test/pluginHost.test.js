@@ -283,7 +283,7 @@ test('an official plugin with a new version and more permissions stays on', asyn
     assert.equal(view(host, 'shipped').official, true);
 });
 
-test('safe mode loads nothing and refuses every switch', async () => {
+test('safe mode loads nothing, refuses switching on and allows switching off without running code', async () => {
     const { officialDir, customDir } = roots();
     writeMarked(customDir, 'custom-on');
     writePlugin(officialDir, 'shipped');
@@ -301,6 +301,19 @@ test('safe mode loads nothing and refuses every switch', async () => {
     assert.equal(host.isEnabled('shipped'), false);
     assert.deepEqual(host.clients(), []);
     await assert.rejects(host.setEnabled('custom-on', true, { adminId: 'a' }), { name: 'PluginHostError', message: SAFE_SENTENCE });
+    assert.equal(view(host, 'shipped').enabled, true);
+
+    // The way out of a plugin that breaks the start: switch it off while no plugin code runs
+    const off = await host.setEnabled('shipped', false, { adminId: 'a' });
+    assert.equal(off.status, 'safe');
+    assert.equal(off.enabled, false);
+    assert.equal((await getDoc(doc(db, 'pluginState', 'shipped'))).data().enabled, false);
+    assert.equal(record('shipped'), undefined);
+    await host.setEnabled('custom-on', false, { adminId: 'a' });
+    assert.equal(fs.existsSync(marker(customDir, 'custom-on')), false);
+    assert.equal(view(host, 'custom-on').enabled, false);
+    assert.equal(host.isEnabled('custom-on'), false);
+    await assert.rejects(host.setEnabled('shipped', true, { adminId: 'a' }), { name: 'PluginHostError', message: SAFE_SENTENCE });
 });
 
 test('mock mode switches an official plugin without state on and stores it', async () => {

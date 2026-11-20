@@ -19,6 +19,7 @@ process.env.ADMIN_RESET_PASSWORD = PASSWORD;
 
 const { db, collection, getDocs } = require('../firebaseAdmin');
 const { createPluginHost } = require('../plugin-sdk/host');
+const { writeState } = require('../plugin-sdk/state');
 const { createAdminPluginsRouter } = require('../routes/adminPlugins');
 const bot = require('../bot');
 
@@ -228,6 +229,32 @@ test('GET lists safe mode, every plugin and its public values', async () => {
     const refused = await setEnabled('offi', { enabled: true });
     assert.equal(refused.status, 409);
     assert.deepEqual(await refused.json(), { error: 'Abgesicherter Modus aktiv – Plugins lassen sich nicht einschalten.' });
+});
+
+test('safe mode: switching off answers 200 and is audited, switching on 409', async () => {
+    const root = createTempDir('admin-plugins-safe');
+    const officialDir = path.join(root, 'official');
+    writePlugin(officialDir, 'safe-on');
+    await writeState('safe-on', { enabled: true });
+    current = createPluginHost({ officialDir, customDir: path.join(root, 'custom'), safeMode: true });
+    await current.start();
+
+    const listed = (await (await call('/api/admin/plugins')).json()).plugins.find(plugin => plugin.id === 'safe-on');
+    assert.equal(listed.enabled, true);
+
+    const off = await setEnabled('safe-on', { enabled: false });
+    assert.equal(off.status, 200);
+    const { plugin } = await off.json();
+    assert.equal(plugin.enabled, false);
+    assert.equal(plugin.status, 'safe');
+    assert.deepEqual((await auditOf('PLUGIN_DISABLE')).filter(entry => entry.targetId === 'safe-on')
+        .map(({ adminId, details }) => ({ adminId, details })), [{ adminId: ADMIN.id, details: 'Plugin „Plugin safe-on“ ausgeschaltet' }]);
+    // register would have stored a document
+    assert.equal((await getDocs(collection(db, 'plugin:safe-on:items'))).docs.length, 0);
+
+    const on = await setEnabled('safe-on', { enabled: true });
+    assert.equal(on.status, 409);
+    assert.deepEqual(await on.json(), { error: 'Abgesicherter Modus aktiv – Plugins lassen sich nicht einschalten.' });
 });
 
 test('plugin data is deleted only while the plugin is off', async () => {

@@ -26,6 +26,7 @@ const STATUS_TEXT = {
  * @property {{ key: string, label: string }[]} permissions
  * @property {'off'|'on'|'error'|'confirm'|'invalid'|'incompatible'|'orphaned'|'safe'} status
  * @property {string} statusText -> German.
+ * @property {boolean} enabled -> Stored switch (`pluginState.enabled`); in safe mode the only sign which plugins are on.
  * @property {string} lastError
  * @property {string} lastErrorAt -> ISO date or `''`.
  * @property {string|null} limitWarning -> „Nachrichtengrenze erreicht (bis HH:MM)“ while the budget is used up.
@@ -71,6 +72,7 @@ function buildView({ entry, record, safeMode, limitWarning }) {
         permissions: (manifest ? manifest.permissions : []).map(key => ({ key, label: PERMISSIONS[key] })),
         status,
         statusText: statusText || STATUS_TEXT[status],
+        enabled: stored.enabled,
         lastError: stored.lastError,
         lastErrorAt: stored.lastErrorAt,
         limitWarning,

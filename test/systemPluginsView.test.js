@@ -186,6 +186,18 @@ test('safe mode disables every switch and says so', async () => {
     for (const input of switches) assert.match(input, / disabled/);
 });
 
+test('safe mode enables only the off switch of a plugin that is stored on', async () => {
+    const safe = (overrides) => view({ status: 'safe', statusText: 'Abgesicherter Modus aktiv', ...overrides });
+    const { element } = await openPlugins([safe({ enabled: true }), safe({ ...CUSTOM, status: 'safe', statusText: 'Abgesicherter Modus aktiv', enabled: false })], {}, { safeMode: true });
+    const list = element('plugins-list').innerHTML;
+    const switches = [...list.matchAll(/<input[^>]*data-change="togglePlugin"[^>]*>/g)].map(match => match[0]);
+    assert.equal(switches.length, 2);
+    assert.doesNotMatch(switches[0], / disabled/);
+    assert.match(switches[0], / checked/);
+    assert.match(switches[1], / disabled/);
+    assert.doesNotMatch(switches[1], / checked/);
+});
+
 test('settings render from the manifest and save only changed keys with their types', async () => {
     const settings = [
         { key: 'title', type: 'text', label: 'Titel', help: 'Kurz.', required: false },

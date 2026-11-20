@@ -70,8 +70,11 @@ function warningLines(view) {
 
 function switchHtml(view, safeMode) {
     const id = escapeHtml(view.id);
-    const checked = view.status === 'on' ? ' checked' : '';
-    const disabled = safeMode || LOCKED_STATUSES.includes(view.status) ? ' disabled' : '';
+    // Safe mode runs no plugin: the stored switch shows, and only switching off is possible
+    const on = safeMode ? view.enabled === true : view.status === 'on';
+    const checked = on ? ' checked' : '';
+    const locked = safeMode ? !on : LOCKED_STATUSES.includes(view.status);
+    const disabled = locked ? ' disabled' : '';
     return `<div class="form-check form-switch plugin-switch">
         <input class="form-check-input" type="checkbox" role="switch" id="plugin-${id}-enabled" data-change="togglePlugin" data-plugin-id="${id}" aria-label="Plugin ${escapeHtml(quoted(view.name))} einschalten"${checked}${disabled}>
     </div>`;
@@ -159,7 +162,7 @@ function settingsHtml(view, lists) {
  *
  * @param {Object} view -> Plugin view of GET /api/admin/plugins (plugin-sdk/views.js + `settingsValues`).
  * @param {Object} [context]
- * @param {boolean} [context.safeMode] -> Safe mode: every switch is disabled.
+ * @param {boolean} [context.safeMode] -> Safe mode: only the switch of a plugin stored on is enabled (to switch it off).
  * @param {Array<Object>} [context.channels] -> `GET /api/admin/channels` for `channel` settings.
  * @param {Array<Object>} [context.roles] -> `GET /api/admin/roles` for `role` settings.
  * @param {boolean} [context.readOnly] -> A custom folder that reuses an official id: facts only, no actions.
@@ -232,7 +235,7 @@ function drawCard(index) {
 function drawList() {
     const list = document.getElementById('plugins-list');
     const safe = panel.safeMode
-        ? `<div class="glass-card system-card">${warningLine('Abgesicherter Modus aktiv: PLUGINS_SAFE_MODE=true lädt keinen Plugin-Code. Alle Schalter sind gesperrt.')}</div>`
+        ? `<div class="glass-card system-card">${warningLine('Abgesicherter Modus aktiv: PLUGINS_SAFE_MODE=true lädt keinen Plugin-Code. Eingeschaltete Plugins lassen sich nur ausschalten.')}</div>`
         : '';
     const cards = panel.views.length === 0
         ? emptyState({ icon: 'puzzle', title: 'Keine Plugins gefunden', text: 'Offizielle Plugins liegen im Ordner plugins/, eigene in PLUGINS_DIR.' })

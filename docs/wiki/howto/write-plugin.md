@@ -186,7 +186,7 @@ Checked by `test/pluginClientGuards.test.js` for official plugins; for custom pl
 1. Put the folder into `data/plugins/<id>/` of a checkout (or point `PLUGINS_DIR` elsewhere) and run `npm run dev:mock`.
 2. Log in as `admin`, open System › Plugins: the card shows „Nicht offiziell“, your permissions and the status. Switch it on: tick „Ich vertraue dem Code dieses Plugins“ and enter the reset password (mock mode: `dev`).
 3. Your tab appears after a reload; errors show on the card („Letzter Fehler …“) and in the log with `[plugin:<id>]`. DMs and channel posts show as `dev/mockBot.js` log lines.
-4. After changing `server.js` or `plugin.json`, restart the server (nodemon ignores `data/**`: type `rs` or stop and start); a changed `version` asks for confirmation again. `PLUGINS_SAFE_MODE=true` starts without any plugin code if your plugin breaks the start.
+4. After changing `server.js` or `plugin.json`, restart the server (nodemon ignores `data/**`: type `rs` or stop and start); a changed `version` asks for confirmation again. If your plugin breaks the start: restart with `PLUGINS_SAFE_MODE=true`, switch the broken plugin off in System › Plugins, remove the line, restart (in safe mode plugins can only be switched off).
 
 ## 7. Install (operators)
 

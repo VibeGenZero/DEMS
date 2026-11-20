@@ -333,13 +333,15 @@ function createPluginHost({
 
     /**
      * Switch a plugin on or off and store it. Switching on a custom plugin
-     * confirms its current version and permissions.
+     * confirms its current version and permissions. Safe mode refuses only
+     * switching on: switching off is the way out of a plugin that breaks the
+     * start, and runs no plugin code (nothing was registered).
      *
      * @returns {Promise<PluginView>}
      */
     async function setEnabled(id, enabled, { adminId = '' } = {}) {
         const record = recordOf(id);
-        if (safeMode) throw new PluginHostError(MESSAGES.safeMode);
+        if (safeMode && enabled) throw new PluginHostError(MESSAGES.safeMode);
         if (!isLoadable(record)) throw new PluginHostError(MESSAGES.cannotEnable);
         return chain(switchChains, id, async () => {
             const { manifest, official } = record.entry;
