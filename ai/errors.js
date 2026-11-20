@@ -10,6 +10,7 @@ const AI_ERROR_MESSAGES = {
     rate_limited: 'Der KI-Anbieter nimmt gerade keine weiteren Anfragen an.',
     provider_error: 'Der KI-Anbieter hat einen Fehler gemeldet.',
     empty_answer: 'Der KI-Anbieter hat keine Antwort geliefert.',
+    blocked_address: 'Diese KI-Adresse ist gesperrt: DEMS ruft keine Link-Local- oder Cloud-Metadaten-Adressen auf.',
 };
 
 /** Error of the AI layer; the message is always the fixed text of `code`. */

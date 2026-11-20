@@ -8,6 +8,10 @@ const { AiError, AI_ERROR_MESSAGES, logAiFailure } = require('./errors');
 const openaiAdapter = require('./providers/openaiCompatible');
 const anthropicAdapter = require('./providers/anthropic');
 const mockAdapter = require('./providers/mock');
+const { createGuardedFetch } = require('./addressGuard');
+
+// Every provider request: no link-local or metadata address, no redirect (ai/addressGuard.js)
+const guardedFetch = createGuardedFetch();
 
 const PROVIDERS = Object.freeze({
     ollama: { label: 'Ollama (lokal oder Cloud)', adapter: 'openai', defaultBaseUrl: 'http://localhost:11434/v1', keyRequired: false },
@@ -78,7 +82,7 @@ function getAiClient({ admin = false, overrides = null, env = process.env } = {}
     if (!isUsable(settings)) throw new AiError('unreachable');
     const entry = providerEntry(settings.provider);
     const baseUrl = (settings.baseUrl || entry.defaultBaseUrl).replace(/\/+$/, '');
-    const adapterArgs = { baseUrl, apiKey: settings.apiKey, model: settings.model };
+    const adapterArgs = { baseUrl, apiKey: settings.apiKey, model: settings.model, fetchImpl: guardedFetch };
     let adapter;
     if (entry.adapter === 'mock') adapter = mockAdapter.create(adapterArgs);
     else if (entry.adapter === 'anthropic') adapter = anthropicAdapter.create(adapterArgs);

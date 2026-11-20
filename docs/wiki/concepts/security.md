@@ -3,7 +3,7 @@ id: security
 title: Security model and open audit findings
 type: concept
 tags: [security, csp, helmet, csrf, xss, rate-limit, audit, https]
-sources: [server.js, routes/adminPlugins.js, routes/pluginTheme.js, plugin-sdk/themeCss.js, plugin-sdk/theme.js, public/design-boot.js, routes/calendar.js, utils/calendarFeedStore.js, SECURITY.md, routes/setup.js, utils/setupState.js, docs/security/SECURITY_AUDIT_2026-04-22.md, ISSUE.md, routes/events.js, routes/user.js, utils/eventUtils.js, bot/threadSync.js, public/js/core/ui.js, public/js/core/actions.js, utils/trustProxy.js, utils/ipAddress.js, compose.yaml]
+sources: [server.js, routes/adminPlugins.js, routes/pluginTheme.js, plugin-sdk/themeCss.js, plugin-sdk/theme.js, public/design-boot.js, routes/calendar.js, utils/calendarFeedStore.js, SECURITY.md, routes/setup.js, utils/setupState.js, docs/security/SECURITY_AUDIT_2026-04-22.md, ISSUE.md, routes/events.js, routes/user.js, utils/eventUtils.js, bot/threadSync.js, public/js/core/ui.js, public/js/core/actions.js, utils/trustProxy.js, utils/ipAddress.js, ai/addressGuard.js, compose.yaml]
 depends_on: [server]
 see_also: [auth-session, known-issues, deployment, plugin-sdk]
 ---
@@ -25,6 +25,7 @@ see_also: [auth-session, known-issues, deployment, plugin-sdk]
 | Client address | `trust proxy` from `TRUST_PROXY` (`utils/trustProxy.js`): by default one hop, and only when the direct peer is on a loopback, link-local or private address (TLS proxy on the same host or in the Docker network); a client from the internet cannot pick its `req.ip` through `X-Forwarded-For`. `compose.yaml` publishes the port on `127.0.0.1` only (`DEMS_BIND`), so clients cannot skip the proxy |
 | CSRF | double-submit token, see [auth-session](auth-session.md) |
 | AuthZ | `requireAuth`, `requireAdmin`; the whole event API needs a login (no public preview); `draft`/`archived` events answer 404 to non-admins; comment delete = owner or admin |
+| AI addresses | every AI request goes through `ai/addressGuard.js`: link-local (`169.254.0.0/16`, `fe80::/10`) and known cloud metadata addresses (`metadata.google.internal`, `100.100.100.200`, `fd00:ec2::254`) are refused, written or resolved, with `blocked_address`; only http(s), no redirects; `AI_BASE_URL` with such an address is not stored. Loopback and LAN stay open for a local Ollama. The model list carries only id-shaped strings (≤ 200 chars, ≤ 1000 ids, `ai/providers/modelIds.js`) |
 | XSS | frontend `escapeHtml()` for interpolated values, values for actions in `data-*` attributes (escaped with `escapeHtml`, read via `dataset`), never in handler code — the CSP blocks inline handlers, `renderMarkdownSafe()` = marked + DOMPurify for descriptions |
 | Secrets | `.env` never in the image (`.dockerignore`); `checkinCode` removed from every event answer outside `/api/admin` (`toPublicEvent` in `utils/eventUtils.js`); the token of the comment-sync webhook (B-16) lives only in memory (`bot/threadSync.js`), never in the database or an answer |
 | Mirrored comments (B-16) | web comments go into Discord with `allowedMentions: { parse: [] }` (no `@everyone`, role or user pings) and the suffix „(Web)“; comments from Discord are plain text rendered with `escapeHtml` and marked „Discord“ |
@@ -81,6 +82,7 @@ The report itself is confidential and stays in the issue; this table only tracks
 | # | Finding | Status |
 |---|---|---|
 | 1 | setup PIN limit bypassed with a forged `X-Forwarded-For` (`trust proxy 1`, port published directly) | fixed: `TRUST_PROXY` default trusts only a local proxy (`utils/trustProxy.js`), `compose.yaml` binds `127.0.0.1` (`DEMS_BIND`), and on top of 5 / 15 min per IP at most 20 wrong PINs / 15 min from all addresses together |
+| 2 | SSRF through the admin-typed AI base URL | fixed: `ai/addressGuard.js` refuses link-local and metadata addresses (also after DNS), only http(s), no redirects; model list reduced to ids. Loopback/LAN stay reachable on purpose (local Ollama); DNS rebinding between check and fetch is not covered |
 
 ## HTTPS requirement
 

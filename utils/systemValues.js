@@ -2,7 +2,19 @@
  * Checks of the configuration values the setup wizard and the admin "System"
  * view store (#138), with the German messages both show. Pure, no database.
  */
+const { isBlockedAiHost } = require('../ai/addressGuard');
+const { AI_ERROR_MESSAGES } = require('../ai/errors');
+
 const SNOWFLAKE = /^\d{17,20}$/;
+
+/** Host of a URL as the URL parser normalises it ('' when it does not parse). */
+const hostOf = (address) => {
+    try {
+        return new URL(address).hostname;
+    } catch {
+        return '';
+    }
+};
 const RESET_PASSWORD_MIN = 12;
 const SERVER_NAME_MAX = 100;
 const AI_MODEL_MAX = 200;
@@ -95,6 +107,8 @@ function normalizeSystemValue(key, raw) {
             // Provider docs show the address with a trailing slash (Ollama); the client adds its own paths
             const address = value.replace(/\/+$/, '');
             if (address && !/^https?:\/\/[^\s/]\S*$/i.test(address)) return { error: SYSTEM_VALUE_ERRORS.AI_BASE_URL };
+            // A link-local or metadata address is never stored; every request checks it again (ai/addressGuard.js)
+            if (address && isBlockedAiHost(hostOf(address))) return { error: AI_ERROR_MESSAGES.blocked_address };
             return { value: address };
         }
         case 'AI_MODEL':

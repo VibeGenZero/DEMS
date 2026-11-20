@@ -90,6 +90,7 @@ sources: [scripts/wiki-graph.js, docs/wiki/graph.json, CLAUDE.md]
 | `utils/setupState.js`, `routes/setup.js` | security, api-index, configuration |
 | `routes/adminSystem.js`, `routes/adminAi.js`, `routes/aiConnection.js`, `utils/systemValues.js` | routes-admin, configuration, ai-integration |
 | `ai/*.js`, `ai/providers/*.js` | ai-integration |
+| `ai/addressGuard.js` | ai-integration, security |
 | `routes/eventAsk.js` | ai-integration, routes-events, api-index |
 | `utils/askRefresh.js` | utils, routes-admin, bot |
 | `middleware/privacy.js`, `utils/privacyPolicy.js`, `public/js/pages/privacy.js` | auth-session, data-model |
