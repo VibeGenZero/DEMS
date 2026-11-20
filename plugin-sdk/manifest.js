@@ -17,7 +17,8 @@ const PERMISSIONS = Object.freeze({
     'members:read': 'Mitgliedernamen und Avatare lesen',
     'discord:dm': 'Direktnachrichten über den Bot senden',
     'discord:channel': 'Nachrichten in Discord-Kanäle posten',
-    network: 'Verbindungen ins Internet aufbauen'
+    network: 'Verbindungen ins Internet aufbauen',
+    theme: 'Aussehen der ganzen Seite ändern'
 });
 
 /** Allowed `settings[].type` values. */

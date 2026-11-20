@@ -57,6 +57,7 @@ test('the admin list shows every plugin with its status and public setting value
     assert.equal(body.safeMode, false);
     assert.deepEqual(body.plugins.map(plugin => [plugin.id, plugin.status, plugin.official]), [
         // Dev mock mode switches the official plugins on
+        ['custom-design', 'on', true],
         [OFFICIAL_PLUGIN, 'on', true],
         [PLUGIN, 'on', false],
         [IDLE_PLUGIN, 'off', false]

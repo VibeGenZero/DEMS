@@ -682,3 +682,30 @@ test('initPlugins starts the host behind pluginHost()', async () => {
     assert.equal(sdk.pluginHost(), host);
     assert.equal(host.isEnabled('shipped'), true);
 });
+
+test('themeSources lists enabled theme plugins only, sorted, and deleteData/wipeAllData remove the theme document', async () => {
+    const { officialDir, customDir } = roots();
+    writePlugin(officialDir, 'zebra', { manifest: { permissions: ['theme'] } });
+    writePlugin(officialDir, 'alpha', { manifest: { permissions: ['theme'] } });
+    writePlugin(officialDir, 'plain', { manifest: { permissions: ['events:read'] } });
+    await enabledState('zebra');
+    await enabledState('alpha');
+    await enabledState('plain');
+    usedCollections.push('pluginThemes');
+
+    const host = createPluginHost({ officialDir, customDir });
+    await host.start();
+
+    assert.deepEqual(host.themeSources(), ['alpha', 'zebra']);
+    await record('alpha').ctx.theme.publish('.alpha{}');
+    await record('zebra').ctx.theme.publish('.zebra{}');
+    assert.equal((await getDoc(doc(db, 'pluginThemes', 'alpha'))).exists(), true);
+
+    await host.setEnabled('alpha', false);
+    assert.deepEqual(host.themeSources(), ['zebra']);
+    await host.deleteData('alpha');
+    assert.equal((await getDoc(doc(db, 'pluginThemes', 'alpha'))).exists(), false);
+
+    await host.wipeAllData();
+    assert.equal((await getDoc(doc(db, 'pluginThemes', 'zebra'))).exists(), false);
+});

@@ -1,0 +1,10 @@
+{
+  "id": "custom-design",
+  "name": "Design anpassen",
+  "version": "1.0.0",
+  "sdk": 1,
+  "description": "Farben, Ecken, Schrift und eigenes CSS für eure Community.",
+  "author": "DEMS",
+  "permissions": ["theme"],
+  "settings": []
+}

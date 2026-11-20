@@ -199,7 +199,7 @@ test('safe mode shows in the admin list and refuses switching a plugin', async (
     assert.equal(list.status, 200);
     const body = await list.json();
     assert.equal(body.safeMode, true);
-    assert.deepEqual(body.plugins.map(plugin => [plugin.id, plugin.status]), [[OFFICIAL_PLUGIN, 'safe'], [PLUGIN, 'safe'], [IDLE_PLUGIN, 'safe']]);
+    assert.deepEqual(body.plugins.map(plugin => [plugin.id, plugin.status]), [['custom-design', 'safe'], [OFFICIAL_PLUGIN, 'safe'], [PLUGIN, 'safe'], [IDLE_PLUGIN, 'safe']]);
 
     const res = await admin.send('PUT', `/api/admin/plugins/${IDLE_PLUGIN}/enabled`, { enabled: true, trust: true, password: 'dev' });
     assert.equal(res.status, 409);

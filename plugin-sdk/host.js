@@ -14,6 +14,7 @@ const path = require('path');
 const { discoverPlugins } = require('./discovery');
 const state = require('./state');
 const { purgeUserData, wipePluginData } = require('./data');
+const { deleteTheme } = require('./theme');
 const { createMessageLimiter } = require('./discord');
 const { setHookGate, setHookErrorReporter, clearHooks } = require('./hooks');
 const { createContext } = require('./context');
@@ -429,6 +430,7 @@ function createPluginHost({
         return serializeWrite(id, async () => {
             const collections = state.normalizeState(record.state || {}).collections;
             const deleted = await wipePluginData(id, collections);
+            await deleteTheme(id);
             await state.deleteSettings(id);
             if (!record.entry) {
                 await state.deleteState(id);
@@ -454,6 +456,7 @@ function createPluginHost({
         for (const [id, record] of records) {
             deleted += await serializeWrite(id, async () => {
                 const count = await wipePluginData(id, state.normalizeState(record.state || {}).collections);
+                await deleteTheme(id);
                 await state.deleteSettings(id);
                 return count;
             });
@@ -484,6 +487,10 @@ function createPluginHost({
                 id, name: manifest.name, version: manifest.version, official,
                 permissions: [...manifest.permissions], hasCss: Boolean(manifest.css)
             })),
+        themeSources: () => [...records.values()]
+            .filter(record => isEnabled(record.id) && record.entry.manifest.permissions.includes('theme'))
+            .map(record => record.id)
+            .sort(),
         setEnabled,
         reportError,
         readPublicSettings,

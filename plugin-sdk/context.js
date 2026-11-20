@@ -13,6 +13,7 @@ const { avatarUrlOf, repairAvatarUrl } = require('../utils/avatar');
 const { parseDate, isEventOver } = require('../utils/eventListing');
 const { createDataApi } = require('./data');
 const { createDiscordApi } = require('./discord');
+const { createThemeApi } = require('./theme');
 const { HOOK_NAMES, EVENT_HOOKS, onHook, toPluginEvent } = require('./hooks');
 const { PluginPermissionError, PluginHttpError } = require('./errors');
 const state = require('./state');
@@ -198,6 +199,7 @@ function createContext({ entry, host }) {
         log,
         routes: Object.freeze(routes),
         data: createDataApi(id, { recordCollection: host.recordCollection }),
+        theme: createThemeApi(id, { granted }),
         settings: Object.freeze({ get: readSettings }),
         events: Object.freeze(events),
         members: Object.freeze(members),

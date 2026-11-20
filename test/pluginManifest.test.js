@@ -53,7 +53,8 @@ test('exports SDK_VERSION, PERMISSIONS and SETTING_TYPES', () => {
         'members:read': 'Mitgliedernamen und Avatare lesen',
         'discord:dm': 'Direktnachrichten über den Bot senden',
         'discord:channel': 'Nachrichten in Discord-Kanäle posten',
-        network: 'Verbindungen ins Internet aufbauen'
+        network: 'Verbindungen ins Internet aufbauen',
+        theme: 'Aussehen der ganzen Seite ändern'
     });
     assert.deepEqual(SETTING_TYPES, ['text', 'textarea', 'number', 'boolean', 'select', 'channel', 'role', 'secret']);
 });
