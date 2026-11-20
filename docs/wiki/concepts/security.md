@@ -3,7 +3,7 @@ id: security
 title: Security model and open audit findings
 type: concept
 tags: [security, csp, helmet, csrf, xss, rate-limit, audit, https]
-sources: [server.js, routes/adminPlugins.js, routes/pluginTheme.js, plugin-sdk/themeCss.js, plugin-sdk/theme.js, public/design-boot.js, routes/calendar.js, utils/calendarFeedStore.js, SECURITY.md, routes/setup.js, utils/setupState.js, docs/security/SECURITY_AUDIT_2026-04-22.md, ISSUE.md, routes/events.js, routes/user.js, utils/eventUtils.js, bot/threadSync.js, public/js/core/ui.js, public/js/core/actions.js]
+sources: [server.js, routes/adminPlugins.js, routes/pluginTheme.js, plugin-sdk/themeCss.js, plugin-sdk/theme.js, public/design-boot.js, routes/calendar.js, utils/calendarFeedStore.js, SECURITY.md, routes/setup.js, utils/setupState.js, docs/security/SECURITY_AUDIT_2026-04-22.md, ISSUE.md, routes/events.js, routes/user.js, utils/eventUtils.js, bot/threadSync.js, public/js/core/ui.js, public/js/core/actions.js, utils/trustProxy.js, utils/ipAddress.js, compose.yaml]
 depends_on: [server]
 see_also: [auth-session, known-issues, deployment, plugin-sdk]
 ---
@@ -22,6 +22,7 @@ see_also: [auth-session, known-issues, deployment, plugin-sdk]
 | Security headers + CSP | `helmet(...)` in `server.js` (directive list there) |
 | CORS | `cors({ origin: BASE_URL, credentials: true })` |
 | Rate limits | `/api/` per logged-in user 1000 / 15 min, otherwise per IP 200 / 15 min (`middleware/rateLimits.js`, mounted after the session; `RATE_LIMIT_MAX_USER`, `RATE_LIMIT_MAX`; the 429 names the wait in minutes and the page shows it once per 30 s, `core/rate-limit-notice.js`), `/auth/` 30 / 15 min (both off in dev mock mode); failed check-ins 10 / 15 min per member (`checkinLimiter`, on in mock mode too); member search `GET /api/user/search` 60 / min per member (`searchLimiter` in `routes/user.js`, on in mock mode too); calendar feed `GET /calendar/<token>.ics` outside `/api`: 30 / 15 min per link (on in mock mode too) and 600 / 15 min per address (off in mock mode), `createCalendarLimiters` |
+| Client address | `trust proxy` from `TRUST_PROXY` (`utils/trustProxy.js`): by default one hop, and only when the direct peer is on a loopback, link-local or private address (TLS proxy on the same host or in the Docker network); a client from the internet cannot pick its `req.ip` through `X-Forwarded-For`. `compose.yaml` publishes the port on `127.0.0.1` only (`DEMS_BIND`), so clients cannot skip the proxy |
 | CSRF | double-submit token, see [auth-session](auth-session.md) |
 | AuthZ | `requireAuth`, `requireAdmin`; the whole event API needs a login (no public preview); `draft`/`archived` events answer 404 to non-admins; comment delete = owner or admin |
 | XSS | frontend `escapeHtml()` for interpolated values, values for actions in `data-*` attributes (escaped with `escapeHtml`, read via `dataset`), never in handler code — the CSP blocks inline handlers, `renderMarkdownSafe()` = marked + DOMPurify for descriptions |
@@ -75,6 +76,12 @@ The report itself is confidential and stays in the issue; this table only tracks
 | vuln-0010 | admin reset of the users kept their sessions | fixed: ends all non-admin sessions like panic mode |
 | — | two guests accepting at once lose an answer | fixed: guest buttons under `withEventLock` |
 
+## White-box audit 2026-11-20 (3.4.0) — status
+
+| # | Finding | Status |
+|---|---|---|
+| 1 | setup PIN limit bypassed with a forged `X-Forwarded-For` (`trust proxy 1`, port published directly) | fixed: `TRUST_PROXY` default trusts only a local proxy (`utils/trustProxy.js`), `compose.yaml` binds `127.0.0.1` (`DEMS_BIND`), and on top of 5 / 15 min per IP at most 20 wrong PINs / 15 min from all addresses together |
+
 ## HTTPS requirement
 
 Helmet adds `upgrade-insecure-requests` to the CSP by default. Browsers then rewrite all asset URLs of a page served via `http://<ip>:3000` to `https://` → CSS/JS fail, the SPA hangs on the loading screen ("Initialisiere System..."). `http://localhost` is exempt. Use a TLS reverse proxy ([deployment](../ops/deployment.md)) or set `upgradeInsecureRequests: null` in the CSP directives for intentional plain-HTTP setups.
@@ -85,7 +92,7 @@ A fresh installation (no setup completed, `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_S
 
 - The gate in `server.js` answers every `/api/*` and `/auth/*` request with 503 except `/api/setup/*` and the public start-page endpoints ([api-index](../reference/api-index.md)). Static files and `/healthz` stay up.
 - The setup PIN is `SETUP_PIN` or a random 8-digit PIN (`crypto.randomInt`) created at every start, printed in the log, kept in memory only and compared with `safeEqual`. Whoever reads the container log already controls the host; the PIN changes with each start and is void once the setup is done.
-- `POST /api/setup/unlock` is limited to 5 attempts per 15 minutes and IP and regenerates the session (a planted cookie is useless); only that session may run the steps.
+- `POST /api/setup/unlock` is limited to 5 attempts per 15 minutes and IP, and to 20 wrong PINs per 15 minutes from all addresses together („Zu viele falsche Setup-PINs. Bitte warte 15 Minuten oder starte DEMS neu.“; the counters live in memory, a restart clears them and logs a new PIN unless `SETUP_PIN` is set). A success regenerates the session (a planted cookie is useless); only that session may run the steps.
 - The Discord step checks the client id/secret with an OAuth2 `client_credentials` request and the bot token with a real login before anything is stored; the values reach `process.env` for the login and are taken back on failure.
 - The optional step „KI" tries typed AI values through `POST /api/setup/ai/test` and `/api/setup/ai/models` (same handlers as the admin routes, `routes/aiConnection.js`, behind the setup session). Completing stores `AI_PROVIDER`, `AI_BASE_URL`, `AI_API_KEY`, `AI_MODEL` only when a provider is chosen (a provider without a model → 400 „Bitte wähle ein KI-Modell oder überspringe den KI-Schritt."); „Überspringen" sends them empty and nothing of the AI is stored. Values from `.env` stay.
 - Completing stores the values (`systemSettings/config`, secrets in plain text, never returned), ends setup mode without a restart and destroys the setup session.

@@ -3,7 +3,7 @@ id: server
 title: server.js — Express app, misc endpoints, startup
 type: module
 tags: [express, server, startup, shutdown, endpoints, helmet, session]
-sources: [server.js, updates.json, routes/calendar.js, routes/plugins.js, routes/pluginStatic.js, middleware/rateLimits.js, utils/serverName.js]
+sources: [server.js, updates.json, routes/calendar.js, routes/plugins.js, routes/pluginStatic.js, middleware/rateLimits.js, utils/serverName.js, utils/trustProxy.js]
 part_of: [architecture]
 depends_on: [middleware, data-layer, bot]
 see_also: [request-lifecycle, security, configuration]
@@ -50,7 +50,7 @@ see_also: [request-lifecycle, security, configuration]
 
 ## Gotchas
 
-- `app.set('trust proxy', 1)` assumes exactly ONE reverse proxy (Traefik, Caddy, Railway). More hops → wrong `req.ip` in rate limits.
+- `trust proxy` comes from `TRUST_PROXY` (`utils/trustProxy.js`): by default exactly ONE reverse proxy, trusted only when the socket peer is on a loopback, link-local or private address (Traefik/Caddy/nginx on the host or in the Docker network). More hops, or a platform proxy on a public address → set `TRUST_PROXY` (a hop count or a proxy address list), else `req.ip` in the rate limits is wrong.
 - Session store is `PersistentSessionStore` (`utils/sessionStore.js`, collection `sessions`): logins survive restarts; it assumes it is the only DEMS process (write-through cache).
 - Express 5 path syntax: wildcards must be named (`/{*splat}`), `*` alone throws at startup.
 - Express 5 hands listen errors (e.g. `EADDRINUSE`) to the `listen` callback; the code exits with 1 so Docker restarts it.

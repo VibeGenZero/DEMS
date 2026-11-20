@@ -30,6 +30,7 @@ const { pruneUsage } = require('./ai/usage');
 const { initSetupState, isSetupRequired } = require('./utils/setupState');
 const { createSetupRouter } = require('./routes/setup');
 const { privacyGate } = require('./middleware/privacy');
+const { trustProxySetting } = require('./utils/trustProxy');
 const { getPrivacyPolicy } = require('./utils/privacyPolicy');
 const { BANNER_FILE, bannerDir, sweepOrphanBanners } = require('./utils/bannerStore');
 const { initPlugins, pluginHost } = require('./plugin-sdk');
@@ -43,9 +44,9 @@ const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Trust Proxy (Railway, Heroku, etc.)
-// Needed for correct IP addressing in rate limiting behind load balancers
-app.set('trust proxy', 1);
+// Client address behind the TLS proxy (rate limits, X-Forwarded-Proto). Default: one hop,
+// only from a proxy on a loopback or private address; TRUST_PROXY overrides (utils/trustProxy.js)
+app.set('trust proxy', trustProxySetting(process.env.TRUST_PROXY));
 
 // ── Validate required env vars ──────────────────────────────────────────
 // A missing SESSION_SECRET is generated and stored at start (utils/systemConfig.js, #138);

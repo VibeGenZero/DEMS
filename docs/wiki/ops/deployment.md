@@ -140,4 +140,5 @@ Ordering note: `test/updatesData.test.js` orders the history like SemVer: a rele
 | back on the login page right after the Discord login | `NODE_ENV=production` makes the cookies `Secure`, but the request reached DEMS via plain HTTP (no TLS proxy, or no `X-Forwarded-Proto`) | open the HTTPS host; the production image is not meant for plain-HTTP tests (use `compose.dev.yaml`) |
 | everyone logged out after deploy | `SESSION_SECRET` changed (cookies signed with the old secret no longer match) or the `sessions` collection was wiped | keep `SESSION_SECRET` stable across deploys |
 | Traefik 404 | labels not applied / host not resolving | check labels, DNS, `docker ps` networks |
-| wrong client IPs in rate limits | more than one proxy hop | `trust proxy` is set to 1 in `server.js` |
+| wrong client IPs in rate limits (everybody shares one limit) | more than one proxy hop, or a proxy on a public address (some platforms) | set `TRUST_PROXY` (hop count or proxy addresses, [configuration](configuration.md)); the default trusts one proxy on a loopback or private address |
+| proxy on another machine gets no connection | `compose.yaml` publishes the port on `127.0.0.1` only | `DEMS_BIND=0.0.0.0` in `.env` (then keep the port closed to everybody but the proxy) |

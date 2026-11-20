@@ -73,6 +73,7 @@ sources: [scripts/wiki-graph.js, docs/wiki/graph.json, CLAUDE.md]
 | `plugin-sdk/coreHooks.js` (hook emission from the core, `pluginOrigin` check) | event-lifecycle, routes-admin, data-model, plugin-sdk |
 | `routes/calendar.js`, `utils/calendarFeed.js`, `utils/calendarFeedStore.js`, `utils/icalendar.js` | routes-user, server, data-model, security |
 | `utils/serverName.js` | server |
+| `utils/trustProxy.js`, `utils/ipAddress.js` | server, security, configuration |
 | `routes/polls.js` | routes-polls, date-polls |
 | `middleware/*.js` | middleware, maintenance-mode, auth-session |
 | `utils/registrationService.js` | registration-flow, role-slots, utils |

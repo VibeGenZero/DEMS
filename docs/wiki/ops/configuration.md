@@ -29,6 +29,7 @@ see_also: [docker, deployment, dev-mock-mode]
 | `AI_MODEL_ADMIN` | no | `AI_MODEL` | model for admin features |
 | `RATE_LIMIT_MAX_USER` | no | `1000` | `/api/*` requests per 15 minutes per logged-in user (`middleware/rateLimits.js`, read on every request) |
 | `RATE_LIMIT_MAX` | no | `200` | `/api/*` requests per 15 minutes per IP for everybody not logged in; both limits are off in dev mock mode |
+| `TRUST_PROXY` | no | empty = one proxy on a loopback/private address | which proxy DEMS believes the client address (`X-Forwarded-For`) and protocol from (`utils/trustProxy.js`): empty = one hop, only when the direct peer is on a loopback, link-local or private address; `false`/`0` = none; a number = that many hops; `true` = every hop; anything else = an Express address list (`loopback, 10.0.0.0/8`). Platforms whose proxy has a public address set `1`. Read at start |
 | `DATABASE_URL` | production: this or `PGHOST` | — | PostgreSQL connection URL (`postgres://user:pass@host:5432/db`); wins over `PG*`. Not needed with `compose.yaml` |
 | `PGHOST`, `PGPORT`, `PGDATABASE`, `PGUSER` | production: `PGHOST` or `DATABASE_URL` | —, `5432`, `dems`, `dems` | PostgreSQL as single values; `compose.yaml` sets them to its `postgres` service |
 | `PGPASSWORD` / `PGPASSWORD_FILE` | with `PGHOST` | — | password, or a file holding only the password (trimmed; wins over `PGPASSWORD`). Compose: `/run/dems-secrets/db_password`, generated on the first start |
@@ -42,6 +43,7 @@ see_also: [docker, deployment, dev-mock-mode]
 | `ADMIN_RESET_PASSWORD` | no | — | system reset and panic-mode deactivation; empty → both impossible |
 | `NODE_ENV` | no | `production` in the Docker image | blocks `DEV_MOCK`; makes session and `XSRF-TOKEN` cookies `Secure` → DEMS must be reached via HTTPS (TLS proxy sending `X-Forwarded-Proto: https`), otherwise the login does not stick |
 | `DEMS_PORT` | no | `3000` | host port in `compose.yaml` |
+| `DEMS_BIND` | no | `127.0.0.1` | host address `compose.yaml` publishes the port on; the default keeps the port off the network, so clients cannot skip the TLS proxy. A proxy on another machine needs `0.0.0.0` |
 | `DEMS_TAG` | no | `latest` | image tag `compose.yaml` pulls (`moritakahashi/dems:${DEMS_TAG}`): `latest` = releases, `beta` = pre-releases; read by Compose, not by DEMS |
 | `DEMS_CHANNEL`, `DEMS_COMMIT` | no (image) | empty | baked into published images by the publish job (`edge`/`beta`/`latest`, commit sha); shown in the admin "System" view, `edge` switches the update check off; not meant for `.env` |
 | `UPDATE_CHECK` | no | on | `false` → no update check; otherwise DEMS asks `GET https://api.github.com/repos/<UPDATE_CHECK_REPO>/releases` 30 s after start and every 12 h (anonymous, generic `User-Agent`, nothing about the installation) and shows a newer version in the admin "System" view (`utils/updateCheck.js`); always off in dev mock mode, in the test helpers and on `edge` images |

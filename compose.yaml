@@ -57,8 +57,10 @@ services:
       PGDATABASE: dems
       PGUSER: dems
       PGPASSWORD_FILE: /run/dems-secrets/db_password
+    # Only on the host itself by default: the TLS proxy runs on the same host or in the
+    # Docker network. A proxy on another machine needs DEMS_BIND=0.0.0.0 in .env
     ports:
-      - "${DEMS_PORT:-3000}:3000"
+      - "${DEMS_BIND:-127.0.0.1}:${DEMS_PORT:-3000}:3000"
     volumes:
       # Uploaded banners
       - dems-data:/app/data

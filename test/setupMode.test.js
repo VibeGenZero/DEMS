@@ -102,6 +102,45 @@ test('more than five PIN attempts within 15 minutes are refused', async () => {
     }
 });
 
+test('wrong PINs from ever new forwarded addresses run into a limit for everybody', async () => {
+    // The default trusts a proxy on loopback, so every X-Forwarded-For counts as its own address
+    const own = await startServer('server.js', freshEnv());
+    try {
+        const client = createClient(own.baseUrl);
+        const { token } = await (await client.request('/api/csrf-token')).json();
+        const attempt = (index, pin) => client.request('/api/setup/unlock', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': token, 'X-Forwarded-For': `198.51.100.${index}` },
+            body: JSON.stringify({ pin })
+        });
+        for (let index = 1; index <= 20; index++) {
+            assert.equal((await attempt(index, '99999999')).status, 401, `attempt ${index}`);
+        }
+        const blocked = await attempt(21, PIN);
+        assert.equal(blocked.status, 429);
+        assert.equal((await blocked.json()).error, 'Zu viele falsche Setup-PINs. Bitte warte 15 Minuten oder starte DEMS neu.');
+    } finally {
+        await own.stop();
+    }
+});
+
+test('with TRUST_PROXY=false a forged X-Forwarded-For does not reset the limit per address', async () => {
+    const own = await startServer('server.js', freshEnv({ TRUST_PROXY: 'false' }));
+    try {
+        const client = createClient(own.baseUrl);
+        const { token } = await (await client.request('/api/csrf-token')).json();
+        const attempt = (index) => client.request('/api/setup/unlock', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': token, 'X-Forwarded-For': `198.51.100.${index}` },
+            body: JSON.stringify({ pin: '99999999' })
+        });
+        for (let index = 1; index <= 5; index++) assert.equal((await attempt(index)).status, 401);
+        assert.equal((await attempt(6)).status, 429);
+    } finally {
+        await own.stop();
+    }
+});
+
 test('without SETUP_PIN a random 8-digit PIN is logged', async () => {
     const own = await startServer('server.js', freshEnv({ SETUP_PIN: '' }));
     try {

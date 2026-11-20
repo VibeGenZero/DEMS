@@ -20,6 +20,9 @@ const { providerList, answerConnectionTest, answerModelList } = require('./aiCon
 
 const UNLOCK_WINDOW_MS = 15 * 60 * 1000;
 const UNLOCK_LIMIT = 5;
+// Wrong PINs from all addresses together: the per-IP limit alone falls to a forged
+// or rotating client address (security report 2026-11)
+const UNLOCK_TOTAL_LIMIT = 20;
 const SETUP_ACTOR = 'setup';
 const SECRET_FIELDS = ['clientSecret', 'botToken'];
 const DISCORD_KEYS = {
@@ -34,6 +37,7 @@ const MESSAGES = {
     locked: 'Bitte zuerst die Setup-PIN eingeben.',
     wrongPin: 'Falsche Setup-PIN.',
     tooMany: 'Zu viele Versuche. Bitte warte 15 Minuten und versuche es erneut.',
+    tooManyTotal: 'Zu viele falsche Setup-PINs. Bitte warte 15 Minuten oder starte DEMS neu.',
     clientId: 'Bitte eine gültige Client ID eintragen (17–20 Ziffern, Schritt 2 der Anleitung).',
     clientSecret: 'Bitte das Client Secret eintragen (Schritt 2 der Anleitung).',
     botToken: 'Bitte den Bot-Token eintragen (Schritt 3 der Anleitung).',
@@ -77,7 +81,8 @@ function isDiscordDone() {
 /**
  * The setup router.
  *
- * @param {Object} [deps] -> Replacements for the Discord helpers, plus `unlockLimit` (PIN attempts per 15 min and IP)
+ * @param {Object} [deps] -> Replacements for the Discord helpers, plus `unlockLimit` (PIN attempts per 15 min and IP),
+ *   `unlockTotalLimit` (wrong PINs per 15 min from all addresses together)
  *   and `isProduction` (default NODE_ENV=production: the session cookie is Secure, so the wizard needs HTTPS).
  * @returns {express.Router}
  */
@@ -92,6 +97,17 @@ function createSetupRouter(deps = {}) {
         standardHeaders: true,
         legacyHeaders: false,
         handler: (req, res) => res.status(429).json({ error: MESSAGES.tooMany })
+    });
+    // One bucket for everybody that counts only refused PINs: guessing the PIN stays hopeless
+    // even from ever new addresses; a restart clears it (and logs a new PIN unless SETUP_PIN is set)
+    const unlockTotalLimiter = rateLimit({
+        windowMs: UNLOCK_WINDOW_MS,
+        limit: deps.unlockTotalLimit || UNLOCK_TOTAL_LIMIT,
+        keyGenerator: () => 'all',
+        skipSuccessfulRequests: true,
+        standardHeaders: false,
+        legacyHeaders: false,
+        handler: (req, res) => res.status(429).json({ error: MESSAGES.tooManyTotal })
     });
 
     // Every step after the PIN: only in setup mode and only for the session that entered it
@@ -145,7 +161,7 @@ function createSetupRouter(deps = {}) {
     /**
      * POST /api/setup/unlock — { pin } → unlocks the wizard for this session
      */
-    router.post('/unlock', unlockLimiter, async (req, res) => {
+    router.post('/unlock', unlockLimiter, unlockTotalLimiter, async (req, res) => {
         try {
             if (!setupState.isSetupRequired()) return res.status(409).json({ error: MESSAGES.done });
             if (!setupState.checkSetupPin(req.body.pin)) return res.status(401).json({ error: MESSAGES.wrongPin });
