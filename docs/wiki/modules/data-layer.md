@@ -3,7 +3,7 @@ id: data-layer
 title: Data layer — firebaseAdmin.js, document store, PostgreSQL and SQLite
 type: module
 tags: [database, postgresql, sqlite, pg, better-sqlite3, adapter, query, migrations]
-sources: [firebaseAdmin.js, db/config.js, db/documentStore.js, db/postgresStorage.js, db/sqliteStorage.js, db/sqliteAdapter.js, db/migrate.js, db/migrations/README.md]
+sources: [firebaseAdmin.js, db/config.js, db/documentStore.js, db/postgresStorage.js, db/sqliteStorage.js, db/sqliteAdapter.js, db/migrate.js, db/migrations/README.md, db/migrations/001-remove-orphan-comments.js]
 part_of: [architecture]
 see_also: [data-model, conventions, add-collection]
 ---
@@ -54,7 +54,7 @@ Not available: `limit`, `startAfter`, subcollections, `serverTimestamp`, `Timest
 - `runMigrations(api)` runs at every start, after `ready()` and before HTTP, bot and schedulers.
 - Steps are `db/migrations/NNN-<kebab-name>.js` exporting `{ id, description, up(api) }`; `id` = file name without `.js`. Applied ids are documents in `schemaMigrations` (`{ appliedAt, description }`).
 - A failing step aborts the start (`Migration <id> fehlgeschlagen: …`); later steps do not run. Rules for writing steps: `db/migrations/README.md`.
-- 3.0 ships no steps: the PostgreSQL database starts empty.
+- Steps shipped: `001-remove-orphan-comments` (3.4.0) deletes comments whose event no longer exists (event deletion did not delete them before, audit 2026-11-20).
 
 ## Rules
 

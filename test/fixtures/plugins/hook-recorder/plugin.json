@@ -1,0 +1,11 @@
+{
+  "id": "hook-recorder",
+  "name": "Hook-Rekorder",
+  "version": "1.0.0",
+  "sdk": 1,
+  "description": "Testplugin: schreibt jeden Hook mit.",
+  "author": "DEMS-Tests",
+  "permissions": ["events:read", "events:draft"],
+  "server": "server.js",
+  "client": "client.js"
+}

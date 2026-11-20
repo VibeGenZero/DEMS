@@ -7,6 +7,7 @@
  * printed to the console with the [MOCK-DISCORD] prefix instead.
  */
 const crypto = require('crypto');
+const util = require('util');
 const { db, doc, getDoc, updateDoc } = require('../firebaseAdmin');
 const { GUILD, ROLES, CHANNELS, CATEGORIES, PERSONAS, MEMBERS, buildScheduledEvents, findMember } = require('./mockGuild');
 const { getTimezone } = require('../utils/timezone');
@@ -196,7 +197,8 @@ async function sendDM(userId, message) {
             embeds: (message.embeds || []).map(toPayload),
             components: (message.components || []).map(toPayload)
         };
-    mockLog(`DM an ${describeUser(userId)}`, payload);
+    // Full depth, so link buttons (row -> button -> url) show up in the log
+    mockLog(`DM an ${describeUser(userId)}`, typeof payload === 'string' ? payload : util.inspect(payload, { depth: null }));
     return true;
 }
 
@@ -217,6 +219,11 @@ async function sendChannelMessage(channelId, payload, options = {}) {
     });
     console.log(describePayload(payload));
     return { channelId, messageId: fakeSnowflake(), guildId: GUILD.id };
+}
+
+async function sendPluginChannelMessage(channelId, payload = {}) {
+    mockLog(`Plugin-Nachricht in ${describeChannel(channelId)}`, payload.content);
+    return true;
 }
 
 async function ensureAnnouncementThread(sent, title, existing = null) {
@@ -455,6 +462,7 @@ module.exports = {
     getBotStatus,
     sendDM,
     sendChannelMessage,
+    sendPluginChannelMessage,
     ensureAnnouncementThread,
     refreshEventAnnouncements,
     refreshPollMessages,

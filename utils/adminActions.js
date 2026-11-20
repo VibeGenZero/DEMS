@@ -15,6 +15,7 @@ const { notifyRegistrationsChanged } = require('./announcementRefresh');
 const { normalizePollInput, tallyPoll } = require('./pollService');
 const { loadPoll, loadPollVotes } = require('./pollStore');
 const { debugLog } = require('./debugLog');
+const { safeStatusChange } = require('../plugin-sdk/coreHooks');
 
 // Announcement records kept per event or poll (older ones are no longer refreshed)
 const MAX_TRACKED_ANNOUNCEMENTS = 5;
@@ -113,6 +114,7 @@ async function publishDraft(eventId, adminId, { via } = {}) {
 
     const updates = { status: 'active', updatedAt: new Date().toISOString() };
     await updateDoc(doc(db, 'events', eventId), updates);
+    safeStatusChange({ eventId, before: event, after: { ...event, ...updates } });
     await addAuditLog('UPDATE_EVENT_STATUS', adminId, `Changed status to active${viaNote(via)}`, eventId);
     notifyRegistrationsChanged(eventId);
     if (event.autoCreateChannels) {

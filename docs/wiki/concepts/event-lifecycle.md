@@ -2,8 +2,8 @@
 id: event-lifecycle
 title: Event lifecycle — status, series, check-in
 type: concept
-tags: [events, status, draft, archive, auto-archive, ended, cancel, series, recurring, checkin, duplicate]
-sources: [routes/admin.js, bot/scheduledEvents.js, routes/events.js, public/js/admin/event-actions.js, public/js/admin/wizard.js, public/js/admin/wizard-notify.js, utils/eventArchive.js, utils/eventCleanup.js, utils/adminActions.js, bot/adminCommands.js, utils/eventListing.js, utils/eventChangeNotice.js, utils/checkin.js, bot/checkin.js]
+tags: [events, status, draft, archive, auto-archive, ended, cancel, series, recurring, checkin, duplicate, plugin-hooks]
+sources: [routes/admin.js, plugin-sdk/coreHooks.js, plugin-sdk/hooks.js, bot/scheduledEvents.js, routes/events.js, public/js/admin/event-actions.js, public/js/admin/wizard.js, public/js/admin/wizard-notify.js, utils/eventArchive.js, utils/eventCleanup.js, utils/adminActions.js, bot/adminCommands.js, utils/eventListing.js, utils/eventChangeNotice.js, utils/checkin.js, bot/checkin.js]
 depends_on: [data-model]
 see_also: [routes-admin, reminders-presence, registration-flow]
 ---
@@ -31,6 +31,21 @@ Active events need a `startDate`: creating, editing and publishing through `/sta
 The admin table names these actions by what they do (`admin/event-rows.js` decides which a row offers): "Veröffentlichen" and "Wieder aktivieren" send `PUT …/status` with `active`, "Zurück in Entwürfe" with `draft`, "Archivieren" with `archived`. "Jetzt starten …" (`POST …/start`) is only offered for a draft without a start date, "Jetzt beenden …" (`POST …/end`) only while the event runs, because it writes the end date. `cancel` has no button; cancelled events show in the archive tab with the chip "Abgesagt".
 
 Visibility: `GET /api/events` returns only `active` (admins may pass `?status=`); `GET /api/admin/all-events` returns everything.
+
+## Plugin hooks
+
+Each lifecycle write emits plugin hooks after the write (`plugin-sdk/coreHooks.js` wraps `emitHook` / `emitEventStatusChange` of `plugin-sdk/hooks.js`; errors are logged, never answered). Payload events have the public shape plus `origin` (`toPluginEvent`, never `checkinCode`).
+
+| Hook | Emitted by |
+|---|---|
+| `event.created` | create (each series date, also `fromPoll`), Discord `/event erstellen`, duplicate, series extension |
+| `event.published` | status to `active` from `draft` or new: create as active, `PUT …/status`, `PUT …/:id`, `POST …/start` of a draft, `publishDraft` (Discord draft buttons) |
+| `event.updated` | `PUT …/:id` (each saved series date) when a field changed; `{ event, changed }` |
+| `event.ended` | status to `archived`: `POST …/end`, `PUT …/status`, `PUT …/:id`, auto-archive |
+| `event.cancelled` | status to `cancelled`: `PUT …/cancel`, `PUT …/status`, `PUT …/:id` |
+| `event.deleted` | `DELETE …/:id`, series delete (per date); `{ eventId, origin }` |
+
+A new event counts as coming from `draft`, a stored event without status as `active`; so creating an active event emits `event.created`, then `event.published`. The admin system reset emits no hooks.
 
 ## End of an event (W-01)
 

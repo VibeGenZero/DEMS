@@ -3,6 +3,7 @@
  */
 import { registerActions } from './actions.js';
 import { state } from './state.js';
+import { showPluginPage } from './plugins.js';
 import { placeNavMarker, syncNavbarHeight } from './tab-glider.js';
 import { showBotControlSection } from '../admin/bot-control.js';
 import { showAdminSection } from '../admin/dashboard.js';
@@ -24,7 +25,7 @@ import { showPollDetail, showPollsSection } from '../polls/polls.js';
 export const LEGACY_EVENT_ROUTE = /^events\/(.+)$/;
 
 // Pages without their own navbar link mark the link of their list
-const NAV_ROUTE = { member: 'members', insights: 'admin', system: 'admin', 'event-editor': 'admin', news: 'info', privacy: 'info' };
+const NAV_ROUTE = { members: 'admin', member: 'admin', 'bot-control': 'admin', insights: 'admin', system: 'admin', 'event-editor': 'admin', news: 'info', privacy: 'info' };
 
 // Event a logged-out user opened -> shown after the Discord login
 export const PENDING_ROUTE_KEY = 'dems_pending_route';
@@ -171,9 +172,11 @@ export function handleRoute() {
     document.getElementById('event-detail-section')?.classList.remove('has-action-bar');
 
     // Only the navbar: the tabs component (.nav.nav-pills) uses .nav-link too
+    // A plugin page marks the tab of its plugin (data-section="p-<id>-section")
+    const navSection = (route === 'p' ? `p-${param}` : (NAV_ROUTE[route] || route)) + '-section';
     document.querySelectorAll('#main-navbar .nav-link').forEach(link => {
         link.classList.remove('active');
-        if (link.getAttribute('data-section') === (NAV_ROUTE[route] || route) + '-section') {
+        if (link.getAttribute('data-section') === navSection) {
             link.classList.add('active');
         }
     });
@@ -263,6 +266,9 @@ export function handleRoute() {
         case 'privacy':
             showPrivacySection();
             break;
+        case 'p':
+            // Access ('member' / 'admin') is checked by the page the plugin registered
+            return showPluginPage(param, parts.slice(2).join('/'));
         case 'debug':
             if (window.DEBUG_MODE) {
                 showDebugSection();

@@ -12,7 +12,7 @@ process.env.DEV_MOCK = 'true';
 process.env.DEV_SQLITE_PATH = path.join(tmpDir, 'seed.sqlite');
 
 const { seedIfEmpty, resetAndSeed } = require('../dev/seed');
-const { EVENT_ID, SERIES_EVENT_IDS, CHECKIN_CODE, POLL_ID } = require('../dev/seedData');
+const { EVENT_ID, SERIES_EVENT_IDS, CHECKIN_CODE, POLL_ID, SUBMISSION_ID } = require('../dev/seedData');
 const { PERSONAS } = require('../dev/mockGuild');
 const { db, collection, doc, getDoc, getDocs, setDoc } = require('../firebaseAdmin');
 
@@ -27,7 +27,8 @@ const EXPECTED_COUNTS = {
     botMessages: 1,
     botSettings: 1,
     maintenanceSettings: 1,
-    eventTemplates: 2
+    eventTemplates: 2,
+    'plugin:event-submissions:submissions': 3
 };
 
 async function countDocs(name) {
@@ -78,6 +79,29 @@ test('Elif has an open waitlist offer for the second training date (B-15)', asyn
     const expires = new Date(registration.offer.expiresAt);
     assert.ok(expires > new Date(), 'deadline ahead');
     assert.ok(expires < new Date((await getEvent(SERIES_EVENT_IDS[1])).startDate), 'before the start');
+});
+
+test('the seed has open and rejected submissions of Event einreichen and records the collection', async () => {
+    const submissions = 'plugin:event-submissions:submissions';
+    const submission = async (id) => (await getDoc(doc(db, submissions, id))).data();
+    const byPersona = (id) => PERSONAS.find(persona => persona.id === id).userId;
+    assert.deepEqual([(await submission(SUBMISSION_ID.TOM)).userId, (await submission(SUBMISSION_ID.TOM)).status], [byPersona('member'), 'open']);
+    assert.deepEqual([(await submission(SUBMISSION_ID.NEO)).userId, (await submission(SUBMISSION_ID.NEO)).status], [byPersona('newbie'), 'open']);
+    const lena = await submission(SUBMISSION_ID.LENA);
+    assert.deepEqual([lena.userId, lena.status], [byPersona('raider'), 'rejected']);
+    assert.ok(lena.reason.length > 0);
+
+    // Recorded for the account purge; switched on like the mock default for official plugins
+    const state = (await getDoc(doc(db, 'pluginState', 'event-submissions'))).data();
+    assert.deepEqual(state.collections, ['submissions']);
+    assert.equal(state.enabled, true);
+});
+
+test('resetAndSeed keeps the other plugin state fields and does not record a collection twice', async () => {
+    const ref = doc(db, 'pluginState', 'event-submissions');
+    await setDoc(ref, { enabled: false, confirmedVersion: '1.0.0', collections: ['notes', 'submissions'] });
+    await resetAndSeed();
+    assert.deepEqual((await getDoc(ref)).data(), { enabled: false, confirmedVersion: '1.0.0', collections: ['notes', 'submissions'] });
 });
 
 test('seedIfEmpty does not seed twice', async () => {
@@ -239,6 +263,7 @@ test('the newcomer persona has no profile yet', async () => {
 test('resetAndSeed removes own changes and restores the seed', async () => {
     await setDoc(doc(db, 'events', 'my-own-event'), { title: 'Eigenes Event', status: 'active' });
     await setDoc(doc(db, 'events', EVENT_ID.OPEN), { title: 'Überschrieben' });
+    await setDoc(doc(db, 'plugin:event-submissions:submissions', 'my-own-submission'), { userId: '1', title: 'Eigene Idee' });
 
     assert.deepEqual(await resetAndSeed(), EXPECTED_COUNTS);
 
@@ -246,6 +271,7 @@ test('resetAndSeed removes own changes and restores the seed', async () => {
     assert.equal((await getEvent(EVENT_ID.OPEN)).title, 'Community-Spieleabend');
     assert.equal(await countDocs('events'), EXPECTED_COUNTS.events);
     assert.equal((await getDoc(doc(db, 'devMeta', 'seed'))).exists(), true);
+    assert.equal(await countDocs('plugin:event-submissions:submissions'), EXPECTED_COUNTS['plugin:event-submissions:submissions']);
 });
 
 test('the seed refuses to run outside the dev mock mode', () => {

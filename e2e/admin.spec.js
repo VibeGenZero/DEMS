@@ -320,7 +320,7 @@ test('the member list sorts by a column and flips on a second click', async ({ p
 
 test('members see no member overview and are sent away from it', async ({ page }) => {
     await loginAs(page, 'member');
-    await expect(page.locator('#nav-members')).toBeHidden();
+    await expect(page.locator('#nav-admin')).toBeHidden();
     await page.goto('/#members');
     await expect(page.locator('#events-section')).toBeVisible();
     await expect(page.locator('#members-section')).toBeHidden();
@@ -505,7 +505,8 @@ test('the System page shows the configuration and the Discord guide', async ({ p
     await expect(page.locator('#system-panel-overview')).toBeVisible();
     await expect(page.locator('#system-panel-discord')).toBeHidden();
     await expect(page.locator('#system-status-list .system-status-row')).toHaveCount(3);
-    await expect(page.locator('#system-nav .settings-nav-item')).toHaveCount(6);
+    // Übersicht, Discord, Server, Sicherheit, KI, Plugins, Datenschutz
+    await expect(page.locator('#system-nav .settings-nav-item')).toHaveCount(7);
 
     await page.click('#system-nav a[href="#system/discord"]');
     await expect(page).toHaveURL(/#system\/discord$/);

@@ -104,6 +104,8 @@ async function closeMenu(page) {
     }
 }
 
+const ADMIN_TOOLBAR_ROUTES = new Set(['members', 'insights', 'bot-control', 'system']);
+
 /**
  * Go to a section through the navigation, like a user does.
  *
@@ -112,6 +114,14 @@ async function closeMenu(page) {
  * @returns {Promise<void>}
  */
 async function navigate(page, route) {
+    if (ADMIN_TOOLBAR_ROUTES.has(route)) {
+        if (!(await page.locator('#admin-section').isVisible())) {
+            await navigate(page, 'admin');
+        }
+        await page.locator(`#admin-section .admin-toolbar a[href="#${route}"]`).click();
+        await expect(page.locator(`#${route}-section`)).toBeVisible();
+        return;
+    }
     await openMenu(page);
     await page.locator(`#navContent a.nav-link[href="#${route}"]`).click();
     await expect(page.locator(`#${route}-section`)).toBeVisible();

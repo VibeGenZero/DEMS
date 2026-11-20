@@ -106,6 +106,21 @@ test('the shipped migrations folder applies cleanly to an empty database', async
     await api.close();
 });
 
+test('the shipped steps remove comments whose event is gone and keep the others', async () => {
+    const api = makeStore();
+    const { db, doc, setDoc, getDocs, collection } = api;
+    await setDoc(doc(db, 'events', 'kept'), { title: 'Bleibt' });
+    await setDoc(doc(db, 'comments', 'on-kept'), { eventId: 'kept', text: 'bleibt' });
+    await setDoc(doc(db, 'comments', 'on-deleted'), { eventId: 'deleted', text: 'verwaist' });
+    await setDoc(doc(db, 'comments', 'without-event'), { text: 'ohne Event' });
+
+    await runMigrations(api, { log: quiet });
+
+    const ids = (await getDocs(collection(db, 'comments'))).docs.map((snap) => snap.id);
+    assert.deepEqual(ids, ['on-kept']);
+    await api.close();
+});
+
 test('server does not listen until migrations are done', async () => {
     const dir = createTempDir('slow-migration');
     const server = await startServer('test/fixtures/slowMigrationServer.js', {

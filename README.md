@@ -56,7 +56,7 @@ docker compose logs dems | grep Setup-PIN   # nach ein paar Sekunden
 ```
 
 1.  Compose startet drei Dienste: die Datenbank (PostgreSQL, Passwort wird beim ersten Start zufällig erzeugt), einen kleinen Helfer dafür und DEMS selbst auf Port 3000.
-2.  Leite deine Domain per HTTPS-Proxy auf Port 3000 weiter. Ein vollständiges Beispiel mit Traefik steht in [`docs/wiki/ops/deployment.md`](docs/wiki/ops/deployment.md).
+2.  Leite deine Domain per HTTPS-Proxy auf Port 3000 weiter. Ein vollständiges Beispiel mit Traefik steht in [`docs/wiki/ops/deployment.md`](docs/wiki/ops/deployment.md). Der Port ist nur auf dem Server selbst offen (`127.0.0.1`); läuft dein Proxy auf einem anderen Rechner, setze `DEMS_BIND=0.0.0.0` in der `.env`.
 3.  Öffne `https://<deine-domain>`, gib die Setup-PIN aus dem Log ein und folge dem Assistenten: Discord-Anwendung, Bot einladen, Server-ID, Adresse, Admin-Rolle. Die Werte speichert DEMS in der Datenbank.
 
 Danach meldest du dich mit Discord an. Wer auf deinem Discord-Server „Administrator“ ist oder die gewählte Admin-Rolle hat, ist in DEMS Admin.
@@ -85,6 +85,18 @@ docker compose pull && docker compose up -d
 *   Admins sehen unter **Admin › System**, wenn es eine neuere Version gibt. Dafür fragt DEMS zweimal am Tag die öffentlichen GitHub-Releases ab, ohne Daten über deine Installation. Abschalten mit `UPDATE_CHECK=false` in der `.env`.
 *   Was sich geändert hat, steht in den [Releases](https://github.com/VibeGenZero/DEMS/releases) und nach dem Update im Neuigkeiten-Dialog der App.
 *   Vorabversionen (Beta, Release Candidate) bekommst du mit `DEMS_TAG=beta` in der `.env`; Standard ist `latest`, die fertigen Releases.
+
+> [!WARNING]
+> **Update auf 3.4.0: Prüfe deinen Proxy.** Seit dem Sicherheitsupdate in 3.4.0 vertraut DEMS einem Proxy nicht mehr blind. Bei manchen Installationen klappt danach der Login nicht mehr, oder der Proxy erreicht DEMS nicht.
+>
+> *   **Betrifft jedes Update auf 3.4.0, auch mit deiner bisherigen `compose.yaml`:** DEMS glaubt die Proxy-Header (`X-Forwarded-For`, `X-Forwarded-Proto`) nur noch einem Proxy auf demselben Server, im Docker-Netz oder in einem privaten Netz (`10.x`, `172.16.x`–`172.31.x`, `192.168.x`). Kommt dein Proxy von einer anderen Adresse, zum Beispiel über Tailscale (`100.x`), über eine öffentliche IP oder von manchen Hosting-Plattformen, landest du nach dem Discord-Login wieder auf der Login-Seite oder bekommst „Zu viele Anfragen“.
+>
+>     **Lösung:** `TRUST_PROXY=<Adresse deines Proxys>` in der `.env`, danach `docker compose up -d --force-recreate` (einzelner Container: `-e TRUST_PROXY=…` im `docker run`-Befehl). Ist der Port nur für den Proxy erreichbar, geht auch `TRUST_PROXY=1`, das bisherige Verhalten.
+> *   **Betrifft nur, wer die neue `compose.yaml` holt:** Der Port ist dann nur noch auf `127.0.0.1` offen. Erreicht dein Proxy DEMS über die IP des Servers (Proxy auf einem anderen Rechner; Nginx Proxy Manager oder cloudflared im eigenen Container mit Server-IP, `172.17.0.1` oder `host.docker.internal`), meldet er „502 Bad Gateway“.
+>
+>     **Lösung:** `DEMS_BIND=0.0.0.0` in der `.env` und den Port per Firewall nur für den Proxy offen lassen. `docker compose pull` allein ändert deine `compose.yaml` nicht.
+>
+> Nicht betroffen sind ein Proxy direkt auf dem Server (z. B. Caddy oder nginx) und Traefik über Container-Labels. Beide Variablen sind in [`.env.example`](.env.example) erklärt.
 
 ### Sichern
 
@@ -115,7 +127,9 @@ Bisher aus dem Quellcode gebaut? `compose.yaml` zieht jetzt das veröffentlichte
 | Problem | Lösung |
 | --- | --- |
 | Die Seite bleibt beim Laden hängen | DEMS über `https://<domain>` öffnen, nicht über `http://<ip>:3000`. |
-| Nach dem Discord-Login wieder auf der Login-Seite | Der Proxy muss HTTPS sprechen und `X-Forwarded-Proto` setzen. |
+| Nach dem Discord-Login wieder auf der Login-Seite | Der Proxy muss HTTPS sprechen und `X-Forwarded-Proto` setzen. Seit 3.4.0 außerdem: Kommt der Proxy nicht vom selben Server oder aus einem privaten Netz (z. B. über Tailscale), `TRUST_PROXY` auf seine Adresse setzen (siehe [Aktualisieren](#aktualisieren)). |
+| Nach dem Update auf 3.4.0 ständig „Zu viele Anfragen“ | DEMS sieht bei allen Nutzern die Adresse des Proxys, alle teilen sich ein Limit: `TRUST_PROXY` auf die Adresse des Proxys setzen (siehe [Aktualisieren](#aktualisieren)). |
+| „502 Bad Gateway“ nach der neuen `compose.yaml` | Der Port ist nur noch auf `127.0.0.1` offen. Verbindet sich der Proxy über die IP des Servers: `DEMS_BIND=0.0.0.0` in der `.env`. |
 | Discord lehnt den Bot ab („Used disallowed intents“) | Im Developer Portal unter „Bot“ den „Server Members Intent“ einschalten. |
 | Werte aus der `.env` kommen nicht an | Die `.env` muss neben `compose.yaml` liegen; danach `docker compose up -d --force-recreate`. |
 

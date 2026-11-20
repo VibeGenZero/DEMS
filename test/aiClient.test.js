@@ -172,6 +172,12 @@ test('normalizeSystemValue checks the AI keys', () => {
     assert.deepEqual(normalizeSystemValue('AI_BASE_URL', 'http://localhost:11434/v1/'), { value: 'http://localhost:11434/v1' });
     assert.deepEqual(normalizeSystemValue('AI_BASE_URL', 'https://x.test/v1//'), { value: 'https://x.test/v1' });
     assert.deepEqual(normalizeSystemValue('AI_BASE_URL', 'ftp://x'), urlError);
+    // Link-local and cloud metadata addresses are never stored (security report 2026-11)
+    const blocked = { error: 'Diese KI-Adresse ist gesperrt: DEMS ruft keine Link-Local- oder Cloud-Metadaten-Adressen auf.' };
+    for (const address of ['http://169.254.169.254/latest', 'http://[fe80::1]:11434/v1', 'http://metadata.google.internal/v1']) {
+        assert.deepEqual(normalizeSystemValue('AI_BASE_URL', address), blocked, address);
+    }
+    assert.deepEqual(normalizeSystemValue('AI_BASE_URL', 'http://192.168.1.10:11434/v1'), { value: 'http://192.168.1.10:11434/v1' });
     assert.deepEqual(normalizeSystemValue('AI_MODEL', '  m  '), { value: 'm' });
     assert.equal(normalizeSystemValue('AI_MODEL_ADMIN', 'x'.repeat(300)).value.length, 200);
     assert.deepEqual(normalizeSystemValue('AI_API_KEY', ' k '), { value: 'k' });
@@ -236,6 +242,49 @@ test('the connection test counts an answer without text as connected (reasoning 
         assert.equal(result.ok, true, JSON.stringify(result));
     } finally {
         await new Promise(resolve => fake.close(resolve));
+    }
+});
+
+test('the client refuses a cloud metadata base URL without sending anything', async () => {
+    const realFetch = globalThis.fetch;
+    const realWarn = console.warn;
+    let calls = 0;
+    globalThis.fetch = async () => { calls++; return new Response('{}', { status: 200 }); };
+    console.warn = () => {};
+    try {
+        const overrides = { provider: 'ollama', baseUrl: 'http://169.254.169.254/latest', model: 'm' };
+        await assert.rejects(getAiClient({ env: {}, overrides }).listModels(), { name: 'AiError', code: 'blocked_address' });
+        const result = await testConnection(overrides);
+        assert.deepEqual(result, { ok: false, code: 'blocked_address', error: 'Diese KI-Adresse ist gesperrt: DEMS ruft keine Link-Local- oder Cloud-Metadaten-Adressen auf.' });
+    } finally {
+        globalThis.fetch = realFetch;
+        console.warn = realWarn;
+    }
+    assert.equal(calls, 0);
+});
+
+test('the client follows no redirect of a provider', async () => {
+    const http = require('http');
+    const listen = (server) => new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+    const hits = [];
+    const target = http.createServer((req, res) => {
+        hits.push(req.url);
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({ data: [{ id: 'internal' }] }));
+    });
+    await listen(target);
+    const redirecting = http.createServer((req, res) => {
+        res.writeHead(302, { location: `http://127.0.0.1:${target.address().port}${req.url}` });
+        res.end();
+    });
+    await listen(redirecting);
+    try {
+        const client = getAiClient({ env: {}, overrides: { provider: 'ollama', baseUrl: `http://127.0.0.1:${redirecting.address().port}/v1`, model: 'm' } });
+        await assert.rejects(client.listModels(), { name: 'AiError', code: 'unreachable' });
+        assert.deepEqual(hits, []);
+    } finally {
+        await new Promise(resolve => target.close(resolve));
+        await new Promise(resolve => redirecting.close(resolve));
     }
 });
 

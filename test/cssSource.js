@@ -118,4 +118,21 @@ function readTokens(css) {
     return readSchemeTokens(css, 'dark');
 }
 
-module.exports = { readCss, stripComments, parseRules, readTokens, readSchemeTokens };
+// A colour written out: hex, rgb(), hsl() or a colour name (white-space is no colour)
+const RAW_COLOR = /#[0-9a-fA-F]{3,8}\b|\brgba?\(|\bhsla?\(|(?<![-\w])(white|black)(?![-\w])/;
+const withoutImportant = (value) => value.replace(/\s*!important$/, '');
+
+/**
+ * Raw values that belong into tokens.css, one predicate per rule of
+ * cssRules.test.js (also used for the stylesheets of official plugins).
+ * Each takes a declaration `{ property, value }` and answers true for a raw value.
+ */
+const RAW_VALUE_CHECKS = {
+    colour: (declaration) => RAW_COLOR.test(declaration.value),
+    fontSize: (declaration) => declaration.property === 'font-size' && /\d(px|rem)\b/.test(declaration.value),
+    // Layers above local stacking (10 and more) use the z tokens
+    zIndex: (declaration) => declaration.property === 'z-index' && /^-?\d+$/.test(withoutImportant(declaration.value)) && Math.abs(Number(withoutImportant(declaration.value))) >= 10,
+    radius: (declaration) => declaration.property.startsWith('border') && declaration.property.endsWith('radius') && /\dpx\b/.test(declaration.value)
+};
+
+module.exports = { readCss, stripComments, parseRules, readTokens, readSchemeTokens, RAW_VALUE_CHECKS };

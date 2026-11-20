@@ -37,6 +37,7 @@ test('every Discord helper answers with its neutral value while the bot is not r
     const neutral = {
         sendDM: [['u1', 'Hallo'], false],
         sendChannelMessage: [['c1', { components: [] }, { roleIds: ['r1'] }], false],
+        sendPluginChannelMessage: [['c1', { content: 'Hallo', components: [] }], false],
         refreshEventAnnouncements: [['ev'], false],
         refreshPollMessages: [['poll'], false],
         markPollMessagesDeleted: [[{ id: 'poll', messages: [] }], false],
@@ -115,6 +116,40 @@ test('closing a request whose message was deleted in Discord answers false witho
         const registration = { id: 'reg1', eventId: 'ev', userId: 'u1', approvalMessage: { channelId: 'c1', messageId: 'm1' } };
         assert.equal(await bot.closeApprovalRequest(registration, { status: 'accepted', actorName: 'Mori' }, { title: 'Abend' }), false);
         assert.deepEqual(errors, [], 'a gone message is not logged as an error');
+    } finally {
+        state.isReady = false;
+        bot.client.channels.fetch = originalFetch;
+        console.error = originalError;
+    }
+});
+
+test('a plugin channel message is posted without any mentions, whatever the payload asks for', async () => {
+    const { state } = require('../bot/client');
+    const originalFetch = bot.client.channels.fetch;
+    const sent = [];
+    state.isReady = true;
+    bot.client.channels.fetch = async (id) => ({ id, send: async (payload) => { sent.push(payload); return { id: 'm1' }; } });
+    try {
+        const payload = { content: '@everyone <@&123> hi', components: [], allowedMentions: { parse: ['everyone'] } };
+        assert.equal(await bot.sendPluginChannelMessage('c1', payload), true);
+        assert.deepEqual(sent, [{ content: '@everyone <@&123> hi', components: [], allowedMentions: { parse: [] } }]);
+    } finally {
+        state.isReady = false;
+        bot.client.channels.fetch = originalFetch;
+    }
+});
+
+test('a plugin channel message that Discord refuses answers false and is logged', async () => {
+    const { state } = require('../bot/client');
+    const originalFetch = bot.client.channels.fetch;
+    const originalError = console.error;
+    const errors = [];
+    state.isReady = true;
+    bot.client.channels.fetch = async () => { throw new Error('Missing Access'); };
+    console.error = (...args) => errors.push(args.join(' '));
+    try {
+        assert.equal(await bot.sendPluginChannelMessage('c1', { content: 'Hallo', components: [] }), false);
+        assert.equal(errors.length, 1);
     } finally {
         state.isReady = false;
         bot.client.channels.fetch = originalFetch;

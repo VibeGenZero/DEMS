@@ -1,6 +1,26 @@
 {
-    "version": "3.3.0",
+    "version": "3.4.0",
     "releases": [
+        {
+            "version": "3.4.0",
+            "date": "2026-11-20",
+            "news": [
+                {
+                    "title": "💡 Plugins: Event-Ideen einreichen",
+                    "content": "DEMS lässt sich jetzt mit Plugins erweitern – das erste heißt „Event einreichen“. Im neuen Tab schlägst du dem Team ein Event vor: Titel, Beschreibung, Wunschtermin und Kategorie, fertig. Unter „Deine Vorschläge“ siehst du, ob deine Idee noch offen, in Planung, eingetragen oder abgelehnt ist, und der Bot schickt dir eine Nachricht, sobald das Team entschieden hat. Admins sehen alle Vorschläge, übernehmen einen mit einem Klick in den Event-Editor oder lehnen ihn mit Begründung ab. Plugins schalten Admins unter System › Plugins ein und aus.",
+                    "highlight": true
+                },
+                {
+                    "title": "🎨 Design anpassen für eure Community",
+                    "content": "Mit dem zweiten offiziellen Plugin „Design anpassen“ stellen Admins unter „Design“ die Farben (getrennt für Dunkel und Hell), die Ecken und die Schrift für die ganze Seite ein – mit Live-Kontrastwarnung und einer Vorschau nur im eigenen Tab. Wer CSS kennt, kann zusätzlich eigenes CSS ergänzen (geschützt durch das Reset-Passwort). Falls ein Design einmal stört, lädt ?design=standard in der Adresse DEMS jederzeit im Standarddesign.",
+                    "highlight": true
+                },
+                {
+                    "title": "🔒 Sicherheitsupdate",
+                    "content": "Nach einer Sicherheitsprüfung ist DEMS an mehreren Stellen dichter: Kommentare verschwinden jetzt zusammen mit ihrem Event, die Setup-PIN lässt sich auch mit ständig wechselnden Adressen nicht mehr durchprobieren, Schutzprüfungen greifen unabhängig von der Groß- und Kleinschreibung der Adresse, und die KI-Anbindung ruft keine Cloud-Metadaten-Adressen mehr auf. Für Betreiber: Die compose.yaml öffnet DEMS jetzt nur noch auf 127.0.0.1. Läuft euer Proxy auf einem anderen Rechner, setzt DEMS_BIND=0.0.0.0 in der .env; stehen mehrere Proxys oder einer mit öffentlicher Adresse davor, passt TRUST_PROXY an."
+                }
+            ]
+        },
         {
             "version": "3.3.0",
             "date": "2026-11-18",

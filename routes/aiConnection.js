@@ -35,7 +35,7 @@ async function answerConnectionTest(req, res) {
     }
 }
 
-/** POST …/ai/models — `{ provider, baseUrl, apiKey }` -> `{ models }`; 502 with the German sentence */
+/** POST …/ai/models — `{ provider, baseUrl, apiKey }` -> `{ models }`; 502 with the German sentence (400 for a refused address) */
 async function answerModelList(req, res) {
     try {
         const overrides = overridesOf(req.body);
@@ -46,7 +46,7 @@ async function answerModelList(req, res) {
     } catch (err) {
         const code = err instanceof AiError ? err.code : 'unreachable';
         logAiFailure('Modellliste', err);
-        res.status(502).json({ error: AI_ERROR_MESSAGES[code] });
+        res.status(code === 'blocked_address' ? 400 : 502).json({ error: AI_ERROR_MESSAGES[code] });
     }
 }
 

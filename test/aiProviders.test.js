@@ -330,6 +330,26 @@ test('listModels returns the sorted ids', async () => {
     } finally { await fake.stop(); }
 });
 
+test('listModels passes on model ids only, never other text of the answer', async () => {
+    // The list goes back to the admin as it is: it must not relay what an internal service answered
+    const ids = ['gpt-4o', 'openai/gpt-4o:free', 'models/gemini-1.5-pro', 'llama3.1:8b', 'claude-3-5-sonnet@20240620', 'mistral-7b-instruct-v0.3+q4'];
+    const junk = ['ami-id\niam/security-credentials/dems-role', 'a'.repeat(201), '<script>alert(1)</script>', 'has space', '', 42, null];
+    const fake = await startFake((req, res) => sendJson(res, 200, { data: [...ids, ...junk].map((id) => ({ id })) }));
+    try {
+        const expected = [...ids].sort();
+        assert.deepEqual(await openai.create({ baseUrl: fake.baseUrl, model: 'm' }).listModels(), expected);
+        assert.deepEqual(await anthropic.create({ baseUrl: fake.baseUrl, apiKey: SECRET, model: 'm' }).listModels(), expected);
+    } finally { await fake.stop(); }
+});
+
+test('listModels passes on at most 1000 ids', async () => {
+    const fake = await startFake((req, res) => sendJson(res, 200, { data: Array.from({ length: 1500 }, (_, i) => ({ id: `model-${String(i).padStart(4, '0')}` })) }));
+    try {
+        const models = await openai.create({ baseUrl: fake.baseUrl, model: 'm' }).listModels();
+        assert.equal(models.length, 1000);
+    } finally { await fake.stop(); }
+});
+
 test('listModels maps a rejected key to invalid_key', async () => {
     const fake = await startFake((req, res) => sendJson(res, 401, {}));
     try {

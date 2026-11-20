@@ -30,8 +30,14 @@ const { pruneUsage } = require('./ai/usage');
 const { initSetupState, isSetupRequired } = require('./utils/setupState');
 const { createSetupRouter } = require('./routes/setup');
 const { privacyGate } = require('./middleware/privacy');
+const { lowerPath, isApiOrAuthPath } = require('./utils/requestPath');
+const { trustProxySetting } = require('./utils/trustProxy');
 const { getPrivacyPolicy } = require('./utils/privacyPolicy');
 const { BANNER_FILE, bannerDir, sweepOrphanBanners } = require('./utils/bannerStore');
+const { initPlugins, pluginHost } = require('./plugin-sdk');
+const { createPluginRouter } = require('./routes/plugins');
+const { createPluginStatic } = require('./routes/pluginStatic');
+const { createThemeRouter } = require('./routes/pluginTheme');
 
 // Production runs behind a TLS proxy (trust proxy below) -> cookies only over HTTPS
 const IS_PRODUCTION = process.env.NODE_ENV === 'production';
@@ -39,9 +45,13 @@ const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Trust Proxy (Railway, Heroku, etc.)
-// Needed for correct IP addressing in rate limiting behind load balancers
-app.set('trust proxy', 1);
+// Routes match only their exact letter case: /API/… must not reach the /api routers
+// past the gates below (security report 2026-11; the gates also compare in lower case)
+app.set('case sensitive routing', true);
+
+// Client address behind the TLS proxy (rate limits, X-Forwarded-Proto). Default: one hop,
+// only from a proxy on a loopback or private address; TRUST_PROXY overrides (utils/trustProxy.js)
+app.set('trust proxy', trustProxySetting(process.env.TRUST_PROXY));
 
 // ── Validate required env vars ──────────────────────────────────────────
 // A missing SESSION_SECRET is generated and stored at start (utils/systemConfig.js, #138);
@@ -164,8 +174,7 @@ app.use((req, res, next) => {
     }
 
     // Validate on mutating requests to /api/ and /auth/ (logout)
-    const isProtectedPath = req.path.startsWith('/api/') || req.path.startsWith('/auth/');
-    if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(req.method) && isProtectedPath) {
+    if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(req.method) && isApiOrAuthPath(req)) {
         const token = req.headers['x-csrf-token'] || req.headers['x-xsrf-token'];
         if (!token || token !== req.session.csrfToken) {
             return res.status(403).json({ error: 'Ungültiges CSRF-Token. Bitte Seite neu laden.' });
@@ -177,6 +186,10 @@ app.use((req, res, next) => {
 
 // ── Static files ────────────────────────────────────────────────────────
 app.use(express.static(path.join(__dirname, 'public')));
+// Client files of switched-on plugins (allow-list, routes/pluginStatic.js); after session and CSRF,
+// before the role refresh; a file request creates no session (saveUninitialized: false)
+app.use('/plugins', createPluginStatic(() => pluginHost()));
+app.use(createThemeRouter(() => pluginHost()));
 // Dev mock mode: banners of the dummy events (dev/banners, see dev/seedData.js)
 if (IS_MOCK_MODE) app.use('/dev-banners', express.static(path.join(__dirname, 'dev', 'banners')));
 
@@ -226,8 +239,8 @@ if (IS_DEBUG) {
 const SETUP_OPEN_PATHS = ['/api/csrf-token', '/api/server-info', '/api/maintenance/status', '/api/privacy', '/api/updates'];
 app.use((req, res, next) => {
     if (!isSetupRequired()) return next();
-    const isApi = req.path.startsWith('/api/') || req.path.startsWith('/auth/');
-    if (!isApi || req.path.startsWith('/api/setup/') || SETUP_OPEN_PATHS.includes(req.path)) return next();
+    const pathname = lowerPath(req);
+    if (!isApiOrAuthPath(req) || pathname.startsWith('/api/setup/') || SETUP_OPEN_PATHS.includes(pathname)) return next();
     res.status(503).json({ error: 'DEMS ist noch nicht eingerichtet.', setupRequired: true });
 });
 app.use('/api/setup', createSetupRouter());
@@ -244,6 +257,8 @@ app.use('/api/events', require('./routes/events'));
 app.use('/api/polls', require('./routes/polls'));
 app.use('/api/admin', require('./routes/admin'));
 app.use('/api/user', require('./routes/user'));
+// Plugin client list + plugin routes, behind the same session, CSRF and privacy chain as the core
+app.use('/api/plugins', createPluginRouter(() => pluginHost()));
 
 // CSRF token endpoint (for frontend to fetch)
 app.get('/api/csrf-token', (req, res) => {
@@ -338,6 +353,17 @@ async function start() {
     const loaded = await loadSystemConfig();
     console.log(`⚙️ Konfiguration: ${loaded.fromDb} Werte aus der Datenbank, ${loaded.fromEnv} aus der Umgebung (.env).`);
     await loadAiSettings();
+    // Plugins (plugin-sdk/): a failure never blocks the start, DEMS then runs without plugins
+    try {
+        await initPlugins({
+            officialDir: path.join(__dirname, 'plugins'),
+            customDir: path.resolve(process.env.PLUGINS_DIR || path.join(__dirname, 'data', 'plugins')),
+            safeMode: process.env.PLUGINS_SAFE_MODE === 'true',
+            mockMode: IS_MOCK_MODE
+        });
+    } catch (err) {
+        console.error('❌ Plugins konnten nicht gestartet werden, DEMS läuft ohne Plugins:', err.message);
+    }
     sessionMiddleware = createSessionMiddleware();
     // Setup mode: no Discord values yet -> the wizard runs, the PIN goes to the log
     await initSetupState({ mockMode: IS_MOCK_MODE });

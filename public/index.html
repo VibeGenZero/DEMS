@@ -40,6 +40,8 @@
   <link rel="stylesheet" href="/css/tokens.css?v=3">
   <link rel="stylesheet" href="/css/components.css?v=3">
   <link rel="stylesheet" href="/css/style.css?v=3">
+  <link rel="stylesheet" href="/theme.css" id="custom-theme">
+  <script src="/design-boot.js"></script>
   <link rel="icon" type="image/svg+xml" href="/logo.svg">
 </head>
 
@@ -107,16 +109,6 @@
             <li class="nav-item is-hidden" id="nav-admin">
               <a class="nav-link" href="#admin" data-section="admin-section">
                 <i class="bi bi-gear me-1"></i>Admin
-              </a>
-            </li>
-            <li class="nav-item is-hidden" id="nav-members">
-              <a class="nav-link" href="#members" data-section="members-section">
-                <i class="bi bi-people me-1"></i>Mitglieder
-              </a>
-            </li>
-            <li class="nav-item is-hidden" id="nav-bot-control">
-              <a class="nav-link" href="#bot-control" data-section="bot-control-section">
-                <i class="bi bi-robot me-1"></i>Bot-Zentrale
               </a>
             </li>
             <li class="nav-item is-hidden" id="nav-debug">
@@ -1009,6 +1001,9 @@
           <a class="btn btn-ghost btn-sm" href="#insights">
             <i class="bi bi-graph-up me-1"></i>Auswertungen
           </a>
+          <a class="btn btn-ghost btn-sm" href="#bot-control">
+            <i class="bi bi-robot me-1"></i>Bot-Zentrale
+          </a>
           <a class="btn btn-ghost btn-sm" href="#system">
             <i class="bi bi-sliders me-1"></i>System
           </a>
@@ -1073,9 +1068,12 @@
     <!-- Member overview for admins (W-15): admin/members.js -->
     <section id="members-section" class="app-section is-hidden">
       <div class="container section-container">
-        <div class="section-header">
-          <h2><i class="bi bi-people me-2"></i>Mitglieder</h2>
-          <p class="text-secondary mb-0" id="members-count"></p>
+        <div class="section-header d-flex justify-content-between align-items-center flex-wrap gap-3">
+          <div>
+            <h2><i class="bi bi-people me-2"></i>Mitglieder</h2>
+            <p class="text-secondary mb-0" id="members-count"></p>
+          </div>
+          <a class="btn btn-outline-light" href="#admin"><i class="bi bi-arrow-left me-1"></i>Zum Dashboard</a>
         </div>
         <div class="members-toolbar">
           <div class="events-search">
@@ -1242,6 +1240,11 @@
                 <div class="system-card-head"><h4 class="system-card-title">Datenschutz-Hinweis</h4></div>
                 <p class="text-secondary mb-0">Bei einem Cloud-Anbieter werden Fragen und Event-Inhalte an diesen Anbieter gesendet. Ergänze das in deiner Datenschutzerklärung. Mit einem lokalen Ollama verlässt nichts den Server. Namen und Discord-IDs der Mitglieder werden nie mitgesendet.</p>
               </div>
+            </section>
+            <section class="settings-panel is-hidden" id="system-panel-plugins" aria-labelledby="system-panel-plugins-title">
+              <h3 class="settings-panel-title" id="system-panel-plugins-title" tabindex="-1">Plugins</h3>
+              <p class="text-secondary" id="plugins-privacy-hint">Plugins können Daten von Mitgliedern speichern. Erwähne eingeschaltete Plugins in deiner Datenschutzerklärung.</p>
+              <div class="plugin-list" id="plugins-list"></div>
             </section>
             <section class="settings-panel is-hidden" id="system-panel-privacy" aria-labelledby="system-panel-privacy-title">
               <h3 class="settings-panel-title" id="system-panel-privacy-title" tabindex="-1">Datenschutz</h3>
@@ -1776,6 +1779,16 @@
       </div>
     </section>
 
+    <!-- Pages of plugins (#p/<id>, core/plugins.js): the title is set per plugin, render() fills a fresh element in #plugin-root -->
+    <section id="plugin-section" class="app-section is-hidden">
+      <div class="container section-container">
+        <div class="section-header">
+          <h2 id="plugin-title"></h2>
+        </div>
+        <div id="plugin-root"></div>
+      </div>
+    </section>
+
     <section id="insights-section" class="app-section is-hidden">
       <div class="container section-container">
         <div class="section-header d-flex justify-content-between align-items-center flex-wrap gap-3">
@@ -1811,9 +1824,12 @@
     <!-- Bot Control Center (Bot-Zentrale) -->
     <section id="bot-control-section" class="app-section is-hidden">
       <div class="container section-container">
-        <div class="section-header">
-          <h2><i class="bi bi-robot me-2"></i>Bot-Zentrale</h2>
-          <p class="text-secondary mb-0">Steuere und konfiguriere den Discord Bot.</p>
+        <div class="section-header d-flex justify-content-between align-items-center flex-wrap gap-3">
+          <div>
+            <h2><i class="bi bi-robot me-2"></i>Bot-Zentrale</h2>
+            <p class="text-secondary mb-0">Steuere und konfiguriere den Discord Bot.</p>
+          </div>
+          <a class="btn btn-outline-light" href="#admin"><i class="bi bi-arrow-left me-1"></i>Zum Dashboard</a>
         </div>
 
         <!-- Bot Status Overview -->
@@ -2064,6 +2080,10 @@
             <div class="form-check">
               <input class="form-check-input" type="checkbox" value="polls" id="reset-polls">
               <label class="form-check-label" for="reset-polls">Alle Abstimmungen löschen</label>
+            </div>
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" value="pluginData" id="reset-plugins" checked>
+              <label class="form-check-label" for="reset-plugins">Plugin-Daten</label>
             </div>
             <div class="form-check">
               <input class="form-check-input" type="checkbox" value="users" id="reset-users">
@@ -2597,6 +2617,27 @@
     </div>
   </div>
 
+  <!-- Admin reset password prompt (core/passwordDialog.js) -->
+  <div class="modal fade" id="passwordModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header border-0 pb-0">
+          <h5 class="modal-title"><i class="bi bi-shield-lock me-2" aria-hidden="true"></i>Reset-Passwort eingeben</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Schließen"></button>
+        </div>
+        <div class="modal-body">
+          <p id="password-modal-text" class="text-secondary mb-3"></p>
+          <label class="form-label" for="password-modal-input">Reset-Passwort</label>
+          <input type="password" class="form-control" id="password-modal-input" autocomplete="off">
+        </div>
+        <div class="modal-footer border-0">
+          <button type="button" class="btn btn-outline-light" data-bs-dismiss="modal">Abbrechen</button>
+          <button type="button" class="btn btn-accent" id="password-modal-ok">Bestätigen</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Privacy policy of this installation (#138, pages/privacy.js): public like #info -->
   <section id="privacy-section" class="app-section is-hidden">
     <div class="container section-container privacy-container">
@@ -2647,6 +2688,35 @@
         <div class="modal-footer border-0">
           <button type="button" class="btn btn-outline-light" data-bs-dismiss="modal">Abbrechen</button>
           <button type="button" class="btn btn-primary" data-click="confirmSystemSave">Speichern</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- System › Plugins (admin/system-plugins.js): trust confirmation before a custom plugin runs -->
+  <div class="modal fade" id="pluginTrustModal" tabindex="-1" aria-labelledby="plugin-trust-title">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header border-0">
+          <h5 class="modal-title" id="plugin-trust-title"><i class="bi bi-exclamation-triangle me-2" aria-hidden="true"></i>Nicht offizielles Plugin einschalten?</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Schließen"></button>
+        </div>
+        <div class="modal-body">
+          <p><span id="plugin-trust-name"></span> stammt nicht aus dem DEMS-Projekt. Es läuft mit vollem Zugriff auf DEMS,
+            den Discord-Bot und die Datenbank — die Berechtigungen unten zeigen, was es nutzen
+            möchte, verhindern aber nichts. Schalte es nur ein, wenn du dem Code vertraust.</p>
+          <p class="form-label">Berechtigungen</p>
+          <ul class="plugin-permissions" id="plugin-trust-permissions"></ul>
+          <div class="form-check mb-3">
+            <input class="form-check-input" type="checkbox" id="plugin-trust-check" data-change="pluginTrustInput">
+            <label class="form-check-label" for="plugin-trust-check">Ich vertraue dem Code dieses Plugins</label>
+          </div>
+          <label class="form-label" for="plugin-trust-password">Admin-Reset-Passwort</label>
+          <input type="password" class="form-control" id="plugin-trust-password" autocomplete="current-password" data-input="pluginTrustInput">
+        </div>
+        <div class="modal-footer border-0">
+          <button type="button" class="btn btn-outline-light" data-bs-dismiss="modal">Abbrechen</button>
+          <button type="button" class="btn btn-warning" id="plugin-trust-confirm" data-click="confirmPluginTrust" disabled>Einschalten</button>
         </div>
       </div>
     </div>
@@ -2849,6 +2919,12 @@
 
   <!-- Card flight between the overview and an event page (events/card-flight.js) -->
   <div id="card-flight" class="card-flight is-hidden" aria-hidden="true"></div>
+
+  <!-- Design draft preview banner (core/pluginTheme.js) -->
+  <div id="design-preview-bar" class="design-preview-bar is-hidden" role="status">
+    <span><i class="bi bi-eye me-2" aria-hidden="true"></i>Vorschau des Design-Entwurfs – nur du siehst ihn.</span>
+    <button type="button" class="btn btn-secondary btn-sm" data-click="endDesignPreview">Vorschau beenden</button>
+  </div>
 
   <!-- Scripts -->
   <script src="/vendor/bootstrap/bootstrap.bundle.min.js"></script>

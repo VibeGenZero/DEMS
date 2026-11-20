@@ -3,7 +3,7 @@ id: routes-events
 title: routes/events.js — event endpoints for logged-in members
 type: module
 tags: [api, events, registration, checkin, comments, series, participants]
-sources: [routes/events.js, utils/checkin.js, utils/threadSync.js, utils/registrationService.js, utils/eventUtils.js, utils/eventListing.js, utils/waitlistOffers.js, utils/tentativeRegistration.js]
+sources: [routes/events.js, utils/checkin.js, utils/threadSync.js, utils/registrationService.js, utils/eventUtils.js, utils/eventListing.js, utils/waitlistOffers.js, utils/tentativeRegistration.js, utils/eventComments.js]
 part_of: [architecture]
 depends_on: [middleware, utils, data-layer, bot]
 see_also: [registration-flow, event-lifecycle, api-index]
@@ -28,9 +28,9 @@ see_also: [registration-flow, event-lifecycle, api-index]
 | GET | `/:id/my-registration` | user | own registration (a waitlisted one also `waitlistPosition: { position, total }`, W-05; only the own place, never other members' times), or only `{ registered: true, asGuest: true, id, status, checkedIn, checkedInAt }` of the inviting registration when the user is a guest — status and id of that registration (an accepted one first when they are the guest of two), check-in of the guest (#110); never its `formAnswers` or guest list, or `{ registered: false }` |
 | GET | `/:id/participants` | user | first 20 accepted participants `{ displayName, avatar }` + `total`; `bench` = tentative registrations (B-17), oldest „Vielleicht“ first, `{ displayName, avatar }` plus `preferredSlotId` on slot events (`loadBench`, no ids, times or answers); slot events also get `slots` (line-up with members) and `waitlist` |
 | POST | `/:id/checkin` | user + `checkinLimiter` (10 failed attempts / 15 min per member, also in mock mode → 429 "Zu viele Check-in-Versuche …") | body `{ code }`; requires `checkinEnabled` + matching `checkinCode` + own accepted registration; sets `checkedIn`, `checkedInAt` through `checkInMember` (`utils/checkin.js`, shared with the Discord button of B-07; no time window here); a repeat answers `alreadyCheckedIn: true` |
-| GET | `/:id/comments` | user | comments of the event, sorted by `createdAt` ascending, incl. `source`, `discordMessageId`, `editedAt` (B-16) |
-| POST | `/:id/comments` | user | body `{ text (≤1000), replyTo }`; stores `source: 'web'` and mirrors the comment into the event's Discord thread (`mirrorCommentToThread`, fire and forget, B-16) |
-| DELETE | `/:id/comments/:commentId` | user (owner or admin) | deletes one comment and, when it has a `discordMessageId`, its Discord message (`deleteMirroredMessage`, fire and forget, B-16) |
+| GET | `/:id/comments` | user | comments of the event, sorted by `createdAt` ascending, incl. `source`, `discordMessageId`, `editedAt` (B-16); 404 „Event nicht gefunden“ for an unknown or deleted event (`requireExistingEvent`, reads `res.locals.event` from `router.param`) |
+| POST | `/:id/comments` | user | only on an existing event (404 otherwise); body `{ text (≤1000), replyTo }`; stores `source: 'web'` and mirrors the comment into the event's Discord thread (`mirrorCommentToThread`, fire and forget, B-16) |
+| DELETE | `/:id/comments/:commentId` | user (owner or admin) | 404 „Kommentar nicht gefunden.“ unless the comment belongs to `:id`; deletes one comment and, when it has a `discordMessageId`, its Discord message (`deleteMirroredMessage`, fire and forget, B-16) |
 
 Related: `POST /api/events/:id/ask` (the event assistant, SSE stream) lives in `routes/eventAsk.js`, mounted before this router; see [api-index](../reference/api-index.md).
 

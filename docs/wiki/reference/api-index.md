@@ -3,7 +3,7 @@ id: api-index
 title: API index — every HTTP endpoint
 type: reference
 tags: [api, endpoints, rest, index, routes]
-sources: [server.js, routes/setup.js, routes/auth.js, routes/events.js, routes/user.js, routes/admin.js, dev/devAuth.js]
+sources: [server.js, routes/plugins.js, routes/pluginStatic.js, routes/pluginTheme.js, routes/adminPlugins.js, plugins/custom-design/server.js, routes/setup.js, routes/auth.js, routes/events.js, routes/user.js, routes/admin.js, dev/devAuth.js]
 depends_on: [routes-auth, routes-events, routes-admin, routes-user, server]
 see_also: [request-lifecycle, add-api-endpoint]
 ---
@@ -23,6 +23,11 @@ see_also: [request-lifecycle, add-api-endpoint]
 | GET | `/api/privacy` (#138: current privacy policy `{ markdown, version, updatedAt }`, 404 without one) | — |
 | GET | `/api/server-info` (`{ serverName, iconUrl, guildId, debugMode, ai: { memberAssistant, assistantName, teaserText, adminAssistant } }`; `ai` also in the error fallback, all off) | —
 | GET | `/api/updates` | — |
+| GET / HEAD | `/plugins/:pluginId/<client.js\|client.css\|assets/<name>>` (client files of switched-on plugins, `routes/pluginStatic.js`; allow-list, creates no session; anything else plain 404) | — |
+| GET | `/theme.css` (published stylesheets of enabled plugins with `theme`, `routes/pluginTheme.js`; re-checked with `checkThemeCss`, ETag + `Cache-Control: no-cache`, creates no session; empty in safe mode) | — |
+| GET | `/theme-preview.css` (like `/theme.css`, with a plugin's draft replacing its published sheet; `Cache-Control: no-store`; non-admins get 404) | A |
+| GET | `/api/plugins` (client list of switched-on plugins: `[{ id, name, version, official, permissions, client, css }]`; `[]` in safe mode or before the host is ready) | U |
+| any | `/api/plugins/:pluginId/{*splat}` (dispatcher for `ctx.routes.*`, `routes/plugins.js`; off or unknown plugin 404 `Plugin nicht gefunden.`, unknown route 404 `Nicht gefunden.`, routes with `password: true` also check `req.body.password` against `ADMIN_RESET_PASSWORD` and strip it before the handler) | U or A, per route `access` |
 | GET | `/{*splat}` (SPA fallback) | — |
 
 ## /api/setup — setup wizard (#138, `routes/setup.js`, [security](../concepts/security.md#first-run-setup-138))
@@ -113,8 +118,22 @@ Only in setup mode (afterwards 409 `Die Einrichtung ist bereits abgeschlossen.`)
 | PUT / DELETE | `/api/admin/event-templates/:id` (W-10) |
 | GET / PUT | `/api/admin/bot-messages` |
 | GET | `/api/admin/audit-log` |
-| DELETE | `/api/admin/reset` |
+| DELETE | `/api/admin/reset` (`targets` incl. `pluginData`; `users` wipes plugin data too) |
+| GET | `/api/admin/plugins` (`{ safeMode, plugins }`, views + public `settingsValues`) |
+| PUT | `/api/admin/plugins/:id/enabled` (`{ enabled, trust?, password? }`; custom plugin on needs `trust` + reset password), `/plugins/:id/settings` (`{ values, password? }`; a secret needs the reset password) |
+| DELETE | `/api/admin/plugins/:id/data` (only while off; `{ deleted }`) |
 | GET | `/api/admin/bot/status`, `/bot/running-events` |
 | GET / PUT | `/api/admin/bot/settings` |
 | GET / PUT | `/api/admin/maintenance` |
 | POST | `/api/admin/maintenance/panic`, `/maintenance/panic/deactivate` |
+
+## /api/plugins/custom-design — official plugin „Design anpassen“ ([plugin-sdk](../concepts/plugin-sdk.md), all A)
+
+| Method | Path |
+|---|---|
+| GET | `/api/plugins/custom-design/` (`{ published, draft, defaults, warnings }`) |
+| PUT | `/api/plugins/custom-design/draft` (validates source, compiles CSS, saves draft via `ctx.theme.saveDraft`; stores filter errors on `draft.error` and answers 200 `{ draft, warnings }`) |
+| DELETE | `/api/plugins/custom-design/draft` (discards draft in `ctx.theme` and `designs/draft`) |
+| POST | `/api/plugins/custom-design/publish` (publishes stored draft when free CSS did not change; 409 without a draft or with `draft.error`, 403 when free CSS changed) |
+| POST | `/api/plugins/custom-design/publish-css` (`password: true` admin reset password; publishes stored draft including changed free CSS) |
+| POST | `/api/plugins/custom-design/reset` (clears `ctx.theme` and deletes `draft` and `published`) |

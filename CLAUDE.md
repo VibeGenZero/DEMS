@@ -18,6 +18,7 @@ The project knowledge graph is in **`docs/wiki/`**. Entry point: **`docs/wiki/in
 | config, Docker, deploy | `docs/wiki/ops/configuration.md`, `docs/wiki/ops/docker.md`, `docs/wiki/ops/deployment.md` |
 | CI pipeline (GitHub Actions), GitLab runner | `docs/wiki/ops/ci.md` |
 | AI (event assistant, `/ask`, editor drafts, providers) | `docs/wiki/concepts/ai-integration.md` |
+| plugins, SDK (write a plugin, `ctx`/`ui`, hooks, System › Plugins) | `docs/wiki/concepts/plugin-sdk.md`, `docs/wiki/howto/write-plugin.md` |
 | known bugs and traps | `docs/wiki/reference/known-issues.md`, `docs/wiki/concepts/security.md` |
 | German term in a ticket | `docs/wiki/reference/glossary.md` |
 

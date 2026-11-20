@@ -9,6 +9,7 @@
  */
 const { db, doc, getDoc } = require('../firebaseAdmin');
 const { currentPrivacyVersion, needsConsent } = require('../utils/privacyPolicy');
+const { lowerPath, isApiPath } = require('../utils/requestPath');
 
 const OPEN_PATHS = ['/api/privacy', '/api/user/privacy/accept', '/api/csrf-token', '/api/server-info', '/api/maintenance/status', '/api/updates'];
 const GATE_ANSWER = { error: 'Bitte akzeptiere zuerst die Datenschutzerklärung.', privacyRequired: true };
@@ -46,7 +47,7 @@ async function privacyStateOf(req) {
  * A failing lookup lets the request through, so it never locks everybody out.
  */
 async function privacyGate(req, res, next) {
-    if (!req.path.startsWith('/api/') || OPEN_PATHS.includes(req.path) || !req.session || !req.session.user) return next();
+    if (!isApiPath(req) || OPEN_PATHS.includes(lowerPath(req)) || !req.session || !req.session.user) return next();
     try {
         if ((await privacyStateOf(req)).required) return res.status(403).json(GATE_ANSWER);
     } catch (err) {

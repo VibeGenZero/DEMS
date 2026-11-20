@@ -3,6 +3,7 @@
 const { AiError, errorFromStatus, errorFromThrown } = require('../errors');
 const { readServerSentEvents } = require('./sse');
 const { JSON_HINT } = require('./jsonHint');
+const { modelIdsOf } = require('./modelIds');
 
 const DEFAULT_TIMEOUT_MS = 60000;
 // Long-standing stable version; the provider keeps existing parameters per version.
@@ -69,7 +70,7 @@ function create({ baseUrl, apiKey, model, fetchImpl = fetch }) {
         });
         try {
             const json = await response.json();
-            return (json.data || []).map((m) => m.id).filter((id) => typeof id === 'string').sort();
+            return modelIdsOf(json.data);
         } catch (err) {
             throw errorFromThrown(err);
         }

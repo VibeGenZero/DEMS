@@ -184,3 +184,13 @@ test('switching the event assistant for Discord is logged instead of reaching Di
     assert.equal(result, true);
     assert.ok(output.includes('Befehle und Ankündigungen aktualisiert (Event-Assistent)'), output);
 });
+
+test('a plugin channel message is logged with its channel and text instead of reaching Discord', async () => {
+    let result;
+    const output = await captureLogs(async () => {
+        result = await bot.sendPluginChannelMessage(CHANNEL_ID.ANNOUNCEMENTS, { content: 'Neue Einreichung', components: [] });
+    });
+    assert.equal(result, true);
+    assert.ok(output.includes('Plugin-Nachricht in #ankündigungen'), output);
+    assert.ok(output.includes('Neue Einreichung'), output);
+});

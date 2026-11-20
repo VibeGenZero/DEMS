@@ -3,13 +3,13 @@ id: data-model
 title: Data model — collections and document shapes
 type: concept
 tags: [data-model, schema, collections, events, registrations, users, postgresql]
-sources: [routes/admin.js, utils/calendarFeedStore.js, utils/registrationService.js, utils/userProfile.js, utils/sessionStore.js, routes/events.js, utils/eventUtils.js, bot/registration.js, utils/checkin.js, bot/threadSync.js, dev/seedData.js, utils/eventTemplates.js, utils/botSettings.js, ai/settings.js, ai/usage.js]
+sources: [routes/admin.js, plugin-sdk/state.js, plugin-sdk/data.js, plugin-sdk/theme.js, plugins/custom-design/server.js, utils/calendarFeedStore.js, utils/registrationService.js, utils/userProfile.js, utils/sessionStore.js, routes/events.js, utils/eventUtils.js, bot/registration.js, utils/checkin.js, bot/threadSync.js, dev/seedData.js, utils/eventTemplates.js, utils/botSettings.js, ai/settings.js, ai/usage.js]
 depends_on: [data-layer]
-see_also: [registration-flow, event-lifecycle, maintenance-mode, glossary]
+see_also: [registration-flow, event-lifecycle, maintenance-mode, glossary, plugin-sdk]
 ---
 # Data model — collections and document shapes
 
-> TL;DR: Seventeen schemaless collections. `events`, `registrations`, `comments`, `auditLogs`, `polls`, `eventTemplates` use auto ids; `pollVotes` uses `<pollId>_<userId>`; `users` and `calendarFeeds` use the Discord user id; `aiUsage` uses the local day `YYYY-MM-DD`; `botMessages/templates`, `botSettings/config`, `maintenanceSettings/config`, `systemSettings/config`, `privacyPolicy/current`, `aiSettings/config` are singleton documents; `devMeta/seed` exists only in dev mock mode. All dates are ISO-8601 strings. Shapes are defined by the code that writes them (no schema file) — the producers are listed per collection.
+> TL;DR: Seventeen schemaless core collections, plus the plugin SDK's `pluginState`, `pluginSettings` (id = plugin id) and one namespaced `plugin:<id>:<coll>` per plugin collection. `events`, `registrations`, `comments`, `auditLogs`, `polls`, `eventTemplates` use auto ids; `pollVotes` uses `<pollId>_<userId>`; `users` and `calendarFeeds` use the Discord user id; `aiUsage` uses the local day `YYYY-MM-DD`; `botMessages/templates`, `botSettings/config`, `maintenanceSettings/config`, `systemSettings/config`, `privacyPolicy/current`, `aiSettings/config` are singleton documents; `devMeta/seed` exists only in dev mock mode. All dates are ISO-8601 strings. Shapes are defined by the code that writes them (no schema file) — the producers are listed per collection.
 
 ```mermaid
 erDiagram
@@ -56,6 +56,7 @@ erDiagram
 | `eventStartNotificationSent` | bool | start DM sent once |
 | `registrationClosedRefreshed` | bool | announcements refreshed once after the registration deadline (W-03); reset when an edit moves the deadline (`keepDeadlineRefreshFlag`) |
 | `sourcePollId` | poll id or `''` | date poll the event was created from (informative) |
+| `origin` | `{ plugin, ref }` or absent | plugin that created the event (plugin SDK, „Übernehmen“): set only by `POST /api/admin/events` from `pluginOrigin` (checked by `validatePluginOrigin` in `plugin-sdk/coreHooks.js`: known, switched-on plugin with `events:draft`, `ref` 1…100 chars trimmed; else 400 „Ungültige Plugin-Herkunft.“); a series stores it on the first date only; `PUT` ignores `origin`/`pluginOrigin`, duplicates, series extensions and templates never copy it; admin-only in answers (`ADMIN_EVENT_FIELDS`), in every plugin hook payload of the event (`toPluginEvent`) |
 | `slots` | `[{ id, name, emoji, capacity }]` or absent | role slots, see [role-slots](role-slots.md); with slots `maxParticipants = Σ capacity` and `allowGuests = false` |
 | `announcements` | `[{ channelId, messageId, intro }]` (max 5) | Discord announcements that are kept up to date live; `intro` = rendered ping line (role mentions, `@everyone`, text) kept on every refresh (B-05; records from before have none until their first refresh) |
 | `discordThread` | `{ guildId, threadId }`, `null` or absent | discussion thread of the event (B-14); written only by `POST /events/:id/announce`, never taken from a request body; `null` in duplicates and series copies; public (the event page links it) |
@@ -78,6 +79,8 @@ Slot fields exist only on slot events: `slotId` = the slot actually taken (`null
 Read in full by the admin member overview (W-15, `GET /api/admin/members`, `utils/memberOverview.js`): `createdAt` shows as "Dabei seit", `updatedAt` (login or settings save) and the registration times give "Letzte Aktivität".
 
 ## comments (auto id) — `POST /api/events/:id/comments`
+
+Only on an existing event; deleting the event (or its series) deletes its comments (`utils/eventComments.js`), migration `001-remove-orphan-comments` removed those older deletions left behind.
 
 `{ eventId, userId, userName, userAvatar, text (≤1000), isAdmin, replyTo (comment id|null), createdAt, source?: web|discord (missing = web), discordMessageId?, editedAt? }` — the last three come from the thread sync (B-16): `discordMessageId` = the thread copy of a web comment or the Discord message a comment came from; `editedAt` = last Discord edit — `userAvatar` is the session avatar URL at posting time; comments written before F-11 store it wrapped (`cdn.discordapp.com/avatars/<id>/<URL>.png?size=64`), `GET /api/events/:id/comments` unwraps it.
 
@@ -108,6 +111,17 @@ Read in full by the admin member overview (W-15, `GET /api/admin/members`, `util
 ## aiUsage (id = local day `YYYY-MM-DD` in `TIMEZONE`) — written by `ai/usage.js`
 
 `{ memberQuestions, adminRequests, inputTokens, outputTokens, errors }` — counters only, never question or answer text. `pruneUsage` deletes documents older than 90 days (at start and every 6 h); `questionsToday` feeds the daily limit of `ai/limits.js`.
+
+## Plugin SDK collections — written by `plugin-sdk/state.js`, `plugin-sdk/data.js` and `plugin-sdk/theme.js`
+
+| Collection | Id | Shape |
+|---|---|---|
+| `pluginState` | plugin id | `{ enabled, enabledAt, enabledBy, confirmedVersion, confirmedPermissions[], collections[], lastError, lastErrorAt }` (`normalizeState` defaults missing fields); `confirmed*` only for custom plugins (the trust confirmation); `collections` = every `coll` the plugin wrote to, recorded before the first write so purge and „Daten löschen“ find it; an entry without a plugin folder = „Verwaist“. Kept by the system reset |
+| `pluginSettings` | plugin id | `{ values: { <setting key>: value } }`; secrets in plain text, answered only as `{ set }` (`readPublicSettings`); wiped by reset target `pluginData` / `users` and by „Daten löschen“ |
+| `pluginThemes` | plugin id | `{ css, publishedAt, draft, draftAt }` (`plugin-sdk/theme.js`, written only through `ctx.theme` after `checkThemeCss`, unreachable via `ctx.data`); read by `GET /theme.css` (`css`) and `GET /theme-preview.css` (`draft` or `css`); wiped by reset target `pluginData` / `users` and by „Daten löschen“ |
+| `plugin:<id>:<coll>` | auto or plugin-chosen (1–128 chars, no `/`) | whatever the plugin stores (`ctx.data`); reserved field `userId` (Discord id string) → deleted on account deletion (`purgeUser`); e.g. `plugin:event-submissions:submissions`, `plugin:custom-design:designs` (`draft` and `published` sources `{ tokens: { dark, light }, corners, font, css, error?, updatedAt, updatedBy }`) |
+
+See [plugin-sdk](plugin-sdk.md).
 
 ## Singletons
 

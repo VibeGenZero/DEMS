@@ -13,6 +13,7 @@ import { state } from '../core/state.js';
 import { escapeHtml, renderMarkdownSafe, showConfirmDialog, showToast } from '../core/ui.js';
 import { mountDiscordGuide, resetDiscordGuide } from '../pages/discord-guide.js';
 import { aiFieldChanged, baseUrlPlaceholder, loadAiPanel, providerOptions, resetAiBehaviour } from './system-ai.js';
+import { loadPluginsPanel } from './system-plugins.js';
 import { categoryOf, clearDirtyCategories, dirtyCategories, markCategoryDirty, showSystemCategory } from './system-nav.js';
 
 // Label and hint of each key, in the order of the page
@@ -130,6 +131,8 @@ export async function showSystemSection(param) {
     // The router uses a guard up when it lets a navigation through
     setLeaveGuard(mayLeaveSystem);
     onRouteLeave(leftSystem);
+    // The plugin list is loaded each time it is shown: a status can change at runtime (errors, message limit)
+    if (category === 'plugins') await loadPluginsPanel();
     // A category switch keeps the loaded values and whatever was typed
     if (page.open) return;
     page.open = true;
