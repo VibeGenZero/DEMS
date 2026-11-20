@@ -14,6 +14,10 @@
                     "title": "🎨 Design anpassen für eure Community",
                     "content": "Mit dem zweiten offiziellen Plugin „Design anpassen“ stellen Admins unter „Design“ die Farben (getrennt für Dunkel und Hell), die Ecken und die Schrift für die ganze Seite ein – mit Live-Kontrastwarnung und einer Vorschau nur im eigenen Tab. Wer CSS kennt, kann zusätzlich eigenes CSS ergänzen (geschützt durch das Reset-Passwort). Falls ein Design einmal stört, lädt ?design=standard in der Adresse DEMS jederzeit im Standarddesign.",
                     "highlight": true
+                },
+                {
+                    "title": "🔒 Sicherheitsupdate",
+                    "content": "Nach einer Sicherheitsprüfung ist DEMS an mehreren Stellen dichter: Kommentare verschwinden jetzt zusammen mit ihrem Event, die Setup-PIN lässt sich auch mit ständig wechselnden Adressen nicht mehr durchprobieren, Schutzprüfungen greifen unabhängig von der Groß- und Kleinschreibung der Adresse, und die KI-Anbindung ruft keine Cloud-Metadaten-Adressen mehr auf. Für Betreiber: Die compose.yaml öffnet DEMS jetzt nur noch auf 127.0.0.1. Läuft euer Proxy auf einem anderen Rechner, setzt DEMS_BIND=0.0.0.0 in der .env; stehen mehrere Proxys oder einer mit öffentlicher Adresse davor, passt TRUST_PROXY an."
                 }
             ]
         },
