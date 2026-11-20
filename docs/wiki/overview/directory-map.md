@@ -29,6 +29,8 @@ Line counts as of 2026-10-02 (approximate; they drift).
 | `routes/user.js` | ~390 | profile, badges, settings, guest search, account deletion | read handler you need | [routes-user](../modules/routes-user.md) |
 | `middleware/*.js` | ~30–90 each | `auth`, `maintenance`, `validators` | read whole | [middleware](../modules/middleware.md) |
 | `utils/*.js` | ~25–320 each | registration service, form fields, waitlist + audit, profiles, avatar URLs, bot permissions, CSV cells, message templates, session store, reminder rules, debug log | read whole | [utils](../modules/utils.md) |
+| `plugin-sdk/*.js` | ~30–500 each | plugin SDK: manifest, discovery, state, host (lifecycle), `ctx` (context, data, discord), hooks, core hook helpers, admin views | read the one module you touch | [plugin-sdk](../concepts/plugin-sdk.md) |
+| `plugins/<id>/` | ~150–270 per file | official plugins (`plugins/event-submissions/`: `plugin.json`, `server.js`, `rules.js`, `client.js`, `assets/view.js`, `client.css`) | read whole | [write-plugin](../howto/write-plugin.md) |
 | `dev/*.js` | ~15–460 | dev mock mode (switch, mock guild/bot, persona login, seed) | read whole, `seedData.js` only when changing seed data | [dev-mock-mode](../modules/dev-mock-mode.md) |
 | `test/*.test.js` + `test/helpers.js` | ~30–200 | `node:test` suites | read `helpers.js` first | [testing](../ops/testing.md) |
 | `e2e/*.spec.js` + `e2e/helpers.js`, `playwright.config.js` | ~60–100 | Playwright browser smoke tests (`npm run test:e2e`) | read whole | [testing](../ops/testing.md) |

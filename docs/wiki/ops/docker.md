@@ -2,14 +2,14 @@
 id: docker
 title: Docker — image, stages, compose files
 type: ops
-tags: [docker, compose, container, image, healthcheck, volume]
-sources: [Dockerfile, compose.yaml, compose.build.yaml, compose.dev.yaml, .dockerignore]
+tags: [docker, compose, container, image, healthcheck, volume, plugins]
+sources: [Dockerfile, compose.yaml, compose.build.yaml, compose.dev.yaml, .dockerignore, plugins]
 depends_on: [configuration]
-see_also: [deployment, dev-mock-mode]
+see_also: [deployment, dev-mock-mode, write-plugin]
 ---
 # Docker — image, stages, compose files
 
-> TL;DR: Multi-stage `Dockerfile` on `node:24-bookworm-slim`: `runtime` (default, production: non-root `node` user, `NODE_ENV=production`, uploaded banners (`/app/data/uploads`, W-12) on volume `/app/data`, healthcheck `GET /healthz`) and `dev` (all deps, nodemon polling, used by `compose.dev.yaml`). `compose.yaml` runs the published image `moritakahashi/dems:${DEMS_TAG:-latest}` with an optional `.env` together with PostgreSQL and a generated database password; `compose.build.yaml` is an override that builds the `runtime` stage from the checkout (CI uses it); `compose.dev.yaml` runs the dev mock mode with the source bind-mounted.
+> TL;DR: Multi-stage `Dockerfile` on `node:24-bookworm-slim`: `runtime` (default, production: non-root `node` user, `NODE_ENV=production`, uploaded banners (`/app/data/uploads`, W-12) and custom plugins (`/app/data/plugins`) on volume `/app/data`, healthcheck `GET /healthz`) and `dev` (all deps, nodemon polling, used by `compose.dev.yaml`). `compose.yaml` runs the published image `moritakahashi/dems:${DEMS_TAG:-latest}` with an optional `.env` together with PostgreSQL and a generated database password; `compose.build.yaml` is an override that builds the `runtime` stage from the checkout (CI uses it); `compose.dev.yaml` runs the dev mock mode with the source bind-mounted.
 
 ## Dockerfile stages
 
@@ -52,6 +52,19 @@ Published image: public Docker Hub repository `moritakahashi/dems` and, with the
 Installs built from source before: `compose.yaml` now pulls the published image and `--build` alone builds nothing; keep building with `docker compose -f compose.yaml -f compose.build.yaml up -d --build`.
 
 CI builds both targets, starts `compose.yaml` + `compose.build.yaml` (so it tests the image built from the branch, not the published one) without any `.env` and waits for the HEALTHCHECK of `dems` in the `docker-build` job, without pushing; see [ci](ci.md). The runtime image alone does not start (production needs PostgreSQL).
+
+## Custom plugins (plugin SDK)
+
+Official plugins ship in the image (`/app/plugins`, part of `COPY . .`). Custom plugins live on the data volume in `/app/data/plugins/<id>/` (default of `PLUGINS_DIR`; set it in `.env` to use another folder inside the container). There is no upload in the browser: copy the folder in, make it readable for the user `node`, restart, then switch the plugin on in System › Plugins (trust dialog + reset password).
+
+```bash
+docker compose exec dems mkdir -p /app/data/plugins
+docker compose cp ./my-plugin dems:/app/data/plugins/my-plugin
+docker compose exec -u root dems chown -R node:node /app/data/plugins/my-plugin
+docker compose restart dems
+```
+
+A plugin that breaks the start: add `PLUGINS_SAFE_MODE=true` to `.env`, `docker compose up -d`, switch it off, remove the line again. Read [write-plugin](../howto/write-plugin.md#7-install-operators) before installing one — custom plugins run with full access.
 
 ## .dockerignore
 

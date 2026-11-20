@@ -1,6 +1,17 @@
 {
-    "version": "3.3.0",
+    "version": "3.4.0",
     "releases": [
+        {
+            "version": "3.4.0",
+            "date": "2026-11-20",
+            "news": [
+                {
+                    "title": "💡 Plugins: Event-Ideen einreichen",
+                    "content": "DEMS lässt sich jetzt mit Plugins erweitern – das erste heißt „Event einreichen“. Im neuen Tab schlägst du dem Team ein Event vor: Titel, Beschreibung, Wunschtermin und Kategorie, fertig. Unter „Deine Vorschläge“ siehst du, ob deine Idee noch offen, in Planung, eingetragen oder abgelehnt ist, und der Bot schickt dir eine Nachricht, sobald das Team entschieden hat. Admins sehen alle Vorschläge, übernehmen einen mit einem Klick in den Event-Editor oder lehnen ihn mit Begründung ab. Plugins schalten Admins unter System › Plugins ein und aus.",
+                    "highlight": true
+                }
+            ]
+        },
         {
             "version": "3.3.0",
             "date": "2026-11-18",

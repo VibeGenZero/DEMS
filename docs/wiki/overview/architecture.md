@@ -4,7 +4,7 @@ title: System architecture
 type: overview
 tags: [architecture, overview, express, discord, postgresql, sqlite, spa]
 sources: [server.js, bot.js, bot, firebaseAdmin.js, db/documentStore.js, public/js, routes]
-see_also: [directory-map, request-lifecycle, data-model]
+see_also: [directory-map, request-lifecycle, data-model, plugin-sdk]
 ---
 # System architecture
 
@@ -21,6 +21,7 @@ see_also: [directory-map, request-lifecycle, data-model]
 | Middleware | `middleware/*.js` | auth guards, maintenance gates, input validation | [middleware](../modules/middleware.md) |
 | Domain helpers | `utils/*.js` | registration service, form fields, waitlist, audit log, profiles, debug log | [utils](../modules/utils.md) |
 | Frontend | `public/` | SPA: `index.html` + `js/main.js` with ES modules per area (`js/core`, `js/events`, `js/polls`, `js/admin`, `js/pages`) + `css/style.css` + vendored libs | [frontend-app](../modules/frontend-app.md), [frontend-markup](../modules/frontend-markup.md) |
+| Plugin SDK | `plugin-sdk/` (host, `ctx`, hooks), `plugins/` (official plugins), `routes/plugins.js`, `public/js/core/plugins.js` (`ui`) | loads official and custom plugins in-process behind a permission-checking `ctx`/`ui` | [plugin-sdk](../concepts/plugin-sdk.md) |
 | Dev mock mode | `dev/` | runs without Discord and PostgreSQL: persona login, mock bot, seed data | [dev-mock-mode](../modules/dev-mock-mode.md) |
 | Landing page | `landing/` (git-ignored) | local static marketing site, NOT served by `server.js` | [landing-page](../modules/landing-page.md) |
 
