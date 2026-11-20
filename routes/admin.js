@@ -39,6 +39,7 @@ const { loadBotSettings, announceChannelId, isValidConfirmHours } = require('../
 const { BULK_ACTIONS, MAX_BULK_IDS, planBulkAction } = require('../utils/bulkRegistrations');
 const { followingDates, transferTime, planExtension, seriesUpdateFields, slotsForDate } = require('../utils/eventSeries');
 const { cleanupEvent, restoreEventRole } = require('../utils/eventCleanup');
+const { deleteEventComments } = require('../utils/eventComments');
 const {
     buildNewEvent, createEventChannelsAllowed, announceEvent, createPoll, announcePoll
 } = require('../utils/adminActions');
@@ -920,6 +921,8 @@ router.delete('/events/:id', async (req, res) => {
         });
         await Promise.all(deletePromises);
         await closePendingRequests(regs.docs.map(docSnap => docSnap.data()), { status: 'deleted' }, event);
+        // The comments go with the event: none stays readable under its id
+        await deleteEventComments(req.params.id);
         if (event) await releaseBanners([event.bannerUrl]);
 
         await addAuditLog('DELETE_EVENT', req.session.user.id, `Deleted event ${req.params.id}`, req.params.id);
@@ -953,7 +956,7 @@ router.delete('/events/series/:seriesId', async (req, res) => {
             return res.status(404).json({ error: 'Serie nicht gefunden' });
         }
 
-        // Delete all events and their registrations
+        // Delete all events with their registrations and comments
         for (const eventId of eventIds) {
             // Clean-up first: it reads the channel ids and the registrations (B-10)
             await cleanupEvent(eventId);
@@ -972,6 +975,7 @@ router.delete('/events/series/:seriesId', async (req, res) => {
             });
             await Promise.all(deletePromises);
             await closePendingRequests(regs.docs.map(regDoc => regDoc.data()), { status: 'deleted' }, eventsById.get(eventId));
+            await deleteEventComments(eventId);
         }
         await releaseBanners(banners);
 

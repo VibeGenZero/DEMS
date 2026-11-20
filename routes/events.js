@@ -37,7 +37,8 @@ router.use(requireAuth);
 
 /**
  * Every route with :id — draft and archived events answer 404 for non-admins,
- * as if they did not exist. Unknown ids are left to the route handler.
+ * as if they did not exist. Unknown ids are left to the route handler; the
+ * event read here stays in res.locals.event (null for an unknown id).
  */
 router.param('id', async (req, res, next, id) => {
     try {
@@ -45,6 +46,7 @@ router.param('id', async (req, res, next, id) => {
         if (eventSnap.exists() && !isEventVisibleTo(req.session.user, eventSnap.data())) {
             return res.status(404).json({ error: 'Event nicht gefunden' });
         }
+        res.locals.event = eventSnap.exists() ? eventSnap.data() : null;
         next();
     } catch (err) {
         console.error('Error checking event visibility:', err);
@@ -600,9 +602,18 @@ router.post('/:id/checkin', requireAuth, checkinLimiter, async (req, res) => {
 });
 
 /**
+ * Comment routes: only on an event that exists (router.param above read it),
+ * so no comment is written or read under an unknown or deleted event id
+ */
+function requireExistingEvent(req, res, next) {
+    if (!res.locals.event) return res.status(404).json({ error: 'Event nicht gefunden' });
+    next();
+}
+
+/**
  * GET /api/events/:id/comments — Get comments for an event
  */
-router.get('/:id/comments', requireAuth, async (req, res) => {
+router.get('/:id/comments', requireAuth, requireExistingEvent, async (req, res) => {
     try {
         const q = query(
             collection(db, 'comments'),
@@ -627,7 +638,7 @@ router.get('/:id/comments', requireAuth, async (req, res) => {
 /**
  * POST /api/events/:id/comments — Post a comment
  */
-router.post('/:id/comments', requireAuth, async (req, res) => {
+router.post('/:id/comments', requireAuth, requireExistingEvent, async (req, res) => {
     try {
         const user = req.session.user;
         const { text, replyTo } = req.body;
@@ -665,12 +676,13 @@ router.post('/:id/comments', requireAuth, async (req, res) => {
 /**
  * DELETE /api/events/:id/comments/:commentId — Delete a comment
  */
-router.delete('/:id/comments/:commentId', requireAuth, async (req, res) => {
+router.delete('/:id/comments/:commentId', requireAuth, requireExistingEvent, async (req, res) => {
     try {
         const user = req.session.user;
         const commentSnap = await getDoc(doc(db, 'comments', req.params.commentId));
 
-        if (!commentSnap.exists()) {
+        // A comment of another event is not found under this one
+        if (!commentSnap.exists() || commentSnap.data().eventId !== req.params.id) {
             return res.status(404).json({ error: 'Kommentar nicht gefunden.' });
         }
 

@@ -753,6 +753,66 @@ test('a comment shows the avatar of its author', async () => {
     assert.equal(comments.find(comment => comment.text === 'Avatar-Test').userAvatar, avatar);
 });
 
+test('comments exist only on an existing event', async () => {
+    const member = await loginAs('member');
+    const missing = 'dev-event-doesnotexist';
+    const post = await member.send('POST', `/api/events/${missing}/comments`, { text: 'Verwaist' });
+    assert.equal(post.status, 404);
+    assert.equal((await post.json()).error, 'Event nicht gefunden');
+
+    const list = await member.request(`/api/events/${missing}/comments`);
+    assert.equal(list.status, 404);
+    assert.equal((await list.json()).error, 'Event nicht gefunden');
+
+    const { db, collection, getDocs, query, where } = serverStore();
+    assert.equal((await getDocs(query(collection(db, 'comments'), where('eventId', '==', missing)))).size, 0);
+});
+
+test('a comment is deleted only through the event it belongs to', async () => {
+    const member = await loginAs('member');
+    const posted = await member.send('POST', `/api/events/${EVENT_ID.OPEN}/comments`, { text: 'Falscher Pfad' });
+    const { id } = await posted.json();
+
+    const wrongEvent = await member.send('DELETE', `/api/events/${EVENT_ID.FORM}/comments/${id}`);
+    assert.equal(wrongEvent.status, 404);
+    assert.equal((await wrongEvent.json()).error, 'Kommentar nicht gefunden.');
+    assert.equal((await member.send('DELETE', `/api/events/${EVENT_ID.OPEN}/comments/${id}`)).status, 200);
+});
+
+test('deleting an event deletes its comments', async () => {
+    const admin = await loginAs('admin');
+    const member = await loginAs('member');
+    const created = await createSlotEvent(admin, 'Kommentar-Löschtest', []);
+    assert.equal((await member.send('POST', `/api/events/${created.id}/comments`, { text: 'Geht mit dem Event' })).status, 200);
+
+    assert.equal((await admin.send('DELETE', `/api/admin/events/${created.id}`)).status, 200);
+
+    assert.equal((await member.request(`/api/events/${created.id}/comments`)).status, 404);
+    const { db, collection, getDocs, query, where } = serverStore();
+    assert.equal((await getDocs(query(collection(db, 'comments'), where('eventId', '==', created.id)))).size, 0);
+});
+
+test('deleting a series deletes the comments of its events', async () => {
+    const admin = await loginAs('admin');
+    const member = await loginAs('member');
+    const res = await admin.send('POST', '/api/admin/events', {
+        title: 'Serien-Kommentartest', status: 'active', accessMode: 'open', approvalMode: 'instant',
+        recurring: true, recurringInterval: 'weekly', startDate: '2026-12-07T18:00:00.000Z', recurringUntil: '2026-12-15'
+    });
+    const { events } = await res.json();
+    assert.equal(events.length, 2);
+    for (const event of events) {
+        assert.equal((await member.send('POST', `/api/events/${event.id}/comments`, { text: 'Serienkommentar' })).status, 200);
+    }
+
+    assert.equal((await admin.send('DELETE', `/api/admin/events/series/${events[0].seriesId}`)).status, 200);
+
+    const { db, collection, getDocs, query, where } = serverStore();
+    for (const event of events) {
+        assert.equal((await getDocs(query(collection(db, 'comments'), where('eventId', '==', event.id)))).size, 0, event.id);
+    }
+});
+
 test('deleting an event deletes its Discord channels', async () => {
     const admin = await loginAs('admin');
     const created = await createSlotEvent(admin, 'Channel-Löschtest', [], { autoCreateChannels: true, channelConfig: { type: 'both' } });
