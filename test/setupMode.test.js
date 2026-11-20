@@ -34,6 +34,10 @@ test('the API answers 503 in setup mode, health check and public endpoints stay 
     assert.deepEqual(await events.json(), { error: 'DEMS ist noch nicht eingerichtet.', setupRequired: true });
     assert.equal((await client.request('/auth/me')).status, 503);
     assert.equal((await client.request('/auth/discord')).status, 503);
+    // Another letter case reaches the same routers, so it meets the same gate
+    for (const pathname of ['/API/events', '/Api/user/settings', '/AUTH/me']) {
+        assert.equal((await client.request(pathname)).status, 503, pathname);
+    }
 
     assert.equal((await client.request('/healthz')).status, 200);
     assert.equal((await client.request('/api/server-info')).status, 200);
@@ -97,6 +101,45 @@ test('more than five PIN attempts within 15 minutes are refused', async () => {
         const sixth = await unlock(client);
         assert.equal(sixth.status, 429);
         assert.match((await sixth.json()).error, /Versuche/);
+    } finally {
+        await own.stop();
+    }
+});
+
+test('wrong PINs from ever new forwarded addresses run into a limit for everybody', async () => {
+    // The default trusts a proxy on loopback, so every X-Forwarded-For counts as its own address
+    const own = await startServer('server.js', freshEnv());
+    try {
+        const client = createClient(own.baseUrl);
+        const { token } = await (await client.request('/api/csrf-token')).json();
+        const attempt = (index, pin) => client.request('/api/setup/unlock', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': token, 'X-Forwarded-For': `198.51.100.${index}` },
+            body: JSON.stringify({ pin })
+        });
+        for (let index = 1; index <= 20; index++) {
+            assert.equal((await attempt(index, '99999999')).status, 401, `attempt ${index}`);
+        }
+        const blocked = await attempt(21, PIN);
+        assert.equal(blocked.status, 429);
+        assert.equal((await blocked.json()).error, 'Zu viele falsche Setup-PINs. Bitte warte 15 Minuten oder starte DEMS neu.');
+    } finally {
+        await own.stop();
+    }
+});
+
+test('with TRUST_PROXY=false a forged X-Forwarded-For does not reset the limit per address', async () => {
+    const own = await startServer('server.js', freshEnv({ TRUST_PROXY: 'false' }));
+    try {
+        const client = createClient(own.baseUrl);
+        const { token } = await (await client.request('/api/csrf-token')).json();
+        const attempt = (index) => client.request('/api/setup/unlock', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': token, 'X-Forwarded-For': `198.51.100.${index}` },
+            body: JSON.stringify({ pin: '99999999' })
+        });
+        for (let index = 1; index <= 5; index++) assert.equal((await attempt(index)).status, 401);
+        assert.equal((await attempt(6)).status, 429);
     } finally {
         await own.stop();
     }

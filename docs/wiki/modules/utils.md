@@ -3,7 +3,7 @@ id: utils
 title: utils/ — domain helpers
 type: module
 tags: [utils, registration, form-fields, waitlist, audit-log, profile, debug, change-notice, banner]
-sources: [utils/registrationService.js, utils/registrationStatus.js, utils/approvalRequests.js, utils/checkin.js, utils/threadSync.js, utils/formFields.js, utils/eventUtils.js, utils/eventListing.js, utils/profileEvents.js, utils/eventUrl.js, utils/userProfile.js, utils/avatar.js, utils/botPermissions.js, utils/csv.js, utils/template.js, utils/sessionStore.js, utils/reminders.js, utils/debugLog.js, utils/capacity.js, utils/slotService.js, utils/eventLock.js, utils/announcementRefresh.js, utils/pollService.js, utils/pollStore.js, utils/eventPreview.js, utils/eventArchive.js, utils/eventCleanup.js, utils/adminActions.js, utils/localDateTime.js, utils/eventChangeNotice.js, utils/notificationPrefs.js, utils/memberOverview.js, utils/insights.js, utils/participantMessage.js, utils/bannerStore.js, utils/bulkRegistrations.js, utils/eventSeries.js, utils/eventTemplates.js, utils/botSettings.js, utils/waitlistOffers.js, utils/tentativeRegistration.js, utils/systemConfig.js, utils/timezone.js, utils/discordFetch.js, utils/adminAccess.js, utils/participations.js, utils/semver.js, utils/updateCheck.js, utils/askRefresh.js, utils/serverName.js]
+sources: [utils/registrationService.js, utils/registrationStatus.js, utils/approvalRequests.js, utils/checkin.js, utils/threadSync.js, utils/formFields.js, utils/eventUtils.js, utils/eventListing.js, utils/profileEvents.js, utils/eventUrl.js, utils/userProfile.js, utils/avatar.js, utils/botPermissions.js, utils/csv.js, utils/template.js, utils/sessionStore.js, utils/reminders.js, utils/debugLog.js, utils/capacity.js, utils/slotService.js, utils/eventLock.js, utils/announcementRefresh.js, utils/pollService.js, utils/pollStore.js, utils/eventPreview.js, utils/eventArchive.js, utils/eventCleanup.js, utils/adminActions.js, utils/localDateTime.js, utils/eventChangeNotice.js, utils/notificationPrefs.js, utils/memberOverview.js, utils/insights.js, utils/participantMessage.js, utils/bannerStore.js, utils/bulkRegistrations.js, utils/eventSeries.js, utils/eventTemplates.js, utils/botSettings.js, utils/waitlistOffers.js, utils/tentativeRegistration.js, utils/systemConfig.js, utils/timezone.js, utils/discordFetch.js, utils/adminAccess.js, utils/participations.js, utils/semver.js, utils/updateCheck.js, utils/askRefresh.js, utils/serverName.js, utils/trustProxy.js, utils/ipAddress.js, utils/requestPath.js, utils/eventComments.js]
 part_of: [architecture]
 depends_on: [data-layer, bot]
 see_also: [registration-flow, form-fields, role-slots]
@@ -88,6 +88,18 @@ Database-backed configuration in `systemSettings/config`: `MANAGED_KEYS` (`group
 ## utils/serverName.js
 
 `resolveServerName(bot?)` → `SERVER_NAME`, else the Discord server name (`getGuildName(DISCORD_GUILD_ID)` through `require('../bot')`, '' while the bot is not ready), else „DEMS“. Used by `GET /api/server-info` and the calendar feed name („<Name> · Meine Events“).
+
+## utils/trustProxy.js, utils/ipAddress.js (pure, audit 2026-11-20)
+
+`trustProxySetting(process.env.TRUST_PROXY)` → the value of `app.set('trust proxy', …)` in `server.js`: empty = a function that trusts hop 0 only when it is on a loopback, link-local or private address (`net.BlockList`), `false`/`0` → `false`, a number → that hop count, `true` → `true`, anything else → the string for Express (`loopback, 10.0.0.0/8`). `ipAddress.js`: `normalizeIp(address)` (`::ffff:1.2.3.4` → IPv4, `[::1]` → `::1`, `null` for no IP) and `inBlockList(list, address)`, shared with `ai/addressGuard.js`.
+
+## utils/requestPath.js (pure, audit 2026-11-20)
+
+`lowerPath(req)`, `isApiPath(req)` (`/api/…`), `isApiOrAuthPath(req)` (`/api/…` or `/auth/…`): the path checks of the CSRF middleware, the setup gate and the privacy gate, all in lower case, because a router mounted at `/api` matches any letter case unless `case sensitive routing` is on.
+
+## utils/eventComments.js (audit 2026-11-20)
+
+`deleteEventComments(eventId)` → number of deleted comments; called by `DELETE /api/admin/events/:id` and, per event, `DELETE /api/admin/events/series/:seriesId`.
 
 ## utils/participations.js (pure, #110)
 

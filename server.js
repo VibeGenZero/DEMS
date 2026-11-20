@@ -30,6 +30,8 @@ const { pruneUsage } = require('./ai/usage');
 const { initSetupState, isSetupRequired } = require('./utils/setupState');
 const { createSetupRouter } = require('./routes/setup');
 const { privacyGate } = require('./middleware/privacy');
+const { lowerPath, isApiOrAuthPath } = require('./utils/requestPath');
+const { trustProxySetting } = require('./utils/trustProxy');
 const { getPrivacyPolicy } = require('./utils/privacyPolicy');
 const { BANNER_FILE, bannerDir, sweepOrphanBanners } = require('./utils/bannerStore');
 const { initPlugins, pluginHost } = require('./plugin-sdk');
@@ -43,9 +45,13 @@ const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Trust Proxy (Railway, Heroku, etc.)
-// Needed for correct IP addressing in rate limiting behind load balancers
-app.set('trust proxy', 1);
+// Routes match only their exact letter case: /API/… must not reach the /api routers
+// past the gates below (security report 2026-11; the gates also compare in lower case)
+app.set('case sensitive routing', true);
+
+// Client address behind the TLS proxy (rate limits, X-Forwarded-Proto). Default: one hop,
+// only from a proxy on a loopback or private address; TRUST_PROXY overrides (utils/trustProxy.js)
+app.set('trust proxy', trustProxySetting(process.env.TRUST_PROXY));
 
 // ── Validate required env vars ──────────────────────────────────────────
 // A missing SESSION_SECRET is generated and stored at start (utils/systemConfig.js, #138);
@@ -168,8 +174,7 @@ app.use((req, res, next) => {
     }
 
     // Validate on mutating requests to /api/ and /auth/ (logout)
-    const isProtectedPath = req.path.startsWith('/api/') || req.path.startsWith('/auth/');
-    if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(req.method) && isProtectedPath) {
+    if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(req.method) && isApiOrAuthPath(req)) {
         const token = req.headers['x-csrf-token'] || req.headers['x-xsrf-token'];
         if (!token || token !== req.session.csrfToken) {
             return res.status(403).json({ error: 'Ungültiges CSRF-Token. Bitte Seite neu laden.' });
@@ -234,8 +239,8 @@ if (IS_DEBUG) {
 const SETUP_OPEN_PATHS = ['/api/csrf-token', '/api/server-info', '/api/maintenance/status', '/api/privacy', '/api/updates'];
 app.use((req, res, next) => {
     if (!isSetupRequired()) return next();
-    const isApi = req.path.startsWith('/api/') || req.path.startsWith('/auth/');
-    if (!isApi || req.path.startsWith('/api/setup/') || SETUP_OPEN_PATHS.includes(req.path)) return next();
+    const pathname = lowerPath(req);
+    if (!isApiOrAuthPath(req) || pathname.startsWith('/api/setup/') || SETUP_OPEN_PATHS.includes(pathname)) return next();
     res.status(503).json({ error: 'DEMS ist noch nicht eingerichtet.', setupRequired: true });
 });
 app.use('/api/setup', createSetupRouter());

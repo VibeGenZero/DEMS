@@ -13,6 +13,14 @@ test('compose.yaml runs the published image, without a build', () => {
     assert.doesNotMatch(compose, /^\s+build:/m);
 });
 
+test('compose.yaml publishes DEMS on localhost only, unless DEMS_BIND says otherwise', () => {
+    // A port open to the world lets clients skip the TLS proxy (security report 2026-11)
+    const compose = read('compose.yaml');
+    assert.match(compose, /- "\$\{DEMS_BIND:-127\.0\.0\.1\}:\$\{DEMS_PORT:-3000\}:3000"/);
+    assert.doesNotMatch(compose, /- "\$\{DEMS_PORT:-3000\}:3000"/);
+    assert.match(read('.env.example'), /^# DEMS_BIND=127\.0\.0\.1$/m);
+});
+
 test('compose.build.yaml builds the runtime stage from source', () => {
     const build = read('compose.build.yaml');
     assert.match(build, /context: \./);

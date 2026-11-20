@@ -65,7 +65,7 @@ before(async () => {
     app.use(express.json());
     app.use(session({ secret: 'test', resave: false, saveUninitialized: false }));
     app.get('/api/csrf-token', (req, res) => { req.session.touched = true; res.json({ token: 't' }); });
-    app.use('/api/setup', createSetupRouter({ ...deps, unlockLimit: 1000 }));
+    app.use('/api/setup', createSetupRouter({ ...deps, unlockLimit: 1000, unlockTotalLimit: 1000 }));
     await new Promise(resolve => { server = app.listen(0, '127.0.0.1', resolve); });
     baseUrl = `http://127.0.0.1:${server.address().port}`;
 });

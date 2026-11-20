@@ -62,6 +62,7 @@ Unsicher, ob etwas dazugehört? Melde es trotzdem privat – wir sortieren das.
 ## Hinweise für Betreiber
 
 *   **HTTPS ist Pflicht.** Betreibe DEMS nur hinter einem TLS-Proxy; ohne HTTPS funktionieren Login und Einrichtung nicht.
+*   **Port nicht direkt öffnen.** Die mitgelieferte `compose.yaml` veröffentlicht DEMS nur auf `127.0.0.1`, damit niemand am Proxy vorbei zugreift. Läuft der Proxy auf einem anderen Rechner, setze `DEMS_BIND=0.0.0.0` und lass den Port per Firewall nur für den Proxy offen. Steht vor DEMS mehr als ein Proxy oder einer mit öffentlicher Adresse, stelle `TRUST_PROXY` passend ein (siehe `.env.example`).
 *   **Aktuell bleiben.** Spiele Updates mit `docker compose pull && docker compose up -d` ein, sobald **Admin › System** eine neue Version meldet. Sicherheits-Fixes kommen nur für die neueste Version.
 *   **Geheimnisse schützen.** Die `.env` (falls vorhanden) und die Docker-Volumes enthalten Bot-Token, Client Secret und das Datenbank-Passwort. Gib sie niemandem und lege sie nicht in ein Repository. Ein geleaktes Bot-Token im Developer Portal sofort neu erzeugen und unter **Admin › System** eintragen.
 *   **Datenbank nicht öffnen.** Die mitgelieferte `compose.yaml` veröffentlicht PostgreSQL bewusst nicht nach außen – lass das so.

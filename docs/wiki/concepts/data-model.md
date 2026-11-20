@@ -80,6 +80,8 @@ Read in full by the admin member overview (W-15, `GET /api/admin/members`, `util
 
 ## comments (auto id) — `POST /api/events/:id/comments`
 
+Only on an existing event; deleting the event (or its series) deletes its comments (`utils/eventComments.js`), migration `001-remove-orphan-comments` removed those older deletions left behind.
+
 `{ eventId, userId, userName, userAvatar, text (≤1000), isAdmin, replyTo (comment id|null), createdAt, source?: web|discord (missing = web), discordMessageId?, editedAt? }` — the last three come from the thread sync (B-16): `discordMessageId` = the thread copy of a web comment or the Discord message a comment came from; `editedAt` = last Discord edit — `userAvatar` is the session avatar URL at posting time; comments written before F-11 store it wrapped (`cdn.discordapp.com/avatars/<id>/<URL>.png?size=64`), `GET /api/events/:id/comments` unwraps it.
 
 ## auditLogs (auto id) — `utils/eventUtils.js#addAuditLog`

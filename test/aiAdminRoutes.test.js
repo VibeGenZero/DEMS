@@ -179,6 +179,20 @@ test('a typed foreign base URL never receives the stored API key', async () => {
     }
 });
 
+test('the connection test and the model list refuse a cloud metadata address', async () => {
+    const admin = await loginAs('admin');
+    const blocked = 'Diese KI-Adresse ist gesperrt: DEMS ruft keine Link-Local- oder Cloud-Metadaten-Adressen auf.';
+    const body = { provider: 'ollama', baseUrl: 'http://169.254.169.254/latest', apiKey: '', model: 'm' };
+
+    const models = await admin.send('POST', '/api/admin/ai/models', body);
+    assert.equal(models.status, 400);
+    assert.deepEqual(await models.json(), { error: blocked });
+
+    const tested = await admin.send('POST', '/api/admin/ai/test', body);
+    assert.equal(tested.status, 200);
+    assert.deepEqual(await tested.json(), { ok: false, error: blocked });
+});
+
 const ADMIN_OFF = { error: 'Die KI für Admins ist ausgeschaltet.' };
 
 test('routes: member 403; feature off 404; mock mode answers a patch with the title', async () => {

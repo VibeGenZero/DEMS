@@ -73,6 +73,9 @@ sources: [scripts/wiki-graph.js, docs/wiki/graph.json, CLAUDE.md]
 | `plugin-sdk/coreHooks.js` (hook emission from the core, `pluginOrigin` check) | event-lifecycle, routes-admin, data-model, plugin-sdk |
 | `routes/calendar.js`, `utils/calendarFeed.js`, `utils/calendarFeedStore.js`, `utils/icalendar.js` | routes-user, server, data-model, security |
 | `utils/serverName.js` | server |
+| `utils/trustProxy.js`, `utils/ipAddress.js` | server, security, configuration |
+| `utils/requestPath.js` | server, auth-session, security |
+| `utils/eventComments.js` | routes-admin, routes-events, data-model, security |
 | `routes/polls.js` | routes-polls, date-polls |
 | `middleware/*.js` | middleware, maintenance-mode, auth-session |
 | `utils/registrationService.js` | registration-flow, role-slots, utils |
@@ -89,6 +92,7 @@ sources: [scripts/wiki-graph.js, docs/wiki/graph.json, CLAUDE.md]
 | `utils/setupState.js`, `routes/setup.js` | security, api-index, configuration |
 | `routes/adminSystem.js`, `routes/adminAi.js`, `routes/aiConnection.js`, `utils/systemValues.js` | routes-admin, configuration, ai-integration |
 | `ai/*.js`, `ai/providers/*.js` | ai-integration |
+| `ai/addressGuard.js` | ai-integration, security |
 | `routes/eventAsk.js` | ai-integration, routes-events, api-index |
 | `utils/askRefresh.js` | utils, routes-admin, bot |
 | `middleware/privacy.js`, `utils/privacyPolicy.js`, `public/js/pages/privacy.js` | auth-session, data-model |
