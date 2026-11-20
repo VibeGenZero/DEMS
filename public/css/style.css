@@ -187,14 +187,18 @@ body {
   font-size: var(--font-size-2xl) !important;
   color: var(--accent-light) !important;
   text-shadow: 0 0 20px var(--accent-glow);
+  white-space: nowrap;
 }
 
 #main-navbar .nav-link {
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
   color: var(--text-secondary);
   font-weight: 500;
   transition: var(--transition);
   position: relative;
-  padding: 0.5rem 1rem;
+  padding: 0.5rem 0.75rem;
 }
 
 #main-navbar .nav-link:hover,

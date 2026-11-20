@@ -320,7 +320,7 @@ test('the member list sorts by a column and flips on a second click', async ({ p
 
 test('members see no member overview and are sent away from it', async ({ page }) => {
     await loginAs(page, 'member');
-    await expect(page.locator('#nav-members')).toBeHidden();
+    await expect(page.locator('#nav-admin')).toBeHidden();
     await page.goto('/#members');
     await expect(page.locator('#events-section')).toBeVisible();
     await expect(page.locator('#members-section')).toBeHidden();

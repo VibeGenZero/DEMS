@@ -348,6 +348,35 @@ test('the logout removes the plugin tabs', async () => {
     assert.equal(harness.element('nav-p-test'), null);
 });
 
+test('two or more plugin tabs bundle into the Plugins dropdown and sum their badges', async () => {
+    const harness = await openApp({ '/api/events': [] });
+    const ui1 = mount(harness, (ui) => ui.addPage(recordingPage([], { tab: { label: 'Erstes', icon: 'bi-star' } })));
+    assert.equal(harness.element('nav-plugins-dropdown'), null, 'one tab stands directly in the navbar');
+
+    const ui2 = mount(harness, (ui) => ui.addPage(recordingPage([], { tab: { label: 'Zweites', icon: 'bi-puzzle' } })), { ...ENTRY, id: 'second', name: 'Second' });
+    const dropdown = harness.element('nav-plugins-dropdown');
+    assert.ok(dropdown, 'two tabs bundle into the dropdown');
+    assert.match(dropdown.innerHTML, /Erstes/);
+    assert.match(dropdown.innerHTML, /Zweites/);
+
+    ui1.setTabBadge(2);
+    ui2.setTabBadge(3);
+    assert.equal(harness.element('nav-p-test-badge').textContent, '2');
+    assert.equal(harness.element('nav-p-second-badge').textContent, '3');
+    assert.equal(harness.element('nav-plugins-badge').textContent, '5');
+    assert.ok(!isHidden(harness.element('nav-plugins-badge')));
+
+    await go(harness, 'p/second');
+    assert.ok(harness.element('nav-p-second-link').classList.contains('active'));
+    assert.ok(harness.element('nav-plugins-toggle').classList.contains('active'));
+
+    await go(harness, 'info');
+    assert.ok(!harness.element('nav-p-second-link').classList.contains('active'));
+
+    harness.app.showLoggedOut();
+    assert.equal(harness.element('nav-plugins-dropdown'), null);
+});
+
 const POLICY = { markdown: '# Datenschutz', version: 3, updatedAt: '2026-11-09T10:00:00.000Z' };
 const flush = async () => {
     for (let i = 0; i < 3; i++) await new Promise(resolve => setImmediate(resolve));

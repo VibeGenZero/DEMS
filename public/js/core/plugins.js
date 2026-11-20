@@ -32,8 +32,8 @@ const HELPERS = Object.freeze({
 
 /** @type {Map<string, { access: string, title: string, render: Function, leave: Function|null }>} */
 const pages = new Map();
-// Plugin ids with a tab in the navbar
-const tabs = new Set();
+/** @type {Map<string, { label: string, icon: string, access: string, badge: number }>} */
+const tabs = new Map();
 const stylesheets = new Set();
 let loading = null;
 // Plugin whose page is shown; its leave() runs when another plugin page or route replaces it
@@ -228,8 +228,27 @@ function addPage(id, { access, title, render, leave, tab } = {}) {
     if (tab && (access === 'member' || isAdmin)) addTab(id, tab, access);
 }
 
-// Member tabs stand after the core member links, admin tabs after the admin links
+// One plugin tab stands directly in the navbar; two or more bundle into the "Plugins" dropdown
 function addTab(id, { label, icon }, access) {
+    tabs.set(id, { label: label.trim(), icon, access, badge: 0 });
+    renderPluginTabs();
+    placeNavMarker();
+    syncNavbarHeight();
+}
+
+function clearTabElements(ids) {
+    for (const id of ids) {
+        document.getElementById(`nav-p-${id}-badge`)?.remove();
+        document.getElementById(`nav-p-${id}-link`)?.remove();
+        document.getElementById(`nav-p-${id}`)?.remove();
+    }
+    document.getElementById('nav-plugins-badge')?.remove();
+    document.getElementById('nav-plugins-toggle')?.remove();
+    document.getElementById('nav-plugins-menu')?.remove();
+    document.getElementById('nav-plugins-dropdown')?.remove();
+}
+
+function renderSingleTab(id, { label, icon, access }) {
     const before = document.getElementById(access === 'admin' ? 'nav-debug' : 'nav-admin');
     if (!before) return;
     const item = document.createElement('li');
@@ -237,27 +256,86 @@ function addTab(id, { label, icon }, access) {
     item.id = `nav-p-${id}`;
     const safeId = escapeHtml(id);
     item.innerHTML = `<a class="nav-link" id="nav-p-${safeId}-link" href="#p/${safeId}" data-section="p-${safeId}-section">`
-        + `<i class="bi ${escapeHtml(icon)} me-1"></i>${escapeHtml(label.trim())}`
+        + `<i class="bi ${escapeHtml(icon)} me-1"></i>${escapeHtml(label)}`
         + `<span class="badge rounded-pill text-bg-danger ms-1 is-hidden" id="nav-p-${safeId}-badge"></span></a>`;
     before.insertAdjacentElement('beforebegin', item);
-    tabs.add(id);
-    placeNavMarker();
-    syncNavbarHeight();
 }
 
-// Callers move the navbar marker and height afterwards; true when a tab was removed
-function removeTab(id) {
-    if (!tabs.delete(id)) return false;
-    document.getElementById(`nav-p-${id}`)?.remove();
-    return true;
+function renderDropdownTabs() {
+    const allAdmin = [...tabs.values()].every(tab => tab.access === 'admin');
+    const before = document.getElementById(allAdmin ? 'nav-debug' : 'nav-admin');
+    if (!before) return;
+    const itemsHtml = [...tabs.entries()].map(([id, { label, icon }]) => {
+        const safeId = escapeHtml(id);
+        const linkHtml = `<a class="dropdown-item" id="nav-p-${safeId}-link" href="#p/${safeId}" data-section="p-${safeId}-section">`
+            + `<i class="bi ${escapeHtml(icon)} me-2"></i>${escapeHtml(label)}`
+            + `<span class="badge rounded-pill text-bg-danger ms-2 is-hidden" id="nav-p-${safeId}-badge"></span></a>`;
+        return { id, linkHtml, liHtml: `<li id="nav-p-${safeId}">${linkHtml}</li>` };
+    });
+    const dropdown = document.createElement('li');
+    dropdown.className = 'nav-item dropdown';
+    dropdown.id = 'nav-plugins-dropdown';
+    dropdown.innerHTML = `<a class="nav-link dropdown-toggle" id="nav-plugins-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">`
+        + `<i class="bi bi-puzzle me-1"></i>Plugins`
+        + `<span class="badge rounded-pill text-bg-danger ms-1 is-hidden" id="nav-plugins-badge"></span></a>`
+        + `<ul class="dropdown-menu" id="nav-plugins-menu">${itemsHtml.map(entry => entry.liHtml).join('')}</ul>`;
+    before.insertAdjacentElement('beforebegin', dropdown);
+    for (const { id, linkHtml } of itemsHtml) {
+        const li = document.getElementById(`nav-p-${id}`);
+        if (li && !li.innerHTML) li.innerHTML = linkHtml;
+    }
 }
 
-function setTabBadge(id, count) {
-    const badge = document.getElementById(`nav-p-${id}-badge`);
+function applyBadgeValue(badge, count) {
     if (!badge) return;
     const value = Math.max(0, Math.floor(Number(count) || 0));
     badge.textContent = value > 99 ? '99+' : String(value);
     toggleElement(badge, value > 0);
+}
+
+function syncTabBadges() {
+    let total = 0;
+    for (const [id, tab] of tabs.entries()) {
+        total += tab.badge;
+        applyBadgeValue(document.getElementById(`nav-p-${id}-badge`), tab.badge);
+    }
+    applyBadgeValue(document.getElementById('nav-plugins-badge'), total);
+}
+
+function syncActivePluginTab() {
+    for (const id of tabs.keys()) {
+        document.getElementById(`nav-p-${id}-link`)?.classList.toggle('active', id === shownPluginId);
+    }
+    const toggle = document.getElementById('nav-plugins-toggle');
+    if (toggle) toggle.classList.toggle('active', Boolean(shownPluginId && tabs.has(shownPluginId)));
+}
+
+function renderPluginTabs() {
+    clearTabElements([...tabs.keys()]);
+    if (tabs.size === 1) {
+        const [[id, tab]] = [...tabs.entries()];
+        renderSingleTab(id, tab);
+    } else if (tabs.size >= 2) {
+        renderDropdownTabs();
+    }
+    syncTabBadges();
+    syncActivePluginTab();
+}
+
+// Callers move the navbar marker and height afterwards; true when a tab was removed
+function removeTab(id) {
+    if (!tabs.has(id)) return false;
+    clearTabElements([id]);
+    tabs.delete(id);
+    renderPluginTabs();
+    return true;
+}
+
+function setTabBadge(id, count) {
+    const tab = tabs.get(id);
+    if (!tab) return;
+    tab.badge = Math.max(0, Math.floor(Number(count) || 0));
+    syncTabBadges();
 }
 
 /**
@@ -266,15 +344,20 @@ function setTabBadge(id, count) {
  * @returns {void}
  */
 export function unloadPluginTabs() {
-    for (const id of [...tabs]) removeTab(id);
+    const ids = [...tabs.keys()];
+    tabs.clear();
+    clearTabElements(ids);
     placeNavMarker();
     syncNavbarHeight();
 }
 
 // leave() of the shown plugin page; a broken one must not stop the next page
 function leaveShownPage() {
-    const page = pages.get(shownPluginId);
+    const prevId = shownPluginId;
+    const page = pages.get(prevId);
     shownPluginId = null;
+    if (prevId) document.getElementById(`nav-p-${prevId}-link`)?.classList.remove('active');
+    document.getElementById('nav-plugins-toggle')?.classList.remove('active');
     if (!page || !page.leave) return;
     try {
         page.leave();
@@ -310,11 +393,8 @@ export async function showPluginPage(pluginId, param = '') {
 
     document.getElementById('plugin-section').style.display = 'block';
     document.getElementById('plugin-title').textContent = page.title;
-    const link = document.getElementById(`nav-p-${pluginId}-link`);
-    if (link && !link.classList.contains('active')) {
-        link.classList.add('active');
-        placeNavMarker();
-    }
+    syncActivePluginTab();
+    placeNavMarker();
     const root = document.getElementById('plugin-root');
     root.innerHTML = '';
     const container = document.createElement('div');

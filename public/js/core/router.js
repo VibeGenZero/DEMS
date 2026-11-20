@@ -25,7 +25,7 @@ import { showPollDetail, showPollsSection } from '../polls/polls.js';
 export const LEGACY_EVENT_ROUTE = /^events\/(.+)$/;
 
 // Pages without their own navbar link mark the link of their list
-const NAV_ROUTE = { member: 'members', insights: 'admin', system: 'admin', 'event-editor': 'admin', news: 'info', privacy: 'info' };
+const NAV_ROUTE = { members: 'admin', member: 'admin', 'bot-control': 'admin', insights: 'admin', system: 'admin', 'event-editor': 'admin', news: 'info', privacy: 'info' };
 
 // Event a logged-out user opened -> shown after the Discord login
 export const PENDING_ROUTE_KEY = 'dems_pending_route';
