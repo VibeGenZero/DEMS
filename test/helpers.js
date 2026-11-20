@@ -11,7 +11,7 @@ const vm = require('vm');
 const REPO_ROOT = path.join(__dirname, '..');
 
 // Variables that would leak the developer's own setup into a test process
-const LEAKING_PREFIXES = ['DISCORD_', 'DEV_', 'PG'];
+const LEAKING_PREFIXES = ['DISCORD_', 'DEV_', 'PG', 'PLUGINS_'];
 const LEAKING_KEYS = ['NODE_ENV', 'DATABASE_URL', 'SQLITE_PATH', 'UPLOAD_DIR', 'SESSION_SECRET', 'ADMIN_RESET_PASSWORD', 'PORT', 'BASE_URL', 'DEBUG_MODE', 'SETUP_PIN', 'SERVER_NAME', 'TIMEZONE'];
 
 const SERVER_START_TIMEOUT_MS = 20000;

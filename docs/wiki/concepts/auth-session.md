@@ -51,7 +51,7 @@ While a privacy policy exists (`privacyPolicy/current`, `utils/privacyPolicy.js`
 - The current version comes from memory; the accepted one from `req.session.user.privacyAcceptedVersion`. A session without that field (every new login, sessions from before #138) reads `users/<id>.privacyAcceptedVersion` once (`null` = never accepted).
 - `/auth/me` adds `privacyRequired` and `privacyVersion` (and never returns `privacyAcceptedVersion`).
 - `POST /api/user/privacy/accept { version }`: only the current version (409 otherwise, also without a policy); stores `privacyAcceptedVersion` + `privacyAcceptedAt` on the user and in the session.
-- SPA: `finishLoading` → `checkAuth` → `settlePrivacyConsent()` waits in `#privacyConsentModal` (static backdrop, no Escape) before maintenance check and routing; the news and first-login popups follow the consent (`showLoginPopups`). „Ablehnen und abmelden“ calls `logout()`. `watchPrivacyAnswers()` (set up in `main.js`) wraps `window.fetch` once: a 403 with `privacyRequired` during the visit (a new version) reopens the dialog and re-runs the route after the consent.
+- SPA: `finishLoading` → `checkAuth` → `settlePrivacyConsent()` waits in `#privacyConsentModal` (static backdrop, no Escape) before maintenance check and routing; the news and first-login popups follow the consent (`showLoginPopups`), and so do the plugin clients (`loadPlugins()`; `/api/plugins` is gated too). „Ablehnen und abmelden“ calls `logout()`. `watchPrivacyAnswers()` (set up in `main.js`) wraps `window.fetch` once: a 403 with `privacyRequired` during the visit (a new version) reopens the dialog and re-runs the route after the consent.
 - Discord interactions (registration button, modal, slash commands) are not gated.
 
 ## CSRF (double submit)

@@ -27,7 +27,7 @@ test('the admin header holds the main actions; „Mit KI erstellen" starts hidde
 test('the admin areas sit in a toolbar of quiet buttons that do not wrap their labels', () => {
     const toolbar = adminSection.slice(adminSection.indexOf('<nav class="admin-toolbar"'));
     assert.match(toolbar, /<nav class="admin-toolbar" aria-label="Verwaltung">/);
-    for (const target of ['href="#polls"', 'href="#members"', 'href="#insights"', 'href="#system"', 'data-click="showBotMessagesModal"', 'data-click="loadAuditLog"']) {
+    for (const target of ['href="#polls"', 'href="#members"', 'href="#insights"', 'href="#bot-control"', 'href="#system"', 'data-click="showBotMessagesModal"', 'data-click="loadAuditLog"']) {
         assert.match(toolbar, new RegExp(`class="btn btn-ghost btn-sm" ${target}`), target);
     }
     assert.match(toolbar, /class="btn btn-danger-soft btn-sm dropdown-toggle"/);

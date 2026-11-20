@@ -138,7 +138,7 @@ export function reminderHoursOf(value) {
  * @returns {Promise<void>} -> Resolves when roles, templates and bot switches are loaded.
  */
 export async function resetWizard() {
-    state.pendingPollDecision = null;
+    state.pendingPollDecision = state.pendingPluginOrigin = null;
     rememberLoadedEvent(null);
     await rememberSeries(null);
     document.getElementById('event-edit-id').value = '';
@@ -307,6 +307,7 @@ export async function applyDraft(draft) {
     document.getElementById('event-recurring-interval').value = draft.recurringInterval || 'weekly';
     document.getElementById('event-recurring-until').value = draft.recurringUntil || '';
     if (draft.fromPoll) state.pendingPollDecision = draft.fromPoll;
+    if (draft.pluginOrigin) state.pendingPluginOrigin = draft.pluginOrigin;
     await fillWizard(draft);
     updateStartRequired();
 }
@@ -320,7 +321,7 @@ export async function applyDraft(draft) {
  * @returns {Promise<Object|null>} -> The loaded event; null when it does not exist, cannot be loaded or is no longer wanted (nothing is shown then).
  */
 export async function loadEventIntoWizard(eventId, { isWanted = () => true } = {}) {
-    state.pendingPollDecision = null;
+    state.pendingPollDecision = state.pendingPluginOrigin = null;
     try {
         const res = await fetch(`/api/events/${encodeURIComponent(eventId)}?status=all`);
         if (!res.ok) return null;
@@ -406,6 +407,7 @@ export function collectEventDraft() {
         allowTentative: document.getElementById('event-allow-tentative').checked,
         slots: getSlotsFromEditor(),
         fromPoll: state.pendingPollDecision || undefined,
+        pluginOrigin: state.pendingPluginOrigin || undefined, // ui.openEventEditor; never null (the server refuses it)
         customBotMessages: {
             registration: document.getElementById('event-msg-registration').value,
             accepted: document.getElementById('event-msg-accepted').value,
@@ -470,6 +472,7 @@ export async function saveEvent() {
 
         if (res.ok) {
             const answer = await res.json();
+            state.pendingPluginOrigin = null;
             showToast(editId ? savedEventToast(answer) : 'Event erstellt!', 'success');
             if (!editId && state.pendingPollDecision) {
                 const decidedPollId = state.pendingPollDecision.pollId;

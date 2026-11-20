@@ -13,7 +13,7 @@ import { clearEditorAssistMarks, mountEditorAssist, openEditorAssist, syncEditor
 import { clearDraft, formatSavedAt, isDraftStale, readDraft, storeDraft } from './editor-draft.js';
 import { setDateChangeHandler } from './wizard-dates.js';
 import { cancelWizardPreview, renderWizardPreview } from './wizard-preview.js';
-import { WIZARD_TOTAL_STEPS, applyDraft, collectEventDraft, currentWizardStep, fillWizard, loadEventIntoWizard, resetWizard, saveEvent, setWizardMode, wizardGoTo } from './wizard.js';
+import { WIZARD_TOTAL_STEPS, applyDraft, collectEventDraft, currentWizardStep, loadEventIntoWizard, resetWizard, saveEvent, setWizardMode, wizardGoTo } from './wizard.js';
 
 const ROUTE = 'event-editor';
 const NEW_KEY = 'new';
@@ -207,9 +207,10 @@ async function startEditor(run) {
     page.prefill = null;
     page.fresh = false;
     if (prefill || fresh) {
-        // A template, a poll or an import starts the event: an older kept input does not come back under it
+        // A template, a poll, an import or a plugin starts the event: an older kept input does not come back under it
         clearDraft(editId());
-        if (prefill) await fillWizard(prefill);
+        // applyDraft also takes dates, status and a plugin origin (ui.openEventEditor)
+        if (prefill) await applyDraft(prefill);
     } else {
         await restoreDraft(event);
     }
@@ -272,9 +273,9 @@ export function showEventEditor(param) {
  *
  * @param {Object} [options]
  * @param {string} [options.eventId] -> Event to edit; empty = new event.
- * @param {Object} [options.prefill] -> Fields for a new event (shape of fillWizard).
+ * @param {Object} [options.prefill] -> Fields for a new event (shape of collectEventDraft, put in with applyDraft; `pluginOrigin` is kept for the create).
  * @param {string} [options.returnTo] -> Route shown after closing; default: the page the admin is on.
- * @param {boolean} [options.fresh] -> Start a new event without the kept input of an earlier visit (the caller fills the wizard itself: poll decision, Discord import).
+ * @param {boolean} [options.fresh] -> Start a new event without the kept input of an earlier visit (the caller fills the wizard itself: poll decision, Discord import; or a plugin's prefill).
  * @returns {Promise<void>} -> Resolves when the wizard is filled; callers may set further fields then.
  */
 export function openEventEditor({ eventId = '', prefill = null, returnTo = '', fresh = false } = {}) {

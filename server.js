@@ -32,6 +32,10 @@ const { createSetupRouter } = require('./routes/setup');
 const { privacyGate } = require('./middleware/privacy');
 const { getPrivacyPolicy } = require('./utils/privacyPolicy');
 const { BANNER_FILE, bannerDir, sweepOrphanBanners } = require('./utils/bannerStore');
+const { initPlugins, pluginHost } = require('./plugin-sdk');
+const { createPluginRouter } = require('./routes/plugins');
+const { createPluginStatic } = require('./routes/pluginStatic');
+const { createThemeRouter } = require('./routes/pluginTheme');
 
 // Production runs behind a TLS proxy (trust proxy below) -> cookies only over HTTPS
 const IS_PRODUCTION = process.env.NODE_ENV === 'production';
@@ -177,6 +181,10 @@ app.use((req, res, next) => {
 
 // ── Static files ────────────────────────────────────────────────────────
 app.use(express.static(path.join(__dirname, 'public')));
+// Client files of switched-on plugins (allow-list, routes/pluginStatic.js); after session and CSRF,
+// before the role refresh; a file request creates no session (saveUninitialized: false)
+app.use('/plugins', createPluginStatic(() => pluginHost()));
+app.use(createThemeRouter(() => pluginHost()));
 // Dev mock mode: banners of the dummy events (dev/banners, see dev/seedData.js)
 if (IS_MOCK_MODE) app.use('/dev-banners', express.static(path.join(__dirname, 'dev', 'banners')));
 
@@ -244,6 +252,8 @@ app.use('/api/events', require('./routes/events'));
 app.use('/api/polls', require('./routes/polls'));
 app.use('/api/admin', require('./routes/admin'));
 app.use('/api/user', require('./routes/user'));
+// Plugin client list + plugin routes, behind the same session, CSRF and privacy chain as the core
+app.use('/api/plugins', createPluginRouter(() => pluginHost()));
 
 // CSRF token endpoint (for frontend to fetch)
 app.get('/api/csrf-token', (req, res) => {
@@ -338,6 +348,17 @@ async function start() {
     const loaded = await loadSystemConfig();
     console.log(`⚙️ Konfiguration: ${loaded.fromDb} Werte aus der Datenbank, ${loaded.fromEnv} aus der Umgebung (.env).`);
     await loadAiSettings();
+    // Plugins (plugin-sdk/): a failure never blocks the start, DEMS then runs without plugins
+    try {
+        await initPlugins({
+            officialDir: path.join(__dirname, 'plugins'),
+            customDir: path.resolve(process.env.PLUGINS_DIR || path.join(__dirname, 'data', 'plugins')),
+            safeMode: process.env.PLUGINS_SAFE_MODE === 'true',
+            mockMode: IS_MOCK_MODE
+        });
+    } catch (err) {
+        console.error('❌ Plugins konnten nicht gestartet werden, DEMS läuft ohne Plugins:', err.message);
+    }
     sessionMiddleware = createSessionMiddleware();
     // Setup mode: no Discord values yet -> the wizard runs, the PIN goes to the log
     await initSetupState({ mockMode: IS_MOCK_MODE });

@@ -187,14 +187,18 @@ body {
   font-size: var(--font-size-2xl) !important;
   color: var(--accent-light) !important;
   text-shadow: 0 0 20px var(--accent-glow);
+  white-space: nowrap;
 }
 
 #main-navbar .nav-link {
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
   color: var(--text-secondary);
   font-weight: 500;
   transition: var(--transition);
   position: relative;
-  padding: 0.5rem 1rem;
+  padding: 0.5rem 0.75rem;
 }
 
 #main-navbar .nav-link:hover,
@@ -5093,6 +5097,40 @@ a.info-version-badge:focus-visible {
   color: var(--text-secondary);
 }
 
+/* ── System › Plugins ── */
+/* admin/system-plugins.js: one .system-card per plugin; switch top right, chips, permissions, settings */
+.plugin-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-16);
+}
+
+.plugin-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-8);
+}
+
+.plugin-section-title {
+  margin: 0 0 var(--space-8);
+  font-size: var(--font-size-md);
+}
+
+.plugin-permissions {
+  margin: 0;
+  padding-left: 0;
+  list-style: none;
+  color: var(--text-secondary);
+}
+
+.plugin-warning {
+  color: var(--warning);
+}
+
+.plugin-switch {
+  margin: 0;
+}
+
 /* Privacy policy page and consent dialog (pages/privacy.js, #138) */
 .privacy-container {
   max-width: 52rem;
@@ -5127,4 +5165,23 @@ a.info-version-badge:focus-visible {
   .system-privacy-editor {
     grid-template-columns: 1fr 1fr;
   }
+}
+
+/* Design draft preview banner (core/pluginTheme.js) */
+.design-preview-bar {
+  position: fixed;
+  bottom: var(--space-16);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: var(--z-banner);
+  display: flex;
+  align-items: center;
+  gap: var(--space-12);
+  padding: var(--space-8) var(--space-16);
+  background: var(--bg-card);
+  color: var(--text-primary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-pill);
+  box-shadow: var(--shadow-md);
+  font-size: var(--font-size-sm);
 }

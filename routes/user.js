@@ -14,6 +14,8 @@ const { currentPrivacyVersion } = require('../utils/privacyPolicy');
 const { savePrivacyAcceptance } = require('../utils/userProfile');
 const { getFeedOf, saveNewFeed, deleteFeed } = require('../utils/calendarFeedStore');
 const { buildCalendarFeedUrls } = require('../utils/eventUrl');
+const { pluginHost } = require('../plugin-sdk');
+const { safeEmit } = require('../plugin-sdk/coreHooks');
 
 /**
  * POST /api/user/privacy/accept — { version }: the member accepts the current privacy policy (#138)
@@ -469,7 +471,8 @@ router.delete('/calendar', requireAuth, async (req, res) => {
 });
 
 /**
- * DELETE /api/user/account — Delete user account and all registrations
+ * DELETE /api/user/account — Delete user account and all registrations,
+ * poll votes and plugin documents of the member, then emit `member.deleted`
  */
 router.delete('/account', requireAuth, async (req, res) => {
     try {
@@ -512,6 +515,15 @@ router.delete('/account', requireAuth, async (req, res) => {
         } catch (pollErr) {
             console.error('Deleting poll votes failed:', pollErr.message);
         }
+
+        // Plugin documents with the member's userId, in every plugin (on, off or orphaned)
+        try {
+            await pluginHost().purgeUser(userId);
+        } catch (pluginErr) {
+            console.error('Deleting plugin data failed:', pluginErr.message);
+        }
+        // Lets plugins clean up the rest; safeEmit never throws
+        safeEmit('member.deleted', { userId });
 
         // Destroy session
         req.session.destroy(() => {

@@ -8,6 +8,7 @@ import { avatar } from './components.js';
 import { showFirstLoginModal } from '../pages/profile.js';
 import { refreshPollBadge } from '../polls/polls.js';
 import { showNewsAfterLogin } from './updates.js';
+import { unloadPluginTabs } from './plugins.js';
 
 // POST with CSRF token: the server no longer logs out on a plain GET
 export async function logout() {
@@ -75,20 +76,17 @@ export function showLoggedIn() {
 
     if (state.currentUser.isAdmin) {
         document.getElementById('nav-admin').style.display = 'block';
-        document.getElementById('nav-members').style.display = 'block';
-        document.getElementById('nav-bot-control').style.display = 'block';
     }
 }
 
 export function showLoggedOut() {
     document.getElementById('user-info').style.display = 'none';
     document.getElementById('nav-admin').style.display = 'none';
-    document.getElementById('nav-members').style.display = 'none';
-    document.getElementById('nav-bot-control').style.display = 'none';
     document.getElementById('nav-events').style.display = 'none';
     document.getElementById('nav-profile').style.display = 'none';
     document.getElementById('nav-polls').style.display = 'none';
     document.getElementById('nav-debug').style.display = 'none';
+    unloadPluginTabs();
 
     // Clear sensitive data from UI
     document.getElementById('user-avatar').innerHTML = '';

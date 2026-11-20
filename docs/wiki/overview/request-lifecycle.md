@@ -3,13 +3,13 @@ id: request-lifecycle
 title: Request lifecycle (middleware order)
 type: overview
 tags: [express, middleware, csrf, session, rate-limit, routing]
-sources: [server.js]
+sources: [server.js, routes/pluginStatic.js, routes/plugins.js]
 depends_on: [server]
 see_also: [auth-session, security]
 ---
 # Request lifecycle (middleware order)
 
-> TL;DR: Every HTTP request passes `server.js` middleware in this exact order: healthz → helmet → cors → rate limits → uploaded banners → body parsers → session → CSRF → static files → (debug log) → routers → misc endpoints → SPA fallback. Mutating `/api/*` calls need the `X-CSRF-TOKEN` header; everything unknown returns `index.html`.
+> TL;DR: Every HTTP request passes `server.js` middleware in this exact order: healthz → helmet → cors → rate limits → uploaded banners → body parsers → session → CSRF → static files → plugin client files → (debug log) → routers → misc endpoints → SPA fallback. Mutating `/api/*` calls need the `X-CSRF-TOKEN` header; everything unknown returns `index.html`.
 
 ## Order (as registered in `server.js`)
 
@@ -26,10 +26,11 @@ see_also: [auth-session, security]
 | 8 | `express-session` (`PersistentSessionStore`, collection `sessions`) | all | cookie `httpOnly`, `sameSite: lax`, `secure` only with `NODE_ENV=production`, 24 h |
 | 9 | CSRF (double submit) | all | mints `req.session.csrfToken` only on `GET /api/csrf-token`, sets cookie `XSRF-TOKEN` when the session has one, rejects POST/PUT/DELETE/PATCH on `/api/*` and `/auth/*` without matching `X-CSRF-TOKEN` / `X-XSRF-TOKEN` header → 403 |
 | 10 | `express.static('public')` | files | served before routers |
+| 10b | `/plugins` (`createPluginStatic`, `routes/pluginStatic.js`) | `/plugins/<pluginId>/*` | client files of switched-on plugins (allow-list: `client.js`, `client.css`, `assets/<name>`); answers every path below `/plugins` itself (404 for anything else, other methods too); after session and CSRF, before the role refresh; creates no session (`saveUninitialized: false`) |
 | 11 | `createRoleRefresh` | logged-in requests | roles and `isAdmin` re-read from Discord at most every 5 min ([auth-session](../concepts/auth-session.md)) |
 | 12 | debug request logger | all | only with `DEBUG_MODE=true`; registered after static, so static files are not logged |
 | 13 | `dev/devAuth` router | `/auth` | only when `DEV_MOCK=true` |
-| 14 | routers | `/auth`, `/api/events`, `/api/admin`, `/api/user` | see [api-index](../reference/api-index.md) |
+| 14 | routers | `/auth`, `/api/events`, `/api/polls`, `/api/admin`, `/api/user`, `/api/plugins` (last: client list + dispatcher for plugin routes, `routes/plugins.js`) | see [api-index](../reference/api-index.md) |
 | 15 | `GET /api/csrf-token`, `/api/maintenance/status`, `/api/server-info`, `/api/updates` | — | defined in `server.js` |
 | 16 | `GET /{*splat}` | everything else | SPA fallback → `public/index.html` (also for unknown `/api/...` GETs) |
 
