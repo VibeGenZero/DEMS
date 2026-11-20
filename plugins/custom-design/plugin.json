@@ -5,6 +5,7 @@
   "sdk": 1,
   "description": "Farben, Ecken, Schrift und eigenes CSS für eure Community.",
   "author": "DEMS",
+  "server": "server.js",
   "permissions": ["theme"],
   "settings": []
 }
