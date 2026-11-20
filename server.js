@@ -35,6 +35,7 @@ const { BANNER_FILE, bannerDir, sweepOrphanBanners } = require('./utils/bannerSt
 const { initPlugins, pluginHost } = require('./plugin-sdk');
 const { createPluginRouter } = require('./routes/plugins');
 const { createPluginStatic } = require('./routes/pluginStatic');
+const { createThemeRouter } = require('./routes/pluginTheme');
 
 // Production runs behind a TLS proxy (trust proxy below) -> cookies only over HTTPS
 const IS_PRODUCTION = process.env.NODE_ENV === 'production';
@@ -183,6 +184,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 // Client files of switched-on plugins (allow-list, routes/pluginStatic.js); after session and CSRF,
 // before the role refresh; a file request creates no session (saveUninitialized: false)
 app.use('/plugins', createPluginStatic(() => pluginHost()));
+app.use(createThemeRouter(() => pluginHost()));
 // Dev mock mode: banners of the dummy events (dev/banners, see dev/seedData.js)
 if (IS_MOCK_MODE) app.use('/dev-banners', express.static(path.join(__dirname, 'dev', 'banners')));
 
