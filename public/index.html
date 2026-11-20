@@ -2617,6 +2617,27 @@
     </div>
   </div>
 
+  <!-- Admin reset password prompt (core/passwordDialog.js) -->
+  <div class="modal fade" id="passwordModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header border-0 pb-0">
+          <h5 class="modal-title"><i class="bi bi-shield-lock me-2" aria-hidden="true"></i>Reset-Passwort eingeben</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Schließen"></button>
+        </div>
+        <div class="modal-body">
+          <p id="password-modal-text" class="text-secondary mb-3"></p>
+          <label class="form-label" for="password-modal-input">Reset-Passwort</label>
+          <input type="password" class="form-control" id="password-modal-input" autocomplete="off">
+        </div>
+        <div class="modal-footer border-0">
+          <button type="button" class="btn btn-outline-light" data-bs-dismiss="modal">Abbrechen</button>
+          <button type="button" class="btn btn-accent" id="password-modal-ok">Bestätigen</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Privacy policy of this installation (#138, pages/privacy.js): public like #info -->
   <section id="privacy-section" class="app-section is-hidden">
     <div class="container section-container privacy-container">
@@ -2898,6 +2919,12 @@
 
   <!-- Card flight between the overview and an event page (events/card-flight.js) -->
   <div id="card-flight" class="card-flight is-hidden" aria-hidden="true"></div>
+
+  <!-- Design draft preview banner (core/pluginTheme.js) -->
+  <div id="design-preview-bar" class="design-preview-bar is-hidden" role="status">
+    <span><i class="bi bi-eye me-2" aria-hidden="true"></i>Vorschau des Design-Entwurfs – nur du siehst ihn.</span>
+    <button type="button" class="btn btn-secondary btn-sm" data-click="endDesignPreview">Vorschau beenden</button>
+  </div>
 
   <!-- Scripts -->
   <script src="/vendor/bootstrap/bootstrap.bundle.min.js"></script>

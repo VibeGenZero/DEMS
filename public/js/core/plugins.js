@@ -13,6 +13,8 @@ import { navigateTo, onRouteLeave } from './router.js';
 import { state } from './state.js';
 import { placeNavMarker, syncNavbarHeight } from './tab-glider.js';
 import { applyStyleData, escapeHtml, markdownPreview, renderMarkdownSafe, showConfirmDialog, showElement, showToast, toggleElement } from './ui.js';
+import { showPasswordDialog } from './passwordDialog.js';
+import { createThemeUi, hideThemePreview } from './pluginTheme.js';
 import { openEventEditor } from '../admin/editor-page.js';
 import { relativeDay } from '../events/cards.js';
 
@@ -154,7 +156,7 @@ export function createPluginUi(entry) {
     const permissions = Array.isArray(entry.permissions) ? [...entry.permissions] : [];
     const user = state.currentUser || {};
     const actionNames = new Set();
-    const request = (method) => (path, body) => pluginRequest(id, method, path, body);
+    const request = (method) => (path, body, options) => pluginRequest(id, method, path, body, options);
 
     return Object.freeze({
         plugin: Object.freeze({ id, name: String(entry.name || ''), version: String(entry.version || ''), official: entry.official === true }),
@@ -175,6 +177,7 @@ export function createPluginUi(entry) {
             }
         }),
         api: Object.freeze({ get: request('GET'), post: request('POST'), put: request('PUT'), delete: request('DELETE') }),
+        theme: createThemeUi(permissions),
         openEventEditor({ prefill = {}, ref } = {}) {
             if (!state.currentUser || !state.currentUser.isAdmin) throw new Error('openEventEditor is for admins only');
             if (!permissions.includes('events:draft')) throw new Error('openEventEditor needs the permission events:draft');
@@ -194,15 +197,24 @@ export function createPluginUi(entry) {
  *
  * @returns {Promise<*>} -> Parsed JSON; rejects with the German `error` of a failed answer.
  */
-function pluginRequest(id, method, path, body) {
+function pluginRequest(id, method, path, body, reqOptions = {}) {
     if (typeof path !== 'string' || !path.startsWith('/') || UNSAFE_PATH.test(path)) throw new Error(`Invalid plugin path "${String(path)}"`);
-    const headers = { 'X-CSRF-TOKEN': state.csrfToken };
-    const options = { method, headers };
-    if (body !== undefined && method !== 'GET') {
-        headers['Content-Type'] = 'application/json';
-        options.body = JSON.stringify(body);
-    }
+    const needsPassword = Boolean(reqOptions && reqOptions.password === true);
+    if (needsPassword && method === 'GET') throw new Error('password needs a mutating method');
     return (async () => {
+        let payload = body;
+        if (needsPassword) {
+            const password = await showPasswordDialog('Gib das Admin-Reset-Passwort ein, um fortzufahren.');
+            if (password === null) throw new Error('Abgebrochen.');
+            const base = body && typeof body === 'object' && !Array.isArray(body) ? body : {};
+            payload = { ...base, password };
+        }
+        const headers = { 'X-CSRF-TOKEN': state.csrfToken };
+        const options = { method, headers };
+        if (payload !== undefined && method !== 'GET') {
+            headers['Content-Type'] = 'application/json';
+            options.body = JSON.stringify(payload);
+        }
         const res = await fetch(`/api/plugins/${id}${path}`, options);
         let json = null;
         try {
@@ -347,6 +359,7 @@ export function unloadPluginTabs() {
     const ids = [...tabs.keys()];
     tabs.clear();
     clearTabElements(ids);
+    hideThemePreview();
     placeNavMarker();
     syncNavbarHeight();
 }

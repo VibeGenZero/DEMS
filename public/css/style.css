@@ -5166,3 +5166,22 @@ a.info-version-badge:focus-visible {
     grid-template-columns: 1fr 1fr;
   }
 }
+
+/* Design draft preview banner (core/pluginTheme.js) */
+.design-preview-bar {
+  position: fixed;
+  bottom: var(--space-16);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: var(--z-banner);
+  display: flex;
+  align-items: center;
+  gap: var(--space-12);
+  padding: var(--space-8) var(--space-16);
+  background: var(--bg-card);
+  color: var(--text-primary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-pill);
+  box-shadow: var(--shadow-md);
+  font-size: var(--font-size-sm);
+}
