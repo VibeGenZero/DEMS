@@ -32,6 +32,7 @@ const SEALED = 'Routen und Hooks lassen sich nur während register() anmelden.';
  * @property {'GET'|'POST'|'PUT'|'DELETE'} method
  * @property {string} path -> Express path below `/api/plugins/<id>`.
  * @property {'member'|'admin'} access
+ * @property {boolean} password -> Whether the route requires `ADMIN_RESET_PASSWORD`.
  * @property {(request: { user: object, params: object, query: object, body: object }) => unknown} handler
  */
 
@@ -104,11 +105,18 @@ function createContext({ entry, host }) {
         }
         const access = options && typeof options === 'object' ? options.access : undefined;
         if (!ACCESS.includes(access)) throw new Error(`${label}: access muss member oder admin sein.`);
+        const password = options && typeof options === 'object' ? options.password : undefined;
+        if (password !== undefined && typeof password !== 'boolean') {
+            throw new Error(`${label}: password muss true oder false sein.`);
+        }
+        if (password === true && access !== 'admin') {
+            throw new Error(`${label}: password: true gibt es nur mit access admin.`);
+        }
         if (typeof handler !== 'function') throw new Error(`${label}: Handler muss eine Funktion sein.`);
         if (host.routes.some(route => route.method === method && route.path === path)) {
             throw new Error(`${label} ist bereits angemeldet.`);
         }
-        host.routes.push({ method, path, access, handler });
+        host.routes.push({ method, path, access, password: password === true, handler });
     }
 
     const routes = {};

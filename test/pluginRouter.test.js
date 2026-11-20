@@ -187,6 +187,34 @@ test('admin routes need an admin session', async () => {
     assert.deepEqual(await admin.json(), { gone: true });
 });
 
+test('password routes check ADMIN_RESET_PASSWORD, strip password from body, and leave normal routes unchanged', async () => {
+    process.env.ADMIN_RESET_PASSWORD = 'dev';
+    const adminUser = { ...MEMBER, isAdmin: true };
+    const seenProtected = [];
+    const seenPlain = [];
+    host.routes = [
+        { method: 'POST', path: '/secret', access: 'admin', password: true, handler: ({ body }) => { seenProtected.push(body); return { ok: true }; } },
+        { method: 'POST', path: '/plain', access: 'admin', password: false, handler: ({ body }) => { seenPlain.push(body); return { ok: true }; } }
+    ];
+
+    const missing = await call('/api/plugins/demo/secret', { method: 'POST', user: adminUser, body: { a: 1 } });
+    assert.equal(missing.status, 401);
+    assert.deepEqual(await missing.json(), { error: 'Ungültiges Admin-Reset-Passwort.' });
+
+    const wrong = await call('/api/plugins/demo/secret', { method: 'POST', user: adminUser, body: { a: 1, password: 'wrong' } });
+    assert.equal(wrong.status, 401);
+    assert.deepEqual(await wrong.json(), { error: 'Ungültiges Admin-Reset-Passwort.' });
+    assert.deepEqual(seenProtected, []);
+
+    const right = await call('/api/plugins/demo/secret', { method: 'POST', user: adminUser, body: { a: 1, password: 'dev' } });
+    assert.equal(right.status, 200);
+    assert.deepEqual(seenProtected, [{ a: 1 }]);
+
+    const plain = await call('/api/plugins/demo/plain', { method: 'POST', user: adminUser, body: { a: 1, password: 'kept' } });
+    assert.equal(plain.status, 200);
+    assert.deepEqual(seenPlain, [{ a: 1, password: 'kept' }]);
+});
+
 test('a method the plugin did not register answers 404', async () => {
     host.routes = [route('GET', '/only-get', () => ({}))];
     const res = await call('/api/plugins/demo/only-get', { method: 'PUT' });

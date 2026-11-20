@@ -10,14 +10,15 @@
  * `routesOf` returns the routes regardless of it.
  */
 const express = require('express');
-const { requireAuth, requireAdmin } = require('../middleware/auth');
+const { requireAuth, requireAdmin, safeEqual } = require('../middleware/auth');
 const { PluginHttpError } = require('../plugin-sdk/errors');
 
 const MESSAGES = {
     pluginNotFound: 'Plugin nicht gefunden.',
     routeNotFound: 'Nicht gefunden.',
     pluginFailed: 'Im Plugin ist ein Fehler aufgetreten.',
-    listFailed: 'Die Plugins konnten nicht geladen werden.'
+    listFailed: 'Die Plugins konnten nicht geladen werden.',
+    badPassword: 'Ungültiges Admin-Reset-Passwort.'
 };
 
 const GUARDS = {
@@ -76,8 +77,20 @@ function sameRoutes(a, b) {
     return a.length === b.length && a.every((route, index) => {
         const other = b[index];
         return route.method === other.method && route.path === other.path
-            && route.access === other.access && route.handler === other.handler;
+            && route.access === other.access && Boolean(route.password) === Boolean(other.password)
+            && route.handler === other.handler;
     });
+}
+
+function requireResetPassword(req, res, next) {
+    const body = req.body && typeof req.body === 'object' && !Array.isArray(req.body) ? req.body : {};
+    if (!safeEqual(body.password, process.env.ADMIN_RESET_PASSWORD)) {
+        return res.status(401).json({ error: MESSAGES.badPassword });
+    }
+    const copy = { ...body };
+    delete copy.password;
+    req.body = copy;
+    next();
 }
 
 /** Build the router of one plugin; a route Express refuses is skipped and reported. */
@@ -88,7 +101,8 @@ function buildPluginRouter(host, pluginId, routes) {
         try {
             const guards = GUARDS[route.access];
             if (!guards || !['get', 'post', 'put', 'delete'].includes(method)) throw new Error('unsupported method or access');
-            router[method](route.path, ...guards, wrapHandler(host, pluginId, route.handler));
+            const chain = route.password ? [...guards, requireResetPassword] : guards;
+            router[method](route.path, ...chain, wrapHandler(host, pluginId, route.handler));
         } catch (err) {
             console.error(`[plugin:${pluginId}] Route ${route.method} ${route.path} skipped: ${err.message}`);
             host.reportError(pluginId, `Route ${route.method} ${route.path} ist ungültig.`);

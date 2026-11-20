@@ -93,19 +93,31 @@ test('a route needs access member or admin', () => {
     assert.throws(() => ctx.routes.put('/x', undefined, () => {}), { message: 'Route PUT /x: access muss member oder admin sein.' });
 });
 
-test('routes are recorded with method, path, access and handler; a duplicate is refused', () => {
+test('routes are recorded with method, path, access, password and handler; a duplicate is refused', () => {
     const { ctx, runtime } = build();
     const handler = () => ({ ok: true });
     ctx.routes.get('/', { access: 'member' }, handler);
     ctx.routes.post('/', { access: 'member' }, handler);
-    ctx.routes.delete('/items/:id', { access: 'admin' }, handler);
+    ctx.routes.delete('/items/:id', { access: 'admin', password: true }, handler);
 
     assert.deepEqual(runtime.routes, [
-        { method: 'GET', path: '/', access: 'member', handler },
-        { method: 'POST', path: '/', access: 'member', handler },
-        { method: 'DELETE', path: '/items/:id', access: 'admin', handler }
+        { method: 'GET', path: '/', access: 'member', password: false, handler },
+        { method: 'POST', path: '/', access: 'member', password: false, handler },
+        { method: 'DELETE', path: '/items/:id', access: 'admin', password: true, handler }
     ]);
     assert.throws(() => ctx.routes.get('/', { access: 'admin' }, handler), { message: 'Route GET / ist bereits angemeldet.' });
+});
+
+test('password route needs admin access and a boolean option', () => {
+    const { ctx } = build();
+    assert.throws(
+        () => ctx.routes.post('/x', { access: 'member', password: true }, () => {}),
+        { message: 'Route POST /x: password: true gibt es nur mit access admin.' }
+    );
+    assert.throws(
+        () => ctx.routes.post('/x', { access: 'admin', password: 'ja' }, () => {}),
+        /password/
+    );
 });
 
 test('route paths start with / and have no wildcard; the handler is a function', () => {
