@@ -90,6 +90,7 @@ module.exports = {
 | `ctx.events.get(id)`, `ctx.events.list({ upcoming })`, `ctx.events.url(id)` | `events:read`; public event shape + `origin`, **every status** (drafts too — do not show drafts to members); `list` sorted by start |
 | `ctx.registrations.list({ eventId, userId })` | `registrations:read` (SDK 1.1); `{ id, eventId, userId, status, source, createdAt, checkedIn, checkedInAt, slotId }` sorted by `createdAt`, no form answers or guests |
 | `ctx.members.get(userId)` | `members:read`; `{ id, name, avatar }` or `null` |
+| `ctx.members.search(query)` | `members:read` (SDK 1.1); up to 20 `{ id, name, avatar }` of members who logged in once, whose display, user or global name contains `query` (trimmed, any case, 2–50 characters, else `[]`), sorted by name; no `acceptInvitations` filter — guard the route with `access: 'admin'` when only the team may search |
 | `ctx.discord.sendDM(userId, { text, link? })` | `discord:dm`; → `true`/`false` |
 | `ctx.discord.listRoles()`, `addRole(userId, roleId)`, `removeRole(userId, roleId)` | `discord:roles` (SDK 1.1); only roles the guard allows (no admin, moderation or server rights, below the bot); `{ ok: true, changed }` or `{ ok: false, reason }`, a refused role throws `PluginDataError`; 500 changes per 10 min. Remember whether *you* gave a role (`changed`) before you take it away again |
 | `ctx.discord.sendChannelMessage(settingKey, { text, link? })` | `discord:channel`; names one of **your own `channel` settings**, never a channel id |

@@ -9,12 +9,12 @@
  */
 const { db, collection, doc, getDoc, getDocs } = require('../firebaseAdmin');
 const { buildEventUrl, buildSiteUrl } = require('../utils/eventUrl');
-const { avatarUrlOf, repairAvatarUrl } = require('../utils/avatar');
 const { parseDate, isEventOver } = require('../utils/eventListing');
 const { createDataApi } = require('./data');
 const { createDiscordApi } = require('./discord');
 const { createThemeApi } = require('./theme');
 const { createRegistrationsApi } = require('./registrations');
+const { createMembersApi } = require('./members');
 const { HOOK_NAMES, EVENT_HOOKS, REGISTRATION_HOOKS, onHook, toPluginEvent } = require('./hooks');
 const { PluginPermissionError, PluginHttpError } = require('./errors');
 const state = require('./state');
@@ -153,22 +153,6 @@ function createContext({ entry, host }) {
         url: eventId => buildEventUrl(eventId)
     };
 
-    const members = {
-        /** @returns {Promise<{ id: string, name: string, avatar: string }|null>} -> null for an unknown member. */
-        async get(userId) {
-            requirePermission('members:read');
-            if (!isDocId(userId)) return null;
-            const snap = await getDoc(doc(db, 'users', userId));
-            if (!snap.exists()) return null;
-            const user = snap.data();
-            return {
-                id: userId,
-                name: String(user.displayName || user.username || user.globalName || ''),
-                avatar: repairAvatarUrl(avatarUrlOf(user))
-            };
-        }
-    };
-
     const hooks = {
         /**
          * @param {string} name -> One of the hook names; event hooks need `events:read`, registration hooks `registrations:read`.
@@ -213,7 +197,7 @@ function createContext({ entry, host }) {
         settings: Object.freeze({ get: readSettings }),
         events: Object.freeze(events),
         registrations: createRegistrationsApi({ granted }),
-        members: Object.freeze(members),
+        members: createMembersApi({ granted }),
         discord: createDiscordApi({
             pluginId: id,
             permissions: manifest.permissions,

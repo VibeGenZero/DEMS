@@ -24,6 +24,7 @@ Spec: [2026-11-19-plugin-sdk-design](../../superpowers/specs/2026-11-19-plugin-s
 | state | `plugin-sdk/state.js` | `pluginState/<id>` and `pluginSettings/<id>` (see [data-model](data-model.md)) |
 | ctx | `plugin-sdk/context.js`, `data.js`, `discord.js`, `theme.js`, `themeCss.js` | the server API, built once per plugin (a fresh one only for a retry after a failed `register`); `theme.js` + `themeCss.js` store allow-list-filtered CSS in `pluginThemes` |
 | hooks | `plugin-sdk/hooks.js`, `plugin-sdk/coreHooks.js` | per-plugin queues; the core's emit helpers (`safeEmit`, `emitEventCreated`, `emitRegistrationCheckedIn`, …) and the `pluginOrigin` check |
+| members | `plugin-sdk/members.js` | `ctx.members.get/search` (`toPluginMember`: name = display, user or global name) |
 | registrations | `plugin-sdk/registrations.js` | `ctx.registrations.list({ eventId, userId })` and `toPluginRegistration` (SDK 1.1) |
 | errors | `plugin-sdk/errors.js` | `PluginPermissionError`, `PluginDataError`, `PluginHttpError` (`ctx.httpError`), `PluginHostError` (German messages) |
 | API | `routes/plugins.js` | `GET /api/plugins` (client list) + dispatcher `/api/plugins/<id>/…` (on/off checked per request; optional `password: true` admin reset password guard; a handler that has not answered after 30 s → 504 „Das Plugin hat nicht rechtzeitig geantwortet.“ + `lastError`, its late result is dropped) |
@@ -74,7 +75,7 @@ A missing permission throws `PluginPermissionError` („Dem Plugin fehlt die Ber
 |---|---|---|
 | `events:read` | `ctx.events.get/list`, the six `event.*` hooks | „Events lesen“ |
 | `events:draft` | `ui.openEventEditor` with an origin; `pluginOrigin` accepted on create | „Events für das Team vorbereiten“ |
-| `members:read` | `ctx.members.get` | „Mitgliedernamen und Avatare lesen“ |
+| `members:read` | `ctx.members.get`, `ctx.members.search` (SDK 1.1) | „Mitgliedernamen und Avatare lesen“ |
 | `discord:dm` | `ctx.discord.sendDM` | „Direktnachrichten über den Bot senden“ |
 | `discord:channel` | `ctx.discord.sendChannelMessage` | „Nachrichten in Discord-Kanäle posten“ |
 | `theme` | `ctx.theme.saveDraft/discardDraft/publish/clear`, `ui.theme.showPreview/hidePreview/reload/isStandardMode` | „Aussehen der ganzen Seite ändern“ |

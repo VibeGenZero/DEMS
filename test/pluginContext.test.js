@@ -260,6 +260,30 @@ test('ctx.members.get needs members:read and returns id, name, avatar or null', 
     assert.equal(await ctx.members.get(42), null);
 });
 
+test('ctx.members.search finds stored users by any name, 2–50 characters, at most 20, sorted by name', async () => {
+    await setDoc(doc(db, 'users', '111111111111111111'), { username: 'kira', displayName: 'Kira K.', avatar: null });
+    await setDoc(doc(db, 'users', '222222222222222222'), { username: 'ben', globalName: 'Benjamin', acceptInvitations: false });
+    await setDoc(doc(db, 'users', '333333333333333333'), { username: 'anna', displayName: 'Anna' });
+    await setDoc(doc(db, 'users', '000000000000000005'), { username: 'zora', displayName: 'Zora Anders' });
+    for (let i = 0; i < 25; i++) await setDoc(doc(db, 'users', `4000000000000000${10 + i}`), { username: `zz${String(i).padStart(2, '0')}` });
+    const { ctx } = build(['members:read']);
+
+    const kira = await ctx.members.search('KIR');
+    assert.deepEqual(kira.map(member => member.id), ['111111111111111111']);
+    assert.deepEqual(Object.keys(kira[0]).sort(), ['avatar', 'id', 'name']);
+    assert.equal(kira[0].name, 'Kira K.');
+    // The name follows ctx.members.get: display name, then user name, then global name
+    assert.deepEqual((await ctx.members.search('jamin')).map(member => member.name), ['ben']);
+    assert.deepEqual((await ctx.members.search('an')).map(member => member.name), ['Anna', 'Zora Anders']);
+    const many = await ctx.members.search('zz');
+    assert.equal(many.length, 20);
+    assert.equal(many[0].name, 'zz00');
+    assert.deepEqual(await ctx.members.search(' k '), []);
+    assert.deepEqual(await ctx.members.search('x'.repeat(51)), []);
+    assert.deepEqual(await ctx.members.search(42), []);
+    await assert.rejects(build([]).ctx.members.search('kira'), PluginPermissionError);
+});
+
 test('ctx.settings.get returns the stored values of the manifest keys, secrets included', async () => {
     await state.writeSettings('alpha', { channel: '111111111111111111', token: 'geheim', removed: 'x' });
     const { ctx } = build();
