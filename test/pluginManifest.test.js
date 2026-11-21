@@ -3,6 +3,8 @@ const assert = require('node:assert/strict');
 
 const {
     SDK_VERSION,
+    SDK_MINOR,
+    SDK_VERSIONS,
     PERMISSIONS,
     SETTING_TYPES,
     validateManifest
@@ -47,6 +49,8 @@ function assertInvalid(result, reason) {
 
 test('exports SDK_VERSION, PERMISSIONS and SETTING_TYPES', () => {
     assert.equal(SDK_VERSION, 1);
+    assert.equal(SDK_MINOR, 1);
+    assert.deepEqual(SDK_VERSIONS, [1, 1.1]);
     assert.deepEqual(PERMISSIONS, {
         'events:read': 'Events lesen',
         'events:draft': 'Events für das Team vorbereiten',
@@ -54,7 +58,9 @@ test('exports SDK_VERSION, PERMISSIONS and SETTING_TYPES', () => {
         'discord:dm': 'Direktnachrichten über den Bot senden',
         'discord:channel': 'Nachrichten in Discord-Kanäle posten',
         network: 'Verbindungen ins Internet aufbauen',
-        theme: 'Aussehen der ganzen Seite ändern'
+        theme: 'Aussehen der ganzen Seite ändern',
+        'registrations:read': 'Anmeldungen lesen',
+        'discord:roles': 'Discord-Rollen vergeben und entziehen'
     });
     assert.deepEqual(SETTING_TYPES, ['text', 'textarea', 'number', 'boolean', 'select', 'channel', 'role', 'secret']);
 });
@@ -126,9 +132,28 @@ test('reports another sdk version as incompatible', () => {
     assert.deepEqual(result, { ok: false, status: 'incompatible', reason: 'Inkompatibel (SDK 2)' });
 });
 
-test('rejects a missing or non-integer sdk', () => {
-    for (const sdk of [undefined, '1', 1.5, null]) {
+test('rejects a missing sdk or one that is not a number', () => {
+    for (const sdk of [undefined, '1', '1.1', null, Number.NaN]) {
         assertInvalid(validate({ sdk }), 'Ungültig: SDK-Version fehlt.');
+    }
+});
+
+test('sdk 1.1 is accepted, other numbers stay incompatible', () => {
+    const result = validate({ sdk: 1.1 });
+    assert.equal(result.ok, true);
+    assert.equal(result.manifest.sdk, 1.1);
+    for (const sdk of [1.2, 1.5, 0]) {
+        assert.deepEqual(validate({ sdk }), { ok: false, status: 'incompatible', reason: `Inkompatibel (SDK ${sdk})` });
+    }
+});
+
+test('registrations:read and discord:roles need sdk 1.1', () => {
+    for (const permission of ['registrations:read', 'discord:roles']) {
+        const granted = validate({ sdk: 1.1, permissions: ['events:read', permission] });
+        assert.equal(granted.ok, true);
+        assert.deepEqual(granted.manifest.permissions, ['events:read', permission]);
+        assertInvalid(validate({ sdk: 1, permissions: ['events:read', permission] }),
+            `Ungültig: Die Berechtigung „${permission}“ braucht SDK 1.1.`);
     }
 });
 

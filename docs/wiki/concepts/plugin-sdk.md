@@ -18,7 +18,7 @@ Spec: [2026-11-19-plugin-sdk-design](../../superpowers/specs/2026-11-19-plugin-s
 | Part | File | Does |
 |---|---|---|
 | entry | `plugin-sdk/index.js` | `initPlugins(options)` (once, in `server.js` after migrations, system config and AI settings, before `listen`; a failure never blocks the start), `pluginHost()` for routes |
-| manifest | `plugin-sdk/manifest.js` | `validateManifest(raw, folder, { fileExists })`, `PERMISSIONS` (with German labels), `SETTING_TYPES`, `SDK_VERSION = 1` |
+| manifest | `plugin-sdk/manifest.js` | `validateManifest(raw, folder, { fileExists })`, `PERMISSIONS` (with German labels), `SETTING_TYPES`, `SDK_VERSION = 1`, `SDK_MINOR = 1`, `SDK_VERSIONS = [1, 1.1]`, `SDK_1_1_PERMISSIONS` |
 | discovery | `plugin-sdk/discovery.js` | `discoverPlugins({ officialDir, customDir })`: every sub-folder with `plugin.json`; official first; a custom folder with an official id → „Ungültig: Die ID gehört einem offiziellen Plugin.“ |
 | host | `plugin-sdk/host.js` | lifecycle, on/off, admin views (`views.js`), settings validation, data delete, `purgeUser`, `wipeAllData`, `reportError`; one write chain per plugin (state writes are read-merge-write) |
 | state | `plugin-sdk/state.js` | `pluginState/<id>` and `pluginSettings/<id>` (see [data-model](data-model.md)) |
@@ -63,7 +63,9 @@ flowchart LR
 
 Status chips (`plugin-sdk/views.js`): `off` Aus, `on` An, `error` Fehler: …, `confirm` Bestätigung nötig, `invalid` Ungültig: <Grund>, `incompatible` Inkompatibel (SDK <n>), `orphaned` Verwaist, `safe` Abgesicherter Modus aktiv. A runtime error (route 500, hook throw) keeps the plugin on and shows `lastError` + time as a warning line; the message limit shows „Nachrichtengrenze erreicht (bis HH:MM)“.
 
-## Permissions (SDK 1)
+## Permissions (SDK 1.1)
+
+`plugin.json` names `sdk: 1` or `sdk: 1.1` (`SDK_VERSIONS` in `plugin-sdk/manifest.js`); 1.1 only adds to 1.0, so every 1.x plugin runs. The two 1.1 permissions need `sdk: 1.1`, else „Ungültig: Die Berechtigung „…“ braucht SDK 1.1.“ (`SDK_1_1_PERMISSIONS`). Known limit: DEMS 3.4.x shows a `sdk: 1.1` manifest as „Ungültig: SDK-Version fehlt.“
 
 A missing permission throws `PluginPermissionError` („Dem Plugin fehlt die Berechtigung „…“.“). In-process this is a guard rail, not a wall.
 
@@ -76,8 +78,10 @@ A missing permission throws `PluginPermissionError` („Dem Plugin fehlt die Ber
 | `discord:channel` | `ctx.discord.sendChannelMessage` | „Nachrichten in Discord-Kanäle posten“ |
 | `theme` | `ctx.theme.saveDraft/discardDraft/publish/clear`, `ui.theme.showPreview/hidePreview/reload/isStandardMode` | „Aussehen der ganzen Seite ändern“ |
 | `network` | nothing in `ctx`; declares internet access | „Verbindungen ins Internet aufbauen“ |
+| `registrations:read` (SDK 1.1) | `ctx.registrations.list`, hook `registration.checkedIn` | „Anmeldungen lesen“ |
+| `discord:roles` (SDK 1.1) | `ctx.discord.listRoles/addRole/removeRole` | „Discord-Rollen vergeben und entziehen“ |
 
-Routes, own data, own settings, `member.deleted`, the page/tab, `ctx.audit` and `ctx.log` need no permission. Not in SDK 1.0 (planned 1.1): Discord commands/buttons/modals, `ctx.schedule`, event page panel, registration and check-in hooks.
+Routes, own data, own settings, `member.deleted`, the page/tab, `ctx.audit` and `ctx.log` need no permission. Not in SDK 1.1 (planned 1.2): Discord commands/buttons/modals, `ctx.schedule`, event page panel, registration status hooks.
 
 ## Hooks
 

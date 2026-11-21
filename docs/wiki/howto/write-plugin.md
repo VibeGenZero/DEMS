@@ -9,7 +9,7 @@ see_also: [security, frontend-app, bot, data-model, api-index, docker]
 ---
 # How to write a plugin
 
-> TL;DR: Make a folder `<id>/` with `plugin.json` (id = folder name, `sdk: 1`, version `x.y.z`, permissions, settings), a CommonJS `server.js` exporting `register(ctx)` (routes with a mandatory `access`, `ctx.data`, `ctx.settings`, `ctx.hooks`, `ctx.discord`) and an ES module `client.js` exporting `register(ui)` (`ui.addPage` with a tab, `ui.actions.register`, `ui.api`, `ui.helpers`). Touch DEMS only through `ctx`/`ui`, store the member's Discord id in `userId`, write German texts, no inline styles/handlers, tokens and Bootstrap Icons only. Put the folder into `PLUGINS_DIR` (`/app/data/plugins` in Docker), restart, switch it on in System › Plugins. The reference is `plugins/event-submissions/` („Event einreichen“).
+> TL;DR: Make a folder `<id>/` with `plugin.json` (id = folder name, `sdk: 1` or `1.1`, version `x.y.z`, permissions, settings), a CommonJS `server.js` exporting `register(ctx)` (routes with a mandatory `access`, `ctx.data`, `ctx.settings`, `ctx.hooks`, `ctx.discord`) and an ES module `client.js` exporting `register(ui)` (`ui.addPage` with a tab, `ui.actions.register`, `ui.api`, `ui.helpers`). Touch DEMS only through `ctx`/`ui`, store the member's Discord id in `userId`, write German texts, no inline styles/handlers, tokens and Bootstrap Icons only. Put the folder into `PLUGINS_DIR` (`/app/data/plugins` in Docker), restart, switch it on in System › Plugins. The reference is `plugins/event-submissions/` („Event einreichen“).
 
 Background (lifecycle, hooks, security model): [plugin-sdk](../concepts/plugin-sdk.md).
 
@@ -49,7 +49,7 @@ The browser can load only `client.js`, `client.css` and `assets/<name>` (one lev
 | Field | Rule (a break → „Ungültig: <Grund>“, never loaded) |
 |---|---|
 | `id` | `^[a-z][a-z0-9-]{2,31}$`, equal to the folder name; an official plugin's id is refused for a custom plugin |
-| `sdk` | integer; DEMS 3.4 supports `1`, another → „Inkompatibel (SDK <n>)“ |
+| `sdk` | number; DEMS 3.5 supports `1` and `1.1` (1.1 only adds to 1.0), another number → „Inkompatibel (SDK <n>)“, no number → „Ungültig: SDK-Version fehlt.“. The permissions `registrations:read` and `discord:roles` need `1.1` („Ungültig: Die Berechtigung „…“ braucht SDK 1.1.“). DEMS 3.4.x reports `1.1` as „Ungültig: SDK-Version fehlt.“ |
 | `version` | `x.y.z`. Changing it on a custom plugin makes the admin confirm again |
 | `name` / `description` / `author` | required ≤ 40 / optional ≤ 200 / optional ≤ 60 characters, German |
 | `server` / `client` | optional relative file names inside the folder (no `..`, `\`, `:`, leading `/`); must exist |
