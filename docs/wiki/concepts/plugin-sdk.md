@@ -3,7 +3,7 @@ id: plugin-sdk
 title: Plugin SDK — architecture, lifecycle, security model
 type: concept
 tags: [plugins, plugin-sdk, extensions, ctx, ui, hooks, permissions, trust, privacy, safe-mode, sdk-1]
-sources: [plugin-sdk, utils/checkin.js, plugins/event-submissions, plugins/custom-design, routes/plugins.js, routes/pluginStatic.js, routes/pluginTheme.js, routes/adminPlugins.js, public/design-boot.js, public/js/core/plugins.js, public/js/core/pluginTheme.js, public/js/core/passwordDialog.js, public/js/admin/system-plugins.js, routes/user.js, server.js, test/pluginClientGuards.test.js, docs/superpowers/specs/2026-11-19-plugin-sdk-design.md, docs/superpowers/specs/2026-11-20-custom-design-plugin-design.md]
+sources: [plugin-sdk, utils/checkin.js, plugins/event-submissions, plugins/custom-design, plugins/badges, routes/plugins.js, routes/pluginStatic.js, routes/pluginTheme.js, routes/adminPlugins.js, public/design-boot.js, public/js/core/plugins.js, public/js/core/pluginTheme.js, public/js/core/passwordDialog.js, public/js/admin/system-plugins.js, routes/user.js, server.js, test/pluginClientGuards.test.js, docs/superpowers/specs/2026-11-19-plugin-sdk-design.md, docs/superpowers/specs/2026-11-20-custom-design-plugin-design.md]
 depends_on: [server, data-layer]
 see_also: [write-plugin, security, frontend-app, bot, data-model, api-index, event-lifecycle]
 ---
@@ -34,7 +34,7 @@ Spec: [2026-11-19-plugin-sdk-design](../../superpowers/specs/2026-11-19-plugin-s
 | admin API | `routes/adminPlugins.js` | `GET /api/admin/plugins`, `PUT …/:id/enabled`, `PUT …/:id/settings`, `DELETE …/:id/data` — see [routes-admin](../modules/routes-admin.md) |
 | browser | `public/js/core/plugins.js`, `public/js/core/passwordDialog.js` | `loadPlugins()` (after the privacy consent), the `ui` object, pages at `#p/<id>`, navbar tabs, core reset password dialog `#passwordModal` — see [frontend-app](../modules/frontend-app.md) |
 | admin UI | `public/js/admin/system-plugins.js` | System › Plugins (cards, switch, trust dialog `#pluginTrustModal`, settings, „Daten löschen“) |
-| reference plugins | `plugins/event-submissions/`, `plugins/custom-design/` | „Event einreichen“ and „Design anpassen“ (official) |
+| reference plugins | `plugins/event-submissions/`, `plugins/custom-design/`, `plugins/badges/` | „Event einreichen“, „Design anpassen“ and „Badges“ (official; „Badges“ is the SDK 1.1 reference, see below) |
 
 ```mermaid
 flowchart LR
@@ -121,6 +121,18 @@ A new event counts as coming from `draft`, a stored one without status as `activ
 14. **Themes (`theme` permission) — who guarantees what.** `ctx.theme` stores filtered stylesheets in the core-owned collection `pluginThemes/<id>` (unreachable via `ctx.data`). Every stylesheet is checked by `checkThemeCss` (`plugin-sdk/themeCss.js`: ≤ 50 000 characters, no backslashes, balanced `{}`/`()`, only allow-listed functions and at-rules — `url()`, `@import`, `@font-face` refused; a comment does not exempt the name after it, since `center/**/image-set(` is a real `image-set()` for the browser) both when saved and **again when served** by `GET /theme.css` and `GET /theme-preview.css`, so the SDK guarantees no plugin theme can make the browser load external resources even though the CSP has `img-src https:`. Because `ctx.theme` is not request-bound, **password checks and audit logging are the plugin's responsibility**, using the SDK's `password: true` route option (checked by `routes/plugins.js` against `ADMIN_RESET_PASSWORD` with `safeEqual` and stripped from `req.body` before the handler runs; prompted in the browser by `#passwordModal` via `ui.api.<method>(path, body, { password: true })`) and `ctx.audit`. `?design=standard` in the query or hash disables `#custom-theme` before the first paint (`public/design-boot.js`), and `PLUGINS_SAFE_MODE=true` serves an empty `/theme.css`.
 
 Admin-side rules (reset password for secrets, audit actions, secrets only as `{ set }`): [security](security.md).
+
+## Official plugin „Badges“ (SDK 1.1, #162)
+
+`plugins/badges/`: `rules.js` (pure: `validateBadge`, `ruleText`, `countFor`, `dueAwards`, `ICONS` — 52 Bootstrap Icons checked against the vendored font — and the German texts with Discord markdown escaped), `engine.js` (two in-memory queues: every write on `serial`, roles and messages afterwards on a background effects queue), `server.js` (admin routes below `/api/plugins/badges`: `GET/POST /badges`, `PUT/DELETE /badges/:id`, `GET /badges/:id/holders`, `POST /badges/:id/awards`, `DELETE /badges/:id/awards/:userId`, `POST /badges/:id/roles/retry`, `GET /meta`, `GET /members?q=`; hooks `event.ended` and `registration.checkedIn`; the profile provider), `client.js` + `assets/view.js` + `client.css` (admin tab „Badges“).
+
+- Data: `badges/<id>` `{ name ≤ 40, description ≤ 200, icon, color, rule, roleId, createdAt/By, updatedAt/By }` (≤ 100), `rule` = `{ type: 'manual' }` or `{ type: 'participations'|'checkins', count 1–1000, category|null }`; `awards/<badgeId>_<userId>` `{ badgeId, userId, awardedAt, awardedBy ('rule' or admin id), roleAdded, roleSynced, revokedAt, revokedBy }`. A revoked award stays as a tombstone, so a rule never hands it back; awarding by hand again clears it.
+- Teilnahme = own registration `accepted` for an `archived` event; Check-in = own `checkedIn` registration of an event that is not `cancelled`; `category` set → exactly that event category. Guest places do not count.
+- Triggers: `event.ended` (the event's accepted members), `registration.checkedIn` (that member), creating a rule badge or changing its rule/count/category (everyone, in the background — a **backfill without DM or channel post**, roles yes), awarding by hand. Rules never revoke. One audit entry `plugin:badges:badge.ruleAwarded` per badge and run („Badge „…“: n Mitglieder automatisch ausgezeichnet“); manual actions audit `badge.created/updated/deleted/awarded/revoked`.
+- Roles: a badge's role comes with the award and goes with the revoke, but only where the plugin gave it (`roleAdded`); while another active badge of the member carries the same role it stays and that award takes it over. Deleting a badge or changing its role moves holders along. A role that could not be given (member left the server, bot offline, role now refused by the guard) leaves `roleSynced: false`; the card shows „Rolle bei n Mitgliedern noch nicht vergeben“ + „Erneut versuchen“. On account deletion the core purges the awards before `member.deleted`, so **the Discord roles stay** on the member. A role that is also an event role (`assignRoleId`) is allowed, but the editor warns that the event clean-up takes it away.
+- Settings: `announceChannel` (post „**<Mitglied>** hat das Badge **<Name>** erhalten.“) and `dmOnAward` (DM „Du hast das Badge **<Name>** erhalten!“ + „Zum Profil“; manifest settings have no default, so it starts off).
+- Profile: active awards as reached badges, rule badges not reached yet with `progress`; manual badges not awarded and revoked ones are hidden.
+- Dev seed (`dev/seedData.js`): „Gründungsmitglied“ (manual, awarded to Mori) and „Stammgast“ (from 2 participations).
 
 ## Data and privacy
 
