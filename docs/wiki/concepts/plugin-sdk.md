@@ -81,7 +81,7 @@ Routes, own data, own settings, `member.deleted`, the page/tab, `ctx.audit` and 
 
 ## Hooks
 
-Emitted by the core **after** the write is committed, never awaited by the request; each plugin has its own promise chain (handlers run in emission order, one slow plugin never delays another), each handler gets its own `structuredClone` of the payload, runs in `try/catch` (error → log + `lastError`), > 10 s logs a warning. Event payloads: public event shape (`toPublicEvent`, no `checkinCode`) + `origin`.
+Emitted by the core **after** the write is committed, never awaited by the request; each plugin has its own promise chain (handlers run in emission order, one slow plugin never delays another), each handler gets its own `structuredClone` of the payload, runs in `try/catch` (error → log + `lastError`), > 10 s logs a warning, after 30 s it counts as failed („Hook <name> hat nicht innerhalb von 30 s geantwortet.“ → log + `lastError`) and the plugin's queue goes on — the handler cannot be stopped and keeps running in the background. A plugin registers at most 20 handlers per hook (`MAX_HANDLERS_PER_HOOK`; the 21st makes `register` fail), which bounds the synchronous copies one emission makes. Event payloads: public event shape (`toPublicEvent`, no `checkinCode`) + `origin`.
 
 | Hook | Payload | Emitted by (pinned by `test/pluginHookEmission.test.js`) |
 |---|---|---|
@@ -107,7 +107,7 @@ A new event counts as coming from `draft`, a stored one without status as `activ
 8. **Data.** Own namespace `plugin:<id>:<coll>` per plugin; events only in the public shape; no raw DB.
 9. **Discord.** `allowedMentions: { parse: [] }` always; DMs only to members with a `users` document and through the bot center's DM switch (`sendAutomaticDM`); channel posts only into the channel of one of the plugin's own `channel` settings; ≤ 200 DMs and ≤ 30 posts per plugin per sliding 10 minutes (in memory); link buttons only to `<BASE_URL>/#…`.
 10. **Member data.** Reserved field `userId` → account deletion purges it in every plugin (on, off, orphaned) without relying on the author; system reset target `pluginData` (and `users`) wipes all plugin data and settings, `pluginState` stays.
-11. **Failure isolation.** Every plugin call is wrapped; start waits ≤ 5 s per plugin. Known limit: a synchronous endless loop blocks the whole process ([known-issues](../reference/known-issues.md)).
+11. **Failure isolation.** Every plugin call is wrapped and gets a timeout: `register` 5 s, `onDisable` 2 s, each hook handler 30 s. Known limit: a synchronous endless loop blocks the whole process ([known-issues](../reference/known-issues.md)).
 12. **Static files.** Allow-list (`client.js`, `client.css`, `assets/<name>.{js,css,png,jpg,jpeg,webp,gif,json,woff2}`), no HTML/SVG, no listing, traversal and symlink escapes refused, `nosniff`.
 13. **Dependencies.** Official plugins use only Node built-ins and their own files (no `node_modules`, guard test). Custom plugins may bring their own — the operator's risk.
 14. **Themes (`theme` permission) — who guarantees what.** `ctx.theme` stores filtered stylesheets in the core-owned collection `pluginThemes/<id>` (unreachable via `ctx.data`). Every stylesheet is checked by `checkThemeCss` (`plugin-sdk/themeCss.js`: ≤ 50 000 characters, no backslashes, balanced `{}`/`()`, only allow-listed functions and at-rules — `url()`, `@import`, `@font-face` refused; a comment does not exempt the name after it, since `center/**/image-set(` is a real `image-set()` for the browser) both when saved and **again when served** by `GET /theme.css` and `GET /theme-preview.css`, so the SDK guarantees no plugin theme can make the browser load external resources even though the CSP has `img-src https:`. Because `ctx.theme` is not request-bound, **password checks and audit logging are the plugin's responsibility**, using the SDK's `password: true` route option (checked by `routes/plugins.js` against `ADMIN_RESET_PASSWORD` with `safeEqual` and stripped from `req.body` before the handler runs; prompted in the browser by `#passwordModal` via `ui.api.<method>(path, body, { password: true })`) and `ctx.audit`. `?design=standard` in the query or hash disables `#custom-theme` before the first paint (`public/design-boot.js`), and `PLUGINS_SAFE_MODE=true` serves an empty `/theme.css`.
@@ -125,7 +125,8 @@ Admin-side rules (reset password for secrets, audit actions, secrets only as `{ 
 | What | Limit |
 |---|---|
 | `register(ctx)` / each `onDisable` | 5 s / 2 s |
-| slow hook warning | 10 s (handler keeps running) |
+| slow hook warning / hook timeout | 10 s / 30 s (then the queue goes on; the handler keeps running) |
+| handlers per hook | 20 per plugin |
 | DMs / channel posts | 200 / 30 per plugin per 10 min; text 1–2000, link label 1–80, link URL ≤ 512 |
 | route path | starts with `/`, ≤ 200 characters, no `*`, `?`, `#` or whitespace; same method + path twice → `register` fails |
 | collection name / doc id | `^[a-z][a-zA-Z0-9]{0,31}$` / 1–128 characters without `/` |

@@ -109,7 +109,7 @@ Every document that belongs to a member stores that member's Discord id as a str
 | `event.deleted` | `{ eventId, origin }` | `events:read` |
 | `member.deleted` | `{ userId }` | none |
 
-Handlers run after the core saved the change, one after another per plugin, on a copy of the payload; they cannot change or stop anything. A throw is logged and shown as „Letzter Fehler“; > 10 s logs a warning. Ignore events that are not yours (check `event.origin.plugin === ctx.plugin.id` if you created them). Saving a new event as active emits `event.created`, then `event.published`.
+Handlers run after the core saved the change, one after another per plugin, on a copy of the payload; they cannot change or stop anything. A throw is logged and shown as „Letzter Fehler“; > 10 s logs a warning, after 30 s the handler counts as failed (also „Letzter Fehler“) and your next queued handler runs. At most 20 handlers per hook. Ignore events that are not yours (check `event.origin.plugin === ctx.plugin.id` if you created them). Saving a new event as active emits `event.created`, then `event.published`.
 
 ### Discord messages and their limits
 

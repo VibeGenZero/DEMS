@@ -35,6 +35,7 @@ afterEach(async () => {
     hooks.setHookGate(null);
     hooks.setHookErrorReporter(null);
     hooks.setSlowHookMs(10000);
+    hooks.setHookTimeoutMs(hooks.DEFAULT_HOOK_TIMEOUT_MS);
     console.error = originalError;
     console.warn = originalWarn;
 });
@@ -170,6 +171,31 @@ test('a handler slower than the threshold logs a warning', async () => {
     await hooks.whenHooksIdle();
     assert.equal(warnings.length, 1);
     assert.match(warnings[0], /\[plugin:alpha\] Hook event\.created braucht länger als/);
+});
+
+test('a handler that never settles is reported after the timeout and the queue goes on', { timeout: 2000 }, async () => {
+    const reported = [];
+    const seen = [];
+    hooks.setHookTimeoutMs(30);
+    hooks.setHookErrorReporter((pluginId, message) => reported.push([pluginId, message]));
+    hooks.onHook('alpha', 'event.created', () => new Promise(() => {}));
+    hooks.onHook('alpha', 'event.published', () => { seen.push('published'); });
+    hooks.emitHook('event.created', { event: { id: 'e1' } });
+    hooks.emitHook('event.published', { event: { id: 'e1' } });
+    await hooks.whenHooksIdle();
+    assert.deepEqual(seen, ['published']);
+    assert.deepEqual(reported, [['alpha', 'Hook event.created hat nicht innerhalb von 0,03 s geantwortet.']]);
+    assert.ok(errors.some(line => line.includes('[plugin:alpha]')));
+});
+
+test('a plugin registers at most MAX_HANDLERS_PER_HOOK handlers per hook', () => {
+    assert.equal(hooks.MAX_HANDLERS_PER_HOOK, 20);
+    for (let i = 0; i < 20; i++) hooks.onHook('alpha', 'event.created', () => {});
+    assert.throws(() => hooks.onHook('alpha', 'event.created', () => {}),
+        { message: 'Hook event.created: höchstens 20 Handler pro Plugin.' });
+    // the limit counts per hook name and per plugin
+    hooks.onHook('alpha', 'event.published', () => {});
+    hooks.onHook('beta', 'event.created', () => {});
 });
 
 test('toPluginEvent drops checkinCode and aiNotes and keeps origin', () => {

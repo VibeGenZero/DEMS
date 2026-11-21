@@ -6,7 +6,11 @@
  * run one after another in emission order while a slow plugin never delays
  * another one. Each handler gets its own deep copy of the payload, runs in
  * `try/catch`, and is skipped when the gate (the host's "is this plugin
- * enabled") says no at the moment it is about to run.
+ * enabled") says no at the moment it is about to run. A handler that has not
+ * settled after the timeout is reported and the queue goes on (it cannot be
+ * stopped, so it keeps running in the background); a plugin registers at most
+ * `MAX_HANDLERS_PER_HOOK` handlers per hook, which bounds the copies one
+ * emission makes.
  */
 
 const HOOK_NAMES = [
@@ -18,6 +22,8 @@ const HOOK_NAMES = [
 const EVENT_HOOKS = HOOK_NAMES.filter(name => name.startsWith('event.'));
 
 const DEFAULT_SLOW_HOOK_MS = 10000;
+const DEFAULT_HOOK_TIMEOUT_MS = 30000;
+const MAX_HANDLERS_PER_HOOK = 20;
 
 /** @type {Map<string, Map<string, Function[]>>} pluginId -> hook name -> handlers */
 const handlers = new Map();
@@ -29,8 +35,11 @@ const generations = new Map();
 let gate = null;
 let errorReporter = null;
 let slowHookMs = DEFAULT_SLOW_HOOK_MS;
+let hookTimeoutMs = DEFAULT_HOOK_TIMEOUT_MS;
 let pending = 0;
 let idleWaiters = [];
+
+const seconds = ms => String(ms / 1000).replace('.', ',');
 
 function assertHookName(name) {
     if (!HOOK_NAMES.includes(name)) throw new Error(`Unknown plugin hook: ${name}`);
@@ -42,6 +51,7 @@ function assertHookName(name) {
  * @param {string} pluginId
  * @param {string} name -> One of HOOK_NAMES; anything else throws.
  * @param {(payload: object) => (void|Promise<void>)} handler
+ * @throws {Error} -> Also beyond `MAX_HANDLERS_PER_HOOK` handlers of the plugin for this hook (German, shown as register error).
  */
 function onHook(pluginId, name, handler) {
     assertHookName(name);
@@ -49,7 +59,12 @@ function onHook(pluginId, name, handler) {
     if (!handlers.has(pluginId)) handlers.set(pluginId, new Map());
     const byName = handlers.get(pluginId);
     if (!byName.has(name)) byName.set(name, []);
-    byName.get(name).push(handler);
+    const list = byName.get(name);
+    // emitHook copies the payload once per handler, synchronously in the core's request
+    if (list.length >= MAX_HANDLERS_PER_HOOK) {
+        throw new Error(`Hook ${name}: höchstens ${MAX_HANDLERS_PER_HOOK} Handler pro Plugin.`);
+    }
+    list.push(handler);
 }
 
 /**
@@ -77,6 +92,11 @@ function setSlowHookMs(ms) {
     slowHookMs = ms;
 }
 
+/** Tests only: time in milliseconds after which a handler counts as failed and the queue goes on. */
+function setHookTimeoutMs(ms) {
+    hookTimeoutMs = ms;
+}
+
 function isAllowed(pluginId) {
     if (!gate) return true;
     try {
@@ -98,16 +118,24 @@ function reportError(pluginId, name, err) {
 
 async function runHandler(pluginId, name, handler, payload, generation) {
     if ((generations.get(pluginId) || 0) !== generation || !isAllowed(pluginId)) return;
-    const timer = setTimeout(() => {
+    const slowTimer = setTimeout(() => {
         console.warn(`⚠️ [plugin:${pluginId}] Hook ${name} braucht länger als ${slowHookMs / 1000} s`);
     }, slowHookMs);
-    timer.unref?.();
+    slowTimer.unref?.();
+    let timeoutTimer;
+    const timedOut = new Promise((_, reject) => {
+        timeoutTimer = setTimeout(() => {
+            reject(new Error(`Hook ${name} hat nicht innerhalb von ${seconds(hookTimeoutMs)} s geantwortet.`));
+        }, hookTimeoutMs);
+    });
     try {
-        await handler(payload);
+        // A late settle of the handler is ignored: race already listens to it, so nothing goes unhandled
+        await Promise.race([Promise.resolve().then(() => handler(payload)), timedOut]);
     } catch (err) {
         reportError(pluginId, name, err);
     } finally {
-        clearTimeout(timer);
+        clearTimeout(slowTimer);
+        clearTimeout(timeoutTimer);
     }
 }
 
@@ -182,11 +210,14 @@ function emitEventStatusChange({ eventId, before, after }) {
 module.exports = {
     HOOK_NAMES,
     EVENT_HOOKS,
+    DEFAULT_HOOK_TIMEOUT_MS,
+    MAX_HANDLERS_PER_HOOK,
     onHook,
     clearHooks,
     setHookGate,
     setHookErrorReporter,
     setSlowHookMs,
+    setHookTimeoutMs,
     emitHook,
     whenHooksIdle,
     toPluginEvent,
