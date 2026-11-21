@@ -131,6 +131,7 @@ function register(ctx) {
         return engine.serial(async () => {
             const badge = await ctx.data.update(BADGES, stored.id, { ...value, updatedAt: nowIso(), updatedBy: user.id });
             await ctx.audit('badge.updated', user.id, `Badge „${badge.name}“ geändert`, badge.id);
+            if (badge.roleId !== stored.roleId) engine.moveRole(badge, stored.roleId);
             if (isRuleBadge(badge) && !sameRule(badge.rule, stored.rule)) backfill(user.id);
             return toView(badge, await engine.awardsOfBadge(badge.id));
         });
@@ -139,11 +140,15 @@ function register(ctx) {
     ctx.routes.delete('/badges/:id', ADMIN, async ({ user, params }) => {
         const badge = await findBadge(params.id);
         await engine.serial(async () => {
-            for (const entry of await engine.awardsOfBadge(badge.id)) await ctx.data.delete('awards', entry.id);
-            await ctx.data.delete(BADGES, badge.id);
+            await engine.removeBadge(badge);
             await ctx.audit('badge.deleted', user.id, `Badge „${badge.name}“ gelöscht`, badge.id);
         });
         return { success: true };
+    });
+
+    ctx.routes.post('/badges/:id/roles/retry', ADMIN, async ({ params }) => {
+        const badge = await findBadge(params.id);
+        return { queued: await engine.serial(() => engine.retryRoles(badge)) };
     });
 
     ctx.routes.get('/badges/:id/holders', ADMIN, async ({ params }) => {
@@ -171,7 +176,7 @@ function register(ctx) {
         await engine.serial(async () => {
             const existing = await engine.findAward(badge.id, userId);
             if (existing && isActive(existing)) throw ctx.httpError(400, MESSAGES.alreadyHolds);
-            await engine.award({ badge, userId, by: user.id });
+            await engine.award({ badge, userId, by: user.id, notify: true });
             await ctx.audit('badge.awarded', user.id, `Badge „${badge.name}“ an ${member.name} vergeben`, badge.id);
         });
         return { success: true };

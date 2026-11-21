@@ -290,3 +290,116 @@ test('a check-in and a manual award at the same time create one award', async ()
     await sleep(300);
     assert.deepEqual(await holderIds(badge.id), ids('member'));
 });
+
+// ── Effects: roles, DM, channel post ────────────────────────────────────
+
+const { CHANNEL_ID } = require('../dev/mockGuild');
+
+/** Lines of the mock Discord log that contain `text`. */
+const linesWith = (text) => server.output().split('\n').filter(line => line.includes(text)).length;
+const gave = (role, personaId) => `Rolle @${role} an ${persona(personaId).displayName} (${persona(personaId).userId}) vergeben`;
+const took = (role, personaId) => `Rolle @${role} von ${persona(personaId).displayName} (${persona(personaId).userId}) entfernt`;
+const award = async (badgeId, userId) => json(await admin.send('POST', `${API}/badges/${badgeId}/awards`, { userId }));
+const revoke = async (badgeId, userId) => json(await admin.send('DELETE', `${API}/badges/${badgeId}/awards/${userId}`));
+const settle = () => sleep(300);
+
+test('awarding a badge with a role gives it once; revoking takes it only if the badge gave it', async () => {
+    const vip = await createBadge({ name: 'VIP-Badge', roleId: ROLE_ID.VIP });
+    const before = linesWith(gave('VIP', 'member'));
+    await award(vip.id, persona('member').userId);
+    await eventually(() => linesWith(gave('VIP', 'member')), count => count === before + 1, 'Tom got VIP');
+    assert.equal((await holdersOf(vip.id))[0].roleSynced, true);
+
+    // Lena has Raid-Team already: the badge neither gives nor takes it
+    const raid = await createBadge({ name: 'Raid-Badge', roleId: ROLE_ID.RAID_TEAM });
+    await award(raid.id, persona('raider').userId);
+    await revoke(raid.id, persona('raider').userId);
+    await settle();
+    assert.equal(linesWith(gave('Raid-Team', 'raider')), 0);
+    assert.equal(linesWith(took('Raid-Team', 'raider')), 0);
+
+    const takenBefore = linesWith(took('VIP', 'member'));
+    await revoke(vip.id, persona('member').userId);
+    await eventually(() => linesWith(took('VIP', 'member')), count => count === takenBefore + 1, 'Tom lost VIP');
+    for (const badge of [vip, raid]) await json(await admin.send('DELETE', `${API}/badges/${badge.id}`));
+});
+
+test('two badges with the same role: the role stays while one of them is held', async () => {
+    const first = await createBadge({ name: 'Eins', roleId: ROLE_ID.EVENT });
+    const second = await createBadge({ name: 'Zwei', roleId: ROLE_ID.EVENT });
+    const tom = persona('member').userId;
+    const gaveBefore = linesWith(gave('Event-Teilnehmer', 'member'));
+    const tookBefore = linesWith(took('Event-Teilnehmer', 'member'));
+    await award(first.id, tom);
+    await award(second.id, tom);
+    await eventually(() => linesWith(gave('Event-Teilnehmer', 'member')), count => count === gaveBefore + 1, 'given once');
+    await revoke(first.id, tom);
+    await settle();
+    assert.equal(linesWith(took('Event-Teilnehmer', 'member')), tookBefore, 'the second badge still carries it');
+    await revoke(second.id, tom);
+    await eventually(() => linesWith(took('Event-Teilnehmer', 'member')), count => count === tookBefore + 1, 'taken with the last badge');
+    for (const badge of [first, second]) await json(await admin.send('DELETE', `${API}/badges/${badge.id}`));
+});
+
+test('deleting a badge takes back the roles it gave', async () => {
+    const badge = await createBadge({ name: 'Weg damit', roleId: ROLE_ID.VIP });
+    const tookBefore = linesWith(took('VIP', 'member'));
+    await award(badge.id, persona('member').userId);
+    await eventually(async () => (await holdersOf(badge.id))[0], holder => holder && holder.roleSynced, 'role given');
+    await settle();
+    await json(await admin.send('DELETE', `${API}/badges/${badge.id}`));
+    await eventually(() => linesWith(took('VIP', 'member')), count => count === tookBefore + 1, 'Tom lost VIP');
+});
+
+test('changing the role moves holders from the old role to the new one', async () => {
+    const badge = await createBadge({ name: 'Umzug', roleId: ROLE_ID.VIP });
+    const tom = persona('member').userId;
+    const tookVip = linesWith(took('VIP', 'member'));
+    const gaveMember = linesWith(gave('Mitglied', 'member'));
+    const gaveRaid = linesWith(gave('Raid-Team', 'member'));
+    await award(badge.id, tom);
+    await settle();
+    await json(await admin.send('PUT', `${API}/badges/${badge.id}`, { ...BADGE, name: 'Umzug', roleId: ROLE_ID.RAID_TEAM }));
+    await eventually(() => linesWith(took('VIP', 'member')), count => count === tookVip + 1, 'VIP taken');
+    await eventually(() => linesWith(gave('Raid-Team', 'member')), count => count === gaveRaid + 1, 'Raid-Team given');
+    assert.equal(linesWith(gave('Mitglied', 'member')), gaveMember);
+    await json(await admin.send('DELETE', `${API}/badges/${badge.id}`));
+});
+
+test('dmOnAward and announceChannel send one DM and one post per new award, never on a backfill', async () => {
+    const settings = (values) => admin.send('PUT', '/api/admin/plugins/badges/settings', { values });
+    await json(await settings({ dmOnAward: true, announceChannel: CHANNEL_ID.GENERAL }));
+    try {
+        const badge = await createBadge({ name: 'Gemeldet' });
+        const dmBefore = linesWith('DM an Mori');
+        const postBefore = linesWith('Plugin-Nachricht in');
+        await award(badge.id, persona('admin').userId);
+        await eventually(() => linesWith('DM an Mori'), count => count === dmBefore + 1, 'one DM');
+        await eventually(() => linesWith('Plugin-Nachricht in'), count => count === postBefore + 1, 'one post');
+        assert.ok(server.output().includes('hat das Badge **Gemeldet** erhalten.'));
+        assert.ok(server.output().includes('Du hast das Badge **Gemeldet** erhalten!'));
+
+        await archivedEventWith('badge-silent', 'Silent-T4', ['admin']);
+        const ruled = await createBadge({ name: 'Leise', rule: { type: 'participations', count: 1, category: 'Silent-T4' } });
+        await eventually(() => holderIds(ruled.id), value => value.length === 1, 'backfilled');
+        await settle();
+        assert.equal(linesWith('DM an Mori'), dmBefore + 1, 'no DM on a backfill');
+        assert.equal(linesWith('Plugin-Nachricht in'), postBefore + 1, 'no post on a backfill');
+        for (const entry of [badge, ruled]) await json(await admin.send('DELETE', `${API}/badges/${entry.id}`));
+    } finally {
+        await json(await settings({ dmOnAward: false, announceChannel: '' }));
+    }
+});
+
+test('a role that cannot be given shows as unsynced, and retry queues it again', async () => {
+    const { db, doc, setDoc } = store();
+    await setDoc(doc(db, 'users', FORMER), { id: FORMER, username: 'ehemalig', displayName: 'Ex-Mitglied' });
+    const badge = await createBadge({ name: 'Verlassen', roleId: ROLE_ID.VIP });
+    await award(badge.id, FORMER);
+    await eventually(async () => (await listBadges()).find(entry => entry.id === badge.id).unsynced, value => value === 1, 'unsynced');
+    assert.equal((await holdersOf(badge.id))[0].roleSynced, false);
+    assert.deepEqual(await json(await admin.send('POST', `${API}/badges/${badge.id}/roles/retry`, {})), { queued: 1 });
+    await settle();
+    assert.equal((await listBadges()).find(entry => entry.id === badge.id).unsynced, 1, 'still not on the server');
+    await json(await admin.send('DELETE', `${API}/badges/${badge.id}`));
+});
