@@ -28,7 +28,8 @@ test('every dangerous permission is refused, and each is a real discord.js flag'
     assert.deepEqual(FORBIDDEN_ROLE_PERMISSIONS, [
         'Administrator', 'ManageGuild', 'ManageRoles', 'ManageChannels', 'ManageWebhooks', 'ManageGuildExpressions',
         'ManageEvents', 'ManageMessages', 'ManageThreads', 'ManageNicknames', 'KickMembers', 'BanMembers',
-        'ModerateMembers', 'MentionEveryone', 'ViewAuditLog', 'ViewGuildInsights'
+        'ModerateMembers', 'MentionEveryone', 'ViewAuditLog', 'ViewGuildInsights',
+        'MuteMembers', 'DeafenMembers', 'MoveMembers', 'PinMessages', 'BypassSlowmode', 'ViewCreatorMonetizationAnalytics'
     ]);
     for (const permission of FORBIDDEN_ROLE_PERMISSIONS) {
         assert.equal(typeof PermissionFlagsBits[permission], 'bigint', permission);
@@ -40,3 +41,12 @@ test('a malformed role is refused', () => {
     assert.equal(isPluginAssignableRole(null, opts), false);
     assert.equal(isPluginAssignableRole(role({ permissions: undefined }), opts), false);
 });
+
+test('a role that gets a forbidden right through a channel overwrite is refused; plain channel access is fine', () => {
+    assert.equal(isPluginAssignableRole(role({ channelAllows: ['ViewChannel', 'SendMessages', 'Connect'] }), opts), true);
+    for (const permission of ['ManageMessages', 'ManageChannels', 'MuteMembers', 'MoveMembers', 'PinMessages']) {
+        assert.equal(isPluginAssignableRole(role({ channelAllows: ['ViewChannel', permission] }), opts), false, permission);
+    }
+    assert.equal(isPluginAssignableRole(role({ channelAllows: 'ManageMessages' }), opts), false, 'malformed overwrites refuse');
+});
+
