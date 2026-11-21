@@ -1,6 +1,7 @@
 /**
- * Server side of „Badges“: admins create badges and award them by hand;
- * members see their badges on the profile.
+ * Server side of „Badges“: admins create badges and award them by hand or
+ * by rule (participations when an event ends, check-ins, and a backfill when
+ * a rule is saved); members see their badges on the profile.
  *
  * Every route is admin-only and lives below `/api/plugins/badges`; every
  * write goes through the engine's serial queue and is audited. Uses only
@@ -22,6 +23,8 @@ const MESSAGES = {
 };
 
 const nowIso = () => new Date().toISOString();
+const isRuleBadge = badge => Boolean(badge.rule && badge.rule.type !== 'manual');
+const sameRule = (a, b) => JSON.stringify(a || null) === JSON.stringify(b || null);
 const isDocId = id => typeof id === 'string' && id.length >= 1 && id.length <= MAX_ID_LENGTH && !id.includes('/');
 const distinctSorted = values => [...new Set(values)].sort((a, b) => a.localeCompare(b, 'de'));
 
@@ -75,7 +78,22 @@ function register(ctx) {
         return member && member.name ? member.name : 'Unbekanntes Mitglied';
     }
 
+    /** A backfill after an admin saved a rule: in the background, never inside the route's time. */
+    function backfill(adminId) {
+        engine.evaluate({ notify: false, by: adminId })
+            .catch(err => ctx.log.error('Nachvergabe fehlgeschlagen:', err && err.message ? err.message : err));
+    }
+
     ctx.profile.badges(({ userId }) => engine.profileBadges(userId));
+
+    // Participations count once the event is over (archived)
+    ctx.hooks.on('event.ended', async ({ event }) => {
+        const registrations = await ctx.registrations.list({ eventId: event.id });
+        const userIds = [...new Set(registrations.filter(entry => entry.status === 'accepted').map(entry => entry.userId))];
+        await engine.evaluate({ userIds, notify: true });
+    });
+
+    ctx.hooks.on('registration.checkedIn', ({ registration }) => engine.evaluate({ userIds: [registration.userId], notify: true }));
 
     ctx.routes.get('/badges', ADMIN, async () => {
         const [badges, awards] = await Promise.all([engine.listBadges(), engine.listAwards()]);
@@ -101,6 +119,7 @@ function register(ctx) {
             const at = nowIso();
             const badge = await ctx.data.add(BADGES, { ...value, createdAt: at, createdBy: user.id, updatedAt: at, updatedBy: user.id });
             await ctx.audit('badge.created', user.id, `Badge „${badge.name}“ angelegt`, badge.id);
+            if (isRuleBadge(badge)) backfill(user.id);
             return toView(badge, []);
         });
     });
@@ -112,6 +131,7 @@ function register(ctx) {
         return engine.serial(async () => {
             const badge = await ctx.data.update(BADGES, stored.id, { ...value, updatedAt: nowIso(), updatedBy: user.id });
             await ctx.audit('badge.updated', user.id, `Badge „${badge.name}“ geändert`, badge.id);
+            if (isRuleBadge(badge) && !sameRule(badge.rule, stored.rule)) backfill(user.id);
             return toView(badge, await engine.awardsOfBadge(badge.id));
         });
     });

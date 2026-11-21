@@ -5,7 +5,7 @@
  * same member can never award a badge twice. Uses only the `ctx` it is given
  * and `rules.js`.
  */
-const { awardId, isActive, progressFor, countFor, ruleText } = require('./rules');
+const { awardId, isActive, progressFor, countFor, ruleText, dueAwards } = require('./rules');
 
 const BADGES = 'badges';
 const AWARDS = 'awards';
@@ -25,9 +25,12 @@ function createQueue() {
 
 /**
  * @param {object} ctx -> The plugin context of the SDK.
+ * @param {object} [options]
+ * @param {(badge: object, award: object, options: { notify: boolean }) => void} [options.onAwarded] -> Called after an
+ *   award is stored (roles and messages, see server.js); must not throw.
  * @returns {object} -> See the methods below.
  */
-function createEngine(ctx) {
+function createEngine(ctx, { onAwarded = () => {} } = {}) {
     const serial = createQueue();
 
     /** @returns {Promise<object[]>} -> Every badge, oldest first. */
@@ -104,7 +107,39 @@ function createEngine(ctx) {
         return entries;
     }
 
-    return { serial, listBadges, listAwards, awardsOfBadge, findAward, award, revoke, profileBadges };
+    /**
+     * Award every rule badge that is due, inside `serial`; one audit entry per badge that awarded someone.
+     *
+     * @param {object} [input]
+     * @param {string[]|null} [input.userIds] -> Only these members; null = everyone with a registration.
+     * @param {boolean} [input.notify] -> DM and channel post for each new award (false for a backfill).
+     * @param {string} [input.by] -> Who triggered it for the audit log: an admin id or 'system'.
+     * @returns {Promise<Map<string, number>>} -> New awards per badge id.
+     */
+    function evaluate({ userIds = null, notify = false, by = 'system' } = {}) {
+        return serial(async () => {
+            const counts = new Map();
+            if (Array.isArray(userIds) && userIds.length === 0) return counts;
+            const single = Array.isArray(userIds) && userIds.length === 1;
+            const [badges, awards, registrations, events] = await Promise.all([
+                listBadges(), listAwards(), ctx.registrations.list(single ? { userId: userIds[0] } : {}), ctx.events.list()
+            ]);
+            for (const { badgeId, userId } of dueAwards({ badges, awards, registrations, events, userIds })) {
+                const badge = badges.find(entry => entry.id === badgeId);
+                const stored = await award({ badge, userId, by: 'rule' });
+                onAwarded(badge, stored, { notify });
+                counts.set(badgeId, (counts.get(badgeId) || 0) + 1);
+            }
+            for (const [badgeId, count] of counts) {
+                const badge = badges.find(entry => entry.id === badgeId);
+                const members = count === 1 ? '1 Mitglied' : `${count} Mitglieder`;
+                await ctx.audit('badge.ruleAwarded', by, `Badge „${badge.name}“: ${members} automatisch ausgezeichnet`, badgeId);
+            }
+            return counts;
+        });
+    }
+
+    return { serial, listBadges, listAwards, awardsOfBadge, findAward, award, revoke, profileBadges, evaluate };
 }
 
 module.exports = { createEngine, createQueue, BADGES, AWARDS };

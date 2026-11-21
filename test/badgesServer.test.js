@@ -172,3 +172,121 @@ test('account deletion removes the member from holders and counts', async () => 
     await json(await admin.send('DELETE', `${API}/badges/${badge.id}`));
 });
 
+
+// ── Automatic rules ─────────────────────────────────────────────────────
+
+/** Poll until `check(value)` holds (hooks and backfills run in the background), at most ~3 s. */
+async function eventually(read, check, label) {
+    let value = await read();
+    for (let i = 0; i < 60 && !check(value); i++) {
+        await sleep(50);
+        value = await read();
+    }
+    assert.ok(check(value), `${label}: ${JSON.stringify(value)}`);
+    return value;
+}
+
+/** An archived event of `category` with accepted registrations of the given personas, straight into the database. */
+async function archivedEventWith(key, category, personaIds) {
+    const { db, doc, setDoc } = store();
+    const at = new Date(Date.now() - 10 * DAY).toISOString();
+    await setDoc(doc(db, 'events', key), { title: key, status: 'archived', startDate: at, createdAt: at, category });
+    for (const personaId of personaIds) {
+        await setDoc(doc(db, 'registrations', `${key}-${personaId}`), {
+            eventId: key, userId: persona(personaId).userId, userName: personaId, status: 'accepted', createdAt: at
+        });
+    }
+}
+
+const holderIds = async (badgeId) => (await holdersOf(badgeId)).map(holder => holder.userId).sort();
+const ids = (...personaIds) => personaIds.map(id => persona(id).userId).sort();
+
+/** An active event with instant approval that the given personas registered for. */
+async function eventWithMembers(fields, personaIds) {
+    const event = await json(await admin.send('POST', '/api/admin/events', { status: 'active', approvalMode: 'instant', ...fields }));
+    for (const personaId of personaIds) {
+        await json(await (await loginAt(server.baseUrl, personaId)).send('POST', `/api/events/${event.id}/register`, {}));
+    }
+    return event;
+}
+
+async function registrationOf(eventId, personaId) {
+    const list = await json(await admin.request(`/api/admin/events/${eventId}/registrations`));
+    return list.data.find(reg => reg.userId === persona(personaId).userId);
+}
+
+test('ending an event awards a participation badge once, also after it is archived again', async () => {
+    const badge = await createBadge({ name: 'Quiz-Fan', rule: { type: 'participations', count: 1, category: 'Quiz-T3' } });
+    const event = await eventWithMembers({ title: 'Quiz T3', category: 'Quiz-T3', startDate: new Date(Date.now() + DAY).toISOString() }, ['raider']);
+    await sleep(200);
+    assert.deepEqual(await holderIds(badge.id), [], 'not before the end');
+
+    await json(await admin.send('POST', `/api/admin/events/${event.id}/end`, {}));
+    const [first] = await eventually(() => holdersOf(badge.id), list => list.length === 1, 'raider holds it');
+    assert.deepEqual([first.userId, first.byRule], [persona('raider').userId, true]);
+    const ruleEntries = (await auditEntries('badge.ruleAwarded')).filter(entry => entry.targetId === badge.id);
+    assert.deepEqual(ruleEntries.map(entry => entry.details), ['Badge „Quiz-Fan“: 1 Mitglied automatisch ausgezeichnet']);
+
+    await json(await admin.send('PUT', `/api/admin/events/${event.id}/status`, { status: 'active' }));
+    await json(await admin.send('POST', `/api/admin/events/${event.id}/end`, {}));
+    await sleep(300);
+    const again = await holdersOf(badge.id);
+    assert.deepEqual(again.map(holder => [holder.userId, holder.awardedAt]), [[first.userId, first.awardedAt]]);
+    assert.equal((await auditEntries('badge.ruleAwarded')).filter(entry => entry.targetId === badge.id).length, 1);
+});
+
+test('a check-in awards a check-in badge to that member only', async () => {
+    const badge = await createBadge({ name: 'Pünktlich', rule: { type: 'checkins', count: 1, category: 'Check-T3' } });
+    const event = await eventWithMembers({ title: 'Check T3', category: 'Check-T3', startDate: new Date(Date.now() - 3600_000).toISOString() }, ['member', 'raider']);
+    const tomReg = await registrationOf(event.id, 'member');
+    await json(await admin.send('PUT', `/api/admin/registrations/${tomReg.id}/checkin`, { checkedIn: true }));
+    await eventually(() => holderIds(badge.id), value => value.length === 1, 'Tom holds it');
+    assert.deepEqual(await holderIds(badge.id), ids('member'));
+});
+
+test('creating a rule badge awards everyone who already meets the rule', async () => {
+    await archivedEventWith('badge-backfill', 'Backfill-T3', ['raider', 'member']);
+    const badge = await createBadge({ name: 'Nachzügler', rule: { type: 'participations', count: 1, category: 'Backfill-T3' } });
+    await eventually(() => holderIds(badge.id), value => value.length === 2, 'both hold it');
+    assert.deepEqual(await holderIds(badge.id), ids('member', 'raider'));
+    assert.ok((await holdersOf(badge.id)).every(holder => holder.byRule));
+    const entries = (await auditEntries('badge.ruleAwarded')).filter(entry => entry.targetId === badge.id);
+    assert.deepEqual(entries.map(entry => [entry.details, entry.adminId]),
+        [['Badge „Nachzügler“: 2 Mitglieder automatisch ausgezeichnet', persona('admin').userId]]);
+});
+
+test('lowering the count awards only the newly due members; a revoked member stays revoked', async () => {
+    await archivedEventWith('badge-lower-1', 'Lower-T3', ['raider', 'member', 'admin']);
+    await archivedEventWith('badge-lower-2', 'Lower-T3', ['raider']);
+    const badge = await createBadge({ name: 'Treu', rule: { type: 'participations', count: 2, category: 'Lower-T3' } });
+    await eventually(() => holderIds(badge.id), value => value.length === 1, 'Lena holds it');
+    assert.deepEqual(await holderIds(badge.id), ids('raider'));
+    await json(await admin.send('DELETE', `${API}/badges/${badge.id}/awards/${persona('raider').userId}`));
+
+    await json(await admin.send('PUT', `${API}/badges/${badge.id}`, { ...BADGE, name: 'Treu', rule: { type: 'participations', count: 1, category: 'Lower-T3' } }));
+    await eventually(() => holderIds(badge.id), value => value.length === 2, 'Tom and Mori hold it');
+    assert.deepEqual(await holderIds(badge.id), ids('member', 'admin'));
+});
+
+test('changing only the name of a rule badge runs no backfill', async () => {
+    const badge = await createBadge({ name: 'Still', rule: { type: 'participations', count: 1, category: 'Still-T3' } });
+    await sleep(200);
+    await archivedEventWith('badge-still', 'Still-T3', ['member']);
+    await json(await admin.send('PUT', `${API}/badges/${badge.id}`, { ...BADGE, name: 'Leise', rule: { type: 'participations', count: 1, category: 'Still-T3' } }));
+    await sleep(300);
+    assert.deepEqual(await holderIds(badge.id), []);
+});
+
+test('a check-in and a manual award at the same time create one award', async () => {
+    const badge = await createBadge({ name: 'Gleichzeitig', rule: { type: 'checkins', count: 1, category: 'Race-T3' } });
+    const event = await eventWithMembers({ title: 'Race T3', category: 'Race-T3', startDate: new Date(Date.now() - 3600_000).toISOString() }, ['member']);
+    const tomReg = await registrationOf(event.id, 'member');
+    const [checkin, manual] = await Promise.all([
+        admin.send('PUT', `/api/admin/registrations/${tomReg.id}/checkin`, { checkedIn: true }),
+        admin.send('POST', `${API}/badges/${badge.id}/awards`, { userId: persona('member').userId })
+    ]);
+    assert.equal(checkin.status, 200);
+    assert.ok([200, 400].includes(manual.status), String(manual.status));
+    await sleep(300);
+    assert.deepEqual(await holderIds(badge.id), ids('member'));
+});
