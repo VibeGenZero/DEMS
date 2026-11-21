@@ -11,6 +11,7 @@ import {
     renderEditor,
     renderHolders,
     renderPage,
+    renderPendingRemovals,
     renderSearchResults
 } from './assets/view.js';
 
@@ -28,6 +29,7 @@ export function register(ui) {
         editing: null,
         open: null,
         holders: [],
+        pendingRemovals: 0,
         busy: false
     };
     let searchTimer = null;
@@ -54,14 +56,16 @@ export function register(ui) {
         const page = view.shown ? element('bd-page') : null;
         if (!page) return;
         const editing = view.editing === 'new' ? null : badgeById(view.editing);
+        element('bd-pending').innerHTML = renderPendingRemovals(view.pendingRemovals);
         element('bd-editor').innerHTML = view.editing ? renderEditor(editing, view.meta, ui.helpers) : '';
         element('bd-list').innerHTML = renderBadgeCards(view.badges, view.meta, ui.helpers, details());
         ui.helpers.applyStyleData(page);
     }
 
     async function loadBadges() {
-        const badges = await ui.api.get('/badges');
+        const [badges, pending] = await Promise.all([ui.api.get('/badges'), ui.api.get('/roles/pending')]);
         view.badges = Array.isArray(badges) ? badges : [];
+        view.pendingRemovals = Number(pending && pending.removals) || 0;
         if (view.open && view.open.kind === 'holders' && badgeById(view.open.id)) {
             view.holders = await ui.api.get(`/badges/${encodeURIComponent(view.open.id)}/holders`);
         }
@@ -230,9 +234,17 @@ export function register(ui) {
         });
     }
 
+    function retryPending() {
+        return once(async () => {
+            const { queued } = await ui.api.post('/roles/retry', {});
+            ui.helpers.showToast(queued === 1 ? 'Rolle wird erneut entzogen.' : `${queued} Rollen werden erneut entzogen.`, 'info');
+            await reload();
+        });
+    }
+
     ui.actions.register({
         newBadge, editBadge, cancelEdit, saveBadge, deleteBadge, changeRuleType, changeRole,
-        showHolders, showAward, revokeAward, searchMembers, awardMember, retryRoles
+        showHolders, showAward, revokeAward, searchMembers, awardMember, retryRoles, retryPending
     });
 
     ui.addPage({

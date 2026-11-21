@@ -41,9 +41,10 @@ function register(ctx) {
         return badge;
     }
 
-    /** A badge as the admin page shows it, with its holder counts. */
-    function toView(badge, awards) {
+    /** A badge as the admin page shows it, with its holder counts; `held` = grant ids in place. */
+    function toView(badge, awards, held) {
         const active = awards.filter(entry => entry.badgeId === badge.id && isActive(entry));
+        const unsynced = badge.roleId ? active.filter(entry => !held.has(engine.grantId(entry.userId, badge.roleId))).length : 0;
         return {
             id: badge.id,
             name: badge.name,
@@ -54,7 +55,7 @@ function register(ctx) {
             ruleText: ruleText(badge.rule),
             roleId: badge.roleId,
             holders: active.length,
-            unsynced: active.filter(entry => entry.roleSynced === false).length,
+            unsynced,
             createdAt: badge.createdAt
         };
     }
@@ -96,8 +97,8 @@ function register(ctx) {
     ctx.hooks.on('registration.checkedIn', ({ registration }) => engine.evaluate({ userIds: [registration.userId], notify: true }));
 
     ctx.routes.get('/badges', ADMIN, async () => {
-        const [badges, awards] = await Promise.all([engine.listBadges(), engine.listAwards()]);
-        return badges.map(badge => toView(badge, awards));
+        const [badges, awards, held] = await Promise.all([engine.listBadges(), engine.listAwards(), engine.heldGrantIds()]);
+        return badges.map(badge => toView(badge, awards, held));
     });
 
     ctx.routes.get('/meta', ADMIN, async () => {
@@ -120,7 +121,7 @@ function register(ctx) {
             const badge = await ctx.data.add(BADGES, { ...value, createdAt: at, createdBy: user.id, updatedAt: at, updatedBy: user.id });
             await ctx.audit('badge.created', user.id, `Badge „${badge.name}“ angelegt`, badge.id);
             if (isRuleBadge(badge)) backfill(user.id);
-            return toView(badge, []);
+            return toView(badge, [], new Set());
         });
     });
 
@@ -131,9 +132,9 @@ function register(ctx) {
         return engine.serial(async () => {
             const badge = await ctx.data.update(BADGES, stored.id, { ...value, updatedAt: nowIso(), updatedBy: user.id });
             await ctx.audit('badge.updated', user.id, `Badge „${badge.name}“ geändert`, badge.id);
-            if (badge.roleId !== stored.roleId) engine.moveRole(badge, stored.roleId);
+            if (badge.roleId !== stored.roleId) await engine.moveRole(badge, stored.roleId);
             if (isRuleBadge(badge) && !sameRule(badge.rule, stored.rule)) backfill(user.id);
-            return toView(badge, await engine.awardsOfBadge(badge.id));
+            return toView(badge, await engine.awardsOfBadge(badge.id), await engine.heldGrantIds());
         });
     });
 
@@ -151,10 +152,15 @@ function register(ctx) {
         return { queued: await engine.serial(() => engine.retryRoles(badge)) };
     });
 
+    // Roles that could not be taken back (bot offline, role limit, …), also of deleted badges
+    ctx.routes.get('/roles/pending', ADMIN, async () => ({ removals: await engine.pendingRemovals() }));
+
+    ctx.routes.post('/roles/retry', ADMIN, async () => ({ queued: await engine.serial(() => engine.retryPending()) }));
+
     ctx.routes.get('/badges/:id/holders', ADMIN, async ({ params }) => {
         const badge = await findBadge(params.id);
-        const active = (await engine.awardsOfBadge(badge.id)).filter(isActive)
-            .sort((a, b) => String(b.awardedAt).localeCompare(String(a.awardedAt)));
+        const [awards, held] = await Promise.all([engine.awardsOfBadge(badge.id), engine.heldGrantIds()]);
+        const active = awards.filter(isActive).sort((a, b) => String(b.awardedAt).localeCompare(String(a.awardedAt)));
         return Promise.all(active.map(async entry => {
             const member = await ctx.members.get(entry.userId);
             return {
@@ -163,7 +169,7 @@ function register(ctx) {
                 avatar: member ? member.avatar : '',
                 awardedAt: entry.awardedAt,
                 byRule: entry.awardedBy === 'rule',
-                roleSynced: entry.roleSynced !== false
+                roleSynced: !badge.roleId || held.has(engine.grantId(entry.userId, badge.roleId))
             };
         }));
     });

@@ -4,15 +4,27 @@
  *
  * Two queues: every write runs on `serial`, so two triggers for the same
  * member can never award a badge twice; roles and messages run afterwards
- * on `effects`, in the background, so no route or hook waits for Discord.
- * A role is taken back only when this plugin gave it (`roleAdded`) and no
- * other active badge of the member carries the same role. Uses only the
- * `ctx` it is given and `rules.js`.
+ * on `effects`, one at a time, in the background, so no route or hook waits
+ * for Discord.
+ *
+ * Roles are reconciled, never patched: `grants/<userId>_<roleId>` records
+ * that this plugin gave a role (`given: true`) or found it already there
+ * (`given: false`). After every change `syncRole(userId, roleId)` compares
+ * "does an active badge of the member carry this role?" with the grant and
+ * gives or takes the role — so the order in which awards, revokes, deletes,
+ * role changes and retries arrive never leaves a role behind, and a role the
+ * member had before is never taken. A removal that fails keeps its grant with
+ * `removePending: true` until a retry succeeds. Uses only the `ctx` it is
+ * given and `rules.js`.
  */
 const { awardId, isActive, progressFor, countFor, ruleText, dueAwards, awardDm, awardPost } = require('./rules');
 
 const BADGES = 'badges';
 const AWARDS = 'awards';
+const GRANTS = 'grants';
+
+/** Document id of the grant of one role to one member. */
+const grantId = (userId, roleId) => `${userId}_${roleId}`;
 
 const nowIso = () => new Date().toISOString();
 const byCreatedAt = (a, b) => String(a.createdAt || '').localeCompare(String(b.createdAt || ''));
@@ -54,11 +66,6 @@ function createEngine(ctx) {
     /** @returns {Promise<object|null>} -> The award of a badge to a member, revoked or not. */
     const findAward = (badgeId, userId) => ctx.data.get(AWARDS, awardId(badgeId, userId));
 
-    /** Update an award that may have been deleted meanwhile (badge deleted, account deleted). */
-    async function patchAward(id, patch) {
-        if (await ctx.data.get(AWARDS, id)) await ctx.data.update(AWARDS, id, patch);
-    }
-
     /** `ctx.discord.addRole/removeRole`; a role the guard refuses now counts as not done. */
     async function changeRole(give, userId, roleId) {
         try {
@@ -69,29 +76,62 @@ function createEngine(ctx) {
         }
     }
 
-    /** Give the badge's role for one award and remember whether this plugin gave it. */
-    async function giveRole(roleId, award) {
-        const result = await changeRole(true, award.userId, roleId);
-        await patchAward(award.id, result.ok ? { roleAdded: result.changed, roleSynced: true } : { roleSynced: false });
+    /**
+     * Give or take one role of one member so it matches the current badges. Runs on the effects queue only.
+     *
+     * @param {string} userId
+     * @param {string} roleId
+     */
+    async function reconcileRole(userId, roleId) {
+        const id = grantId(userId, roleId);
+        const [badges, awards, grant] = await Promise.all([
+            listBadges(), ctx.data.where(AWARDS, 'userId', '==', userId), ctx.data.get(GRANTS, id)
+        ]);
+        const carriers = new Set(badges.filter(badge => badge.roleId === roleId).map(badge => badge.id));
+        const wanted = awards.some(entry => isActive(entry) && carriers.has(entry.badgeId));
+        if (wanted) {
+            if (grant) {
+                // A removal failed earlier and the role is wanted again: it is still on the member
+                if (grant.removePending) await ctx.data.update(GRANTS, id, { removePending: false, updatedAt: nowIso() });
+                return;
+            }
+            const result = await changeRole(true, userId, roleId);
+            if (result.ok) await ctx.data.set(GRANTS, id, { userId, roleId, given: result.changed, removePending: false, updatedAt: nowIso() });
+            return;
+        }
+        if (!grant) return;
+        if (!grant.given) {
+            await ctx.data.delete(GRANTS, id);
+            return;
+        }
+        const result = await changeRole(false, userId, roleId);
+        if (result.ok) await ctx.data.delete(GRANTS, id);
+        else if (!grant.removePending) await ctx.data.update(GRANTS, id, { removePending: true, updatedAt: nowIso() });
+    }
+
+    /** Queue a reconcile of one member's role. */
+    function syncRole(userId, roleId) {
+        if (roleId) effect('Rollenabgleich', () => reconcileRole(userId, roleId));
+    }
+
+    /** @returns {Promise<Set<string>>} -> Ids of the grants that are in place (not waiting for a removal). */
+    async function heldGrantIds() {
+        return new Set((await ctx.data.list(GRANTS)).filter(grant => !grant.removePending).map(grant => grant.id));
     }
 
     /**
-     * Take a role this plugin gave, unless another active badge of the member carries it; then that award owns it.
+     * Active holders of a badge whose role could not be given yet.
      *
-     * @param {{ roleId: string, userId: string, awardDocId: string|null, roleAdded: boolean, exceptBadgeId: string }} input
+     * @param {object} badge
+     * @param {Set<string>} [held] -> From `heldGrantIds()`, to read the grants once for many badges.
+     * @returns {Promise<string[]>} -> Their user ids.
      */
-    async function releaseRole({ roleId, userId, awardDocId, roleAdded, exceptBadgeId }) {
-        if (!roleId || !roleAdded) return;
-        const [badges, awards] = await Promise.all([listBadges(), ctx.data.where(AWARDS, 'userId', '==', userId)]);
-        const carriers = new Set(badges.filter(badge => badge.id !== exceptBadgeId && badge.roleId === roleId).map(badge => badge.id));
-        const heir = awards.find(entry => isActive(entry) && carriers.has(entry.badgeId));
-        if (heir) {
-            await patchAward(heir.id, { roleAdded: true });
-        } else {
-            const result = await changeRole(false, userId, roleId);
-            if (!result.ok) return;
-        }
-        if (awardDocId) await patchAward(awardDocId, { roleAdded: false });
+    async function unsyncedOf(badge, held) {
+        if (!badge.roleId) return [];
+        const grants = held || await heldGrantIds();
+        return (await awardsOfBadge(badge.id))
+            .filter(entry => isActive(entry) && !grants.has(grantId(entry.userId, badge.roleId)))
+            .map(entry => entry.userId);
     }
 
     /** DM and channel post for a new award, as the settings say. */
@@ -119,15 +159,11 @@ function createEngine(ctx) {
             userId,
             awardedAt: nowIso(),
             awardedBy: by,
-            roleAdded: false,
-            roleSynced: !badge.roleId,
             revokedAt: null,
             revokedBy: null
         });
-        effect('Badge-Vergabe', async () => {
-            if (badge.roleId) await giveRole(badge.roleId, stored);
-            if (notify) await announce(badge, userId);
-        });
+        syncRole(userId, badge.roleId);
+        if (notify) effect('Badge-Nachricht', () => announce(badge, userId));
         return stored;
     }
 
@@ -138,11 +174,7 @@ function createEngine(ctx) {
      */
     async function revoke({ badge, userId, by }) {
         const updated = await ctx.data.update(AWARDS, awardId(badge.id, userId), { revokedAt: nowIso(), revokedBy: by });
-        effect('Badge-Entzug', async () => {
-            const current = await ctx.data.get(AWARDS, updated.id);
-            if (!current) return;
-            await releaseRole({ roleId: badge.roleId, userId, awardDocId: current.id, roleAdded: current.roleAdded === true, exceptBadgeId: badge.id });
-        });
+        syncRole(userId, badge.roleId);
         return updated;
     }
 
@@ -155,42 +187,49 @@ function createEngine(ctx) {
         const awards = await awardsOfBadge(badge.id);
         for (const entry of awards) await ctx.data.delete(AWARDS, entry.id);
         await ctx.data.delete(BADGES, badge.id);
-        const given = awards.filter(entry => isActive(entry) && entry.roleAdded === true);
-        if (!badge.roleId || given.length === 0) return;
-        effect('Rollen eines gelöschten Badges', async () => {
-            for (const entry of given) {
-                await releaseRole({ roleId: badge.roleId, userId: entry.userId, awardDocId: null, roleAdded: true, exceptBadgeId: badge.id });
-            }
-        });
+        for (const userId of new Set(awards.map(entry => entry.userId))) syncRole(userId, badge.roleId);
     }
 
     /**
-     * After a badge's role changed: holders lose the old role (where this badge gave it) and get the new one.
+     * After a badge's role changed: holders lose the old role (unless another badge carries it) and get the new one.
      *
      * @param {object} badge -> The stored badge with the new `roleId`.
      * @param {string|null} oldRoleId
      */
-    function moveRole(badge, oldRoleId) {
-        effect('Rollenwechsel', async () => {
-            for (const entry of (await awardsOfBadge(badge.id)).filter(isActive)) {
-                await releaseRole({ roleId: oldRoleId, userId: entry.userId, awardDocId: entry.id, roleAdded: entry.roleAdded === true, exceptBadgeId: badge.id });
-                if (badge.roleId) await giveRole(badge.roleId, entry);
-                else await patchAward(entry.id, { roleAdded: false, roleSynced: true });
-            }
-        });
+    async function moveRole(badge, oldRoleId) {
+        for (const entry of (await awardsOfBadge(badge.id)).filter(isActive)) {
+            syncRole(entry.userId, oldRoleId);
+            syncRole(entry.userId, badge.roleId);
+        }
     }
 
     /**
-     * Queue the role again for every active award whose role could not be given.
+     * Queue the role again for every active holder of a badge who does not have it yet.
      *
      * @param {object} badge
      * @returns {Promise<number>} -> How many were queued.
      */
     async function retryRoles(badge) {
-        if (!badge.roleId) return 0;
-        const open = (await awardsOfBadge(badge.id)).filter(entry => isActive(entry) && entry.roleSynced === false);
-        for (const entry of open) effect('Rolle erneut vergeben', () => giveRole(badge.roleId, entry));
+        const open = await unsyncedOf(badge);
+        for (const userId of open) syncRole(userId, badge.roleId);
         return open.length;
+    }
+
+    /** @returns {Promise<object[]>} -> Grants whose removal failed. */
+    const pendingGrants = async () => (await ctx.data.list(GRANTS)).filter(grant => grant.removePending === true);
+
+    /** @returns {Promise<number>} -> Roles waiting to be taken back after a failed removal. */
+    const pendingRemovals = async () => (await pendingGrants()).length;
+
+    /**
+     * Queue every failed removal again.
+     *
+     * @returns {Promise<number>} -> How many were queued.
+     */
+    async function retryPending() {
+        const pending = await pendingGrants();
+        for (const grant of pending) syncRole(grant.userId, grant.roleId);
+        return pending.length;
     }
 
     /**
@@ -258,8 +297,8 @@ function createEngine(ctx) {
 
     return {
         serial, listBadges, listAwards, awardsOfBadge, findAward, award, revoke, removeBadge, moveRole, retryRoles,
-        profileBadges, evaluate
+        retryPending, pendingRemovals, unsyncedOf, heldGrantIds, grantId, profileBadges, evaluate
     };
 }
 
-module.exports = { createEngine, createQueue, BADGES, AWARDS };
+module.exports = { createEngine, createQueue, BADGES, AWARDS, GRANTS };

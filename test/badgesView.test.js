@@ -39,7 +39,7 @@ async function loadView() {
 }
 
 async function openPluginApp(routes = {}, options = {}) {
-    const harness = await loadFrontendApp({ '/api/admin/roles': [], ...routes }, options);
+    const harness = await loadFrontendApp({ '/api/admin/roles': [], [`${API}/roles/pending`]: { removals: 0 }, ...routes }, options);
     harness.state.currentUser = ADMIN;
     harness.state.csrfToken = 'test-csrf';
     const modules = await loadFrontendModules(CLIENT_PATH, harness.window);
@@ -115,6 +115,25 @@ test('the editor prefills a badge, hides the count for manual badges and warns a
     assert.match(noRoles, /Der Bot ist nicht verbunden oder es gibt keine Rolle, die ein Plugin vergeben darf\./);
 });
 
+test('the editor keeps a stored role or category that the lists no longer offer', async () => {
+    const { view, helpers } = await loadView();
+    const html = view.renderEditor(sampleBadge({ roleId: '119999999999999999', rule: { type: 'participations', count: 3, category: 'Alt' } }),
+        { ...META, roles: [] }, helpers);
+    assert.match(html, /<option value="119999999999999999" selected>Gespeicherte Rolle \(nicht verfügbar\)<\/option>/);
+    assert.match(html, /<option value="Alt" selected>Alt \(kein Event mehr\)<\/option>/);
+    assert.doesNotMatch(html, /<option value="" selected>Keine<\/option>/);
+    assert.doesNotMatch(html, /<option value="" selected>Alle Kategorien<\/option>/);
+});
+
+test('failed role removals show as one line with a retry; none show nothing', async () => {
+    const { view } = await loadView();
+    assert.equal(view.renderPendingRemovals(0), '');
+    assert.match(view.renderPendingRemovals(1), /Rolle bei 1 Mitglied noch nicht entzogen/);
+    const many = view.renderPendingRemovals(4);
+    assert.match(many, /Rollen bei 4 Mitgliedern noch nicht entzogen/);
+    assert.match(many, /data-click="p:badges:retryPending"/);
+});
+
 test('holders show name, date and how they got it, each with a revoke button', async () => {
     const { view, helpers } = await loadView();
     const html = view.renderHolders(sampleBadge(), [
@@ -140,6 +159,20 @@ test('the award search lists hits with an award button', async () => {
 });
 
 // ── Client ──────────────────────────────────────────────────────────────
+
+test('the admin page shows failed removals and retries them', async () => {
+    let pending = 2;
+    const harness = await openPluginApp({
+        [`${API}/meta`]: () => META,
+        [`${API}/badges`]: () => [],
+        [`${API}/roles/pending`]: () => ({ removals: pending }),
+        [`${API}/roles/retry`]: () => { pending = 0; return { queued: 2 }; }
+    });
+    assert.match(harness.element('bd-pending').innerHTML, /Rollen bei 2 Mitgliedern noch nicht entzogen/);
+    await harness.app.runAction('p:badges:retryPending', {});
+    assert.ok(harness.toasts.includes('2 Rollen werden erneut entzogen.'), harness.toasts.join(' | '));
+    assert.equal(harness.element('bd-pending').innerHTML, '');
+});
 
 test('the admin page lists the badges, creates one with the editor values and awards one by search', async () => {
     const badges = [sampleBadge()];

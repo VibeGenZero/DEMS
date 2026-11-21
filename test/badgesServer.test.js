@@ -403,3 +403,12 @@ test('a role that cannot be given shows as unsynced, and retry queues it again',
     assert.equal((await listBadges()).find(entry => entry.id === badge.id).unsynced, 1, 'still not on the server');
     await json(await admin.send('DELETE', `${API}/badges/${badge.id}`));
 });
+
+test('failed role removals are counted and can be retried; members cannot reach either route', async () => {
+    assert.deepEqual(await json(await admin.request(`${API}/roles/pending`)), { removals: 0 });
+    assert.deepEqual(await json(await admin.send('POST', `${API}/roles/retry`, {})), { queued: 0 });
+    const member = await loginAt(server.baseUrl, 'member');
+    assert.equal((await member.request(`${API}/roles/pending`)).status, 403);
+    assert.equal((await member.send('POST', `${API}/roles/retry`, {})).status, 403);
+});
+

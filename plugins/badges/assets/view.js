@@ -36,8 +36,22 @@ export function renderPage() {
         <p class="bd-intro text-secondary mb-0">Eigene Badges für eure Community – von Hand oder automatisch vergeben.</p>
         <button type="button" class="btn btn-primary" data-click="p:badges:newBadge"><i class="bi bi-plus-lg me-1" aria-hidden="true"></i>Neues Badge</button>
     </div>
+    <div id="bd-pending"></div>
     <div id="bd-editor"></div>
     <div id="bd-list" class="bd-list"></div>`;
+}
+
+/**
+ * One line about roles that could not be taken back yet (also of deleted badges), with a retry.
+ *
+ * @param {number} count -> `GET /roles/pending` `removals`.
+ * @returns {string} -> '' when there are none.
+ */
+export function renderPendingRemovals(count) {
+    if (!(count > 0)) return '';
+    const what = count === 1 ? 'Rolle bei 1 Mitglied' : `Rollen bei ${membersDative(count)}`;
+    return `<p class="bd-warning glass-card bd-pending mb-0"><i class="bi bi-exclamation-triangle me-1" aria-hidden="true"></i>${what} noch nicht entzogen
+        <button type="button" class="btn btn-sm btn-outline-secondary ms-2" data-click="p:badges:retryPending">Erneut versuchen</button></p>`;
 }
 
 function roleChip(badge, meta, escapeHtml) {
@@ -122,10 +136,17 @@ export function renderEditor(badge, meta, helpers) {
         </label>`;
     }).join('');
     const rules = RULE_OPTIONS.map(entry => option(entry.value, entry.label, entry.value === rule.type, escapeHtml)).join('');
-    const categories = option('', 'Alle Kategorien', !rule.category, escapeHtml)
-        + (meta.categories || []).map(category => option(category, category, category === rule.category, escapeHtml)).join('');
-    const roles = option('', 'Keine', !value.roleId, escapeHtml)
-        + (meta.roles || []).map(role => option(role.id, role.name, role.id === value.roleId, escapeHtml)).join('');
+    // A stored role or category the lists no longer offer stays selected, so saving another field keeps it
+    const categoryList = meta.categories || [];
+    const lostCategory = rule.category && !categoryList.includes(rule.category)
+        ? option(rule.category, `${rule.category} (kein Event mehr)`, true, escapeHtml) : '';
+    const categories = option('', 'Alle Kategorien', !rule.category, escapeHtml) + lostCategory
+        + categoryList.map(category => option(category, category, category === rule.category, escapeHtml)).join('');
+    const roleList = meta.roles || [];
+    const lostRole = value.roleId && !roleList.some(role => role.id === value.roleId)
+        ? option(value.roleId, 'Gespeicherte Rolle (nicht verfügbar)', true, escapeHtml) : '';
+    const roles = option('', 'Keine', !value.roleId, escapeHtml) + lostRole
+        + roleList.map(role => option(role.id, role.name, role.id === value.roleId, escapeHtml)).join('');
     const noRoles = (meta.roles || []).length === 0
         ? '<p class="form-text mb-0">Der Bot ist nicht verbunden oder es gibt keine Rolle, die ein Plugin vergeben darf.</p>'
         : '';

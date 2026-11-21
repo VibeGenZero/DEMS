@@ -793,7 +793,7 @@ function buildBadges(clock) {
         awards: {
             [`${BADGE_ID.FOUNDER}_${people.mori.userId}`]: {
                 badgeId: BADGE_ID.FOUNDER, userId: people.mori.userId, awardedAt: created, awardedBy: people.mori.userId,
-                roleAdded: false, roleSynced: true, revokedAt: null, revokedBy: null
+                revokedAt: null, revokedBy: null
             }
         }
     };
