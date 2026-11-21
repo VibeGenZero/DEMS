@@ -21,6 +21,20 @@ test('compose.yaml publishes DEMS on localhost only, unless DEMS_BIND says other
     assert.match(read('.env.example'), /^# DEMS_BIND=127\.0\.0\.1$/m);
 });
 
+test('the runtime image keeps its code read-only for the node user, only /app/data is its own', () => {
+    // A process that could rewrite /app/plugins would turn any code execution into an
+    // "official" plugin that runs without confirmation (plugin security report 2026-11)
+    const dockerfile = read('Dockerfile');
+    const start = dockerfile.indexOf(' AS runtime');
+    assert.ok(start > 0, 'runtime stage');
+    const runtime = dockerfile.slice(start);
+    assert.doesNotMatch(runtime, /--chown/);
+    assert.match(runtime, /^COPY --from=deps \/app\/node_modules \.\/node_modules$/m);
+    assert.match(runtime, /^COPY \. \.$/m);
+    assert.match(runtime, /^RUN mkdir -p \/app\/data && chown node:node \/app\/data$/m);
+    assert.ok(runtime.indexOf('chown node:node /app/data') < runtime.indexOf('USER node'));
+});
+
 test('compose.build.yaml builds the runtime stage from source', () => {
     const build = read('compose.build.yaml');
     assert.match(build, /context: \./);

@@ -9,7 +9,7 @@ see_also: [deployment, dev-mock-mode, write-plugin]
 ---
 # Docker — image, stages, compose files
 
-> TL;DR: Multi-stage `Dockerfile` on `node:24-bookworm-slim`: `runtime` (default, production: non-root `node` user, `NODE_ENV=production`, uploaded banners (`/app/data/uploads`, W-12) and custom plugins (`/app/data/plugins`) on volume `/app/data`, healthcheck `GET /healthz`) and `dev` (all deps, nodemon polling, used by `compose.dev.yaml`). `compose.yaml` runs the published image `moritakahashi/dems:${DEMS_TAG:-latest}` with an optional `.env` together with PostgreSQL and a generated database password; `compose.build.yaml` is an override that builds the `runtime` stage from the checkout (CI uses it); `compose.dev.yaml` runs the dev mock mode with the source bind-mounted.
+> TL;DR: Multi-stage `Dockerfile` on `node:24-bookworm-slim`: `runtime` (default, production: non-root `node` user that can read but not rewrite the root-owned code and official plugins, `NODE_ENV=production`, uploaded banners (`/app/data/uploads`, W-12) and custom plugins (`/app/data/plugins`) on volume `/app/data`, healthcheck `GET /healthz`) and `dev` (all deps, nodemon polling, used by `compose.dev.yaml`). `compose.yaml` runs the published image `moritakahashi/dems:${DEMS_TAG:-latest}` with an optional `.env` together with PostgreSQL and a generated database password; `compose.build.yaml` is an override that builds the `runtime` stage from the checkout (CI uses it); `compose.dev.yaml` runs the dev mock mode with the source bind-mounted.
 
 ## Dockerfile stages
 
@@ -18,7 +18,7 @@ see_also: [deployment, dev-mock-mode, write-plugin]
 | `build-base` | node:24-bookworm-slim | python3/make/g++ (fallback build of better-sqlite3), `package*.json` |
 | `deps` | build-base | `npm ci --omit=dev` |
 | `dev` | build-base | `npm ci` (incl. nodemon), `COPY . .`, `NODE_ENV=development`, `CMD npx nodemon --legacy-watch dev/start.js` |
-| `runtime` (last = default) | node:24-bookworm-slim | prod `node_modules` from `deps`, app files, `USER node`, `VOLUME /app/data`, `HEALTHCHECK` on `/healthz`, build args `DEMS_CHANNEL`, `DEMS_COMMIT` → env of the same name (set by the publish job; `edge` turns the update check off), `CMD node server.js` |
+| `runtime` (last = default) | node:24-bookworm-slim | prod `node_modules` from `deps` and app files, both owned by root (no `--chown`: a process that could rewrite `/app/plugins` would turn any code execution into an official plugin that runs without confirmation; pinned by `test/composeFiles.test.js`), only `/app/data` belongs to `node`, `USER node`, `VOLUME /app/data`, `HEALTHCHECK` on `/healthz`, build args `DEMS_CHANNEL`, `DEMS_COMMIT` → env of the same name (set by the publish job; `edge` turns the update check off), `CMD node server.js` |
 
 `runtime` must stay the LAST stage (default target); `compose.build.yaml` additionally pins `target: runtime`.
 
@@ -55,7 +55,7 @@ CI builds both targets, starts `compose.yaml` + `compose.build.yaml` (so it test
 
 ## Custom plugins (plugin SDK)
 
-Official plugins ship in the image (`/app/plugins`, part of `COPY . .`). Custom plugins live on the data volume in `/app/data/plugins/<id>/` (default of `PLUGINS_DIR`; set it in `.env` to use another folder inside the container). There is no upload in the browser: copy the folder in, make it readable for the user `node`, restart, then switch the plugin on in System › Plugins (trust dialog + reset password).
+Official plugins ship in the image (`/app/plugins`, part of `COPY . .`, owned by root and read-only for DEMS). Custom plugins live on the data volume in `/app/data/plugins/<id>/` (default of `PLUGINS_DIR`; set it in `.env` to use another folder inside the container). There is no upload in the browser: copy the folder in, make it readable for the user `node`, restart, then switch the plugin on in System › Plugins (trust dialog + reset password).
 
 ```bash
 docker compose exec dems mkdir -p /app/data/plugins

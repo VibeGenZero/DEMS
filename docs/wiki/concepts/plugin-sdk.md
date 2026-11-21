@@ -99,7 +99,7 @@ A new event counts as coming from `draft`, a stored one without status as `activ
 
 1. **Two trust levels.** Official = reviewed in the repo, shipped with the image. Custom = full process access (files, database, bot token, `require` of anything, including `plugin-sdk/state` — so an enabled custom plugin can also mark other plugins as confirmed) and its `client.js`/`client.css` run unsandboxed in every logged-in member's page (CSRF token and session included, an admin's page with admin rights); the trust dialog says both. The permission list is a declaration for official plugins and a guard rail for honest custom ones, never a wall.
 2. **Code only via the server's file system.** No upload, no URL install, no route writes into `PLUGINS_DIR` — a hijacked admin session cannot bring code onto the host.
-3. **„Offiziell“ comes from the location** (`<app>/plugins`), never from the manifest.
+3. **„Offiziell“ comes from the location** (`<app>/plugins`), never from the manifest. In the Docker image that folder (like all code) belongs to root, so the DEMS process cannot rewrite an official plugin ([docker](../ops/docker.md)).
 4. **Custom: trust + reset password + audit** (`PLUGIN_ENABLE`); re-confirmation when version or permissions change; an unset `ADMIN_RESET_PASSWORD` makes switching on impossible.
 5. **Disabled code never runs** — no `require` of a plugin that is off or unconfirmed.
 6. **Plain-data boundary.** `ctx` and `ui` pass only JSON-able copies (no `req`, `res`, Discord objects, DB handles); official plugins import nothing from DEMS (guard test) → a later out-of-process / iframe isolation can sit behind the same API.

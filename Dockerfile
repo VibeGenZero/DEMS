@@ -47,8 +47,10 @@ ARG DEMS_COMMIT=
 ENV DEMS_CHANNEL=$DEMS_CHANNEL \
     DEMS_COMMIT=$DEMS_COMMIT
 
-COPY --from=deps --chown=node:node /app/node_modules ./node_modules
-COPY --chown=node:node . .
+# Code and official plugins stay owned by root, so the node user can read but
+# not rewrite them; DEMS writes only below /app/data.
+COPY --from=deps /app/node_modules ./node_modules
+COPY . .
 
 # Uploaded banners live on a volume so they survive container rebuilds.
 # The data itself is in PostgreSQL (compose.yaml) or, for a single container
