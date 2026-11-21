@@ -17,9 +17,10 @@ function createFakeHost(pluginDir) {
         enabled: true,
         routes: [],
         errors: [],
+        manifest: { client: 'client.js', css: '' },
         isEnabled: id => id === 'demo' && fake.enabled,
         routesOf: id => (id === 'demo' ? fake.routes.map(route => ({ ...route })) : []),
-        entryOf: id => (id === 'demo' ? { id, dir: pluginDir, manifest: { client: 'client.js', css: '' } } : null),
+        entryOf: id => (id === 'demo' ? { id, dir: pluginDir, manifest: { ...fake.manifest } } : null),
         clients: () => [],
         reportError: (id, message) => fake.errors.push([id, message])
     };
@@ -42,6 +43,12 @@ before(async () => {
     fs.writeFileSync(path.join(pluginDir, 'client.js'), 'export function register() {}');
     fs.mkdirSync(path.join(pluginDir, 'assets'));
     fs.writeFileSync(path.join(pluginDir, 'assets', 'logo.png'), 'png');
+    // A folder link out of the plugin (a junction on Windows, a symlink elsewhere: both need no admin rights)
+    const outsideDir = path.join(pluginDir, '..', '..', 'outside');
+    fs.mkdirSync(outsideDir, { recursive: true });
+    fs.writeFileSync(path.join(outsideDir, 'client.js'), 'export const secret = "OUTSIDE";');
+    fs.writeFileSync(path.join(outsideDir, 'client.css'), '.secret { color: red; }');
+    fs.symlinkSync(outsideDir, path.join(pluginDir, 'lib'), 'junction');
     host = createFakeHost(pluginDir);
 
     const app = express();
@@ -52,6 +59,7 @@ before(async () => {
     });
     app.use('/plugins', createPluginStatic(getHost));
     app.use('/api/plugins', createPluginRouter(getHost));
+    app.use('/api/plugins-short', createPluginRouter(getHost, { handlerTimeoutMs: 50 }));
     await new Promise(resolve => {
         listener = app.listen(0, '127.0.0.1', resolve);
     });
@@ -162,6 +170,21 @@ test('an httpError with a status outside 400-599 counts as a plain throw', async
     assert.equal(host.errors.length, 3);
 });
 
+test('a handler that does not answer in time gets 504 and is reported, other routes keep working', async () => {
+    host.errors.length = 0;
+    host.routes = [
+        route('GET', '/hang/:itemId', () => new Promise(() => {})),
+        route('GET', '/quick', () => ({ ok: true }))
+    ];
+    const res = await call('/api/plugins-short/demo/hang/42');
+    assert.equal(res.status, 504);
+    assert.deepEqual(await res.json(), { error: 'Das Plugin hat nicht rechtzeitig geantwortet.' });
+    assert.deepEqual(host.errors, [['demo', 'Route GET /hang/:itemId hat nicht innerhalb von 0,05 s geantwortet.']]);
+    const quick = await call('/api/plugins-short/demo/quick');
+    assert.equal(quick.status, 200);
+    assert.deepEqual(await quick.json(), { ok: true });
+});
+
 test('a result that is not JSON answers 500', async () => {
     host.errors.length = 0;
     host.routes = [
@@ -232,4 +255,18 @@ test('static files: allowed assets are served with their type, other methods and
     assert.equal((await call('/plugins/demo/assets/.hidden.png')).status, 404);
     assert.equal((await call('/plugins/demo/assets/sub/logo.png')).status, 404);
     assert.equal((await call('/plugins/Demo/client.js')).status, 404);
+});
+
+test('static files: client.js and client.css reached through a link out of the plugin folder are refused', async () => {
+    host.manifest = { client: 'lib/client.js', css: 'lib/client.css' };
+    try {
+        for (const name of ['client.js', 'client.css']) {
+            const res = await call(`/plugins/demo/${name}`);
+            assert.equal(res.status, 404, name);
+            assert.doesNotMatch(await res.text(), /secret/i, name);
+        }
+    } finally {
+        host.manifest = { client: 'client.js', css: '' };
+    }
+    assert.equal((await call('/plugins/demo/client.js')).status, 200);
 });

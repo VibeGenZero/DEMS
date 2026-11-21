@@ -50,7 +50,7 @@ test('the category Plugins sits after KI, has its panel, the privacy hint and th
     assert.match(harness.element('plugins-list').innerHTML, /Event einreichen/);
     assert.match(HTML, /id="plugins-privacy-hint"[^>]*>Plugins können Daten von Mitgliedern speichern\. Erwähne eingeschaltete Plugins in deiner Datenschutzerklärung\.</);
     assert.match(HTML, /Nicht offizielles Plugin einschalten\?/);
-    assert.match(HTML, /<span id="plugin-trust-name"><\/span> stammt nicht aus dem DEMS-Projekt\. Es läuft mit vollem Zugriff auf DEMS,\s+den Discord-Bot und die Datenbank — die Berechtigungen unten zeigen, was es nutzen\s+möchte, verhindern aber nichts\. Schalte es nur ein, wenn du dem Code vertraust\./);
+    assert.match(HTML, /<span id="plugin-trust-name"><\/span> stammt nicht aus dem DEMS-Projekt\. Es läuft mit vollem Zugriff auf DEMS,\s+den Discord-Bot und die Datenbank, und im Browser jedes angemeldeten Mitglieds mit dessen\s+Rechten — bei Admins also mit Admin-Rechten\. Die Berechtigungen unten zeigen, was es nutzen\s+möchte, verhindern aber nichts\. Schalte es nur ein, wenn du dem Code vertraust\./);
     assert.match(HTML, /Ich vertraue dem Code dieses Plugins/);
     assert.match(HTML, /id="plugin-trust-confirm"[^>]*data-click="confirmPluginTrust"[^>]* disabled>/);
 });

@@ -43,8 +43,18 @@ test('only the allowed at-rules pass', () => {
     }
 });
 
+test('a comment before a function name does not skip the allow-list', () => {
+    // CSS ends a token at a comment, so the part after it is a function of its own
+    bad('body { background: center/**/image-set("https://x.test/a.png" 1x); }', 1,
+        'Zeile 1: image-set() ist nicht erlaubt.');
+    bad('.a { content: x/**/attr(title); }', 1, 'Zeile 1: attr() ist nicht erlaubt.');
+    bad('.a { color: u/**/rl(x); }', 1, 'Zeile 1: rl() ist nicht erlaubt.');
+    bad('.a { background: x/* a */url(x); }', 1,
+        'Zeile 1: url() ist nicht erlaubt – eigene Bilder und Schriften können nicht eingebunden werden.');
+    ok('.a { color: red/**/; transform: x/**/rotate(1turn); }');
+});
+
 test('comments and strings are handled before the checks', () => {
-    ok('.a { color: u/**/rl(x); }');
     bad('.a {}\n/* offen', 2, 'Zeile 2: Ein Kommentar (/* … */) wird nicht geschlossen.');
     bad('.a { content: "offen\n}', 1, 'Zeile 1: Ein Text in Anführungszeichen wird nicht geschlossen.');
 });

@@ -82,7 +82,7 @@ module.exports = {
 |---|---|
 | `ctx.plugin` | `{ id, version, official }` |
 | `ctx.log.info/warn/error(...)` | console with prefix `[plugin:<id>]` |
-| `ctx.routes.get/post/put/delete(path, { access, password? }, handler)` | mounted at `/api/plugins/<id><path>`; `access` `'member'` or `'admin'` is **required**; `password: true` (only with `access: 'admin'`) checks `req.body.password` against `ADMIN_RESET_PASSWORD` with `safeEqual` before calling `handler` (401 „Ungültiges Admin-Reset-Passwort.“ on failure) and strips `password` from `body`; path Express syntax starting with `/`, no `*`/`?`/`#`; static paths before `/:id`; handler gets `{ user: { id, name, avatar, isAdmin, roles }, params, query, body }` and returns JSON (→ 200; `undefined` → `{ success: true }`) |
+| `ctx.routes.get/post/put/delete(path, { access, password? }, handler)` | mounted at `/api/plugins/<id><path>`; `access` `'member'` or `'admin'` is **required**; `password: true` (only with `access: 'admin'`) checks `req.body.password` against `ADMIN_RESET_PASSWORD` with `safeEqual` before calling `handler` (401 „Ungültiges Admin-Reset-Passwort.“ on failure) and strips `password` from `body`; path Express syntax starting with `/`, no `*`/`?`/`#`; static paths before `/:id`; handler gets `{ user: { id, name, avatar, isAdmin, roles }, params, query, body }` and returns JSON (→ 200; `undefined` → `{ success: true }`) within 30 s (else 504 „Das Plugin hat nicht rechtzeitig geantwortet.“ and „Letzter Fehler“) |
 | `ctx.httpError(status, '<German>')` | `throw` it for a 4xx/5xx answer `{ error }`; any other throw → 500 „Im Plugin ist ein Fehler aufgetreten.“ + `lastError` |
 | `ctx.data.get(coll, id)`, `list(coll)`, `where(coll, field, op, value)`, `add(coll, obj)`, `set(coll, id, obj)`, `update(coll, id, patch)`, `delete(coll, id)` | own documents, returned as `{ id, ...data }` copies; `coll` `^[a-z][a-zA-Z0-9]{0,31}$`; ids 1–128 characters without `/`; ops `==`, `!=`, `<`, `<=`, `>`, `>=`, `in`; `update` of a missing document throws; no `limit`/`orderBy` — sort in memory; dates as ISO strings |
 | `ctx.settings.get()` | `{ key: value }` of the manifest's settings (secrets included; never return them) |
@@ -109,7 +109,7 @@ Every document that belongs to a member stores that member's Discord id as a str
 | `event.deleted` | `{ eventId, origin }` | `events:read` |
 | `member.deleted` | `{ userId }` | none |
 
-Handlers run after the core saved the change, one after another per plugin, on a copy of the payload; they cannot change or stop anything. A throw is logged and shown as „Letzter Fehler“; > 10 s logs a warning. Ignore events that are not yours (check `event.origin.plugin === ctx.plugin.id` if you created them). Saving a new event as active emits `event.created`, then `event.published`.
+Handlers run after the core saved the change, one after another per plugin, on a copy of the payload; they cannot change or stop anything. A throw is logged and shown as „Letzter Fehler“; > 10 s logs a warning, after 30 s the handler counts as failed (also „Letzter Fehler“) and your next queued handler runs. At most 20 handlers per hook. Ignore events that are not yours (check `event.origin.plugin === ctx.plugin.id` if you created them). Saving a new event as active emits `event.created`, then `event.published`.
 
 ### Discord messages and their limits
 

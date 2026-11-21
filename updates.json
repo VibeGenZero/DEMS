@@ -1,6 +1,17 @@
 {
-    "version": "3.4.0",
+    "version": "3.4.1",
     "releases": [
+        {
+            "version": "3.4.1",
+            "date": "2026-11-21",
+            "news": [
+                {
+                    "title": "🔒 Sicherheitsupdate für Plugins",
+                    "content": "Nach einer Sicherheitsprüfung des Plugin-Systems ist DEMS an mehreren Stellen dichter: Eigenes CSS in „Design anpassen“ und Plugin-Designs können über einen Kommentar-Trick keine fremden Bilder mehr nachladen. Ein Plugin, das hängen bleibt, legt seine Abläufe nicht mehr dauerhaft lahm – nach 30 Sekunden geht es weiter, und System › Plugins zeigt den Fehler an. Beim Einschalten eines nicht offiziellen Plugins sagt der Hinweis jetzt auch, dass sein Code im Browser jedes Mitglieds mitläuft, bei Admins mit Admin-Rechten. Für Betreiber: Im Docker-Image kann DEMS seinen eigenen Programmcode nicht mehr überschreiben, es schreibt nur noch nach /app/data.",
+                    "highlight": true
+                }
+            ]
+        },
         {
             "version": "3.4.0",
             "date": "2026-11-20",
