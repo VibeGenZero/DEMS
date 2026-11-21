@@ -43,7 +43,7 @@ function preparePluginsDir(tmpDir) {
 function seedEnabledState(dbPath) {
     const code = `
         require(${repoPath('plugin-sdk/state')}).writeState(${JSON.stringify(PLUGIN)}, {
-            enabled: true, confirmedVersion: '1.0.0', confirmedPermissions: ['events:read', 'events:draft']
+            enabled: true, confirmedVersion: '1.0.0', confirmedPermissions: ['events:read', 'events:draft', 'registrations:read']
         }).then(() => require(${repoPath('firebaseAdmin')}).close()).then(() => console.log('ok'));
     `;
     const result = runNode(code, { SQLITE_PATH: dbPath });

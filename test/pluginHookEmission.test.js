@@ -20,6 +20,7 @@ const { PERSONAS, ROLE_ID } = require('../dev/mockGuild');
 const { HOOK_NAMES, onHook, whenHooksIdle } = require('../plugin-sdk/hooks');
 const { validatePluginOrigin, changedFields, safeEmit, safeStatusChange } = require('../plugin-sdk/coreHooks');
 const { archiveEndedEvents } = require('../utils/eventArchive');
+const { checkInMember } = require('../utils/checkin');
 
 const ADMIN = PERSONAS.find(persona => persona.id === 'admin');
 const INVALID_ORIGIN = { error: 'Ungültige Plugin-Herkunft.' };
@@ -315,6 +316,38 @@ test('hook payloads never carry the check-in code and keep hostile text as plain
     }
 });
 
+test('registration.checkedIn: code check-in and admin toggle, never for a repeat or an undo', async () => {
+    const event = await createEvent({ title: 'Hook Check-in', status: 'active', approvalMode: 'instant', startDate: new Date(Date.now() - 3600_000).toISOString() });
+    const member = await loginAt(server.baseUrl, 'member');
+    const raider = await loginAt(server.baseUrl, 'raider');
+    for (const client of [member, raider]) {
+        const res = await client.send('POST', `/api/events/${event.id}/register`, {});
+        assert.equal(res.status, 200, await res.clone().text());
+    }
+    const { code } = await (await admin.send('POST', `/api/admin/events/${event.id}/generate-checkin`, {})).json();
+    for (let i = 0; i < 2; i++) {
+        const res = await member.send('POST', `/api/events/${event.id}/checkin`, { code });
+        assert.equal(res.status, 200, await res.clone().text());
+    }
+    const list = await (await admin.request(`/api/admin/events/${event.id}/registrations`)).json();
+    const raiderReg = list.data.find(reg => reg.userId === PERSONAS.find(p => p.id === 'raider').userId);
+    for (const checkedIn of [true, true, false]) {
+        const res = await admin.send('PUT', `/api/admin/registrations/${raiderReg.id}/checkin`, { checkedIn });
+        assert.equal(res.status, 200, await res.clone().text());
+    }
+    // 4 = event.created + event.published of the active event + the two first check-ins
+    const entries = (await hooksFor(event.id, 4)).filter(entry => entry.hook === 'registration.checkedIn');
+    assert.deepEqual(entries.map(entry => entry.payload.registration.userId),
+        ['member', 'raider'].map(id => PERSONAS.find(p => p.id === id).userId));
+    for (const entry of entries) {
+        assert.deepEqual(Object.keys(entry.payload).sort(), ['eventId', 'registration']);
+        assert.equal(entry.payload.eventId, event.id);
+        assert.equal(entry.payload.registration.checkedIn, true);
+        assert.equal(typeof entry.payload.registration.checkedInAt, 'string');
+        assert.equal('formAnswers' in entry.payload.registration, false);
+    }
+});
+
 // ── Discord paths and the auto-archive (this process, mock mode) ────────
 
 async function seenFor(eventId) {
@@ -363,4 +396,22 @@ test('the auto-archive emits event.ended', async () => {
     const entries = await seenFor(eventId);
     assert.deepEqual(names(entries), ['event.ended']);
     assert.equal(entries[0].payload.event.status, 'archived');
+});
+
+test('checkInMember (also behind the Discord button) emits registration.checkedIn once, not for guests', async () => {
+    const eventId = 'hook-checkin-discord';
+    const start = new Date(Date.now() - 3600_000).toISOString();
+    await setDoc(doc(db, 'events', eventId), { title: 'Hook Discord Check-in', status: 'active', startDate: start, createdAt: start,
+        checkinEnabled: true, checkinCode: '123456' });
+    const guest = PERSONAS.find(p => p.id === 'newbie').userId;
+    await setDoc(doc(db, 'registrations', 'hook-checkin-reg'), { eventId, userId: ADMIN.userId, userName: 'Admin', status: 'accepted',
+        createdAt: start, guests: [guest], pendingGuests: [] });
+    for (const userId of [ADMIN.userId, ADMIN.userId, guest]) {
+        const result = await checkInMember({ eventId, userId });
+        assert.equal(result.ok, true);
+    }
+    const entries = (await seenFor(eventId)).filter(entry => entry.hook === 'registration.checkedIn');
+    assert.equal(entries.length, 1);
+    assert.equal(entries[0].payload.registration.id, 'hook-checkin-reg');
+    assert.equal(entries[0].payload.registration.userId, ADMIN.userId);
 });

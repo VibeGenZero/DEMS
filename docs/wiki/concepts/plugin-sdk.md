@@ -3,7 +3,7 @@ id: plugin-sdk
 title: Plugin SDK — architecture, lifecycle, security model
 type: concept
 tags: [plugins, plugin-sdk, extensions, ctx, ui, hooks, permissions, trust, privacy, safe-mode, sdk-1]
-sources: [plugin-sdk, plugins/event-submissions, plugins/custom-design, routes/plugins.js, routes/pluginStatic.js, routes/pluginTheme.js, routes/adminPlugins.js, public/design-boot.js, public/js/core/plugins.js, public/js/core/pluginTheme.js, public/js/core/passwordDialog.js, public/js/admin/system-plugins.js, routes/user.js, server.js, test/pluginClientGuards.test.js, docs/superpowers/specs/2026-11-19-plugin-sdk-design.md, docs/superpowers/specs/2026-11-20-custom-design-plugin-design.md]
+sources: [plugin-sdk, utils/checkin.js, plugins/event-submissions, plugins/custom-design, routes/plugins.js, routes/pluginStatic.js, routes/pluginTheme.js, routes/adminPlugins.js, public/design-boot.js, public/js/core/plugins.js, public/js/core/pluginTheme.js, public/js/core/passwordDialog.js, public/js/admin/system-plugins.js, routes/user.js, server.js, test/pluginClientGuards.test.js, docs/superpowers/specs/2026-11-19-plugin-sdk-design.md, docs/superpowers/specs/2026-11-20-custom-design-plugin-design.md]
 depends_on: [server, data-layer]
 see_also: [write-plugin, security, frontend-app, bot, data-model, api-index, event-lifecycle]
 ---
@@ -23,7 +23,8 @@ Spec: [2026-11-19-plugin-sdk-design](../../superpowers/specs/2026-11-19-plugin-s
 | host | `plugin-sdk/host.js` | lifecycle, on/off, admin views (`views.js`), settings validation, data delete, `purgeUser`, `wipeAllData`, `reportError`; one write chain per plugin (state writes are read-merge-write) |
 | state | `plugin-sdk/state.js` | `pluginState/<id>` and `pluginSettings/<id>` (see [data-model](data-model.md)) |
 | ctx | `plugin-sdk/context.js`, `data.js`, `discord.js`, `theme.js`, `themeCss.js` | the server API, built once per plugin (a fresh one only for a retry after a failed `register`); `theme.js` + `themeCss.js` store allow-list-filtered CSS in `pluginThemes` |
-| hooks | `plugin-sdk/hooks.js`, `plugin-sdk/coreHooks.js` | per-plugin queues; the core's emit helpers (`safeEmit`, `emitEventCreated`, …) and the `pluginOrigin` check |
+| hooks | `plugin-sdk/hooks.js`, `plugin-sdk/coreHooks.js` | per-plugin queues; the core's emit helpers (`safeEmit`, `emitEventCreated`, `emitRegistrationCheckedIn`, …) and the `pluginOrigin` check |
+| registrations | `plugin-sdk/registrations.js` | `ctx.registrations.list({ eventId, userId })` and `toPluginRegistration` (SDK 1.1) |
 | errors | `plugin-sdk/errors.js` | `PluginPermissionError`, `PluginDataError`, `PluginHttpError` (`ctx.httpError`), `PluginHostError` (German messages) |
 | API | `routes/plugins.js` | `GET /api/plugins` (client list) + dispatcher `/api/plugins/<id>/…` (on/off checked per request; optional `password: true` admin reset password guard; a handler that has not answered after 30 s → 504 „Das Plugin hat nicht rechtzeitig geantwortet.“ + `lastError`, its late result is dropped) |
 | theme CSS | `routes/pluginTheme.js`, `public/design-boot.js`, `public/js/core/pluginTheme.js` | `GET /theme.css` (public, ETag + `no-cache`) and `GET /theme-preview.css` (admin only, `no-store`) linked as `#custom-theme` in `<head>`, escape hatch `?design=standard` in `design-boot.js`, `ui.theme` + `#design-preview-bar` |
@@ -96,6 +97,7 @@ Emitted by the core **after** the write is committed, never awaited by the reque
 | `event.cancelled` | `{ event }` | status becomes `cancelled` (`PUT …/cancel`, `PUT …/status`, `PUT …/:id`) |
 | `event.deleted` | `{ eventId, origin }` | `DELETE …/:id`, series delete (per date) |
 | `member.deleted` | `{ userId }` | `DELETE /api/user/account`, after the core purge; reaches every switched-on plugin |
+| `registration.checkedIn` (SDK 1.1, needs `registrations:read`) | `{ registration, eventId }` (`registration` in the shape of `ctx.registrations`) | a member's own check-in after it is stored: `checkInMember` in `utils/checkin.js` (code check-in `POST /api/events/:id/checkin`, Discord „Einchecken“ button) and `PUT /api/admin/registrations/:id/checkin` with `checkedIn: true` without `guestId`; never for a repeat, an undo or a guest (`emitRegistrationCheckedIn` in `coreHooks.js`) |
 
 A new event counts as coming from `draft`, a stored one without status as `active` (ruling R6). The admin system reset emits no hooks. Details per code path: [event-lifecycle](event-lifecycle.md#plugin-hooks).
 
@@ -143,6 +145,7 @@ Admin-side rules (reset password for secrets, audit actions, secrets only as `{ 
 
 - Files live in `plugin-sdk/` (not `plugins/loader.js` / `utils/pluginHooks.js`); `plugins/` holds only plugins.
 - `ctx.events.get/list` return events of **every** status (drafts included) in the public shape + `origin` — server code the admin enabled.
+- `ctx.registrations.list({ eventId, userId } = {})` (SDK 1.1) returns `{ id, eventId, userId, status, source, createdAt, checkedIn, checkedInAt, slotId }` sorted by `createdAt` (missing values `null`, `checkedIn` always a boolean) — never form answers, guests, guest check-ins, offers or `checkinInvitedAt`; a filter that is no document id matches nothing.
 - `ctx.routes.*` and `ctx.hooks.on` work only while `register()` runs; later calls throw.
 - A grown permission list of an official plugin is not marked in the list (it just keeps running).
 - The prefill of `ui.openEventEditor` uses the editor's draft fields (`startDate`, not `start`).

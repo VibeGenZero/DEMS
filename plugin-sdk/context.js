@@ -14,7 +14,8 @@ const { parseDate, isEventOver } = require('../utils/eventListing');
 const { createDataApi } = require('./data');
 const { createDiscordApi } = require('./discord');
 const { createThemeApi } = require('./theme');
-const { HOOK_NAMES, EVENT_HOOKS, onHook, toPluginEvent } = require('./hooks');
+const { createRegistrationsApi } = require('./registrations');
+const { HOOK_NAMES, EVENT_HOOKS, REGISTRATION_HOOKS, onHook, toPluginEvent } = require('./hooks');
 const { PluginPermissionError, PluginHttpError } = require('./errors');
 const state = require('./state');
 
@@ -170,13 +171,14 @@ function createContext({ entry, host }) {
 
     const hooks = {
         /**
-         * @param {string} name -> One of the hook names; event hooks need `events:read`.
+         * @param {string} name -> One of the hook names; event hooks need `events:read`, registration hooks `registrations:read`.
          * @param {(payload: object) => (void|Promise<void>)} handler
          */
         on(name, handler) {
             requireOpen();
             if (!HOOK_NAMES.includes(name)) throw new Error(`Unbekannter Hook: ${name}`);
             if (EVENT_HOOKS.includes(name)) requirePermission('events:read');
+            if (REGISTRATION_HOOKS.includes(name)) requirePermission('registrations:read');
             if (typeof handler !== 'function') throw new Error(`Hook ${name}: Handler muss eine Funktion sein.`);
             onHook(id, name, handler);
         }
@@ -210,6 +212,7 @@ function createContext({ entry, host }) {
         theme: createThemeApi(id, { granted }),
         settings: Object.freeze({ get: readSettings }),
         events: Object.freeze(events),
+        registrations: createRegistrationsApi({ granted }),
         members: Object.freeze(members),
         discord: createDiscordApi({
             pluginId: id,

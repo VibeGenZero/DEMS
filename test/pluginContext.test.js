@@ -18,7 +18,7 @@ const hooks = require('../plugin-sdk/hooks');
 const state = require('../plugin-sdk/state');
 const { createContext } = require('../plugin-sdk/context');
 
-const USED = ['events', 'users', 'auditLogs', 'pluginState', 'pluginSettings'];
+const USED = ['events', 'users', 'registrations', 'auditLogs', 'pluginState', 'pluginSettings'];
 const DAY = 24 * 60 * 60 * 1000;
 
 let logs;
@@ -148,6 +148,43 @@ test('event hooks need events:read, member.deleted needs nothing', async () => {
 
     const withRead = build(['events:read']).ctx;
     assert.doesNotThrow(() => withRead.hooks.on('event.created', () => {}));
+});
+
+test('registration.checkedIn needs registrations:read', () => {
+    assert.throws(() => build([]).ctx.hooks.on('registration.checkedIn', () => {}), PluginPermissionError);
+    assert.doesNotThrow(() => build(['registrations:read']).ctx.hooks.on('registration.checkedIn', () => {}));
+});
+
+test('ctx.registrations needs registrations:read', async () => {
+    await assert.rejects(build([]).ctx.registrations.list(), PluginPermissionError);
+});
+
+test('ctx.registrations.list returns attendance fields only, filtered and sorted by createdAt', async () => {
+    const member = '111111111111111111';
+    await setDoc(doc(db, 'registrations', 'r2'), {
+        eventId: 'e1', userId: member, status: 'accepted', source: 'web', createdAt: '2026-11-02T10:00:00.000Z',
+        checkedIn: true, checkedInAt: '2026-11-03T10:00:00.000Z', slotId: 'tank', formAnswers: { Discord: 'x' },
+        guests: ['2'], pendingGuests: [], guestCheckins: {}, offer: null, checkinInvitedAt: '2026-11-03T09:00:00.000Z'
+    });
+    await setDoc(doc(db, 'registrations', 'r1'), {
+        eventId: 'e2', userId: member, status: 'pending', source: 'discord', createdAt: '2026-11-01T10:00:00.000Z'
+    });
+    await setDoc(doc(db, 'registrations', 'r3'), {
+        eventId: 'e1', userId: '222222222222222222', status: 'waitlisted', createdAt: '2026-11-04T10:00:00.000Z'
+    });
+    const { ctx } = build(['registrations:read']);
+    assert.deepEqual(await ctx.registrations.list({ userId: member }), [
+        { id: 'r1', eventId: 'e2', userId: member, status: 'pending', source: 'discord',
+            createdAt: '2026-11-01T10:00:00.000Z', checkedIn: false, checkedInAt: null, slotId: null },
+        { id: 'r2', eventId: 'e1', userId: member, status: 'accepted', source: 'web',
+            createdAt: '2026-11-02T10:00:00.000Z', checkedIn: true, checkedInAt: '2026-11-03T10:00:00.000Z', slotId: 'tank' }
+    ]);
+    assert.deepEqual((await ctx.registrations.list()).map(item => item.id), ['r1', 'r2', 'r3']);
+    assert.equal((await ctx.registrations.list()).at(-1).source, null);
+    assert.deepEqual((await ctx.registrations.list({ eventId: 'e1' })).map(item => item.id), ['r2', 'r3']);
+    assert.deepEqual(await ctx.registrations.list({ eventId: 'e1', userId: 'nobody' }), []);
+    assert.deepEqual(await ctx.registrations.list({ eventId: 'a/b' }), []);
+    assert.deepEqual(await ctx.registrations.list({ userId: 42 }), []);
 });
 
 test('onDisable collects callbacks', () => {

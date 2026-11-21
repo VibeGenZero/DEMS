@@ -8,6 +8,7 @@ const { db, collection, doc, getDoc, getDocs, updateDoc, query, where } = requir
 const { parseDate, isEventOver } = require('./eventListing');
 const { withEventLock } = require('./eventLock');
 const { isListedGuest, guestCheckinOf } = require('./participations');
+const { emitRegistrationCheckedIn } = require('../plugin-sdk/coreHooks');
 
 /**
  * Whether an event has check-in switched on.
@@ -171,6 +172,7 @@ async function checkInMember({ eventId, userId, now = new Date(), requireRunning
     }
     const checkedInAt = now.toISOString();
     await updateDoc(doc(db, 'registrations', registration.id), { checkedIn: true, checkedInAt });
+    emitRegistrationCheckedIn(registration.id, { ...registration.data, checkedIn: true, checkedInAt });
     return { ok: true, alreadyCheckedIn: false, checkedInAt, event, asGuest: false };
 }
 

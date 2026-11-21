@@ -5,7 +5,7 @@
  */
 const HOOKS = [
     'event.created', 'event.published', 'event.updated', 'event.ended',
-    'event.cancelled', 'event.deleted', 'member.deleted'
+    'event.cancelled', 'event.deleted', 'member.deleted', 'registration.checkedIn'
 ];
 
 function register(ctx) {

@@ -88,6 +88,7 @@ module.exports = {
 | `ctx.settings.get()` | `{ key: value }` of the manifest's settings (secrets included; never return them) |
 | `ctx.theme.saveDraft(css)`, `discardDraft()`, `publish(css)`, `clear()` | `theme`; checks `css` with `checkThemeCss` (≤ 50 000 chars, no backslashes, allow-listed functions and at-rules only; throws 400 `PluginHttpError` with German reason + line number on failure) and stores it in `pluginThemes/<id>`, served at `/theme.css` (`publish`) and `/theme-preview.css` (`saveDraft`). The SDK guarantees the CSS filter; your routes own `access: 'admin'`, `password: true` and `ctx.audit` |
 | `ctx.events.get(id)`, `ctx.events.list({ upcoming })`, `ctx.events.url(id)` | `events:read`; public event shape + `origin`, **every status** (drafts too — do not show drafts to members); `list` sorted by start |
+| `ctx.registrations.list({ eventId, userId })` | `registrations:read` (SDK 1.1); `{ id, eventId, userId, status, source, createdAt, checkedIn, checkedInAt, slotId }` sorted by `createdAt`, no form answers or guests |
 | `ctx.members.get(userId)` | `members:read`; `{ id, name, avatar }` or `null` |
 | `ctx.discord.sendDM(userId, { text, link? })` | `discord:dm`; → `true`/`false` |
 | `ctx.discord.sendChannelMessage(settingKey, { text, link? })` | `discord:channel`; names one of **your own `channel` settings**, never a channel id |
@@ -108,6 +109,7 @@ Every document that belongs to a member stores that member's Discord id as a str
 | `event.updated` | `{ event, changed: [field names] }` | `events:read` |
 | `event.deleted` | `{ eventId, origin }` | `events:read` |
 | `member.deleted` | `{ userId }` | none |
+| `registration.checkedIn` | `{ registration, eventId }` — a member's own first check-in (code, Discord button, admin) | `registrations:read` (SDK 1.1) |
 
 Handlers run after the core saved the change, one after another per plugin, on a copy of the payload; they cannot change or stop anything. A throw is logged and shown as „Letzter Fehler“; > 10 s logs a warning, after 30 s the handler counts as failed (also „Letzter Fehler“) and your next queued handler runs. At most 20 handlers per hook. Ignore events that are not yours (check `event.origin.plugin === ctx.plugin.id` if you created them). Saving a new event as active emits `event.created`, then `event.published`.
 

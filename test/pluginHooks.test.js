@@ -40,12 +40,13 @@ afterEach(async () => {
     console.warn = originalWarn;
 });
 
-test('HOOK_NAMES and EVENT_HOOKS list the SDK 1.0 hooks', () => {
+test('HOOK_NAMES, EVENT_HOOKS and REGISTRATION_HOOKS list the SDK 1.1 hooks', () => {
     assert.deepEqual(hooks.HOOK_NAMES, [
         'event.created', 'event.published', 'event.updated', 'event.ended',
-        'event.cancelled', 'event.deleted', 'member.deleted'
+        'event.cancelled', 'event.deleted', 'member.deleted', 'registration.checkedIn'
     ]);
     assert.deepEqual(hooks.EVENT_HOOKS, hooks.HOOK_NAMES.filter(name => name.startsWith('event.')));
+    assert.deepEqual(hooks.REGISTRATION_HOOKS, ['registration.checkedIn']);
 });
 
 test('onHook and emitHook throw on an unknown hook name', () => {
