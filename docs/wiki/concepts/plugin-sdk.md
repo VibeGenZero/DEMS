@@ -9,7 +9,7 @@ see_also: [write-plugin, security, frontend-app, bot, data-model, api-index, eve
 ---
 # Plugin SDK — architecture, lifecycle, security model
 
-> TL;DR: A plugin is one folder with a `plugin.json` (+ optional `server.js`, `client.js`, `client.css`, `assets/`). Official plugins come from `<app>/plugins` (shipped in the image, chip „Offiziell“), custom ones from `PLUGINS_DIR` (default `data/plugins`, on the volume). Plugins run **in the DEMS process without a sandbox**, but reach DEMS only through a permission-checking `ctx` (server) and `ui` (browser) with plain-data in/out, so isolation can be added later. `plugin-sdk/host.js` discovers, validates and loads them at startup (`register(ctx)` with 5 s timeout), admins switch them in System › Plugins (custom: trust dialog + reset password + audit log), `PLUGINS_SAFE_MODE=true` runs no plugin code (plugins can then only be switched off). SDK 1.0 = routes, own data (reserved `userId` → purged on account deletion), settings, seven hooks, rate-limited DMs/channel posts, a tab page, the event editor prefilled with an origin. Writing one: [write-plugin](../howto/write-plugin.md).
+> TL;DR: A plugin is one folder with a `plugin.json` (+ optional `server.js`, `client.js`, `client.css`, `assets/`). Official plugins come from `<app>/plugins` (shipped in the image, chip „Offiziell“), custom ones from `PLUGINS_DIR` (default `data/plugins`, on the volume). Plugins run **in the DEMS process without a sandbox**, but reach DEMS only through a permission-checking `ctx` (server) and `ui` (browser) with plain-data in/out, so isolation can be added later. `plugin-sdk/host.js` discovers, validates and loads them at startup (`register(ctx)` with 5 s timeout), admins switch them in System › Plugins (custom: trust dialog + reset password + audit log), `PLUGINS_SAFE_MODE=true` runs no plugin code (plugins can then only be switched off). SDK 1.0 = routes, own data (reserved `userId` → purged on account deletion), settings, seven hooks, rate-limited DMs/channel posts, a tab page, the event editor prefilled with an origin. SDK 1.1 (`sdk: 1.1`) adds `ctx.registrations` + hook `registration.checkedIn` (`registrations:read`), guarded Discord roles (`discord:roles`), `ctx.members.search` and `ctx.profile.badges` (plugin badges on the member's profile). Writing one: [write-plugin](../howto/write-plugin.md).
 
 Spec: [2026-11-19-plugin-sdk-design](../../superpowers/specs/2026-11-19-plugin-sdk-design.md) (#155). Where this page and the spec differ, this page follows the code.
 
@@ -25,6 +25,7 @@ Spec: [2026-11-19-plugin-sdk-design](../../superpowers/specs/2026-11-19-plugin-s
 | ctx | `plugin-sdk/context.js`, `data.js`, `discord.js`, `theme.js`, `themeCss.js` | the server API, built once per plugin (a fresh one only for a retry after a failed `register`); `theme.js` + `themeCss.js` store allow-list-filtered CSS in `pluginThemes` |
 | hooks | `plugin-sdk/hooks.js`, `plugin-sdk/coreHooks.js` | per-plugin queues; the core's emit helpers (`safeEmit`, `emitEventCreated`, `emitRegistrationCheckedIn`, …) and the `pluginOrigin` check |
 | members | `plugin-sdk/members.js` | `ctx.members.get/search` (`toPluginMember`: name = display, user or global name) |
+| profile | `plugin-sdk/profile.js` | `validatePluginBadges`, `collectPluginBadges` for `GET /api/user/profile` (SDK 1.1) |
 | registrations | `plugin-sdk/registrations.js` | `ctx.registrations.list({ eventId, userId })` and `toPluginRegistration` (SDK 1.1) |
 | errors | `plugin-sdk/errors.js` | `PluginPermissionError`, `PluginDataError`, `PluginHttpError` (`ctx.httpError`), `PluginHostError` (German messages) |
 | API | `routes/plugins.js` | `GET /api/plugins` (client list) + dispatcher `/api/plugins/<id>/…` (on/off checked per request; optional `password: true` admin reset password guard; a handler that has not answered after 30 s → 504 „Das Plugin hat nicht rechtzeitig geantwortet.“ + `lastError`, its late result is dropped) |
@@ -142,11 +143,13 @@ Admin-side rules (reset password for secrets, audit actions, secrets only as `{ 
 | setting value (text types) | ≤ 4000 characters |
 | origin `ref` | 1–100 characters |
 | client page / tab | one page per plugin, tab label ≤ 30 |
+| profile badges (SDK 1.1) | one provider per plugin, 2 s per profile call, ≤ 50 badges; `id` `[a-zA-Z0-9-]{1,40}`, `name` 1–40, `description` ≤ 200, `icon` `bi-*`, `color` `#rrggbb`, `progress` 0–1 |
 
 ## Where the code differs from the spec
 
 - Files live in `plugin-sdk/` (not `plugins/loader.js` / `utils/pluginHooks.js`); `plugins/` holds only plugins.
 - `ctx.events.get/list` return events of **every** status (drafts included) in the public shape + `origin` — server code the admin enabled.
+- `ctx.profile.badges(provider)` (SDK 1.1, no permission, once and only during `register()`): `GET /api/user/profile` calls `provider({ userId })` of every switched-on plugin in parallel after the built-in badges, 2 s each (host `profileProviders()`, none in safe mode); a throw, a timeout („Profil-Badges haben nicht innerhalb von 2 s geantwortet.“) or a non-list answer („Profil-Badges müssen eine Liste sein.“) leaves that plugin out and sets `lastError`, the profile always answers. Each entry is checked and copied (`{ id: 'p:<plugin>:<id>', name, description, icon, color?, unlocked, progress? }`), an invalid one is dropped alone; `renderBadgeList` escapes the texts.
 - `ctx.registrations.list({ eventId, userId } = {})` (SDK 1.1) returns `{ id, eventId, userId, status, source, createdAt, checkedIn, checkedInAt, slotId }` sorted by `createdAt` (missing values `null`, `checkedIn` always a boolean) — never form answers, guests, guest check-ins, offers or `checkinInvitedAt`; a filter that is no document id matches nothing.
 - `ctx.routes.*` and `ctx.hooks.on` work only while `register()` runs; later calls throw.
 - A grown permission list of an official plugin is not marked in the list (it just keeps running).

@@ -205,3 +205,28 @@ test('safe mode shows in the admin list and refuses switching a plugin', async (
     assert.equal(res.status, 409);
     assert.deepEqual(await res.json(), { error: 'Abgesicherter Modus aktiv – Plugins lassen sich nicht einschalten.' });
 });
+
+test('the profile lists plugin badges after the built-in ones and counts them', async () => {
+    const member = await loginAs('member');
+    const res = await member.request('/api/user/profile');
+    assert.equal(res.status, 200);
+    const profile = await res.json();
+    const ids = profile.badges.map(entry => entry.id);
+    assert.equal(ids.at(-1), `p:${PLUGIN}:probe`);
+    assert.ok(ids.indexOf(`p:${PLUGIN}:probe`) > ids.indexOf('newcomer'), 'after the built-in badges');
+    assert.deepEqual(profile.badges.at(-1), {
+        id: `p:${PLUGIN}:probe`, name: '<b>Probe</b>', description: `Testbadge für ${personaById('member').userId}`,
+        icon: 'bi-bug', color: '#123456', unlocked: true
+    });
+    assert.equal(ids.includes(`p:${PLUGIN}:nope`), false);
+    assert.equal(ids.some(id => id.startsWith(`p:${IDLE_PLUGIN}:`)), false, 'a plugin that is off is not asked');
+    assert.equal(profile.totalBadges, profile.badges.length);
+    assert.equal(profile.unlockedBadges, profile.badges.filter(entry => entry.unlocked).length);
+});
+
+test('safe mode asks no plugin for profile badges', async () => {
+    const member = await loginAs('member', safeServer.baseUrl);
+    const profile = await (await member.request('/api/user/profile')).json();
+    assert.equal(profile.badges.some(entry => entry.id.startsWith('p:')), false);
+});
+

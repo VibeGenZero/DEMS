@@ -49,7 +49,9 @@ function build(permissions = [], { registering = true } = {}) {
         recordCollection: async () => {},
         routes: [],
         disableCallbacks: [],
-        isRegistering: () => registering
+        isRegistering: () => registering,
+        profileProviders: [],
+        setProfileProvider: fn => runtime.profileProviders.push(fn)
     };
     return { ctx: createContext({ entry: entry(permissions), host: runtime }), runtime };
 }
@@ -185,6 +187,17 @@ test('ctx.registrations.list returns attendance fields only, filtered and sorted
     assert.deepEqual(await ctx.registrations.list({ eventId: 'e1', userId: 'nobody' }), []);
     assert.deepEqual(await ctx.registrations.list({ eventId: 'a/b' }), []);
     assert.deepEqual(await ctx.registrations.list({ userId: 42 }), []);
+});
+
+test('ctx.profile.badges stores one provider during register()', () => {
+    const { ctx, runtime } = build([]);
+    const provider = () => [];
+    assert.throws(() => ctx.profile.badges('nope'), { message: 'Profil-Badges: provider muss eine Funktion sein.' });
+    ctx.profile.badges(provider);
+    assert.deepEqual(runtime.profileProviders, [provider]);
+    assert.throws(() => ctx.profile.badges(() => []), { message: 'Profil-Badges lassen sich nur einmal anmelden.' });
+    assert.throws(() => build([], { registering: false }).ctx.profile.badges(provider),
+        { message: 'Routen und Hooks lassen sich nur während register() anmelden.' });
 });
 
 test('onDisable collects callbacks', () => {

@@ -71,6 +71,8 @@ The description says „Status: …“, for a guest place „Du bist Gast von <N
 
 Badge texts are German; icons are Bootstrap Icons class names (`bi-*`); `test/vendorAssets.test.js` checks that each one exists in the vendored font.
 
+After the built-in badges come the badges of switched-on plugins (SDK 1.1, `ctx.profile.badges`): `pluginBadgesFor(userId)` asks every provider in parallel through `collectPluginBadges` (`plugin-sdk/profile.js`, 2 s each, invalid entries dropped, ids `p:<plugin>:<id>`); `unlockedBadges`/`totalBadges` count them. No plugin host (tests, a start that failed) or safe mode → none. See [plugin-sdk](../concepts/plugin-sdk.md).
+
 ## Gotchas
 
 - Comments and guest references to a deleted user are not removed by `DELETE /account`.

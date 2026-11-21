@@ -44,6 +44,7 @@ const SEALED = 'Routen und Hooks lassen sich nur während register() anmelden.';
  * @property {RouteDef[]} routes -> Filled by `ctx.routes.*`.
  * @property {Function[]} disableCallbacks -> Filled by `ctx.onDisable`.
  * @property {() => boolean} [isRegistering] -> False once `register()` is over; routes and hooks are refused then.
+ * @property {(provider: Function) => void} [setProfileProvider] -> Stores the plugin's profile badge provider (SDK 1.1).
  */
 
 const isDocId = id => typeof id === 'string' && id.length >= 1 && id.length <= MAX_DOC_ID_LENGTH && !id.includes('/');
@@ -183,6 +184,22 @@ function createContext({ entry, host }) {
         await addAuditLog(`plugin:${id}:${action}`, adminId, details, targetId);
     }
 
+    let profileRegistered = false;
+    const profile = {
+        /**
+         * Badges for the member's own profile (SDK 1.1), once and only during `register()`.
+         *
+         * @param {(request: { userId: string }) => (object[]|Promise<object[]>)} provider -> See plugin-sdk/profile.js for the shape.
+         */
+        badges(provider) {
+            requireOpen();
+            if (typeof provider !== 'function') throw new Error('Profil-Badges: provider muss eine Funktion sein.');
+            if (profileRegistered) throw new Error('Profil-Badges lassen sich nur einmal anmelden.');
+            profileRegistered = true;
+            if (typeof host.setProfileProvider === 'function') host.setProfileProvider(provider);
+        }
+    };
+
     function onDisable(fn) {
         if (typeof fn !== 'function') throw new Error('onDisable erwartet eine Funktion.');
         host.disableCallbacks.push(fn);
@@ -209,6 +226,7 @@ function createContext({ entry, host }) {
         siteUrl: hash => buildSiteUrl(hash),
         audit,
         hooks: Object.freeze(hooks),
+        profile: Object.freeze(profile),
         onDisable,
         httpError: (status, message) => new PluginHttpError(status, message)
     });

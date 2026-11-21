@@ -19,6 +19,12 @@ function register(ctx) {
         });
     }
 
+    // Profile badges (SDK 1.1): one valid badge with markup in its name, one with an unknown icon
+    ctx.profile.badges(({ userId }) => [
+        { id: 'probe', name: '<b>Probe</b>', description: `Testbadge für ${userId}`, icon: 'bi-bug', color: '#123456', unlocked: true },
+        { id: 'nope', name: 'Kaputt', icon: 'nope', unlocked: true }
+    ]);
+
     ctx.routes.get('/log', { access: 'admin' }, async () => {
         const entries = await ctx.data.list('log');
         return entries.sort((a, b) => a.seq - b.seq);
