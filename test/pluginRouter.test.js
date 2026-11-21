@@ -52,6 +52,7 @@ before(async () => {
     });
     app.use('/plugins', createPluginStatic(getHost));
     app.use('/api/plugins', createPluginRouter(getHost));
+    app.use('/api/plugins-short', createPluginRouter(getHost, { handlerTimeoutMs: 50 }));
     await new Promise(resolve => {
         listener = app.listen(0, '127.0.0.1', resolve);
     });
@@ -160,6 +161,21 @@ test('an httpError with a status outside 400-599 counts as a plain throw', async
         assert.deepEqual(await res.json(), { error: 'Im Plugin ist ein Fehler aufgetreten.' });
     }
     assert.equal(host.errors.length, 3);
+});
+
+test('a handler that does not answer in time gets 504 and is reported, other routes keep working', async () => {
+    host.errors.length = 0;
+    host.routes = [
+        route('GET', '/hang/:itemId', () => new Promise(() => {})),
+        route('GET', '/quick', () => ({ ok: true }))
+    ];
+    const res = await call('/api/plugins-short/demo/hang/42');
+    assert.equal(res.status, 504);
+    assert.deepEqual(await res.json(), { error: 'Das Plugin hat nicht rechtzeitig geantwortet.' });
+    assert.deepEqual(host.errors, [['demo', 'Route GET /hang/:itemId hat nicht innerhalb von 0,05 s geantwortet.']]);
+    const quick = await call('/api/plugins-short/demo/quick');
+    assert.equal(quick.status, 200);
+    assert.deepEqual(await quick.json(), { ok: true });
 });
 
 test('a result that is not JSON answers 500', async () => {

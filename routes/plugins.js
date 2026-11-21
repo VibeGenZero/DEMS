@@ -7,16 +7,21 @@
  * routes run behind the same chain as every core route. A handler gets plain
  * copies (`{ user, params, query, body }`), never `req` or `res`; its result
  * is sent as JSON. The on/off switch is checked on every request because
- * `routesOf` returns the routes regardless of it.
+ * `routesOf` returns the routes regardless of it. A handler that has not
+ * answered after `handlerTimeoutMs` gets 504 and is reported; it cannot be
+ * stopped, but its late result is dropped.
  */
 const express = require('express');
 const { requireAuth, requireAdmin, safeEqual } = require('../middleware/auth');
 const { PluginHttpError } = require('../plugin-sdk/errors');
 
+const DEFAULT_HANDLER_TIMEOUT_MS = 30000;
+
 const MESSAGES = {
     pluginNotFound: 'Plugin nicht gefunden.',
     routeNotFound: 'Nicht gefunden.',
     pluginFailed: 'Im Plugin ist ein Fehler aufgetreten.',
+    pluginTimeout: 'Das Plugin hat nicht rechtzeitig geantwortet.',
     listFailed: 'Die Plugins konnten nicht geladen werden.',
     badPassword: 'Ungültiges Admin-Reset-Passwort.'
 };
@@ -46,24 +51,50 @@ function pluginUser(user) {
     };
 }
 
+const seconds = ms => String(ms / 1000).replace('.', ',');
+
+/** Marks the timeout of `answerInTime`, so it is told apart from a throw of the handler. */
+class HandlerTimeout extends Error {}
+
+/** Resolve with `promise`, or reject with a `HandlerTimeout` after `ms`. */
+async function answerInTime(promise, ms, message) {
+    let timer;
+    const timeout = new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new HandlerTimeout(message)), ms);
+    });
+    try {
+        return await Promise.race([promise, timeout]);
+    } finally {
+        clearTimeout(timer);
+    }
+}
+
 const isHttpAnswer = err => err instanceof PluginHttpError && Number.isInteger(err.status) && err.status >= 400 && err.status <= 599;
 
-/** Wrap a plugin handler: plain input in, JSON out, errors as German answers. */
-function wrapHandler(host, pluginId, handler) {
+/** Wrap a plugin handler: plain input in, JSON out, errors as German answers, at most `timeoutMs`. */
+function wrapHandler(host, pluginId, route, timeoutMs) {
+    const { handler } = route;
     return async (req, res) => {
         try {
-            const result = await handler({
+            const input = {
                 user: pluginUser(req.session.user),
                 params: { ...req.params },
                 query: structuredClone(req.query),
                 body: structuredClone(req.body)
-            });
+            };
+            const result = await answerInTime(Promise.resolve().then(() => handler(input)), timeoutMs,
+                `Route ${route.method} ${route.path} hat nicht innerhalb von ${seconds(timeoutMs)} s geantwortet.`);
             // structuredClone refuses functions and symbols anywhere, JSON.stringify refuses BigInt
             const json = JSON.stringify(structuredClone(result === undefined ? { success: true } : result));
             if (json === undefined) throw new Error('Das Ergebnis lässt sich nicht als JSON senden.');
             res.status(200).type('application/json').send(json);
         } catch (err) {
             if (isHttpAnswer(err)) return res.status(err.status).json({ error: String(err.message) });
+            if (err instanceof HandlerTimeout) {
+                console.error(`[plugin:${pluginId}] ${err.message}`);
+                host.reportError(pluginId, err.message);
+                return res.status(504).json({ error: MESSAGES.pluginTimeout });
+            }
             const message = err && err.message ? err.message : String(err);
             console.error(`[plugin:${pluginId}] Route ${req.method} ${req.path} failed: ${message}`);
             host.reportError(pluginId, message);
@@ -94,7 +125,7 @@ function requireResetPassword(req, res, next) {
 }
 
 /** Build the router of one plugin; a route Express refuses is skipped and reported. */
-function buildPluginRouter(host, pluginId, routes) {
+function buildPluginRouter(host, pluginId, routes, handlerTimeoutMs) {
     const router = express.Router();
     for (const route of routes) {
         const method = String(route.method).toLowerCase();
@@ -102,7 +133,7 @@ function buildPluginRouter(host, pluginId, routes) {
             const guards = GUARDS[route.access];
             if (!guards || !['get', 'post', 'put', 'delete'].includes(method)) throw new Error('unsupported method or access');
             const chain = route.password ? [...guards, requireResetPassword] : guards;
-            router[method](route.path, ...chain, wrapHandler(host, pluginId, route.handler));
+            router[method](route.path, ...chain, wrapHandler(host, pluginId, route, handlerTimeoutMs));
         } catch (err) {
             console.error(`[plugin:${pluginId}] Route ${route.method} ${route.path} skipped: ${err.message}`);
             host.reportError(pluginId, `Route ${route.method} ${route.path} ist ungültig.`);
@@ -115,11 +146,13 @@ function buildPluginRouter(host, pluginId, routes) {
  * Router mounted at `/api/plugins`.
  *
  * @param {() => object} getHost -> Returns the plugin host; throws while it is not started.
+ * @param {object} [options]
+ * @param {number} [options.handlerTimeoutMs] -> Time a handler has to answer (tests pass a short one).
  * @returns {import('express').Router}
  * @example
  * app.use('/api/plugins', createPluginRouter(() => pluginHost()));
  */
-function createPluginRouter(getHost) {
+function createPluginRouter(getHost, { handlerTimeoutMs = DEFAULT_HANDLER_TIMEOUT_MS } = {}) {
     const router = express.Router();
     /** @type {Map<string, { routes: object[], router: import('express').Router }>} */
     const cache = new Map();
@@ -128,7 +161,7 @@ function createPluginRouter(getHost) {
         const routes = host.routesOf(pluginId);
         const cached = cache.get(pluginId);
         if (cached && sameRoutes(cached.routes, routes)) return cached.router;
-        const built = buildPluginRouter(host, pluginId, routes);
+        const built = buildPluginRouter(host, pluginId, routes, handlerTimeoutMs);
         cache.set(pluginId, { routes, router: built });
         return built;
     }
@@ -176,4 +209,4 @@ function createPluginRouter(getHost) {
     return router;
 }
 
-module.exports = { createPluginRouter };
+module.exports = { createPluginRouter, DEFAULT_HANDLER_TIMEOUT_MS };
