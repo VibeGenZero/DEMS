@@ -776,9 +776,32 @@ function buildSubmissions(clock) {
  * @param {Date} [now] -> Reference time; all dates are relative to it.
  * @returns {Object} -> `{ [pluginId]: { [collection]: { [documentId]: data } } }`.
  */
+/** Seeded badges of „Badges“ (plugins/badges): one manual badge the admin holds, one rule badge nobody holds yet. */
+const BADGE_ID = { FOUNDER: 'dev-badge-founder', REGULAR: 'dev-badge-regular' };
+
+function buildBadges(clock) {
+    const created = clock.offset(-20 * DAY);
+    const badge = (fields) => ({ description: '', roleId: null, createdAt: created, createdBy: people.mori.userId,
+        updatedAt: created, updatedBy: people.mori.userId, ...fields });
+    return {
+        badges: {
+            [BADGE_ID.FOUNDER]: badge({ name: 'Gründungsmitglied', description: 'Von Anfang an dabei', icon: 'bi-star-fill',
+                color: '#f59e0b', rule: { type: 'manual' } }),
+            [BADGE_ID.REGULAR]: badge({ name: 'Stammgast', icon: 'bi-trophy', color: '#22c55e',
+                rule: { type: 'participations', count: 2, category: null }, createdAt: clock.offset(-19 * DAY) })
+        },
+        awards: {
+            [`${BADGE_ID.FOUNDER}_${people.mori.userId}`]: {
+                badgeId: BADGE_ID.FOUNDER, userId: people.mori.userId, awardedAt: created, awardedBy: people.mori.userId,
+                roleAdded: false, roleSynced: true, revokedAt: null, revokedBy: null
+            }
+        }
+    };
+}
+
 function buildPluginSeedData(now = new Date()) {
     const clock = createClock(now);
-    return { 'event-submissions': { submissions: buildSubmissions(clock) } };
+    return { 'event-submissions': { submissions: buildSubmissions(clock) }, badges: buildBadges(clock) };
 }
 
 function buildSeedData(now = new Date()) {

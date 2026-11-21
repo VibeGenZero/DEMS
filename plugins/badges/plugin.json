@@ -1,0 +1,16 @@
+{
+  "id": "badges",
+  "name": "Badges",
+  "version": "1.0.0",
+  "sdk": 1.1,
+  "description": "Eigene Badges für die Community – von Hand oder automatisch vergeben, optional mit Discord-Rolle.",
+  "author": "DEMS",
+  "server": "server.js",
+  "client": "client.js",
+  "permissions": ["events:read", "registrations:read", "members:read", "discord:roles", "discord:dm", "discord:channel"],
+  "settings": [
+    { "key": "announceChannel", "type": "channel", "label": "Kanal für neue Badges",
+      "help": "Leer lassen, wenn neue Badges nicht im Kanal erscheinen sollen." },
+    { "key": "dmOnAward", "type": "boolean", "label": "Mitglieder per DM über neue Badges informieren" }
+  ]
+}
