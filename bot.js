@@ -37,6 +37,7 @@ const { sendCheckinInvitations } = require('./bot/checkin');
 const { mirrorCommentToThread, deleteMirroredMessage } = require('./bot/threadSync');
 const { sendWaitlistOffer } = require('./bot/waitlistOffers');
 const { refreshAskFeature } = require('./bot/commands');
+const { listPluginRoles, setPluginRole } = require('./bot/pluginRoles');
 
 // Ready, error and interaction listeners, attached once when the bot is loaded
 wireClient();
@@ -99,7 +100,9 @@ module.exports = {
     removeRoleFromMembers,
     sendWaitlistOffer,
     refreshAskFeature,
-    sendPluginChannelMessage
+    sendPluginChannelMessage,
+    listPluginRoles,
+    setPluginRole
 };
 
 // Dev mock mode: every call that would reach Discord goes to the simulated

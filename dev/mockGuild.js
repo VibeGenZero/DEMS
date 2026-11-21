@@ -23,15 +23,16 @@ const ROLE_ID = {
     EVENT: '110000000000000007'
 };
 
-// Highest position first, like getGuildRoles() returns them
+// Highest position first, like getGuildRoles() returns them; `permissions` (discord.js flag names)
+// feed the plugin role guard (bot/pluginRoles.js): the moderator role is refused for plugins
 const ROLES = [
-    { id: ROLE_ID.BOT, name: 'DEMS Bot', color: 0x5865f2, managed: true },
-    { id: ROLE_ID.ADMIN, name: 'Admin', color: 0xef4444, managed: false },
-    { id: ROLE_ID.MODERATOR, name: 'Moderator', color: 0xf59e0b, managed: false },
-    { id: ROLE_ID.RAID_TEAM, name: 'Raid-Team', color: 0x22c55e, managed: false },
-    { id: ROLE_ID.VIP, name: 'VIP', color: 0xa855f7, managed: false },
-    { id: ROLE_ID.EVENT, name: 'Event-Teilnehmer', color: 0x14b8a6, managed: false },
-    { id: ROLE_ID.MEMBER, name: 'Mitglied', color: 0x3b82f6, managed: false }
+    { id: ROLE_ID.BOT, name: 'DEMS Bot', color: 0x5865f2, managed: true, position: 7, permissions: ['Administrator'] },
+    { id: ROLE_ID.ADMIN, name: 'Admin', color: 0xef4444, managed: false, position: 6, permissions: ['Administrator'] },
+    { id: ROLE_ID.MODERATOR, name: 'Moderator', color: 0xf59e0b, managed: false, position: 5, permissions: ['ManageMessages', 'KickMembers'] },
+    { id: ROLE_ID.RAID_TEAM, name: 'Raid-Team', color: 0x22c55e, managed: false, position: 4, permissions: [] },
+    { id: ROLE_ID.VIP, name: 'VIP', color: 0xa855f7, managed: false, position: 3, permissions: [] },
+    { id: ROLE_ID.EVENT, name: 'Event-Teilnehmer', color: 0x14b8a6, managed: false, position: 2, permissions: [] },
+    { id: ROLE_ID.MEMBER, name: 'Mitglied', color: 0x3b82f6, managed: false, position: 1, permissions: [] }
 ];
 
 const CHANNEL_ID = {

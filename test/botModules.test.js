@@ -35,7 +35,7 @@ const EXPORTS = [
     'deleteEventChannels', 'createScheduledEvent', 'getBotStatus', 'getBotSettings', 'saveBotSettings',
     'getRunningEvents', 'sendGuestInvitation', 'canRegisterViaDiscord', 'buildAnnouncementIntro',
     'ensureAnnouncementThread', 'sendApprovalRequest', 'closeApprovalRequest', 'sendCheckinInvitations', 'mirrorCommentToThread', 'deleteMirroredMessage', 'updateScheduledEvent', 'removeScheduledEvent', 'setScheduledEventStatus', 'removeRoleFromMembers', 'sendWaitlistOffer',
-    'refreshAskFeature', 'sendPluginChannelMessage'
+    'refreshAskFeature', 'sendPluginChannelMessage', 'listPluginRoles', 'setPluginRole'
 ];
 
 const lineCount = (file) => fs.readFileSync(file, 'utf8').split(/\r?\n/).length;

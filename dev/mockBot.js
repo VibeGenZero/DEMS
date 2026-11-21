@@ -11,6 +11,7 @@ const util = require('util');
 const { db, doc, getDoc, updateDoc } = require('../firebaseAdmin');
 const { GUILD, ROLES, CHANNELS, CATEGORIES, PERSONAS, MEMBERS, buildScheduledEvents, findMember } = require('./mockGuild');
 const { getTimezone } = require('../utils/timezone');
+const { isPluginAssignableRole } = require('../utils/pluginRoleGuard');
 
 const LOG_PREFIX = '\x1b[35m[MOCK-DISCORD]\x1b[0m';
 const startedAt = new Date();
@@ -111,7 +112,32 @@ async function getGuildIconUrl() {
 }
 
 async function getGuildRoles() {
-    return ROLES.map(role => ({ ...role }));
+    return ROLES.map(({ id, name, color, managed }) => ({ id, name, color, managed }));
+}
+
+// Plugin roles (SDK 1.1): the real guard on the mock server; changes live in memory per member
+const pluginRoleSets = new Map();
+const BOT_ROLE = ROLES.find(role => role.managed);
+const guardOptions = () => ({ adminRoleId: process.env.DISCORD_ADMIN_ROLE_ID || '', botTopPosition: BOT_ROLE.position, everyoneId: GUILD.id });
+const toHex = (color) => (color > 0 ? `#${color.toString(16).padStart(6, '0')}` : null);
+
+async function listPluginRoles() {
+    return ROLES.filter(role => isPluginAssignableRole(role, guardOptions()))
+        .map(role => ({ id: role.id, name: role.name, color: toHex(role.color) }));
+}
+
+async function setPluginRole(userId, roleId, give) {
+    const role = ROLES.find(entry => entry.id === roleId);
+    if (!role || !isPluginAssignableRole(role, guardOptions())) return { ok: false, code: 'forbidden' };
+    const member = findMember(userId);
+    if (!member) return { ok: false, code: 'not_member' };
+    if (!pluginRoleSets.has(userId)) pluginRoleSets.set(userId, new Set(member.roles));
+    const roles = pluginRoleSets.get(userId);
+    if (roles.has(roleId) === give) return { ok: true, changed: false };
+    if (give) roles.add(roleId);
+    else roles.delete(roleId);
+    mockLog(give ? `Rolle ${describeRole(roleId)} an ${describeUser(userId)} vergeben` : `Rolle ${describeRole(roleId)} von ${describeUser(userId)} entfernt`);
+    return { ok: true, changed: true };
 }
 
 async function getGuildChannels() {
@@ -463,6 +489,8 @@ module.exports = {
     sendDM,
     sendChannelMessage,
     sendPluginChannelMessage,
+    listPluginRoles,
+    setPluginRole,
     ensureAnnouncementThread,
     refreshEventAnnouncements,
     refreshPollMessages,
