@@ -17,9 +17,10 @@ function createFakeHost(pluginDir) {
         enabled: true,
         routes: [],
         errors: [],
+        manifest: { client: 'client.js', css: '' },
         isEnabled: id => id === 'demo' && fake.enabled,
         routesOf: id => (id === 'demo' ? fake.routes.map(route => ({ ...route })) : []),
-        entryOf: id => (id === 'demo' ? { id, dir: pluginDir, manifest: { client: 'client.js', css: '' } } : null),
+        entryOf: id => (id === 'demo' ? { id, dir: pluginDir, manifest: { ...fake.manifest } } : null),
         clients: () => [],
         reportError: (id, message) => fake.errors.push([id, message])
     };
@@ -42,6 +43,12 @@ before(async () => {
     fs.writeFileSync(path.join(pluginDir, 'client.js'), 'export function register() {}');
     fs.mkdirSync(path.join(pluginDir, 'assets'));
     fs.writeFileSync(path.join(pluginDir, 'assets', 'logo.png'), 'png');
+    // A folder link out of the plugin (a junction on Windows, a symlink elsewhere: both need no admin rights)
+    const outsideDir = path.join(pluginDir, '..', '..', 'outside');
+    fs.mkdirSync(outsideDir, { recursive: true });
+    fs.writeFileSync(path.join(outsideDir, 'client.js'), 'export const secret = "OUTSIDE";');
+    fs.writeFileSync(path.join(outsideDir, 'client.css'), '.secret { color: red; }');
+    fs.symlinkSync(outsideDir, path.join(pluginDir, 'lib'), 'junction');
     host = createFakeHost(pluginDir);
 
     const app = express();
@@ -248,4 +255,18 @@ test('static files: allowed assets are served with their type, other methods and
     assert.equal((await call('/plugins/demo/assets/.hidden.png')).status, 404);
     assert.equal((await call('/plugins/demo/assets/sub/logo.png')).status, 404);
     assert.equal((await call('/plugins/Demo/client.js')).status, 404);
+});
+
+test('static files: client.js and client.css reached through a link out of the plugin folder are refused', async () => {
+    host.manifest = { client: 'lib/client.js', css: 'lib/client.css' };
+    try {
+        for (const name of ['client.js', 'client.css']) {
+            const res = await call(`/plugins/demo/${name}`);
+            assert.equal(res.status, 404, name);
+            assert.doesNotMatch(await res.text(), /secret/i, name);
+        }
+    } finally {
+        host.manifest = { client: 'client.js', css: '' };
+    }
+    assert.equal((await call('/plugins/demo/client.js')).status, 200);
 });
