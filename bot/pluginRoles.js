@@ -14,9 +14,24 @@ function toHexColor(color) {
     return Number.isInteger(color) && color > 0 ? `#${color.toString(16).padStart(6, '0')}` : null;
 }
 
-/** Plain data of a discord.js role for the guard. */
-function toGuardRole(role) {
-    return { id: role.id, managed: role.managed, position: role.position, permissions: role.permissions.toArray() };
+/** Rights the channel overwrites of the guild allow a role (cached channels, so no extra request). */
+function channelAllowsOf(guild, roleId) {
+    const allows = [];
+    const channels = guild.channels && guild.channels.cache ? [...guild.channels.cache.values()] : [];
+    for (const channel of channels) {
+        const overwrite = channel && channel.permissionOverwrites && channel.permissionOverwrites.cache
+            ? channel.permissionOverwrites.cache.get(roleId) : null;
+        if (overwrite) allows.push(...overwrite.allow.toArray());
+    }
+    return allows;
+}
+
+/** Plain data of a discord.js role for the guard, with the rights its channel overwrites allow. */
+function toGuardRole(guild, role) {
+    return {
+        id: role.id, managed: role.managed, position: role.position,
+        permissions: role.permissions.toArray(), channelAllows: channelAllowsOf(guild, role.id)
+    };
 }
 
 /** The configured guild and what the guard needs from it. */
@@ -40,7 +55,7 @@ async function listPluginRoles() {
         const { guild, options } = await fetchGuardContext();
         const roles = await guild.roles.fetch();
         return [...roles.values()]
-            .filter(role => isPluginAssignableRole(toGuardRole(role), options))
+            .filter(role => isPluginAssignableRole(toGuardRole(guild, role), options))
             .sort((a, b) => b.position - a.position)
             .map(role => ({ id: role.id, name: role.name, color: toHexColor(role.color) }));
     } catch (err) {
@@ -62,7 +77,7 @@ async function setPluginRole(userId, roleId, give) {
     try {
         const { guild, options } = await fetchGuardContext();
         const role = await guild.roles.fetch(roleId).catch(() => null);
-        if (!role || !isPluginAssignableRole(toGuardRole(role), options)) return { ok: false, code: 'forbidden' };
+        if (!role || !isPluginAssignableRole(toGuardRole(guild, role), options)) return { ok: false, code: 'forbidden' };
         const member = await guild.members.fetch(userId).catch(() => null);
         if (!member) return { ok: false, code: 'not_member' };
         const has = member.roles.cache.has(roleId);

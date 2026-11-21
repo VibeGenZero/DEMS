@@ -213,10 +213,13 @@ test('without the thread sync the bot asks for no Message Content intent (#146)'
 });
 
 /** A fake guild for the plugin role helpers: roles by id, one member with role ids, the bot at position 10. */
-function fakeGuild({ roles, memberRoles, calls }) {
+function fakeGuild({ roles, memberRoles, calls, overwrites = {} }) {
     const asRole = (data) => ({ ...data, permissions: { toArray: () => [...data.permissions] } });
+    // One channel whose overwrites allow the listed rights per role id
+    const channel = { permissionOverwrites: { cache: new Map(Object.entries(overwrites).map(([id, allow]) => [id, { id, allow: { toArray: () => allow } }])) } };
     return {
         id: 'G',
+        channels: { cache: new Map([['c1', channel]]) },
         members: {
             me: { roles: { highest: { position: 10 } } },
             fetch: async (userId) => {
@@ -275,3 +278,25 @@ test('plugin roles: the guard runs on the live role, so a role that gained a rig
         console.log = originalLog;
     }
 });
+
+test('plugin roles: a role with a moderation right in a channel overwrite is refused', async () => {
+    const { state } = require('../bot/client');
+    const originalFetch = bot.client.guilds.fetch;
+    const calls = [];
+    const roles = [
+        { id: 'vip', name: 'VIP', color: 0, managed: false, position: 3, permissions: ['SendMessages'] },
+        { id: 'chanmod', name: 'Kanal-Mod', color: 0, managed: false, position: 2, permissions: ['SendMessages'] }
+    ];
+    state.isReady = true;
+    process.env.DISCORD_GUILD_ID = 'G';
+    bot.client.guilds.fetch = async () => fakeGuild({ roles, memberRoles: [], calls, overwrites: { chanmod: ['ViewChannel', 'ManageMessages'], vip: ['ViewChannel'] } });
+    try {
+        assert.deepEqual((await bot.listPluginRoles()).map(role => role.id), ['vip']);
+        assert.deepEqual(await bot.setPluginRole('u1', 'chanmod', true), { ok: false, code: 'forbidden' });
+        assert.deepEqual(calls, []);
+    } finally {
+        state.isReady = false;
+        bot.client.guilds.fetch = originalFetch;
+    }
+});
+
