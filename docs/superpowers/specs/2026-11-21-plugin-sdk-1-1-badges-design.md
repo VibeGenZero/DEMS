@@ -76,7 +76,7 @@ and new registration status hooks (about ten writers to cover and pin, see Non-g
 
 - `plugin.json` `sdk` accepts `1` and `1.1`; any other value stays
   „Inkompatibel (SDK <n>)“. `SDK_VERSION` stays the major `1`; a new constant names the
-  minor (`SDK_MINOR = 1`) and System › Plugins shows „SDK 1.1“ where it shows the version.
+  minor (`SDK_MINOR = 1`). System › Plugins shows no SDK version today and stays so.
 - The new permissions `registrations:read` and `discord:roles` require `sdk: 1.1`;
   declared with `sdk: 1` → „Ungültig: Die Berechtigung „…“ braucht SDK 1.1.“
 - `ctx.members.search` and `ctx.profile` exist for every plugin (additive, no new right).
