@@ -133,7 +133,7 @@ test('GET /api/plugins lists the client of every switched-on plugin', async () =
         name: 'Hook-Rekorder',
         version: '1.0.0',
         official: false,
-        permissions: ['events:read', 'events:draft'],
+        permissions: ['events:read', 'events:draft', 'registrations:read'],
         client: `/plugins/${PLUGIN}/client.js?v=1.0.0`,
         css: ''
     });
