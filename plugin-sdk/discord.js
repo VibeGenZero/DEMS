@@ -1,5 +1,6 @@
 /**
- * Discord access for plugins (`ctx.discord`) with its limits.
+ * Discord access for plugins (`ctx.discord`) with its limits: messages (SDK 1.0)
+ * and role changes through the bot's role guard (SDK 1.1, `discord:roles`).
  *
  * Plugins are not trusted to behave, so every rule is enforced here: the
  * permission (`discord:dm` / `discord:channel`), text length, a link button
@@ -12,11 +13,18 @@
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { buildSiteUrl } = require('../utils/eventUrl');
 const { getTimezone } = require('../utils/timezone');
-const { PluginPermissionError } = require('./errors');
+const { PluginPermissionError, PluginDataError } = require('./errors');
 
 const WINDOW_MS = 600000;
 const DM_LIMIT = 200;
 const POST_LIMIT = 30;
+const ROLE_LIMIT = 500;
+const FORBIDDEN_ROLE = 'Diese Rolle darf ein Plugin nicht vergeben.';
+const ROLE_REASONS = Object.freeze({
+    not_ready: 'Der Bot ist nicht verbunden.',
+    not_member: 'Das Mitglied ist nicht auf dem Server.',
+    refused: 'Discord hat die Änderung abgelehnt.'
+});
 const TEXT_MAX = 2000;
 const LABEL_MAX = 80;
 const URL_MAX = 512;
@@ -40,21 +48,23 @@ function formatClock(ms) {
 }
 
 /**
- * Per-plugin message budget in a sliding window, kept in memory (a restart resets it).
+ * Per-plugin budget of messages and role changes in a sliding window, kept in memory (a restart resets it).
  *
  * @param {object} [options]
  * @param {number} [options.dms=200] -> DMs per plugin and window.
  * @param {number} [options.posts=30] -> Channel posts per plugin and window.
+ * @param {number} [options.roles=500] -> Role changes per plugin and window (SDK 1.1).
  * @param {number} [options.windowMs=600000] -> Window length.
  * @param {() => number} [options.now=Date.now] -> Clock (tests).
- * @returns {{ take: (pluginId: string, kind: 'dm'|'post') => boolean, warning: (pluginId: string) => string|null }}
+ * @returns {{ take: (pluginId: string, kind: 'dm'|'post'|'role') => boolean, until: (pluginId: string, kind: string) => number|null,
+ *   warning: (pluginId: string) => string|null }}
  * @example
  * const limiter = createMessageLimiter();
  * if (limiter.take('event-submissions', 'dm')) { ... }
  * limiter.warning('event-submissions'); // 'Nachrichtengrenze erreicht (bis 19:10)' or null
  */
-function createMessageLimiter({ dms = DM_LIMIT, posts = POST_LIMIT, windowMs = WINDOW_MS, now = Date.now } = {}) {
-    const limits = { dm: dms, post: posts };
+function createMessageLimiter({ dms = DM_LIMIT, posts = POST_LIMIT, roles = ROLE_LIMIT, windowMs = WINDOW_MS, now = Date.now } = {}) {
+    const limits = { dm: dms, post: posts, role: roles };
     /** @type {Map<string, number[]>} `<pluginId>:<kind>` -> send times inside the window, oldest first */
     const sent = new Map();
 
@@ -83,9 +93,14 @@ function createMessageLimiter({ dms = DM_LIMIT, posts = POST_LIMIT, windowMs = W
             sent.set(`${pluginId}:${kind}`, times);
             return true;
         },
+        until: blockedUntil,
         warning(pluginId) {
-            const until = Math.max(...Object.keys(limits).map(kind => blockedUntil(pluginId, kind) ?? -Infinity));
-            return until === -Infinity ? null : `Nachrichtengrenze erreicht (bis ${formatClock(until)})`;
+            const parts = [];
+            const messages = Math.max(...['dm', 'post'].map(kind => blockedUntil(pluginId, kind) ?? -Infinity));
+            if (messages !== -Infinity) parts.push(`Nachrichtengrenze erreicht (bis ${formatClock(messages)})`);
+            const role = blockedUntil(pluginId, 'role');
+            if (role !== null) parts.push(`Rollengrenze erreicht (bis ${formatClock(role)})`);
+            return parts.length > 0 ? parts.join(' · ') : null;
         }
     };
 }
@@ -121,6 +136,8 @@ function buildPayload(text, link) {
 
 const defaultSendDm = (userId, payload) => require('../utils/botSettings').sendAutomaticDM(userId, payload);
 const defaultSendChannel = (channelId, payload) => require('../bot').sendPluginChannelMessage(channelId, payload);
+const defaultSetRole = (userId, roleId, give) => require('../bot').setPluginRole(userId, roleId, give);
+const defaultListRoles = () => require('../bot').listPluginRoles();
 async function defaultUserExists(userId) {
     const { db, doc, getDoc } = require('../firebaseAdmin');
     return (await getDoc(doc(db, 'users', String(userId)))).exists();
@@ -139,12 +156,15 @@ async function defaultUserExists(userId) {
  * @param {(userId: string, payload: object) => Promise<boolean>} [options.sendDm] -> Default: `sendAutomaticDM` (respects the bot center's DM switch).
  * @param {(channelId: string, payload: object) => Promise<boolean>} [options.sendChannel] -> Default: `bot.sendPluginChannelMessage`.
  * @param {(userId: string) => Promise<boolean>} [options.userExists] -> Default: `users/<userId>` exists.
+ * @param {(userId: string, roleId: string, give: boolean) => Promise<object>} [options.setRole] -> Default: `bot.setPluginRole`.
+ * @param {() => Promise<object[]>} [options.listRoles] -> Default: `bot.listPluginRoles`.
  * @param {() => number} [options.now=Date.now] -> Clock for "one limit warning per window" (tests).
- * @returns {{ sendDM: Function, sendChannelMessage: Function }}
+ * @returns {{ sendDM: Function, sendChannelMessage: Function, listRoles: Function, addRole: Function, removeRole: Function }}
  */
 function createDiscordApi({
     pluginId, permissions, readSettings, settingsSchema, limiter, log,
-    sendDm = defaultSendDm, sendChannel = defaultSendChannel, userExists = defaultUserExists, now = Date.now
+    sendDm = defaultSendDm, sendChannel = defaultSendChannel, userExists = defaultUserExists,
+    setRole = defaultSetRole, listRoles = defaultListRoles, now = Date.now
 }) {
     const granted = new Set(permissions || []);
     const limitWarnedAt = { dm: -Infinity, post: -Infinity };
@@ -166,6 +186,31 @@ function createDiscordApi({
     function refuse(what, reason) {
         log.warn(`${what} nicht gesendet: ${reason}`);
         return false;
+    }
+
+    /**
+     * Give or take a role through the bot's guard. Every call that reaches the bot uses one unit of budget.
+     *
+     * @returns {Promise<{ ok: true, changed: boolean } | { ok: false, reason: string }>}
+     * @throws {PluginDataError} -> For a role id that is malformed or that the guard refuses.
+     */
+    async function changeRole(userId, roleId, give) {
+        requirePermission('discord:roles');
+        if (!isSnowflake(roleId)) throw new PluginDataError(FORBIDDEN_ROLE);
+        if (!isSnowflake(userId)) return { ok: false, reason: 'Die Nutzer-ID ist ungültig.' };
+        if (!limiter.take(pluginId, 'role')) {
+            return { ok: false, reason: `Rollengrenze erreicht (bis ${formatClock(limiter.until(pluginId, 'role'))})` };
+        }
+        let result;
+        try {
+            result = await setRole(userId, roleId, give);
+        } catch (err) {
+            log.error('Rollenänderung fehlgeschlagen:', err && err.message ? err.message : err);
+            return { ok: false, reason: ROLE_REASONS.refused };
+        }
+        if (result && result.ok === true) return { ok: true, changed: result.changed === true };
+        if (result && result.code === 'forbidden') throw new PluginDataError(FORBIDDEN_ROLE);
+        return { ok: false, reason: ROLE_REASONS[result && result.code] || ROLE_REASONS.refused };
     }
 
     return {
@@ -219,7 +264,29 @@ function createDiscordApi({
                 log.error(`${what} fehlgeschlagen:`, err.message);
                 return false;
             }
-        }
+        },
+
+        /**
+         * Roles of the server a plugin may give or take (the bot's guard), highest first.
+         *
+         * @returns {Promise<Array<{ id: string, name: string, color: string|null }>>} -> [] while the bot is not ready.
+         */
+        async listRoles() {
+            requirePermission('discord:roles');
+            try {
+                const roles = await listRoles();
+                return (Array.isArray(roles) ? roles : []).map(({ id, name, color }) => ({ id, name, color: color || null }));
+            } catch (err) {
+                log.error('Rollen konnten nicht gelesen werden:', err && err.message ? err.message : err);
+                return [];
+            }
+        },
+
+        /** @returns {Promise<{ ok: true, changed: boolean } | { ok: false, reason: string }>} -> `changed: false` when the member had it. */
+        addRole: (userId, roleId) => changeRole(userId, roleId, true),
+
+        /** @returns {Promise<{ ok: true, changed: boolean } | { ok: false, reason: string }>} -> `changed: false` when the member lacked it. */
+        removeRole: (userId, roleId) => changeRole(userId, roleId, false)
     };
 }
 

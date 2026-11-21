@@ -264,3 +264,98 @@ test('a missing permission throws PluginPermissionError', async () => {
     await assert.rejects(noChannel.sendChannelMessage('notifyChannel', { text: 'Hallo' }), PluginPermissionError);
     assert.equal(sentDms.length + sentPosts.length, 0);
 });
+
+// ── Roles (SDK 1.1, discord:roles) ──────────────────────────────────────
+
+const ROLE = '222222222222222222';
+
+/** ctx.discord with fake role helpers; `calls` records what reached the bot. */
+function roleApi({ permissions = ['discord:roles'], limiter, setRole, listRoles, calls = [] } = {}) {
+    return createDiscordApi({
+        pluginId: 'alpha',
+        permissions,
+        readSettings: async () => ({}),
+        settingsSchema: SCHEMA,
+        limiter: limiter || createMessageLimiter({ now }),
+        log,
+        now,
+        setRole: async (userId, roleId, give) => {
+            calls.push([userId, roleId, give]);
+            return setRole ? setRole(userId, roleId, give) : { ok: true, changed: true };
+        },
+        listRoles: listRoles || (async () => [])
+    });
+}
+
+test('role methods need discord:roles', async () => {
+    const discord = roleApi({ permissions: ['discord:dm'] });
+    await assert.rejects(discord.listRoles(), PluginPermissionError);
+    await assert.rejects(discord.addRole(USER, ROLE), PluginPermissionError);
+    await assert.rejects(discord.removeRole(USER, ROLE), PluginPermissionError);
+});
+
+test('addRole and removeRole pass give true/false to the bot and answer ok/changed', async () => {
+    const calls = [];
+    const discord = roleApi({ calls, setRole: async (userId, roleId, give) => ({ ok: true, changed: give }) });
+    assert.deepEqual(await discord.addRole(USER, ROLE), { ok: true, changed: true });
+    assert.deepEqual(await discord.removeRole(USER, ROLE), { ok: true, changed: false });
+    assert.deepEqual(calls, [[USER, ROLE, true], [USER, ROLE, false]]);
+});
+
+test('a bot refusal becomes a German reason', async () => {
+    const reasons = {
+        not_ready: 'Der Bot ist nicht verbunden.',
+        not_member: 'Das Mitglied ist nicht auf dem Server.',
+        refused: 'Discord hat die Änderung abgelehnt.'
+    };
+    for (const [code, reason] of Object.entries(reasons)) {
+        const discord = roleApi({ setRole: async () => ({ ok: false, code }) });
+        assert.deepEqual(await discord.addRole(USER, ROLE), { ok: false, reason }, code);
+    }
+    const throwing = roleApi({ setRole: async () => { throw new Error('boom'); } });
+    assert.deepEqual(await throwing.removeRole(USER, ROLE), { ok: false, reason: 'Discord hat die Änderung abgelehnt.' });
+    assert.ok(logs.error.some(line => line.includes('boom')));
+});
+
+test('a forbidden or malformed role throws PluginDataError; a malformed user id is a reason and reaches no bot', async () => {
+    const calls = [];
+    const discord = roleApi({ calls, setRole: async () => ({ ok: false, code: 'forbidden' }) });
+    await assert.rejects(discord.addRole(USER, ROLE), { name: 'PluginDataError', message: 'Diese Rolle darf ein Plugin nicht vergeben.' });
+    await assert.rejects(discord.removeRole(USER, 'nope'), { name: 'PluginDataError', message: 'Diese Rolle darf ein Plugin nicht vergeben.' });
+    assert.deepEqual(await discord.addRole('x', ROLE), { ok: false, reason: 'Die Nutzer-ID ist ungültig.' });
+    assert.deepEqual(calls, [[USER, ROLE, true]]);
+});
+
+test('500 role changes per plugin and window by default, then Rollengrenze erreicht without reaching the bot', async () => {
+    const full = createMessageLimiter({ now });
+    for (let i = 0; i < 500; i++) assert.equal(full.take('alpha', 'role'), true);
+    assert.equal(full.take('alpha', 'role'), false);
+    assert.equal(full.take('beta', 'role'), true);
+
+    const calls = [];
+    const limiter = createMessageLimiter({ roles: 2, now });
+    const discord = roleApi({ limiter, calls });
+    await discord.addRole(USER, ROLE);
+    await discord.removeRole(USER, ROLE);
+    assert.deepEqual(await discord.addRole(USER, ROLE), { ok: false, reason: 'Rollengrenze erreicht (bis 19:10)' });
+    assert.equal(calls.length, 2);
+    assert.equal(limiter.warning('alpha'), 'Rollengrenze erreicht (bis 19:10)');
+    assert.equal(limiter.take('alpha', 'dm'), true, 'roles do not use the message budget');
+});
+
+test('the warning names a message and a role limit together', () => {
+    const limiter = createMessageLimiter({ dms: 1, roles: 1, now });
+    limiter.take('alpha', 'dm');
+    clock += 60000;
+    limiter.take('alpha', 'role');
+    assert.equal(limiter.warning('alpha'), 'Nachrichtengrenze erreicht (bis 19:10) · Rollengrenze erreicht (bis 19:11)');
+});
+
+test('listRoles hands out id, name and colour only, as copies', async () => {
+    const roles = [{ id: ROLE, name: 'VIP', color: '#a855f7', position: 3 }];
+    const discord = roleApi({ listRoles: async () => roles });
+    const listed = await discord.listRoles();
+    assert.deepEqual(listed, [{ id: ROLE, name: 'VIP', color: '#a855f7' }]);
+    listed[0].name = 'x';
+    assert.equal(roles[0].name, 'VIP');
+});

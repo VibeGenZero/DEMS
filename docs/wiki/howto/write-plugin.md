@@ -91,6 +91,7 @@ module.exports = {
 | `ctx.registrations.list({ eventId, userId })` | `registrations:read` (SDK 1.1); `{ id, eventId, userId, status, source, createdAt, checkedIn, checkedInAt, slotId }` sorted by `createdAt`, no form answers or guests |
 | `ctx.members.get(userId)` | `members:read`; `{ id, name, avatar }` or `null` |
 | `ctx.discord.sendDM(userId, { text, link? })` | `discord:dm`; → `true`/`false` |
+| `ctx.discord.listRoles()`, `addRole(userId, roleId)`, `removeRole(userId, roleId)` | `discord:roles` (SDK 1.1); only roles the guard allows (no admin, moderation or server rights, below the bot); `{ ok: true, changed }` or `{ ok: false, reason }`, a refused role throws `PluginDataError`; 500 changes per 10 min. Remember whether *you* gave a role (`changed`) before you take it away again |
 | `ctx.discord.sendChannelMessage(settingKey, { text, link? })` | `discord:channel`; names one of **your own `channel` settings**, never a channel id |
 | `ctx.siteUrl(hash)` | `<BASE_URL>/#<hash>`, e.g. your page `ctx.siteUrl('p/<id>')` |
 | `ctx.audit(action, actorId, details, targetId?)` | audit log action `plugin:<id>:<action>` (`^[a-zA-Z0-9_.-]{1,64}$`); call it for admin actions |
