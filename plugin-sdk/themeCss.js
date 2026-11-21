@@ -77,7 +77,6 @@ function checkThemeCss(css) {
     let stringStartLine = 0;
     let braceDepth = 0;
     let parenDepth = 0;
-    let splitIdentByComment = false;
 
     const len = css.length;
     for (let i = 0; i < len; i++) {
@@ -90,7 +89,6 @@ function checkThemeCss(css) {
         if (commentStartLine > 0) {
             if (ch === '\n') {
                 line++;
-                splitIdentByComment = false;
             } else if (ch === '*' && css[i + 1] === '/') {
                 commentStartLine = 0;
                 i++;
@@ -111,13 +109,11 @@ function checkThemeCss(css) {
 
         if (ch === '\n') {
             line++;
-            splitIdentByComment = false;
             continue;
         }
 
         if (ch === '/' && css[i + 1] === '*') {
             commentStartLine = line;
-            splitIdentByComment = i > 0 && isIdentChar(css.charCodeAt(i - 1));
             i++;
             continue;
         }
@@ -125,35 +121,29 @@ function checkThemeCss(css) {
         if (ch === '"' || ch === "'") {
             quote = ch;
             stringStartLine = line;
-            splitIdentByComment = false;
             continue;
         }
 
         if (ch === '{') {
             braceDepth++;
-            splitIdentByComment = false;
             continue;
         }
         if (ch === '}') {
             if (braceDepth === 0) return fail(line, 'Die Klammern { } passen nicht zusammen.');
             braceDepth--;
-            splitIdentByComment = false;
             continue;
         }
         if (ch === '(') {
             parenDepth++;
-            splitIdentByComment = false;
             continue;
         }
         if (ch === ')') {
             if (parenDepth === 0) return fail(line, 'Die Klammern ( ) passen nicht zusammen.');
             parenDepth--;
-            splitIdentByComment = false;
             continue;
         }
 
         if (ch === '@') {
-            splitIdentByComment = false;
             const start = i + 1;
             let end = start;
             while (end < len && isIdentChar(css.charCodeAt(end))) end++;
@@ -166,8 +156,6 @@ function checkThemeCss(css) {
         }
 
         if (isIdentStartAt(css, i)) {
-            const wasSplit = splitIdentByComment;
-            splitIdentByComment = false;
             const start = i;
             let end = start + 1;
             while (end < len && isIdentChar(css.charCodeAt(end))) end++;
@@ -176,15 +164,14 @@ function checkThemeCss(css) {
                 if (fnName === 'url') {
                     return fail(line, 'url() ist nicht erlaubt – eigene Bilder und Schriften können nicht eingebunden werden.');
                 }
-                if (!wasSplit && !ALLOWED_FUNCTIONS.has(fnName)) {
+                // Also after a comment: `center/**/image-set(` is a real image-set() for the browser
+                if (!ALLOWED_FUNCTIONS.has(fnName)) {
                     return fail(line, `${fnName}() ist nicht erlaubt.`);
                 }
             }
             i = end - 1;
             continue;
         }
-
-        splitIdentByComment = false;
     }
 
     if (commentStartLine > 0) {
