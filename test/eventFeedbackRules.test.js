@@ -18,7 +18,8 @@ test('constants and German messages', () => {
 });
 
 test('the window runs from the end until 7 days later; cancelled and draft events have none', () => {
-    const event = { startDate: '2026-11-20T18:00:00.000Z', endDate: '2026-11-20T21:00:00.000Z', status: 'archived' };
+    // Over but not archived yet (the archive runs a day after the end)
+    const event = { startDate: '2026-11-20T18:00:00.000Z', endDate: '2026-11-20T21:00:00.000Z', status: 'active' };
     assert.deepEqual(feedbackWindow(event), { opensAt: new Date('2026-11-20T21:00:00.000Z'), closesAt: new Date('2026-11-27T21:00:00.000Z') });
     assert.equal(eventEnd({ startDate: '2026-11-20T18:00:00.000Z' }).toISOString(), '2026-11-20T20:00:00.000Z');
     assert.equal(eventEnd({ startDate: '2026-11-20T18:00:00.000Z', endDate: '2026-11-20T17:00:00.000Z' }).toISOString(), '2026-11-20T20:00:00.000Z');
@@ -29,6 +30,13 @@ test('the window runs from the end until 7 days later; cancelled and draft event
     for (const status of ['cancelled', 'draft']) assert.equal(feedbackWindow({ ...event, status }), null);
     assert.equal(feedbackWindow({ status: 'archived' }), null);
     assert.equal(isOpen({ ...event, status: 'cancelled' }, new Date('2026-11-21T10:00:00.000Z')), false);
+});
+
+test('an event ended early by an admin (archived before its scheduled end) is open at once', () => {
+    const early = { startDate: '2026-11-20T18:00:00.000Z', endDate: '2026-11-20T23:00:00.000Z', status: 'archived' };
+    assert.equal(isOpen(early, new Date('2026-11-20T19:00:00.000Z')), true);
+    assert.equal(isOpen({ ...early, status: 'active' }, new Date('2026-11-20T19:00:00.000Z')), false);
+    assert.equal(isOpen(early, new Date('2026-11-27T23:01:00.000Z')), false);
 });
 
 test('eligible: accepted, and checked in when the event uses check-in', () => {

@@ -4,8 +4,8 @@
  * no requires), so server and tests share one definition.
  *
  * Event end = `endDate`, else start + 2 h (DEMS' `isEventOver` rule); the
- * window runs from the end until 7 days later; cancelled and draft events
- * never take feedback. Eligible = own registration `accepted`, and checked
+ * window runs from the end (or the archiving, when an admin ends it early)
+ * until 7 days after the end; cancelled and draft events never take feedback. Eligible = own registration `accepted`, and checked
  * in when the event uses check-in.
  */
 
@@ -54,10 +54,11 @@ function feedbackWindow(event) {
     return { opensAt: end, closesAt: new Date(end.getTime() + WINDOW_DAYS * DAY_MS) };
 }
 
-/** Whether the event takes feedback at `now`. */
+/** Whether the event takes feedback at `now`; an event archived before its scheduled end („Beenden“) is over at once. */
 function isOpen(event, now) {
     const window = feedbackWindow(event);
-    return Boolean(window) && window.opensAt <= now && now <= window.closesAt;
+    if (!window || now > window.closesAt) return false;
+    return event.status === 'archived' || window.opensAt <= now;
 }
 
 /**

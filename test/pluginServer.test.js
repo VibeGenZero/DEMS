@@ -127,7 +127,7 @@ test('GET /api/plugins lists the client of every switched-on plugin', async () =
     assert.equal(res.status, 200);
     const list = await res.json();
     // Dev mock mode switches the official plugins on; the custom fixture follows them
-    assert.deepEqual(list.map(plugin => plugin.id), ['badges', 'custom-design', OFFICIAL_PLUGIN, PLUGIN]);
+    assert.deepEqual(list.map(plugin => plugin.id), ['badges', 'custom-design', 'event-feedback', OFFICIAL_PLUGIN, PLUGIN]);
     assert.deepEqual(list.find(plugin => plugin.id === PLUGIN), {
         id: PLUGIN,
         name: 'Hook-Rekorder',
@@ -199,7 +199,7 @@ test('safe mode shows in the admin list and refuses switching a plugin', async (
     assert.equal(list.status, 200);
     const body = await list.json();
     assert.equal(body.safeMode, true);
-    assert.deepEqual(body.plugins.map(plugin => [plugin.id, plugin.status]), [['badges', 'safe'], ['custom-design', 'safe'], [OFFICIAL_PLUGIN, 'safe'], [PLUGIN, 'safe'], [IDLE_PLUGIN, 'safe']]);
+    assert.deepEqual(body.plugins.map(plugin => [plugin.id, plugin.status]), [['badges', 'safe'], ['custom-design', 'safe'], ['event-feedback', 'safe'], [OFFICIAL_PLUGIN, 'safe'], [PLUGIN, 'safe'], [IDLE_PLUGIN, 'safe']]);
 
     const res = await admin.send('PUT', `/api/admin/plugins/${IDLE_PLUGIN}/enabled`, { enabled: true, trust: true, password: 'dev' });
     assert.equal(res.status, 409);
