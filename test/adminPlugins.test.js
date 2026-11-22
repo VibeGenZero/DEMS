@@ -59,6 +59,7 @@ test('the admin list shows every plugin with its status and public setting value
         // Dev mock mode switches the official plugins on
         ['badges', 'on', true],
         ['custom-design', 'on', true],
+        ['event-feedback', 'on', true],
         [OFFICIAL_PLUGIN, 'on', true],
         [PLUGIN, 'on', false],
         [IDLE_PLUGIN, 'off', false]

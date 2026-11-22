@@ -799,9 +799,30 @@ function buildBadges(clock) {
     };
 }
 
+/** Seeded answers of „Event-Feedback“ (plugins/event-feedback) for the archived summer party: Lena and Tom answered, Kira not. */
+function buildFeedback(clock) {
+    const answeredAt = clock.offset(-58 * DAY);
+    const answer = (person, rating, comment) => ({
+        eventId: EVENT_ID.ARCHIVED, userId: person.userId, rating, comment, createdAt: answeredAt, updatedAt: answeredAt
+    });
+    return {
+        answers: {
+            [`${EVENT_ID.ARCHIVED}_${people.lena.userId}`]: answer(people.lena, 5, 'Super Orga!'),
+            [`${EVENT_ID.ARCHIVED}_${people.tom.userId}`]: answer(people.tom, 4, '')
+        },
+        requests: {
+            [EVENT_ID.ARCHIVED]: { eventId: EVENT_ID.ARCHIVED, sentAt: clock.offset(-59 * DAY), count: 3 }
+        }
+    };
+}
+
 function buildPluginSeedData(now = new Date()) {
     const clock = createClock(now);
-    return { 'event-submissions': { submissions: buildSubmissions(clock) }, badges: buildBadges(clock) };
+    return {
+        'event-submissions': { submissions: buildSubmissions(clock) },
+        badges: buildBadges(clock),
+        'event-feedback': buildFeedback(clock)
+    };
 }
 
 function buildSeedData(now = new Date()) {

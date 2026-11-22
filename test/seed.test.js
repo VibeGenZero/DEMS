@@ -30,7 +30,9 @@ const EXPECTED_COUNTS = {
     eventTemplates: 2,
     'plugin:event-submissions:submissions': 3,
     'plugin:badges:badges': 2,
-    'plugin:badges:awards': 1
+    'plugin:badges:awards': 1,
+    'plugin:event-feedback:answers': 2,
+    'plugin:event-feedback:requests': 1
 };
 
 async function countDocs(name) {
@@ -93,6 +95,13 @@ test('the seed has two badges of Badges, the founder badge awarded to the admin,
     assert.deepEqual([award.badgeId, award.userId, award.revokedAt], ['dev-badge-founder', mori, null]);
     const state = (await getDoc(doc(db, 'pluginState', 'badges'))).data();
     assert.deepEqual([...state.collections].sort(), ['awards', 'badges']);
+});
+
+test('the seed has two feedback answers for the archived event and records both collections', async () => {
+    const answers = (await getDocs(collection(db, 'plugin:event-feedback:answers'))).docs.map(item => item.data());
+    assert.deepEqual(answers.map(answer => [answer.eventId, answer.rating]).sort(), [['dev-event-archived', 4], ['dev-event-archived', 5]]);
+    const state = (await getDoc(doc(db, 'pluginState', 'event-feedback'))).data();
+    assert.deepEqual([...state.collections].sort(), ['answers', 'requests']);
 });
 
 test('the seed has open and rejected submissions of Event einreichen and records the collection', async () => {

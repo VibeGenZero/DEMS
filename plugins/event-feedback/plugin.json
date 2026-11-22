@@ -1,0 +1,15 @@
+{
+  "id": "event-feedback",
+  "name": "Event-Feedback",
+  "version": "1.0.0",
+  "sdk": 1.1,
+  "description": "Teilnehmer bewerten Events nach dem Ende – das Team sieht, was gut ankommt.",
+  "author": "DEMS",
+  "server": "server.js",
+  "client": "client.js",
+  "permissions": ["events:read", "registrations:read", "discord:dm"],
+  "settings": [
+    { "key": "noDm", "type": "boolean", "label": "Keine Feedback-Anfragen per DM senden",
+      "help": "Ohne DM finden Mitglieder offene Feedbacks nur im Tab „Feedback“." }
+  ]
+}

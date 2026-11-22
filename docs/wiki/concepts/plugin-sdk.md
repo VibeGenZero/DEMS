@@ -3,7 +3,7 @@ id: plugin-sdk
 title: Plugin SDK — architecture, lifecycle, security model
 type: concept
 tags: [plugins, plugin-sdk, extensions, ctx, ui, hooks, permissions, trust, privacy, safe-mode, sdk-1]
-sources: [plugin-sdk, utils/checkin.js, plugins/event-submissions, plugins/custom-design, plugins/badges, routes/plugins.js, routes/pluginStatic.js, routes/pluginTheme.js, routes/adminPlugins.js, public/design-boot.js, public/js/core/plugins.js, public/js/core/pluginTheme.js, public/js/core/passwordDialog.js, public/js/admin/system-plugins.js, routes/user.js, server.js, test/pluginClientGuards.test.js, docs/superpowers/specs/2026-11-19-plugin-sdk-design.md, docs/superpowers/specs/2026-11-20-custom-design-plugin-design.md]
+sources: [plugin-sdk, utils/checkin.js, plugins/event-submissions, plugins/custom-design, plugins/badges, plugins/event-feedback, routes/plugins.js, routes/pluginStatic.js, routes/pluginTheme.js, routes/adminPlugins.js, public/design-boot.js, public/js/core/plugins.js, public/js/core/pluginTheme.js, public/js/core/passwordDialog.js, public/js/admin/system-plugins.js, routes/user.js, server.js, test/pluginClientGuards.test.js, docs/superpowers/specs/2026-11-19-plugin-sdk-design.md, docs/superpowers/specs/2026-11-20-custom-design-plugin-design.md]
 depends_on: [server, data-layer]
 see_also: [write-plugin, security, frontend-app, bot, data-model, api-index, event-lifecycle]
 ---
@@ -34,7 +34,7 @@ Spec: [2026-11-19-plugin-sdk-design](../../superpowers/specs/2026-11-19-plugin-s
 | admin API | `routes/adminPlugins.js` | `GET /api/admin/plugins`, `PUT …/:id/enabled`, `PUT …/:id/settings`, `DELETE …/:id/data` — see [routes-admin](../modules/routes-admin.md) |
 | browser | `public/js/core/plugins.js`, `public/js/core/passwordDialog.js` | `loadPlugins()` (after the privacy consent), the `ui` object, pages at `#p/<id>`, navbar tabs, core reset password dialog `#passwordModal` — see [frontend-app](../modules/frontend-app.md) |
 | admin UI | `public/js/admin/system-plugins.js` | System › Plugins (cards, switch, trust dialog `#pluginTrustModal`, settings, „Daten löschen“) |
-| reference plugins | `plugins/event-submissions/`, `plugins/custom-design/`, `plugins/badges/` | „Event einreichen“, „Design anpassen“ and „Badges“ (official; „Badges“ is the SDK 1.1 reference, see below) |
+| reference plugins | `plugins/event-submissions/`, `plugins/custom-design/`, `plugins/badges/`, `plugins/event-feedback/` | „Event einreichen“, „Design anpassen“, „Badges“ and „Event-Feedback“ (official; the last two use SDK 1.1, see below) |
 
 ```mermaid
 flowchart LR
@@ -133,6 +133,17 @@ Admin-side rules (reset password for secrets, audit actions, secrets only as `{ 
 - Settings: `announceChannel` (post „**<Mitglied>** hat das Badge **<Name>** erhalten.“) and `dmOnAward` (DM „Du hast das Badge **<Name>** erhalten!“ + „Zum Profil“; manifest settings have no default, so it starts off).
 - Profile: active awards as reached badges, rule badges not reached yet with `progress`; manual badges not awarded and revoked ones are hidden.
 - Dev seed (`dev/seedData.js`): „Gründungsmitglied“ (manual, awarded to Mori) and „Stammgast“ (from 2 participations).
+
+## Official plugin „Event-Feedback“ (SDK 1.1)
+
+`plugins/event-feedback/`: `rules.js` (pure: window, eligibility, `validateAnswer`, `summarize`, DM text), `server.js` (routes below `/api/plugins/event-feedback`, hooks `event.ended` and `event.deleted`), `client.js` + `assets/view.js` + `client.css` (tab „Feedback“ for every member, badge = open feedbacks). Permissions `events:read`, `registrations:read`, `discord:dm`.
+
+- Rules: event end = `endDate`, else start + 2 h; the window runs from the end (at once when an admin archived the event after its start) until 7 days after the end; an event archived **before** its start is not open until its scheduled end; `cancelled`/`draft` never. Eligible = own registration `accepted`, plus `checkedIn` when check-in was **used** at the event (`checkinEnabled` and at least one registration checked in — a duplicated event keeps `checkinEnabled` without a code, so nobody could check in); guests never. Checked live on every request.
+- Data: `answers/<eventId>_<userId>` `{ eventId, userId, rating 1–5, comment ≤ 1000, createdAt, updatedAt }` (purged on account deletion); `requests/<eventId>` `{ eventId, sentAt, count }`.
+- `event.ended` fires when the event is archived — automatically 24 h after the end, or at once via „Beenden“ — so the DM usually arrives a day after the event. An event archived before its start is skipped (no request stored, a real end later asks). Otherwise once per event (a `requests` doc exists → nothing, also after re-archiving) the eligible members get the DM „Wie war **<Titel>**? Gib dem Team kurz Feedback – das dauert nur ein paar Sekunden.“ + „Feedback geben“ → `#p/event-feedback/<eventId>`, unless the setting `noDm` („Keine Feedback-Anfragen per DM senden“; settings have no defaults, so DMs start on). The request is stored also with `noDm`, so switching DMs on later sends nothing old; a window that already closed (archived long after the end, e.g. after downtime) is recorded without DMs. Beyond the SDK's 200 DMs per 10 minutes the rest is dropped; the tab still shows the open feedback. `event.deleted` removes the event's answers and request.
+- Member routes: `GET /mine` (`open` events, `done` answers with `editable`), `GET /events/:eventId/mine`, `PUT /events/:eventId/mine` (`{ rating, comment }`; 403 „Für dieses Event kannst du kein Feedback geben.“, 409 „Die Feedback-Zeit für dieses Event ist vorbei.“, 400 for the answer, 404 „Event nicht gefunden.“).
+- Admin routes: `GET /summary` (ended events the plugin asked about or that have answers — past events from before the plugin stay out — newest first, at most 100: `count`, `eligible`, `average`; plus averages per category over these rows; registrations are grouped by event once, so it stays fast with thousands of events) and `GET /events/:eventId/summary` (`distribution`, `comments` as `{ rating, comment }` sorted by rating). **No user ids, names or times** in any admin answer; „anonym“ means „ohne Namen“ — with very few answers an admin who knows the attendees can still guess.
+- Dev seed: Lena (5, „Super Orga!“) and Tom (4) answered for the archived summer party.
 
 ## Data and privacy
 
