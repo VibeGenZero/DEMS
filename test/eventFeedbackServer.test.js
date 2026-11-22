@@ -96,6 +96,8 @@ test('a member who took part rates within the window, changes the answer, and se
 
 test('not eligible: rejected, waitlisted, not checked in although check-in was used, no registration → 403', async () => {
     const eventId = await endedEvent('fb-noteligible', 1, { checkinEnabled: true });
+    // Check-in was really used: Kira checked in, Tom did not
+    await reg(eventId, kira.userId, { checkedIn: true });
     await reg(eventId, 'member', { checkedIn: false });
     await reg(eventId, 'raider', { status: 'rejected' });
     await reg(eventId, 'admin', { status: 'waitlisted' });
@@ -246,4 +248,57 @@ test('the seed has two answers for the archived summer party', async () => {
     const detail = await json(await admin.request(`${API}/events/dev-event-archived/summary`));
     assert.deepEqual({ count: detail.count, average: detail.average }, { count: 2, average: 4.5 });
     assert.deepEqual(detail.comments, [{ rating: 5, comment: 'Super Orga!' }]);
+});
+
+// ── Review fixes ────────────────────────────────────────────────────────
+
+test('archiving an event before it started asks nobody and keeps it closed; a real end later asks', async () => {
+    const event = await activeEventWith('Zukunftsabend', ['member'], { startDate: new Date(Date.now() + 3 * DAY).toISOString() });
+    await json(await admin.send('PUT', `/api/admin/events/${event.id}/status`, { status: 'archived' }));
+    await sleep(300);
+    assert.equal(dmLines('Zukunftsabend'), 0, 'no DM for an event that never happened');
+    const tom = await client('member');
+    assert.equal((await json(await tom.request(`${API}/events/${event.id}/mine`))).editable, false);
+    assert.equal((await json(await tom.request(`${API}/mine`))).open.some(entry => entry.id === event.id), false);
+    assert.equal((await tom.send('PUT', `${API}/events/${event.id}/mine`, { rating: 5 })).status, 409);
+
+    // It happens after all: reactivated, started three hours ago, ended
+    await json(await admin.send('PUT', `/api/admin/events/${event.id}/status`, { status: 'active' }));
+    const { db, doc, updateDoc } = store();
+    await updateDoc(doc(db, 'events', event.id), { startDate: new Date(Date.now() - 3 * 3600_000).toISOString(), endDate: '' });
+    await json(await admin.send('POST', `/api/admin/events/${event.id}/end`, {}));
+    await eventually(() => dmLines('Zukunftsabend'), count => count === 1, 'asked after the real end');
+});
+
+test('archiving an event whose window already closed sends no DM', async () => {
+    const eventId = await endedEvent('fb-late-archive', 9, { status: 'active', title: 'Spaetabend' });
+    await reg(eventId, 'member');
+    await json(await admin.send('PUT', `/api/admin/events/${eventId}/status`, { status: 'archived' }));
+    await sleep(300);
+    assert.equal(dmLines('Spaetabend'), 0);
+});
+
+test('a check-in event where nobody checked in (e.g. a duplicate without code) lets every accepted member answer', async () => {
+    const eventId = await endedEvent('fb-dup-checkin', 1, { checkinEnabled: true });
+    await reg(eventId, 'member', { checkedIn: false });
+    await reg(eventId, 'raider', { checkedIn: false });
+    assert.equal((await json(await (await client('member')).request(`${API}/events/${eventId}/mine`))).editable, true);
+    assert.equal((await json(await admin.request(`${API}/events/${eventId}/summary`))).eligible, 2);
+});
+
+test('the summary lists only events the plugin asked about or that have answers', async () => {
+    const unasked = await endedEvent('fb-unasked', 2, { title: 'Nie gefragt' });
+    await reg(unasked, 'member');
+    const summary = await json(await admin.request(`${API}/summary`));
+    assert.equal(summary.events.some(entry => entry.event.id === unasked), false);
+    const asked = await activeEventWith('Gefragter Abend', ['member']);
+    await json(await admin.send('POST', `/api/admin/events/${asked.id}/end`, {}));
+    await eventually(async () => (await json(await admin.request(`${API}/summary`))).events.some(entry => entry.event.id === asked.id),
+        found => found, 'listed after the request');
+});
+
+test('guests cannot store an answer either', async () => {
+    const eventId = await endedEvent('fb-guest-put', 1);
+    await reg(eventId, 'member', { guests: [persona('raider').userId] });
+    assert.deepEqual(await json(await (await client('raider')).send('PUT', `${API}/events/${eventId}/mine`, { rating: 5 }), 403), NOT_ELIGIBLE);
 });

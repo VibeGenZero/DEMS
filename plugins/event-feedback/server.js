@@ -10,7 +10,8 @@
  * ids, names or times. Uses only the `ctx` it is given and `rules.js`.
  */
 const {
-    ERRORS, eventEnd, feedbackWindow, isOpen, isEligible, validateAnswer, answerId, summarize, toEventView, requestDm
+    ERRORS, eventEnd, feedbackWindow, hasStarted, isOpen, isEligible, isCheckinUsed, validateAnswer, answerId, summarize,
+    toEventView, requestDm
 } = require('./rules');
 
 const ANSWERS = 'answers';
@@ -25,10 +26,26 @@ const nowIso = () => new Date().toISOString();
 const isDocId = id => typeof id === 'string' && id.length >= 1 && id.length <= MAX_ID_LENGTH && !id.includes('/');
 const newestFirst = (a, b) => String(b.startDate || '').localeCompare(String(a.startDate || ''));
 
-/** Whether an event is over: archived, or its end has passed. */
+/** Whether an event is over: its end has passed, or it was archived after it started. */
 function hasEnded(event, now) {
-    if (!feedbackWindow(event)) return false;
+    if (!feedbackWindow(event) || !hasStarted(event, now)) return false;
     return event.status === 'archived' || eventEnd(event) <= now;
+}
+
+/** Registrations grouped by event id, read once for many events. */
+function byEvent(registrations) {
+    const map = new Map();
+    for (const entry of registrations) {
+        if (!map.has(entry.eventId)) map.set(entry.eventId, []);
+        map.get(entry.eventId).push(entry);
+    }
+    return map;
+}
+
+/** Eligible user ids of one event, from that event's registrations only. */
+function eligibleIds(event, eventRegistrations) {
+    const used = isCheckinUsed(event, eventRegistrations);
+    return [...new Set(eventRegistrations.filter(entry => isEligible(event, entry, used)).map(entry => entry.userId))];
 }
 
 /**
@@ -42,26 +59,21 @@ function register(ctx) {
         return event;
     }
 
-    /** The member's own registration for an event, or null. */
-    async function ownRegistration(eventId, userId) {
-        return (await ctx.registrations.list({ eventId, userId }))[0] || null;
+    /** Whether a member may give feedback for an event at all (check-in counts only when it was used there). */
+    async function mayRate(event, userId) {
+        const eventRegistrations = await ctx.registrations.list({ eventId: event.id });
+        const own = eventRegistrations.find(entry => entry.userId === userId) || null;
+        return isEligible(event, own, isCheckinUsed(event, eventRegistrations));
     }
 
     /** The event, when the member may give feedback for it at all (a 403 answer otherwise). */
     async function eligibleEvent(eventId, userId) {
         const event = await findEvent(eventId);
-        if (!feedbackWindow(event) || !isEligible(event, await ownRegistration(eventId, userId))) {
-            throw ctx.httpError(403, ERRORS.notEligible);
-        }
+        if (!feedbackWindow(event) || !(await mayRate(event, userId))) throw ctx.httpError(403, ERRORS.notEligible);
         return event;
     }
 
     const plainAnswer = answer => (answer ? { rating: answer.rating, comment: answer.comment } : null);
-
-    /** Eligible user ids of one event among `registrations`. */
-    function eligibleIds(event, registrations) {
-        return [...new Set(registrations.filter(entry => entry.eventId === event.id && isEligible(event, entry)).map(entry => entry.userId))];
-    }
 
     /** DMs in the background: a message never delays or fails the hook. */
     function askPerDm(event, userIds) {
@@ -76,11 +88,15 @@ function register(ctx) {
     }
 
     ctx.hooks.on('event.ended', async ({ event }) => {
+        const now = new Date();
+        // Archived before it started: it never happened (yet); a real end later asks
+        if (!hasStarted(event, now)) return;
         if (await ctx.data.get(REQUESTS, event.id)) return;
         const userIds = eligibleIds(event, await ctx.registrations.list({ eventId: event.id }));
         await ctx.data.set(REQUESTS, event.id, { eventId: event.id, sentAt: nowIso(), count: userIds.length });
         const { noDm } = await ctx.settings.get();
-        if (noDm !== true) askPerDm(event, userIds);
+        // A window that already closed (archived long after the end) gets no DM, only the record
+        if (noDm !== true && isOpen(event, now)) askPerDm(event, userIds);
     });
 
     ctx.hooks.on('event.deleted', async ({ eventId }) => {
@@ -97,12 +113,21 @@ function register(ctx) {
         ]);
         const own = new Map(registrations.map(entry => [entry.eventId, entry]));
         const answered = new Map(answers.map(answer => [answer.eventId, answer]));
-        const mayAnswer = event => isOpen(event, now) && isEligible(event, own.get(event.id) || null);
-        const open = events.filter(event => mayAnswer(event) && !answered.has(event.id)).sort(newestFirst).map(toEventView);
+        // Only the member's events in the window; check-in use is read per event only where it matters
+        const candidates = events.filter(event => own.has(event.id) && isOpen(event, now));
+        const allowed = new Set();
+        for (const event of candidates) {
+            const registration = own.get(event.id);
+            const ok = event.checkinEnabled && registration.checkedIn !== true
+                ? await mayRate(event, user.id)
+                : isEligible(event, registration, false);
+            if (ok) allowed.add(event.id);
+        }
+        const open = candidates.filter(event => allowed.has(event.id) && !answered.has(event.id)).sort(newestFirst).map(toEventView);
         const done = events.filter(event => answered.has(event.id)).sort(newestFirst).map(event => ({
             event: toEventView(event),
             ...plainAnswer(answered.get(event.id)),
-            editable: mayAnswer(event)
+            editable: allowed.has(event.id)
         }));
         return { open, done };
     });
@@ -131,17 +156,21 @@ function register(ctx) {
 
     ctx.routes.get('/summary', ADMIN, async () => {
         const now = new Date();
-        const [events, registrations, answers] = await Promise.all([ctx.events.list(), ctx.registrations.list(), ctx.data.list(ANSWERS)]);
+        const [events, registrations, answers, requests] = await Promise.all([
+            ctx.events.list(), ctx.registrations.list(), ctx.data.list(ANSWERS), ctx.data.list(REQUESTS)
+        ]);
         const answersOf = new Map();
         for (const answer of answers) {
             if (!answersOf.has(answer.eventId)) answersOf.set(answer.eventId, []);
             answersOf.get(answer.eventId).push(answer);
         }
-        const rows = events.filter(event => hasEnded(event, now))
-            .map(event => ({ event, eligible: eligibleIds(event, registrations).length, own: answersOf.get(event.id) || [] }))
-            .filter(row => row.eligible > 0 || row.own.length > 0)
-            .sort((a, b) => newestFirst(a.event, b.event))
-            .slice(0, MAX_SUMMARY_EVENTS);
+        // Only events the plugin asked about or that have answers: past events from before the plugin stay out
+        const asked = new Set(requests.map(request => request.eventId));
+        const registrationsOf = byEvent(registrations);
+        const rows = events.filter(event => (asked.has(event.id) || answersOf.has(event.id)) && hasEnded(event, now))
+            .sort(newestFirst)
+            .slice(0, MAX_SUMMARY_EVENTS)
+            .map(event => ({ event, eligible: eligibleIds(event, registrationsOf.get(event.id) || []).length, own: answersOf.get(event.id) || [] }));
         const byCategory = new Map();
         for (const row of rows) {
             const category = row.event.category || '';

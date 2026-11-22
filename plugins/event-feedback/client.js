@@ -104,6 +104,8 @@ export function register(ui) {
         view.rating = rating;
         const stars = element('ef-stars');
         if (stars) stars.innerHTML = renderStars(rating, { input: true });
+        // The redraw removed the pressed button: keep the keyboard on the same star
+        element(`ef-star-${rating}`)?.focus();
     }
 
     function countComment(target) {
@@ -118,6 +120,7 @@ export function register(ui) {
             ui.helpers.showToast('Danke für dein Feedback!', 'success');
             await refreshBadge();
             await reload();
+            element('ef-send')?.focus();
         });
     }
 
@@ -127,7 +130,7 @@ export function register(ui) {
         view.tab = next;
         view.openId = '';
         view.detail = null;
-        return reload();
+        return reload().then(() => element(`ef-tab-${next}`)?.focus());
     }
 
     function openEvent(target) {
@@ -137,12 +140,14 @@ export function register(ui) {
             view.openId = '';
             view.detail = null;
             draw();
+            element(`ef-open-${id}`)?.focus();
             return undefined;
         }
         return once(async () => {
             view.detail = await ui.api.get(`/events/${encodeURIComponent(id)}/summary`);
             view.openId = id;
             draw();
+            element(`ef-open-${id}`)?.focus();
         });
     }
 

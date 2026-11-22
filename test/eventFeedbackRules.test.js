@@ -73,3 +73,16 @@ test('answerId, toEventView and requestDm', () => {
     assert.deepEqual(toEventView({ id: 'e2', title: 'Quiz', startDate: 's' }), { id: 'e2', title: 'Quiz', startDate: 's', category: '' });
     assert.equal(requestDm({ title: 'Raid_Abend *' }), 'Wie war **Raid\\_Abend \\***? Gib dem Team kurz Feedback – das dauert nur ein paar Sekunden.');
 });
+
+test('an event archived before it started is never open', () => {
+    const upcoming = { startDate: '2026-11-25T18:00:00.000Z', status: 'archived' };
+    assert.equal(isOpen(upcoming, new Date('2026-11-21T10:00:00.000Z')), false);
+    assert.equal(isOpen(upcoming, new Date('2026-11-25T21:00:00.000Z')), true, 'open once it is over');
+});
+
+test('check-in counts only when it was really used at the event', () => {
+    const event = { checkinEnabled: true };
+    assert.equal(isEligible(event, { status: 'accepted', checkedIn: false }, false), true, 'nobody checked in');
+    assert.equal(isEligible(event, { status: 'accepted', checkedIn: false }, true), false);
+    assert.equal(isEligible(event, { status: 'accepted', checkedIn: true }, true), true);
+});

@@ -10,6 +10,13 @@ const STARS = [1, 2, 3, 4, 5];
 const COMMENT_MAX = 1000;
 
 const decimal = value => (typeof value === 'number' ? value.toFixed(1).replace('.', ',') : '–');
+const STAR_ICON = '<i class="bi bi-star-fill" aria-hidden="true"></i>';
+
+/** An average as star icon + number, with a spoken label. */
+function averageMarkup(average) {
+    const label = typeof average === 'number' ? `Durchschnitt ${decimal(average)} von 5 Sternen` : 'Noch keine Bewertung';
+    return `<span class="ef-average" role="img" aria-label="${label}">${STAR_ICON}${decimal(average)}</span>`;
+}
 const answersText = count => (count === 1 ? '1 Antwort' : `${count} Antworten`);
 
 function formatDay(value) {
@@ -35,7 +42,8 @@ export function renderStars(rating, { input = false } = {}) {
     if (!input) {
         return `<span class="ef-stars-static" role="img" aria-label="${rating} von 5 Sternen">${STARS.map(icon).join('')}</span>`;
     }
-    return STARS.map(n => `<button type="button" class="ef-star${n <= rating ? ' is-on' : ''}" data-click="p:event-feedback:pickStar" data-rating="${n}" aria-pressed="${n === rating}" aria-label="${n === 1 ? '1 Stern' : `${n} Sterne`}">${icon(n)}</button>`).join('');
+    // The id comes last in the tag (see the test DOM of test/helpers.js); focus returns to it after a pick
+    return STARS.map(n => `<button type="button" class="ef-star${n <= rating ? ' is-on' : ''}" data-click="p:event-feedback:pickStar" data-rating="${n}" aria-pressed="${n === rating}" aria-label="${n === 1 ? '1 Stern' : `${n} Sterne`}" id="ef-star-${n}">${icon(n)}</button>`).join('');
 }
 
 /**
@@ -105,7 +113,7 @@ function renderDetail(detail, escapeHtml) {
     const bars = [5, 4, 3, 2, 1].map(stars => {
         const n = detail.distribution[stars - 1] || 0;
         const width = total ? Math.round((n / total) * 100) : 0;
-        return `<div class="ef-bar"><span class="ef-bar-label">★${stars}</span>
+        return `<div class="ef-bar"><span class="ef-bar-label" aria-label="${stars === 1 ? '1 Stern' : `${stars} Sterne`}">${stars} ${STAR_ICON}</span>
             <div class="ef-bar-track"><div class="ef-bar-fill" data-style-width="${width}"></div></div>
             <span class="ef-bar-count text-secondary">${n}</span></div>`;
     }).join('');
@@ -129,13 +137,13 @@ export function renderSummary(summary, helpers, { openId, detail } = {}) {
         return emptyState({ icon: 'chat-heart', title: 'Noch kein Feedback', text: 'Sobald Events vorbei sind, erscheinen hier die Bewertungen.' });
     }
     const categories = (summary.categories || []).length === 0 ? '' : `<div class="ef-categories">${summary.categories
-        .map(entry => `<span class="chip chip-sm">${escapeHtml(entry.category)} ★ ${decimal(entry.average)}</span>`).join('')}</div>`;
+        .map(entry => `<span class="chip chip-sm">${escapeHtml(entry.category)} ${STAR_ICON} ${decimal(entry.average)}</span>`).join('')}</div>`;
     const rows = summary.events.map(entry => {
         const isOpen = openId === entry.event.id;
         return `<li class="glass-card ef-row ef-summary-row">
-            <button type="button" class="ef-summary-head" data-click="p:event-feedback:openEvent" data-id="${escapeHtml(entry.event.id)}" aria-expanded="${isOpen}">
+            <button type="button" class="ef-summary-head" data-click="p:event-feedback:openEvent" data-id="${escapeHtml(entry.event.id)}" aria-expanded="${isOpen}" id="ef-open-${escapeHtml(entry.event.id)}">
                 <span class="ef-row-main">${eventLine(entry.event, escapeHtml)}</span>
-                <span class="ef-average">★ ${decimal(entry.average)}</span>
+                ${averageMarkup(entry.average)}
                 <span class="ef-rate text-secondary">${rateText(entry)}</span>
             </button>
             ${isOpen && detail ? renderDetail(detail, escapeHtml) : ''}
@@ -152,7 +160,7 @@ export function renderSummary(summary, helpers, { openId, detail } = {}) {
  */
 export function renderAdminSwitch(tab) {
     const pill = (key, icon, label) => `<li class="nav-item" role="presentation">
-        <button type="button" class="nav-link${tab === key ? ' active' : ''}" role="tab" aria-selected="${tab === key}" data-click="p:event-feedback:showTab" data-tab="${key}">
+        <button type="button" class="nav-link${tab === key ? ' active' : ''}" role="tab" aria-selected="${tab === key}" data-click="p:event-feedback:showTab" data-tab="${key}" id="ef-tab-${key}">
             <i class="bi ${icon} me-1" aria-hidden="true"></i>${label}
         </button></li>`;
     return `<ul class="nav nav-pills ef-tabs" role="tablist">${pill('summary', 'bi-bar-chart', 'Auswertung')}${pill('mine', 'bi-chat-heart', 'Mein Feedback')}</ul>`;

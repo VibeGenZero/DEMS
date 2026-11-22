@@ -54,11 +54,21 @@ function feedbackWindow(event) {
     return { opensAt: end, closesAt: new Date(end.getTime() + WINDOW_DAYS * DAY_MS) };
 }
 
-/** Whether the event takes feedback at `now`; an event archived before its scheduled end („Beenden“) is over at once. */
+/** Whether the event has started at `now` (an event without a valid start never has). */
+function hasStarted(event, now) {
+    const start = parseDate(event && event.startDate);
+    return Boolean(start) && start <= now;
+}
+
+/**
+ * Whether the event takes feedback at `now`. An event archived after its start but before its
+ * scheduled end („Beenden“ during the event) is over at once; one archived before it started is
+ * not over until its scheduled end.
+ */
 function isOpen(event, now) {
     const window = feedbackWindow(event);
     if (!window || now > window.closesAt) return false;
-    return event.status === 'archived' || window.opensAt <= now;
+    return window.opensAt <= now || (event.status === 'archived' && hasStarted(event, now));
 }
 
 /**
@@ -66,12 +76,18 @@ function isOpen(event, now) {
  *
  * @param {{ checkinEnabled?: boolean }} event
  * @param {{ status: string, checkedIn: boolean }|null} registration -> The member's own registration.
+ * @param {boolean} [checkinUsed] -> Whether check-in really happened at the event (someone checked in);
+ *   defaults to `checkinEnabled`. A switched-on check-in nobody used (e.g. a duplicate without code) does not count.
  * @returns {boolean}
  */
-function isEligible(event, registration) {
+function isEligible(event, registration, checkinUsed = Boolean(event && event.checkinEnabled)) {
     if (!registration || registration.status !== 'accepted') return false;
-    return !(event && event.checkinEnabled) || registration.checkedIn === true;
+    return !checkinUsed || registration.checkedIn === true;
 }
+
+/** Whether check-in was used at the event: switched on and at least one of its registrations checked in. */
+const isCheckinUsed = (event, registrations) => Boolean(event && event.checkinEnabled)
+    && registrations.some(entry => entry.checkedIn === true);
 
 /**
  * Check what a member sends.
@@ -122,8 +138,10 @@ module.exports = {
     ERRORS,
     eventEnd,
     feedbackWindow,
+    hasStarted,
     isOpen,
     isEligible,
+    isCheckinUsed,
     validateAnswer,
     answerId,
     summarize,

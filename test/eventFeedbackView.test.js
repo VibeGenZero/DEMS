@@ -90,12 +90,15 @@ test('the admin summary shows the average with a comma, the rate and comments wi
     };
     const detail = { event: EVENT, count: 9, eligible: 12, average: 4.3, distribution: [0, 1, 1, 2, 5], comments: [{ rating: 2, comment: '<script>x</script>' }] };
     const html = view.renderSummary(summary, helpers, { openId: 'e1', detail });
-    assert.match(html, /★ 4,3/);
+    // Stars are Bootstrap Icons with a spoken label, never the text symbol
+    assert.doesNotMatch(html, /★/);
+    assert.match(html, /aria-label="Durchschnitt 4,3 von 5 Sternen"[^>]*><i class="bi bi-star-fill" aria-hidden="true"><\/i>4,3/);
     assert.match(html, /9 von 12 \(75 %\)/);
-    assert.match(html, /★ 4,0/);
+    assert.match(html, /aria-label="Durchschnitt 4,0 von 5 Sternen"/);
     assert.match(html, /1 Antwort</);
-    assert.match(html, /★ –/);
-    assert.match(html, /Raid ★ 4,2/);
+    assert.match(html, /aria-label="Noch keine Bewertung"[^>]*><i class="bi bi-star-fill" aria-hidden="true"><\/i>–/);
+    assert.match(html, /Raid <i class="bi bi-star-fill" aria-hidden="true"><\/i> 4,2/);
+    assert.match(html, /<span class="ef-bar-label" aria-label="5 Sterne">5 <i class="bi bi-star-fill" aria-hidden="true"><\/i><\/span>/);
     assert.match(html, /data-click="p:event-feedback:openEvent" data-id="e1"/);
     assert.match(html, /data-style-width="56"/, '5 of 9 answers have 5 stars');
     assert.match(html, /&lt;script&gt;x&lt;\/script&gt;/);
@@ -157,4 +160,23 @@ test('admins see the summary first, open an event and switch to their own feedba
     assert.match(harness.element('ef-page').innerHTML, /Super Orga!/);
     await harness.app.runAction('p:event-feedback:showTab', { dataset: { tab: 'mine' } });
     assert.match(harness.element('ef-page').innerHTML, /Gerade wartet kein Event auf dein Feedback\./);
+});
+
+test('keyboard focus stays on the picked star, the opened row and the chosen pill', async () => {
+    const harness = await openPluginApp({
+        [`${API}/mine`]: () => ({ open: [EVENT], done: [] }),
+        [`${API}/events/e1/mine`]: () => ({ event: EVENT, editable: true, answer: null })
+    }, MEMBER, 'p/event-feedback/e1');
+    await harness.app.runAction('p:event-feedback:pickStar', { dataset: { rating: '4' } });
+    assert.deepEqual(harness.element('ef-star-4').calls.at(-1), ['focus']);
+
+    const admin = await openPluginApp({
+        [`${API}/mine`]: () => ({ open: [], done: [] }),
+        [`${API}/summary`]: () => ({ events: [{ event: EVENT, count: 2, eligible: 4, average: 4.5 }], categories: [] }),
+        [`${API}/events/e1/summary`]: () => ({ event: EVENT, count: 2, eligible: 4, average: 4.5, distribution: [0, 0, 0, 1, 1], comments: [] })
+    }, ADMIN);
+    await admin.app.runAction('p:event-feedback:openEvent', { dataset: { id: 'e1' } });
+    assert.deepEqual(admin.element('ef-open-e1').calls.at(-1), ['focus']);
+    await admin.app.runAction('p:event-feedback:showTab', { dataset: { tab: 'mine' } });
+    assert.deepEqual(admin.element('ef-tab-mine').calls.at(-1), ['focus']);
 });
