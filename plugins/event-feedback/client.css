@@ -1,0 +1,186 @@
+/* ── Official plugin: Event-Feedback (plugins/event-feedback/) ── */
+
+.ef-page {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-16);
+}
+
+.ef-card {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-12);
+    padding: var(--space-24);
+}
+
+.ef-section-title {
+    font-size: var(--font-size-lg);
+    color: var(--text-primary);
+    margin: 0;
+}
+
+.ef-event-title {
+    color: var(--text-primary);
+    overflow-wrap: anywhere;
+}
+
+.ef-event-day {
+    margin-left: var(--space-8);
+    font-size: var(--font-size-sm);
+}
+
+.ef-stars {
+    display: flex;
+    gap: var(--space-4);
+}
+
+.ef-star {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--space-48);
+    height: var(--space-48);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-sm);
+    background: var(--bg-inset);
+    color: var(--text-secondary);
+    font-size: var(--font-size-xl);
+    cursor: pointer;
+}
+
+.ef-star.is-on {
+    border-color: var(--warning-border);
+    color: var(--warning);
+}
+
+.ef-star:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+}
+
+.ef-stars-static {
+    display: inline-flex;
+    gap: var(--space-4);
+    color: var(--warning);
+}
+
+.ef-form-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-8);
+}
+
+.ef-count {
+    font-size: var(--font-size-sm);
+}
+
+.ef-list,
+.ef-comments {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-12);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.ef-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-12);
+    padding: var(--space-16) var(--space-24);
+}
+
+.ef-row-main {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+    min-width: 0;
+}
+
+.ef-summary-row {
+    flex-direction: column;
+    align-items: stretch;
+}
+
+.ef-summary-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-12);
+    width: 100%;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.ef-summary-head .ef-row-main {
+    flex: 1 1 auto;
+}
+
+.ef-average {
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
+.ef-rate {
+    font-size: var(--font-size-sm);
+}
+
+.ef-categories {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-8);
+}
+
+.ef-detail {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-8);
+    padding-top: var(--space-12);
+    border-top: 1px solid var(--border-subtle);
+}
+
+.ef-bar {
+    display: grid;
+    grid-template-columns: var(--space-32) 1fr var(--space-32);
+    align-items: center;
+    gap: var(--space-8);
+}
+
+.ef-bar-label,
+.ef-bar-count {
+    font-size: var(--font-size-sm);
+}
+
+.ef-bar-track {
+    height: var(--space-8);
+    border-radius: var(--radius-pill);
+    background: var(--bg-inset);
+    overflow: hidden;
+}
+
+.ef-bar-fill {
+    width: 0;
+    height: 100%;
+    background: var(--warning);
+}
+
+.ef-comment {
+    color: var(--text-primary);
+    overflow-wrap: anywhere;
+    white-space: pre-line;
+}
+
+.ef-comment-row {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+}
