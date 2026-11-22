@@ -16,6 +16,23 @@ const { getFeedOf, saveNewFeed, deleteFeed } = require('../utils/calendarFeedSto
 const { buildCalendarFeedUrls } = require('../utils/eventUrl');
 const { pluginHost } = require('../plugin-sdk');
 const { safeEmit } = require('../plugin-sdk/coreHooks');
+const { collectPluginBadges } = require('../plugin-sdk/profile');
+
+/**
+ * Profile badges of the switched-on plugins for one member; [] while the plugin host is not running.
+ *
+ * @param {string} userId -> The member whose profile is shown.
+ * @returns {Promise<object[]>} -> Never rejects.
+ */
+async function pluginBadgesFor(userId) {
+    let host;
+    try {
+        host = pluginHost();
+    } catch {
+        return [];
+    }
+    return collectPluginBadges({ userId, providers: host.profileProviders(), onError: host.reportError });
+}
 
 /**
  * POST /api/user/privacy/accept — { version }: the member accepts the current privacy policy (#138)
@@ -286,6 +303,9 @@ router.get('/profile', requireAuth, async (req, res) => {
             unlocked: activeRegs.length >= 3,
             progress: Math.min(activeRegs.length / 3, 1)
         });
+
+        // Badges of switched-on plugins (SDK 1.1), after the built-in ones; 2 s per plugin at most
+        badges.push(...await pluginBadgesFor(user.id));
 
         // ── Lists of the profile page ────────────────────────────
         // Place on the waitlist (W-05): one read per active event the member waits for; never for a guest place

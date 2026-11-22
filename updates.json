@@ -1,6 +1,26 @@
 {
-    "version": "3.4.1",
+    "version": "3.5.0",
     "releases": [
+        {
+            "version": "3.5.0",
+            "date": "2026-11-22",
+            "news": [
+                {
+                    "title": "🏅 Eigene Badges für eure Community",
+                    "content": "Mit dem neuen Plugin „Badges“ legen Admins eigene Badges an – mit Name, Beschreibung, Icon und Farbe. Vergeben werden sie von Hand oder automatisch, zum Beispiel „ab 10 Teilnahmen“ oder „ab 5 Check-ins“, auf Wunsch nur für eine Event-Kategorie. Optional hängt an einem Badge eine Discord-Rolle, die mit dem Badge kommt und mit ihm wieder geht. Deine Badges siehst du im Profil neben den bekannten, noch offene mit Fortschrittsbalken. Wer eine Regel schon erfüllt, bekommt das Badge sofort, ganz ohne Nachrichtenflut.",
+                    "highlight": true
+                },
+                {
+                    "title": "⭐ Event-Feedback: Wie war's?",
+                    "content": "Nach einem Event fragt dich der Bot einmal per DM, wie es war: 1 bis 5 Sterne und auf Wunsch ein kurzer Kommentar, abgeben und ändern kannst du das bis 7 Tage nach dem Event im neuen Tab „Feedback“. Das Team sieht pro Event den Schnitt, wie viele geantwortet haben und die Kommentare – ohne Namen. So lernt ihr, welche Events gut ankommen und was ihr besser machen könnt.",
+                    "highlight": true
+                },
+                {
+                    "title": "🧩 Für Admins und Plugin-Entwickler: Plugin-SDK 1.1",
+                    "content": "Beide neuen Plugins sind offiziell, starten aber ausgeschaltet – Admins schalten sie unter System › Plugins ein. Für eigene Plugins kann das SDK jetzt Anmeldungen und Check-ins lesen, Discord-Rollen vergeben (nie Admin- oder Moderationsrollen), Mitglieder suchen und Badges ins Profil liefern."
+                }
+            ]
+        },
         {
             "version": "3.4.1",
             "date": "2026-11-21",

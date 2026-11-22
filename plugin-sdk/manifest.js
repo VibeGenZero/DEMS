@@ -7,10 +7,14 @@
  * („Ungültig: …“ or „Inkompatibel (SDK <n>)“); such a plugin is never loaded.
  */
 
-/** SDK version this DEMS release supports. */
+/** SDK major version this DEMS release supports. */
 const SDK_VERSION = 1;
+/** Newest minor of that major: 1.1 adds registrations, roles, member search and profile badges. */
+const SDK_MINOR = 1;
+/** Values `plugin.json` may name as `sdk`; 1.x plugins only add to 1.0, so every one of them runs. */
+const SDK_VERSIONS = Object.freeze([1, 1.1]);
 
-/** Known permissions of SDK 1 with the German label shown to admins. */
+/** Known permissions of SDK 1.1 with the German label shown to admins. */
 const PERMISSIONS = Object.freeze({
     'events:read': 'Events lesen',
     'events:draft': 'Events für das Team vorbereiten',
@@ -18,8 +22,13 @@ const PERMISSIONS = Object.freeze({
     'discord:dm': 'Direktnachrichten über den Bot senden',
     'discord:channel': 'Nachrichten in Discord-Kanäle posten',
     network: 'Verbindungen ins Internet aufbauen',
-    theme: 'Aussehen der ganzen Seite ändern'
+    theme: 'Aussehen der ganzen Seite ändern',
+    'registrations:read': 'Anmeldungen lesen',
+    'discord:roles': 'Discord-Rollen vergeben und entziehen'
 });
+
+/** Permissions a manifest may only declare with `sdk: 1.1`. */
+const SDK_1_1_PERMISSIONS = Object.freeze(['registrations:read', 'discord:roles']);
 
 /** Allowed `settings[].type` values. */
 const SETTING_TYPES = Object.freeze(['text', 'textarea', 'number', 'boolean', 'select', 'channel', 'role', 'secret']);
@@ -121,8 +130,8 @@ function validateManifest(raw, folderName, { fileExists }) {
     if (typeof raw.id !== 'string' || !ID_PATTERN.test(raw.id)) return invalid('Die ID ist nicht erlaubt.');
     if (raw.id !== folderName) return invalid('Die ID passt nicht zum Ordnernamen.');
 
-    if (!Number.isInteger(raw.sdk)) return invalid('SDK-Version fehlt.');
-    if (raw.sdk !== SDK_VERSION) return { ok: false, status: 'incompatible', reason: `Inkompatibel (SDK ${raw.sdk})` };
+    if (typeof raw.sdk !== 'number' || Number.isNaN(raw.sdk)) return invalid('SDK-Version fehlt.');
+    if (!SDK_VERSIONS.includes(raw.sdk)) return { ok: false, status: 'incompatible', reason: `Inkompatibel (SDK ${raw.sdk})` };
 
     if (typeof raw.version !== 'string' || !VERSION_PATTERN.test(raw.version)) return invalid('Version muss x.y.z sein.');
 
@@ -152,6 +161,8 @@ function validateManifest(raw, folderName, { fileExists }) {
             return invalid(`Unbekannte Berechtigung ${String(permission)}.`);
         }
     }
+    const newer = raw.sdk === 1 && permissions.find(permission => SDK_1_1_PERMISSIONS.includes(permission));
+    if (newer) return invalid(`Die Berechtigung „${newer}“ braucht SDK 1.1.`);
 
     const rawSettings = raw.settings === undefined ? [] : raw.settings;
     if (!Array.isArray(rawSettings)) return invalid('Einstellungen müssen eine Liste sein.');
@@ -185,4 +196,4 @@ function validateManifest(raw, folderName, { fileExists }) {
     };
 }
 
-module.exports = { SDK_VERSION, PERMISSIONS, SETTING_TYPES, validateManifest };
+module.exports = { SDK_VERSION, SDK_MINOR, SDK_VERSIONS, SDK_1_1_PERMISSIONS, PERMISSIONS, SETTING_TYPES, validateManifest };

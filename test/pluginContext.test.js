@@ -18,7 +18,7 @@ const hooks = require('../plugin-sdk/hooks');
 const state = require('../plugin-sdk/state');
 const { createContext } = require('../plugin-sdk/context');
 
-const USED = ['events', 'users', 'auditLogs', 'pluginState', 'pluginSettings'];
+const USED = ['events', 'users', 'registrations', 'auditLogs', 'pluginState', 'pluginSettings'];
 const DAY = 24 * 60 * 60 * 1000;
 
 let logs;
@@ -49,7 +49,9 @@ function build(permissions = [], { registering = true } = {}) {
         recordCollection: async () => {},
         routes: [],
         disableCallbacks: [],
-        isRegistering: () => registering
+        isRegistering: () => registering,
+        profileProviders: [],
+        setProfileProvider: fn => runtime.profileProviders.push(fn)
     };
     return { ctx: createContext({ entry: entry(permissions), host: runtime }), runtime };
 }
@@ -150,6 +152,54 @@ test('event hooks need events:read, member.deleted needs nothing', async () => {
     assert.doesNotThrow(() => withRead.hooks.on('event.created', () => {}));
 });
 
+test('registration.checkedIn needs registrations:read', () => {
+    assert.throws(() => build([]).ctx.hooks.on('registration.checkedIn', () => {}), PluginPermissionError);
+    assert.doesNotThrow(() => build(['registrations:read']).ctx.hooks.on('registration.checkedIn', () => {}));
+});
+
+test('ctx.registrations needs registrations:read', async () => {
+    await assert.rejects(build([]).ctx.registrations.list(), PluginPermissionError);
+});
+
+test('ctx.registrations.list returns attendance fields only, filtered and sorted by createdAt', async () => {
+    const member = '111111111111111111';
+    await setDoc(doc(db, 'registrations', 'r2'), {
+        eventId: 'e1', userId: member, status: 'accepted', source: 'web', createdAt: '2026-11-02T10:00:00.000Z',
+        checkedIn: true, checkedInAt: '2026-11-03T10:00:00.000Z', slotId: 'tank', formAnswers: { Discord: 'x' },
+        guests: ['2'], pendingGuests: [], guestCheckins: {}, offer: null, checkinInvitedAt: '2026-11-03T09:00:00.000Z'
+    });
+    await setDoc(doc(db, 'registrations', 'r1'), {
+        eventId: 'e2', userId: member, status: 'pending', source: 'discord', createdAt: '2026-11-01T10:00:00.000Z'
+    });
+    await setDoc(doc(db, 'registrations', 'r3'), {
+        eventId: 'e1', userId: '222222222222222222', status: 'waitlisted', createdAt: '2026-11-04T10:00:00.000Z'
+    });
+    const { ctx } = build(['registrations:read']);
+    assert.deepEqual(await ctx.registrations.list({ userId: member }), [
+        { id: 'r1', eventId: 'e2', userId: member, status: 'pending', source: 'discord',
+            createdAt: '2026-11-01T10:00:00.000Z', checkedIn: false, checkedInAt: null, slotId: null },
+        { id: 'r2', eventId: 'e1', userId: member, status: 'accepted', source: 'web',
+            createdAt: '2026-11-02T10:00:00.000Z', checkedIn: true, checkedInAt: '2026-11-03T10:00:00.000Z', slotId: 'tank' }
+    ]);
+    assert.deepEqual((await ctx.registrations.list()).map(item => item.id), ['r1', 'r2', 'r3']);
+    assert.equal((await ctx.registrations.list()).at(-1).source, null);
+    assert.deepEqual((await ctx.registrations.list({ eventId: 'e1' })).map(item => item.id), ['r2', 'r3']);
+    assert.deepEqual(await ctx.registrations.list({ eventId: 'e1', userId: 'nobody' }), []);
+    assert.deepEqual(await ctx.registrations.list({ eventId: 'a/b' }), []);
+    assert.deepEqual(await ctx.registrations.list({ userId: 42 }), []);
+});
+
+test('ctx.profile.badges stores one provider during register()', () => {
+    const { ctx, runtime } = build([]);
+    const provider = () => [];
+    assert.throws(() => ctx.profile.badges('nope'), { message: 'Profil-Badges: provider muss eine Funktion sein.' });
+    ctx.profile.badges(provider);
+    assert.deepEqual(runtime.profileProviders, [provider]);
+    assert.throws(() => ctx.profile.badges(() => []), { message: 'Profil-Badges lassen sich nur einmal anmelden.' });
+    assert.throws(() => build([], { registering: false }).ctx.profile.badges(provider),
+        { message: 'Routen und Hooks lassen sich nur während register() anmelden.' });
+});
+
 test('onDisable collects callbacks', () => {
     const { ctx, runtime } = build();
     const fn = () => {};
@@ -221,6 +271,30 @@ test('ctx.members.get needs members:read and returns id, name, avatar or null', 
     assert.equal(await ctx.members.get('999'), null);
     assert.equal(await ctx.members.get('a/b'), null);
     assert.equal(await ctx.members.get(42), null);
+});
+
+test('ctx.members.search finds stored users by any name, 2–50 characters, at most 20, sorted by name', async () => {
+    await setDoc(doc(db, 'users', '111111111111111111'), { username: 'kira', displayName: 'Kira K.', avatar: null });
+    await setDoc(doc(db, 'users', '222222222222222222'), { username: 'ben', globalName: 'Benjamin', acceptInvitations: false });
+    await setDoc(doc(db, 'users', '333333333333333333'), { username: 'anna', displayName: 'Anna' });
+    await setDoc(doc(db, 'users', '000000000000000005'), { username: 'zora', displayName: 'Zora Anders' });
+    for (let i = 0; i < 25; i++) await setDoc(doc(db, 'users', `4000000000000000${10 + i}`), { username: `zz${String(i).padStart(2, '0')}` });
+    const { ctx } = build(['members:read']);
+
+    const kira = await ctx.members.search('KIR');
+    assert.deepEqual(kira.map(member => member.id), ['111111111111111111']);
+    assert.deepEqual(Object.keys(kira[0]).sort(), ['avatar', 'id', 'name']);
+    assert.equal(kira[0].name, 'Kira K.');
+    // The name follows ctx.members.get: display name, then user name, then global name
+    assert.deepEqual((await ctx.members.search('jamin')).map(member => member.name), ['ben']);
+    assert.deepEqual((await ctx.members.search('an')).map(member => member.name), ['Anna', 'Zora Anders']);
+    const many = await ctx.members.search('zz');
+    assert.equal(many.length, 20);
+    assert.equal(many[0].name, 'zz00');
+    assert.deepEqual(await ctx.members.search(' k '), []);
+    assert.deepEqual(await ctx.members.search('x'.repeat(51)), []);
+    assert.deepEqual(await ctx.members.search(42), []);
+    await assert.rejects(build([]).ctx.members.search('kira'), PluginPermissionError);
 });
 
 test('ctx.settings.get returns the stored values of the manifest keys, secrets included', async () => {

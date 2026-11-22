@@ -28,7 +28,11 @@ const EXPECTED_COUNTS = {
     botSettings: 1,
     maintenanceSettings: 1,
     eventTemplates: 2,
-    'plugin:event-submissions:submissions': 3
+    'plugin:event-submissions:submissions': 3,
+    'plugin:badges:badges': 2,
+    'plugin:badges:awards': 1,
+    'plugin:event-feedback:answers': 2,
+    'plugin:event-feedback:requests': 1
 };
 
 async function countDocs(name) {
@@ -79,6 +83,25 @@ test('Elif has an open waitlist offer for the second training date (B-15)', asyn
     const expires = new Date(registration.offer.expiresAt);
     assert.ok(expires > new Date(), 'deadline ahead');
     assert.ok(expires < new Date((await getEvent(SERIES_EVENT_IDS[1])).startDate), 'before the start');
+});
+
+test('the seed has two badges of Badges, the founder badge awarded to the admin, and records both collections', async () => {
+    const mori = PERSONAS.find(persona => persona.id === 'admin').userId;
+    const founder = (await getDoc(doc(db, 'plugin:badges:badges', 'dev-badge-founder'))).data();
+    assert.deepEqual([founder.name, founder.rule], ['Gründungsmitglied', { type: 'manual' }]);
+    const regular = (await getDoc(doc(db, 'plugin:badges:badges', 'dev-badge-regular'))).data();
+    assert.deepEqual(regular.rule, { type: 'participations', count: 2, category: null });
+    const award = (await getDoc(doc(db, 'plugin:badges:awards', `dev-badge-founder_${mori}`))).data();
+    assert.deepEqual([award.badgeId, award.userId, award.revokedAt], ['dev-badge-founder', mori, null]);
+    const state = (await getDoc(doc(db, 'pluginState', 'badges'))).data();
+    assert.deepEqual([...state.collections].sort(), ['awards', 'badges']);
+});
+
+test('the seed has two feedback answers for the archived event and records both collections', async () => {
+    const answers = (await getDocs(collection(db, 'plugin:event-feedback:answers'))).docs.map(item => item.data());
+    assert.deepEqual(answers.map(answer => [answer.eventId, answer.rating]).sort(), [['dev-event-archived', 4], ['dev-event-archived', 5]]);
+    const state = (await getDoc(doc(db, 'pluginState', 'event-feedback'))).data();
+    assert.deepEqual([...state.collections].sort(), ['answers', 'requests']);
 });
 
 test('the seed has open and rejected submissions of Event einreichen and records the collection', async () => {

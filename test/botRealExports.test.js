@@ -71,7 +71,9 @@ test('every Discord helper answers with its neutral value while the bot is not r
         deleteMirroredMessage: [[{ id: 'c1', discordMessageId: 'm1' }, { discordThread: { guildId: 'g1', threadId: 't1' } }], false],
         updateScheduledEvent: [[{ title: 'Abend', discordScheduledEventId: 's1' }], false],
         removeScheduledEvent: [[{ title: 'Abend', discordScheduledEventId: 's1' }], false],
-        setScheduledEventStatus: [[{ title: 'Abend', discordScheduledEventId: 's1' }, 'active'], false]
+        setScheduledEventStatus: [[{ title: 'Abend', discordScheduledEventId: 's1' }, 'active'], false],
+        listPluginRoles: [[], []],
+        setPluginRole: [['u1', 'r1', true], { ok: false, code: 'not_ready' }]
     };
     for (const [name, [args, expected]] of Object.entries(neutral)) {
         assert.deepEqual(await bot[name](...args), expected, name);
@@ -209,3 +211,92 @@ test('without the thread sync the bot asks for no Message Content intent (#146)'
         bot.client.login = originalLogin;
     }
 });
+
+/** A fake guild for the plugin role helpers: roles by id, one member with role ids, the bot at position 10. */
+function fakeGuild({ roles, memberRoles, calls, overwrites = {} }) {
+    const asRole = (data) => ({ ...data, permissions: { toArray: () => [...data.permissions] } });
+    // One channel whose overwrites allow the listed rights per role id
+    const channel = { permissionOverwrites: { cache: new Map(Object.entries(overwrites).map(([id, allow]) => [id, { id, allow: { toArray: () => allow } }])) } };
+    return {
+        id: 'G',
+        channels: { cache: new Map([['c1', channel]]) },
+        members: {
+            me: { roles: { highest: { position: 10 } } },
+            fetch: async (userId) => {
+                if (userId !== 'u1') throw new Error('Unknown Member');
+                return {
+                    user: { tag: 'kira' },
+                    roles: {
+                        cache: { has: (id) => memberRoles.includes(id) },
+                        add: async (id) => { calls.push(['add', id]); },
+                        remove: async (id) => { calls.push(['remove', id]); }
+                    }
+                };
+            }
+        },
+        roles: {
+            fetch: async (id) => {
+                if (id === undefined) return new Map(roles.map(role => [role.id, asRole(role)]));
+                const role = roles.find(entry => entry.id === id);
+                if (!role) throw new Error('Unknown Role');
+                return asRole(role);
+            }
+        }
+    };
+}
+
+test('plugin roles: the guard runs on the live role, so a role that gained a right is refused', async () => {
+    const { state } = require('../bot/client');
+    const originalFetch = bot.client.guilds.fetch;
+    const originalLog = console.log;
+    const calls = [];
+    const roles = [
+        { id: 'vip', name: 'VIP', color: 0xa855f7, managed: false, position: 3, permissions: ['SendMessages'] },
+        { id: 'mod', name: 'Mod', color: 0, managed: false, position: 4, permissions: ['ManageMessages'] },
+        { id: 'top', name: 'Top', color: 0, managed: false, position: 11, permissions: [] },
+        { id: 'G', name: '@everyone', color: 0, managed: false, position: 0, permissions: [] }
+    ];
+    state.isReady = true;
+    process.env.DISCORD_GUILD_ID = 'G';
+    bot.client.guilds.fetch = async () => fakeGuild({ roles, memberRoles: ['G'], calls });
+    console.log = () => {};
+    try {
+        assert.deepEqual(await bot.listPluginRoles(), [{ id: 'vip', name: 'VIP', color: '#a855f7' }]);
+        assert.deepEqual(await bot.setPluginRole('u1', 'vip', true), { ok: true, changed: true });
+        assert.deepEqual(await bot.setPluginRole('u1', 'vip', false), { ok: true, changed: false });
+        assert.deepEqual(await bot.setPluginRole('u2', 'vip', true), { ok: false, code: 'not_member' });
+        for (const roleId of ['mod', 'top', 'G', 'gone']) {
+            assert.deepEqual(await bot.setPluginRole('u1', roleId, true), { ok: false, code: 'forbidden' }, roleId);
+        }
+        // VIP is edited in Discord and now may delete messages
+        roles[0].permissions.push('ManageMessages');
+        assert.deepEqual(await bot.setPluginRole('u1', 'vip', true), { ok: false, code: 'forbidden' });
+        assert.deepEqual(calls, [['add', 'vip']]);
+    } finally {
+        state.isReady = false;
+        bot.client.guilds.fetch = originalFetch;
+        console.log = originalLog;
+    }
+});
+
+test('plugin roles: a role with a moderation right in a channel overwrite is refused', async () => {
+    const { state } = require('../bot/client');
+    const originalFetch = bot.client.guilds.fetch;
+    const calls = [];
+    const roles = [
+        { id: 'vip', name: 'VIP', color: 0, managed: false, position: 3, permissions: ['SendMessages'] },
+        { id: 'chanmod', name: 'Kanal-Mod', color: 0, managed: false, position: 2, permissions: ['SendMessages'] }
+    ];
+    state.isReady = true;
+    process.env.DISCORD_GUILD_ID = 'G';
+    bot.client.guilds.fetch = async () => fakeGuild({ roles, memberRoles: [], calls, overwrites: { chanmod: ['ViewChannel', 'ManageMessages'], vip: ['ViewChannel'] } });
+    try {
+        assert.deepEqual((await bot.listPluginRoles()).map(role => role.id), ['vip']);
+        assert.deepEqual(await bot.setPluginRole('u1', 'chanmod', true), { ok: false, code: 'forbidden' });
+        assert.deepEqual(calls, []);
+    } finally {
+        state.isReady = false;
+        bot.client.guilds.fetch = originalFetch;
+    }
+});
+

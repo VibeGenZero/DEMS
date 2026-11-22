@@ -43,7 +43,9 @@ const { deleteEventComments } = require('../utils/eventComments');
 const {
     buildNewEvent, createEventChannelsAllowed, announceEvent, createPoll, announcePoll
 } = require('../utils/adminActions');
-const { emitEventCreated, emitEventSaved, emitEventDeleted, safeStatusChange, validatePluginOrigin } = require('../plugin-sdk/coreHooks');
+const {
+    emitEventCreated, emitEventSaved, emitEventDeleted, emitRegistrationCheckedIn, safeStatusChange, validatePluginOrigin
+} = require('../plugin-sdk/coreHooks');
 const { pluginHost } = require('../plugin-sdk');
 
 // Statuses after which an event is over for good -> clean-up in Discord (B-10)
@@ -1509,6 +1511,7 @@ router.put('/registrations/:id/checkin', async (req, res) => {
         // A repeated check-in keeps the original time
         const checkedInAt = checkedIn ? (reg.checkedIn && reg.checkedInAt) || new Date().toISOString() : null;
         await updateDoc(regRef, { checkedIn, checkedInAt });
+        if (checkedIn && reg.checkedIn !== true) emitRegistrationCheckedIn(req.params.id, { ...reg, checkedIn, checkedInAt });
 
         await addAuditLog(
             checkedIn ? 'CHECKIN_REGISTRATION' : 'UNDO_CHECKIN_REGISTRATION',

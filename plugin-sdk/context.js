@@ -9,12 +9,13 @@
  */
 const { db, collection, doc, getDoc, getDocs } = require('../firebaseAdmin');
 const { buildEventUrl, buildSiteUrl } = require('../utils/eventUrl');
-const { avatarUrlOf, repairAvatarUrl } = require('../utils/avatar');
 const { parseDate, isEventOver } = require('../utils/eventListing');
 const { createDataApi } = require('./data');
 const { createDiscordApi } = require('./discord');
 const { createThemeApi } = require('./theme');
-const { HOOK_NAMES, EVENT_HOOKS, onHook, toPluginEvent } = require('./hooks');
+const { createRegistrationsApi } = require('./registrations');
+const { createMembersApi } = require('./members');
+const { HOOK_NAMES, EVENT_HOOKS, REGISTRATION_HOOKS, onHook, toPluginEvent } = require('./hooks');
 const { PluginPermissionError, PluginHttpError } = require('./errors');
 const state = require('./state');
 
@@ -43,6 +44,7 @@ const SEALED = 'Routen und Hooks lassen sich nur während register() anmelden.';
  * @property {RouteDef[]} routes -> Filled by `ctx.routes.*`.
  * @property {Function[]} disableCallbacks -> Filled by `ctx.onDisable`.
  * @property {() => boolean} [isRegistering] -> False once `register()` is over; routes and hooks are refused then.
+ * @property {(provider: Function) => void} [setProfileProvider] -> Stores the plugin's profile badge provider (SDK 1.1).
  */
 
 const isDocId = id => typeof id === 'string' && id.length >= 1 && id.length <= MAX_DOC_ID_LENGTH && !id.includes('/');
@@ -152,31 +154,16 @@ function createContext({ entry, host }) {
         url: eventId => buildEventUrl(eventId)
     };
 
-    const members = {
-        /** @returns {Promise<{ id: string, name: string, avatar: string }|null>} -> null for an unknown member. */
-        async get(userId) {
-            requirePermission('members:read');
-            if (!isDocId(userId)) return null;
-            const snap = await getDoc(doc(db, 'users', userId));
-            if (!snap.exists()) return null;
-            const user = snap.data();
-            return {
-                id: userId,
-                name: String(user.displayName || user.username || user.globalName || ''),
-                avatar: repairAvatarUrl(avatarUrlOf(user))
-            };
-        }
-    };
-
     const hooks = {
         /**
-         * @param {string} name -> One of the hook names; event hooks need `events:read`.
+         * @param {string} name -> One of the hook names; event hooks need `events:read`, registration hooks `registrations:read`.
          * @param {(payload: object) => (void|Promise<void>)} handler
          */
         on(name, handler) {
             requireOpen();
             if (!HOOK_NAMES.includes(name)) throw new Error(`Unbekannter Hook: ${name}`);
             if (EVENT_HOOKS.includes(name)) requirePermission('events:read');
+            if (REGISTRATION_HOOKS.includes(name)) requirePermission('registrations:read');
             if (typeof handler !== 'function') throw new Error(`Hook ${name}: Handler muss eine Funktion sein.`);
             onHook(id, name, handler);
         }
@@ -197,6 +184,22 @@ function createContext({ entry, host }) {
         await addAuditLog(`plugin:${id}:${action}`, adminId, details, targetId);
     }
 
+    let profileRegistered = false;
+    const profile = {
+        /**
+         * Badges for the member's own profile (SDK 1.1), once and only during `register()`.
+         *
+         * @param {(request: { userId: string }) => (object[]|Promise<object[]>)} provider -> See plugin-sdk/profile.js for the shape.
+         */
+        badges(provider) {
+            requireOpen();
+            if (typeof provider !== 'function') throw new Error('Profil-Badges: provider muss eine Funktion sein.');
+            if (profileRegistered) throw new Error('Profil-Badges lassen sich nur einmal anmelden.');
+            profileRegistered = true;
+            if (typeof host.setProfileProvider === 'function') host.setProfileProvider(provider);
+        }
+    };
+
     function onDisable(fn) {
         if (typeof fn !== 'function') throw new Error('onDisable erwartet eine Funktion.');
         host.disableCallbacks.push(fn);
@@ -210,7 +213,8 @@ function createContext({ entry, host }) {
         theme: createThemeApi(id, { granted }),
         settings: Object.freeze({ get: readSettings }),
         events: Object.freeze(events),
-        members: Object.freeze(members),
+        registrations: createRegistrationsApi({ granted }),
+        members: createMembersApi({ granted }),
         discord: createDiscordApi({
             pluginId: id,
             permissions: manifest.permissions,
@@ -222,6 +226,7 @@ function createContext({ entry, host }) {
         siteUrl: hash => buildSiteUrl(hash),
         audit,
         hooks: Object.freeze(hooks),
+        profile: Object.freeze(profile),
         onDisable,
         httpError: (status, message) => new PluginHttpError(status, message)
     });

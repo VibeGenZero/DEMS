@@ -1,5 +1,5 @@
 /**
- * Plugin hooks (SDK 1.0).
+ * Plugin hooks (SDK 1.0, `registration.checkedIn` since 1.1).
  *
  * The core calls `emitHook` after a change is committed. It never waits for
  * plugin handlers: every plugin has its own promise chain, so its handlers
@@ -15,11 +15,14 @@
 
 const HOOK_NAMES = [
     'event.created', 'event.published', 'event.updated', 'event.ended',
-    'event.cancelled', 'event.deleted', 'member.deleted'
+    'event.cancelled', 'event.deleted', 'member.deleted', 'registration.checkedIn'
 ];
 
 /** Hooks that carry event data and need the `events:read` permission. */
 const EVENT_HOOKS = HOOK_NAMES.filter(name => name.startsWith('event.'));
+
+/** Hooks that carry registration data and need the `registrations:read` permission (SDK 1.1). */
+const REGISTRATION_HOOKS = HOOK_NAMES.filter(name => name.startsWith('registration.'));
 
 const DEFAULT_SLOW_HOOK_MS = 10000;
 const DEFAULT_HOOK_TIMEOUT_MS = 30000;
@@ -210,6 +213,7 @@ function emitEventStatusChange({ eventId, before, after }) {
 module.exports = {
     HOOK_NAMES,
     EVENT_HOOKS,
+    REGISTRATION_HOOKS,
     DEFAULT_HOOK_TIMEOUT_MS,
     MAX_HANDLERS_PER_HOOK,
     onHook,

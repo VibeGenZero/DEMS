@@ -9,6 +9,7 @@
  * stamp on a new event.
  */
 const { emitHook, emitEventStatusChange, toPluginEvent } = require('./hooks');
+const { toPluginRegistration } = require('./registrations');
 
 const ORIGIN_REF_MAX = 100;
 const DRAFT_PERMISSION = 'events:draft';
@@ -92,6 +93,21 @@ function emitEventDeleted(eventId, stored) {
     safeEmit('event.deleted', () => ({ eventId, origin: (stored && stored.origin) || null }));
 }
 
+/**
+ * `registration.checkedIn` after a member's own check-in is stored (code check-in,
+ * Discord button, admin toggle). Never for guests, a repeat or an undo: the callers
+ * only call it when the registration was not checked in before.
+ *
+ * @param {string} registrationId -> Registration document id.
+ * @param {object} data -> The stored registration after the write (`checkedIn: true`).
+ */
+function emitRegistrationCheckedIn(registrationId, data) {
+    safeEmit('registration.checkedIn', () => ({
+        registration: toPluginRegistration(registrationId, data),
+        eventId: data.eventId
+    }));
+}
+
 const isPlainObject = (value) => value !== null && typeof value === 'object'
     && [Object.prototype, null].includes(Object.getPrototypeOf(value));
 
@@ -128,6 +144,7 @@ module.exports = {
     emitEventCreated,
     emitEventSaved,
     emitEventDeleted,
+    emitRegistrationCheckedIn,
     changedFields,
     validatePluginOrigin
 };

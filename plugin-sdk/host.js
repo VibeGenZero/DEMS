@@ -142,7 +142,8 @@ function createPluginHost({
             loading: null,
             ctx: null,
             routes: [],
-            disableCallbacks: []
+            disableCallbacks: [],
+            profileProvider: null
         };
     }
 
@@ -168,6 +169,7 @@ function createPluginHost({
             routes: record.routes,
             disableCallbacks: record.disableCallbacks,
             isRegistering: () => attempt.open,
+            setProfileProvider: provider => { record.profileProvider = provider; },
             recordCollection: async coll => {
                 const current = state.normalizeState(record.state || {}).collections;
                 if (current.includes(coll)) return;
@@ -209,6 +211,7 @@ function createPluginHost({
             record.loadError = '';
             record.routes = [];
             record.disableCallbacks = [];
+            record.profileProvider = null;
         }
         if (!entry.manifest.server) {
             record.registered = true;
@@ -236,6 +239,7 @@ function createPluginHost({
         // Drop what the failed register left behind; switching on again retries with a fresh ctx
         clearHooks(record.id);
         record.routes.length = 0;
+        record.profileProvider = null;
         await runDisableCallbacks(record);
         record.disableCallbacks.length = 0;
         try {
@@ -487,6 +491,10 @@ function createPluginHost({
                 id, name: manifest.name, version: manifest.version, official,
                 permissions: [...manifest.permissions], hasCss: Boolean(manifest.css)
             })),
+        /** @returns {Array<{ id: string, provider: Function }>} -> Profile badge providers of switched-on plugins (none in safe mode). */
+        profileProviders: () => [...records.values()]
+            .filter(record => record.profileProvider && isEnabled(record.id))
+            .map(record => ({ id: record.id, provider: record.profileProvider })),
         themeSources: () => [...records.values()]
             .filter(record => isEnabled(record.id) && record.entry.manifest.permissions.includes('theme'))
             .map(record => record.id)

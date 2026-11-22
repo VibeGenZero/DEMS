@@ -194,3 +194,37 @@ test('a plugin channel message is logged with its channel and text instead of re
     assert.ok(output.includes('Plugin-Nachricht in #ankündigungen'), output);
     assert.ok(output.includes('Neue Einreichung'), output);
 });
+
+test('plugins see only the roles the guard allows: not the bot, the admin or the moderator role', async () => {
+    process.env.DISCORD_ADMIN_ROLE_ID = ROLE_ID.ADMIN;
+    const roles = await bot.listPluginRoles();
+    assert.deepEqual(roles.map(role => role.id), [ROLE_ID.RAID_TEAM, ROLE_ID.VIP, ROLE_ID.EVENT, ROLE_ID.MEMBER]);
+    assert.deepEqual(roles.find(role => role.id === ROLE_ID.VIP), { id: ROLE_ID.VIP, name: 'VIP', color: '#a855f7' });
+});
+
+test('setPluginRole gives and takes a role once, logs only real changes and refuses forbidden roles', async () => {
+    process.env.DISCORD_ADMIN_ROLE_ID = ROLE_ID.ADMIN;
+    const kira = '200000000000000011';
+    const lines = [];
+    const original = console.log;
+    console.log = (...args) => lines.push(args.map(String).join(' '));
+    try {
+        assert.deepEqual(await bot.setPluginRole(kira, ROLE_ID.VIP, true), { ok: true, changed: true });
+        assert.deepEqual(await bot.setPluginRole(kira, ROLE_ID.VIP, true), { ok: true, changed: false });
+        assert.deepEqual(await bot.setPluginRole(kira, ROLE_ID.VIP, false), { ok: true, changed: true });
+        assert.deepEqual(await bot.setPluginRole(kira, ROLE_ID.VIP, false), { ok: true, changed: false });
+        // Kira has Raid-Team in the mock server already
+        assert.deepEqual(await bot.setPluginRole(kira, ROLE_ID.RAID_TEAM, true), { ok: true, changed: false });
+        assert.deepEqual(await bot.setPluginRole(kira, ROLE_ID.MODERATOR, true), { ok: false, code: 'forbidden' });
+        assert.deepEqual(await bot.setPluginRole(kira, ROLE_ID.ADMIN, false), { ok: false, code: 'forbidden' });
+        assert.deepEqual(await bot.setPluginRole(kira, '119999999999999999', true), { ok: false, code: 'forbidden' });
+        assert.deepEqual(await bot.setPluginRole('299999999999999999', ROLE_ID.VIP, true), { ok: false, code: 'not_member' });
+    } finally {
+        console.log = original;
+    }
+    const roleLines = lines.filter(line => line.includes('Rolle'));
+    assert.equal(roleLines.length, 2);
+    assert.ok(roleLines[0].includes('Rolle @VIP an Kira (200000000000000011) vergeben'), roleLines[0]);
+    assert.ok(roleLines[1].includes('Rolle @VIP von Kira (200000000000000011) entfernt'), roleLines[1]);
+});
+

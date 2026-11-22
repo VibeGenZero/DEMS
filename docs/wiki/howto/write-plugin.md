@@ -9,7 +9,7 @@ see_also: [security, frontend-app, bot, data-model, api-index, docker]
 ---
 # How to write a plugin
 
-> TL;DR: Make a folder `<id>/` with `plugin.json` (id = folder name, `sdk: 1`, version `x.y.z`, permissions, settings), a CommonJS `server.js` exporting `register(ctx)` (routes with a mandatory `access`, `ctx.data`, `ctx.settings`, `ctx.hooks`, `ctx.discord`) and an ES module `client.js` exporting `register(ui)` (`ui.addPage` with a tab, `ui.actions.register`, `ui.api`, `ui.helpers`). Touch DEMS only through `ctx`/`ui`, store the member's Discord id in `userId`, write German texts, no inline styles/handlers, tokens and Bootstrap Icons only. Put the folder into `PLUGINS_DIR` (`/app/data/plugins` in Docker), restart, switch it on in System › Plugins. The reference is `plugins/event-submissions/` („Event einreichen“).
+> TL;DR: Make a folder `<id>/` with `plugin.json` (id = folder name, `sdk: 1` or `1.1`, version `x.y.z`, permissions, settings), a CommonJS `server.js` exporting `register(ctx)` (routes with a mandatory `access`, `ctx.data`, `ctx.settings`, `ctx.hooks`, `ctx.discord`) and an ES module `client.js` exporting `register(ui)` (`ui.addPage` with a tab, `ui.actions.register`, `ui.api`, `ui.helpers`). Touch DEMS only through `ctx`/`ui`, store the member's Discord id in `userId`, write German texts, no inline styles/handlers, tokens and Bootstrap Icons only. Put the folder into `PLUGINS_DIR` (`/app/data/plugins` in Docker), restart, switch it on in System › Plugins. The reference is `plugins/event-submissions/` („Event einreichen“).
 
 Background (lifecycle, hooks, security model): [plugin-sdk](../concepts/plugin-sdk.md).
 
@@ -49,7 +49,7 @@ The browser can load only `client.js`, `client.css` and `assets/<name>` (one lev
 | Field | Rule (a break → „Ungültig: <Grund>“, never loaded) |
 |---|---|
 | `id` | `^[a-z][a-z0-9-]{2,31}$`, equal to the folder name; an official plugin's id is refused for a custom plugin |
-| `sdk` | integer; DEMS 3.4 supports `1`, another → „Inkompatibel (SDK <n>)“ |
+| `sdk` | number; DEMS 3.5 supports `1` and `1.1` (1.1 only adds to 1.0), another number → „Inkompatibel (SDK <n>)“, no number → „Ungültig: SDK-Version fehlt.“. The permissions `registrations:read` and `discord:roles` need `1.1` („Ungültig: Die Berechtigung „…“ braucht SDK 1.1.“). DEMS 3.4.x reports `1.1` as „Ungültig: SDK-Version fehlt.“ |
 | `version` | `x.y.z`. Changing it on a custom plugin makes the admin confirm again |
 | `name` / `description` / `author` | required ≤ 40 / optional ≤ 200 / optional ≤ 60 characters, German |
 | `server` / `client` | optional relative file names inside the folder (no `..`, `\`, `:`, leading `/`); must exist |
@@ -88,8 +88,12 @@ module.exports = {
 | `ctx.settings.get()` | `{ key: value }` of the manifest's settings (secrets included; never return them) |
 | `ctx.theme.saveDraft(css)`, `discardDraft()`, `publish(css)`, `clear()` | `theme`; checks `css` with `checkThemeCss` (≤ 50 000 chars, no backslashes, allow-listed functions and at-rules only; throws 400 `PluginHttpError` with German reason + line number on failure) and stores it in `pluginThemes/<id>`, served at `/theme.css` (`publish`) and `/theme-preview.css` (`saveDraft`). The SDK guarantees the CSS filter; your routes own `access: 'admin'`, `password: true` and `ctx.audit` |
 | `ctx.events.get(id)`, `ctx.events.list({ upcoming })`, `ctx.events.url(id)` | `events:read`; public event shape + `origin`, **every status** (drafts too — do not show drafts to members); `list` sorted by start |
+| `ctx.registrations.list({ eventId, userId })` | `registrations:read` (SDK 1.1); `{ id, eventId, userId, status, source, createdAt, checkedIn, checkedInAt, slotId }` sorted by `createdAt`, no form answers or guests |
 | `ctx.members.get(userId)` | `members:read`; `{ id, name, avatar }` or `null` |
+| `ctx.profile.badges(({ userId }) => [...])` | none (SDK 1.1); once, during `register()`. Return the member's badges `{ id, name, description?, icon: 'bi-*', color?: '#rrggbb', unlocked, progress?: 0–1 }`; they appear on the member's own profile after the built-in ones. Answer within 2 s (read only what you need), at most 50 |
+| `ctx.members.search(query)` | `members:read` (SDK 1.1); up to 20 `{ id, name, avatar }` of members who logged in once, whose display, user or global name contains `query` (trimmed, any case, 2–50 characters, else `[]`), sorted by name; no `acceptInvitations` filter — guard the route with `access: 'admin'` when only the team may search |
 | `ctx.discord.sendDM(userId, { text, link? })` | `discord:dm`; → `true`/`false` |
+| `ctx.discord.listRoles()`, `addRole(userId, roleId)`, `removeRole(userId, roleId)` | `discord:roles` (SDK 1.1); only roles the guard allows (no admin, moderation or server rights, below the bot); `{ ok: true, changed }` or `{ ok: false, reason }`, a refused role throws `PluginDataError`; 500 changes per 10 min. Remember whether *you* gave a role (`changed`) before you take it away again |
 | `ctx.discord.sendChannelMessage(settingKey, { text, link? })` | `discord:channel`; names one of **your own `channel` settings**, never a channel id |
 | `ctx.siteUrl(hash)` | `<BASE_URL>/#<hash>`, e.g. your page `ctx.siteUrl('p/<id>')` |
 | `ctx.audit(action, actorId, details, targetId?)` | audit log action `plugin:<id>:<action>` (`^[a-zA-Z0-9_.-]{1,64}$`); call it for admin actions |
@@ -108,6 +112,7 @@ Every document that belongs to a member stores that member's Discord id as a str
 | `event.updated` | `{ event, changed: [field names] }` | `events:read` |
 | `event.deleted` | `{ eventId, origin }` | `events:read` |
 | `member.deleted` | `{ userId }` | none |
+| `registration.checkedIn` | `{ registration, eventId }` — a member's own first check-in (code, Discord button, admin) | `registrations:read` (SDK 1.1) |
 
 Handlers run after the core saved the change, one after another per plugin, on a copy of the payload; they cannot change or stop anything. A throw is logged and shown as „Letzter Fehler“; > 10 s logs a warning, after 30 s the handler counts as failed (also „Letzter Fehler“) and your next queued handler runs. At most 20 handlers per hook. Ignore events that are not yours (check `event.origin.plugin === ctx.plugin.id` if you created them). Saving a new event as active emits `event.created`, then `event.published`.
 
