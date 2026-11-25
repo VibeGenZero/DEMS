@@ -25,13 +25,16 @@ function tokenize(code) {
   let line = 1;
   // prev: last significant token (regex/template ends count as values).
   let prev = null;
+  let prev2 = null;
+  let prev3 = null;
+  const setPrev = (t) => { prev3 = prev2; prev2 = prev; prev = t; };
   // Stack of open contexts: 'brace' for a plain `{`, 'tpl' for a `${` inside a template.
   const stack = [];
 
   const push = (type, value, ln) => {
     const t = { type, value, line: ln };
     tokens.push(t);
-    prev = t;
+    setPrev(t);
   };
 
   // Advance over a newline char at src[i] (handles \r\n as one) and count it.
@@ -41,11 +44,27 @@ function tokenize(code) {
     line++;
   };
   const isNl = (c) => c === '\n' || c === '\r';
+  // Skip a backslash escape at src[i]; an escaped line break (also CRLF) counts as a line.
+  const skipEscape = () => {
+    i++;
+    if (i < n && isNl(src[i])) newline(); else i++;
+  };
+  const isValueLike = (t) => !!t && (t.type === 'punct'
+    ? [')', ']', '}'].includes(t.value)
+    : t.type !== 'name' || !REGEX_PRECEDING_NAMES.has(t.value));
 
   const regexAllowed = () => {
     if (!prev) return true;
-    if (prev.type === 'punct') return ![')', ']', '}'].includes(prev.value);
-    if (prev.type === 'name') return REGEX_PRECEDING_NAMES.has(prev.value);
+    if (prev.type === 'punct') {
+      // postfix ++/-- after a value is followed by division
+      if ((prev.value === '+' || prev.value === '-') && prev2 && prev2.type === 'punct'
+        && prev2.value === prev.value && isValueLike(prev3)) return false;
+      return ![')', ']', '}'].includes(prev.value);
+    }
+    if (prev.type === 'name') {
+      if (prev2 && prev2.type === 'punct' && prev2.value === '.') return false; // property name
+      return REGEX_PRECEDING_NAMES.has(prev.value);
+    }
     return false;
   };
 
@@ -55,17 +74,17 @@ function tokenize(code) {
     const begin = i;
     while (i < n) {
       const c = src[i];
-      if (c === '\\') { i += 2; continue; }
+      if (c === '\\') { skipEscape(); continue; }
       if (c === '`') {
         if (isStart) push('string', src.slice(begin, i), startLine);
-        else prev = { type: 'string', value: '', line };
+        else setPrev({ type: 'string', value: '', line });
         i++;
         return false;
       }
       if (c === '$' && src[i + 1] === '{') {
         i += 2;
         stack.push('tpl');
-        prev = null;
+        prev3 = prev2 = prev = null;
         return true;
       }
       if (isNl(c)) newline(); else i++;
@@ -98,7 +117,7 @@ function tokenize(code) {
       const startLine = line;
       const begin = ++i;
       while (i < n && src[i] !== c && !isNl(src[i])) {
-        i += src[i] === '\\' ? 2 : 1;
+        if (src[i] === '\\') skipEscape(); else i++;
       }
       const value = src.slice(begin, Math.min(i, n));
       if (src[i] === c) i++;
@@ -139,15 +158,15 @@ function tokenize(code) {
         let inClass = false;
         while (i < n && !isNl(src[i])) {
           const d = src[i];
-          if (d === '\\') { i += 2; continue; }
+          if (d === '\\') { skipEscape(); continue; }
           if (d === '[') inClass = true;
           else if (d === ']') inClass = false;
           else if (d === '/' && !inClass) break;
           i++;
         }
-        i++; // closing slash
+        if (src[i] === '/') i++; // closing slash (absent when unterminated)
         while (i < n && isIdentPart(src[i])) i++; // flags
-        prev = { type: 'string', value: '', line };
+        setPrev({ type: 'string', value: '', line });
         continue;
       }
       i++;

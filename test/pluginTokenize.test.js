@@ -67,3 +67,30 @@ test('numbers are number tokens', () => {
 test('line numbers are 1-based and CRLF counts once', () => {
   assert.deepEqual(tokenize('a\r\nb\nc').map((t) => t.line), [1, 2, 3]);
 });
+
+test('division after postfix ++/-- does not start a regex', () => {
+  const n = names('i++ / 2; ctx.discord.sendDM(); y / 3');
+  for (const w of ['ctx', 'discord', 'sendDM', 'y']) assert.ok(n.includes(w));
+  assert.ok(names('i-- / 2; ctx.a(); y / 3').includes('ctx'));
+});
+
+test('backslash + CRLF inside a string continues the string', () => {
+  const t = tokenize('"a\\\r\nb"; ctx.q');
+  assert.deepEqual(t.map((x) => x.type), ['string', 'punct', 'name', 'punct', 'name']);
+  assert.equal(t[4].line, 2);
+});
+
+test('backslash-newline in a template keeps line numbers right', () => {
+  assert.equal(tokenize('`a\\\n${z}`').find((t) => t.value === 'z').line, 2);
+  assert.equal(tokenize('`a\\\n\n${z}`').find((t) => t.value === 'z').line, 3);
+});
+
+test('an unterminated regex does not swallow the newline', () => {
+  const t = tokenize('x = /abc\nctx');
+  assert.equal(t.find((x) => x.value === 'ctx').line, 2);
+});
+
+test('keywords used as property names do not start a regex', () => {
+  const n = names('a.in / 2; ctx.x(); b / 3');
+  assert.ok(n.includes('ctx') && n.includes('x'));
+});
