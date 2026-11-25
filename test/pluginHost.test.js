@@ -846,3 +846,114 @@ test('the view carries the permission check with labels; official plugins have n
         tooBig: false
     });
 });
+
+const SWITCH_OFF_SENTENCE = 'Schalte das Plugin zuerst aus.';
+
+/** Wait until `check()` is true, one macrotask at a time. */
+async function until(check) {
+    for (let i = 0; i < 500 && !check(); i += 1) await new Promise(resolve => setImmediate(resolve));
+    assert.ok(check(), 'condition not reached');
+}
+
+test('a loaded plugin stays „Neustart nötig“ after forget, deleteData and a new upload', async () => {
+    const { officialDir, customDir } = roots();
+    writeGood(customDir);
+    const host = createPluginHost({ officialDir, customDir });
+    await host.start();
+    await host.setEnabled('good', true, { adminId: 'a' });
+    await host.setEnabled('good', false, { adminId: 'a' });
+
+    host.forgetPlugin('good');
+    await host.deleteData('good');
+    assert.equal(view(host, 'good'), undefined);
+    writeGood(customDir, 'good', { version: '2.0.0' });
+    const item = host.reloadPlugin('good');
+
+    assert.equal(item.status, 'restart');
+    assert.equal(host.wasLoaded('good'), true);
+    await assert.rejects(host.setEnabled('good', true, { adminId: 'a' }), { message: RESTART_SENTENCE });
+    assert.equal(record('good').registers, 1);
+});
+
+test('reload and forget are refused while a switch-on is queued or registering', async () => {
+    const { officialDir, customDir } = roots();
+    let release;
+    globalThis.__hostGate = new Promise(resolve => { release = resolve; });
+    writePlugin(customDir, 'slow', { manifest: { permissions: ['theme'] }, client: true, server: serverSource('slow', 'await globalThis.__hostGate;') });
+    const host = createPluginHost({ officialDir, customDir });
+    await host.start();
+
+    const switching = host.setEnabled('slow', true, { adminId: 'a' });
+    assert.throws(() => host.reloadPlugin('slow'), { name: 'PluginHostError', message: SWITCH_OFF_SENTENCE });
+    await until(() => record('slow') && record('slow').registers === 1);
+    writePlugin(customDir, 'slow', { manifest: { version: '2.0.0', permissions: ['theme'] }, client: true });
+    assert.throws(() => host.reloadPlugin('slow'), { message: SWITCH_OFF_SENTENCE });
+    assert.throws(() => host.forgetPlugin('slow'), { message: SWITCH_OFF_SENTENCE });
+    release();
+    await switching;
+
+    const item = view(host, 'slow');
+    assert.deepEqual([item.status, item.version], ['on', '1.0.0']);
+    assert.equal((await getDoc(doc(db, 'pluginState', 'slow'))).data().confirmedVersion, '1.0.0');
+    assert.deepEqual(host.clients().map(client => client.id), ['slow']);
+    assert.deepEqual(host.themeSources(), ['slow']);
+    delete globalThis.__hostGate;
+});
+
+test('reload and forget of a switched-on plugin are refused', async () => {
+    const { officialDir, customDir } = roots();
+    writeGood(customDir);
+    const host = createPluginHost({ officialDir, customDir });
+    await host.start();
+    await host.setEnabled('good', true, { adminId: 'a' });
+
+    assert.throws(() => host.reloadPlugin('good'), { name: 'PluginHostError', message: SWITCH_OFF_SENTENCE });
+    assert.throws(() => host.forgetPlugin('good'), { name: 'PluginHostError', message: SWITCH_OFF_SENTENCE });
+    assert.equal(view(host, 'good').status, 'on');
+});
+
+test('forgetting a loaded plugin leaves an orphan that is off and does not break the lists', async () => {
+    const { officialDir, customDir } = roots();
+    writeGood(customDir, 'good', { permissions: ['events:read', 'theme'] });
+    const host = createPluginHost({ officialDir, customDir });
+    await host.start();
+    await host.setEnabled('good', true, { adminId: 'a' });
+    await host.setEnabled('good', false, { adminId: 'a' });
+    assert.equal(host.reloadPlugin('good').status, 'restart');
+
+    host.forgetPlugin('good');
+
+    assert.equal(view(host, 'good').status, 'orphaned');
+    assert.equal(host.isEnabled('good'), false);
+    assert.deepEqual(host.clients(), []);
+    assert.deepEqual(host.themeSources(), []);
+    assert.deepEqual(host.profileProviders(), []);
+    await assert.rejects(host.setEnabled('good', true, { adminId: 'a' }), { message: CANNOT_SENTENCE });
+    assert.equal(host.reloadPlugin('good').status, 'restart');
+});
+
+test('a devPluginId that names an official plugin does nothing special', async () => {
+    const { officialDir, customDir } = roots();
+    writePlugin(officialDir, 'shipped');
+    await state.writeState('shipped', { enabled: false });
+    const host = createPluginHost({ officialDir, customDir, mockMode: true, devPluginId: 'shipped' });
+    await host.start();
+
+    assert.equal(view(host, 'shipped').status, 'off');
+    const stored = (await getDoc(doc(db, 'pluginState', 'shipped'))).data();
+    assert.equal(stored.enabled, false);
+    assert.equal(stored.confirmedVersion, undefined);
+});
+
+test('mock mode switches the dev plugin on again and confirms its new version', async () => {
+    const { officialDir, customDir } = roots();
+    writeMarked(customDir, 'demo', { version: '1.1.0' });
+    await state.writeState('demo', { enabled: false, confirmedVersion: '1.0.0', confirmedPermissions: [] });
+    const host = createPluginHost({ officialDir, customDir, mockMode: true, devPluginId: 'demo' });
+    await host.start();
+
+    assert.equal(view(host, 'demo').status, 'on');
+    const stored = (await getDoc(doc(db, 'pluginState', 'demo'))).data();
+    assert.equal(stored.enabled, true);
+    assert.equal(stored.confirmedVersion, '1.1.0');
+});

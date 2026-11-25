@@ -38,7 +38,8 @@ const MESSAGES = {
     safeMode: 'Abgesicherter Modus aktiv – Plugins lassen sich nicht einschalten.',
     noSettings: 'Für dieses Plugin lassen sich keine Einstellungen speichern.',
     badValues: 'Die Einstellungen müssen ein Objekt sein.',
-    restartFirst: 'Starte DEMS neu, bevor du das Plugin wieder einschaltest.'
+    restartFirst: 'Starte DEMS neu, bevor du das Plugin wieder einschaltest.',
+    switchOffFirst: 'Schalte das Plugin zuerst aus.'
 };
 
 /** @typedef {import('./views').PluginView} PluginView */
@@ -122,6 +123,13 @@ function createPluginHost({
     const writeChains = new Map();
     /** @type {Map<string, Promise<unknown>>} plugin id -> tail of its switch chain */
     const switchChains = new Map();
+    /** @type {Map<string, number>} plugin id -> switches queued or running in its switch chain */
+    const pendingSwitches = new Map();
+    /**
+     * Ids whose code was required since start. Outlives the record (`deleteData`
+     * of an orphan deletes it), because Node's require cache keeps the module.
+     */
+    const loadedIds = new Set();
     let started = null;
 
     function chain(chains, id, task) {
@@ -221,6 +229,7 @@ function createPluginHost({
             record.profileProvider = null;
         }
         if (!entry.manifest.server) {
+            loadedIds.add(record.id);
             record.registered = true;
             return;
         }
@@ -228,6 +237,7 @@ function createPluginHost({
         const attempt = { open: true };
         record.ctx = createContext({ entry, host: contextHost(record, attempt) });
         try {
+            loadedIds.add(record.id);
             const mod = requireModule(path.join(entry.dir, entry.manifest.server));
             if (!mod || typeof mod.register !== 'function') throw new Error('server.js exportiert keine Funktion register(ctx).');
             await withTimeout(Promise.resolve().then(() => mod.register(record.ctx)), registerTimeoutMs,
@@ -262,6 +272,8 @@ function createPluginHost({
             if (!record.loading) record.loading = register(record).finally(() => { record.loading = null; });
             await record.loading;
         }
+        // A re-read (`restart`) or a forgotten folder while register ran keeps its state
+        if (record.runtime === 'restart' || !record.entry) return;
         record.runtime = record.registered ? 'on' : 'error';
     }
 
@@ -366,7 +378,11 @@ function createPluginHost({
         if (safeMode && enabled) throw new PluginHostError(MESSAGES.safeMode);
         if (!isLoadable(record)) throw new PluginHostError(MESSAGES.cannotEnable);
         if (enabled && record.runtime === 'restart') throw new PluginHostError(MESSAGES.restartFirst);
+        pendingSwitches.set(id, (pendingSwitches.get(id) || 0) + 1);
         return chain(switchChains, id, async () => {
+            // Checked again: the folder may have been re-read or forgotten while this switch waited
+            if (!isLoadable(record)) throw new PluginHostError(MESSAGES.cannotEnable);
+            if (enabled && record.runtime === 'restart') throw new PluginHostError(MESSAGES.restartFirst);
             const { manifest, official } = record.entry;
             if (enabled) {
                 const patch = { enabled: true, enabledAt: nowIso(), enabledBy: String(adminId || '') };
@@ -384,6 +400,10 @@ function createPluginHost({
                 if (wasOn) await runDisableCallbacks(record);
             }
             return viewOf(record.entry, record);
+        }).finally(() => {
+            const left = pendingSwitches.get(id) - 1;
+            if (left > 0) pendingSwitches.set(id, left);
+            else pendingSwitches.delete(id);
         });
     }
 
@@ -391,13 +411,22 @@ function createPluginHost({
     const officialIds = () => new Set(entries.filter(entry => entry.official).map(entry => entry.id));
 
     /**
-     * The plugin's code was required since start: a successful or a failed
-     * register (Node keeps a failed module in its require cache, too), or a
-     * plugin without `server.js` that was switched on.
+     * The plugin's code was required since start (also when its record was
+     * deleted since), or a plugin without `server.js` was switched on. A
+     * failed register counts too: a module that throws at top level is evicted
+     * from Node's require cache, but one whose `register` failed stays there,
+     * and `restart` is the conservative answer for both.
      */
     function wasLoaded(id) {
         const record = records.get(id);
-        return Boolean(record && (record.registered || record.ctx !== null));
+        return loadedIds.has(id) || Boolean(record && (record.registered || record.ctx !== null));
+    }
+
+    /** Re-reading or forgetting a folder must wait until the plugin is off and no switch runs. */
+    function refuseWhileBusy(record) {
+        if (isEnabled(record.id) || record.loading || pendingSwitches.has(record.id)) {
+            throw new PluginHostError(MESSAGES.switchOffFirst);
+        }
     }
 
     /** Official entries in discovery order, then the custom ones sorted by id (like `discoverPlugins`). */
@@ -414,18 +443,22 @@ function createPluginHost({
      * the usual state rules. Official ids are never re-read.
      *
      * @returns {PluginView}
-     * @throws {PluginHostError} -> `notFound` for an official id, no plain folder name or a folder without `plugin.json`.
+     * @throws {PluginHostError} -> `notFound` for an official id, no plain folder name or a folder without
+     *   `plugin.json`; `switchOffFirst` while the plugin is on or a switch is queued or running.
      */
     function reloadPlugin(id) {
         const officials = officialIds();
         const plainName = typeof id === 'string' && id !== '' && !id.startsWith('.') && path.basename(id) === id;
         const manifestFile = customDir && plainName ? path.join(customDir, id, 'plugin.json') : '';
         if (officials.has(id) || !manifestFile || !fs.existsSync(manifestFile)) throw new PluginHostError(MESSAGES.notFound);
+        const record = records.get(id);
+        if (record) refuseWhileBusy(record);
         const entry = readCustomPlugin(customDir, id, officials);
         entries = withCustomEntry(id, entry);
-        const record = records.get(id);
         if (!record) {
-            records.set(id, newRecord(id, entry, null));
+            const created = newRecord(id, entry, null);
+            if (wasLoaded(id)) created.runtime = 'restart';
+            records.set(id, created);
         } else {
             record.runtime = wasLoaded(id) ? 'restart' : 'off';
             record.entry = entry;
@@ -436,11 +469,15 @@ function createPluginHost({
     /**
      * Forget a removed custom folder. With a stored state the plugin stays as
      * orphan (its collections are needed by „Daten löschen“ and `purgeUser`).
+     *
+     * @throws {PluginHostError} -> `switchOffFirst` while the plugin is on or a switch is queued or running.
      */
     function forgetPlugin(id) {
         const record = records.get(id);
+        const custom = Boolean(record && record.entry && !record.entry.official);
+        if (custom) refuseWhileBusy(record);
         entries = withCustomEntry(id, null);
-        if (!record || !record.entry || record.entry.official) return;
+        if (!custom) return;
         if (record.state) {
             record.entry = null;
             record.runtime = 'off';
@@ -575,17 +612,17 @@ function createPluginHost({
             return record ? record.routes.map(route => ({ ...route })) : [];
         },
         clients: () => [...records.values()]
-            .filter(record => isEnabled(record.id) && record.entry.manifest.client)
+            .filter(record => record.entry && isEnabled(record.id) && record.entry.manifest.client)
             .map(({ entry: { id, official, manifest } }) => ({
                 id, name: manifest.name, version: manifest.version, official,
                 permissions: [...manifest.permissions], hasCss: Boolean(manifest.css)
             })),
         /** @returns {Array<{ id: string, provider: Function }>} -> Profile badge providers of switched-on plugins (none in safe mode). */
         profileProviders: () => [...records.values()]
-            .filter(record => record.profileProvider && isEnabled(record.id))
+            .filter(record => record.entry && record.profileProvider && isEnabled(record.id))
             .map(record => ({ id: record.id, provider: record.profileProvider })),
         themeSources: () => [...records.values()]
-            .filter(record => isEnabled(record.id) && record.entry.manifest.permissions.includes('theme'))
+            .filter(record => record.entry && isEnabled(record.id) && record.entry.manifest.permissions.includes('theme'))
             .map(record => record.id)
             .sort(),
         setEnabled,
