@@ -10,18 +10,13 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const { PackageError } = require('./errors');
-const { PERMISSIONS, validateManifest } = require('./manifest');
+const { PERMISSIONS, ID_PATTERN, isPlainObject, validateManifest } = require('./manifest');
 const { IGNORED_ENTRY, packageEntryError, readPluginSourcesSync } = require('./files');
 const { scanPlugin, comparePermissions, requiredSdk, formatWarning } = require('./permissionScan');
 const { readZip, writeZip } = require('./zip');
 
 const MANIFEST_FILE = 'plugin.json';
-const ID_PATTERN = /^[a-z][a-z0-9-]{2,31}$/;
 const BOM = /^﻿/;
-
-function isPlainObject(value) {
-    return value !== null && typeof value === 'object' && !Array.isArray(value);
-}
 
 function randomHex() {
     return crypto.randomBytes(4).toString('hex');
@@ -37,7 +32,12 @@ function randomHex() {
 function analyzePlugin(dir) {
     const root = fs.realpathSync(dir);
     const text = fs.readFileSync(path.join(root, MANIFEST_FILE), 'utf8').replace(BOM, '');
-    const raw = JSON.parse(text);
+    let raw;
+    try {
+        raw = JSON.parse(text);
+    } catch {
+        throw new PackageError('plugin.json ist kein gültiges JSON.');
+    }
     if (!isPlainObject(raw)) throw new PackageError('plugin.json ist kein Objekt.');
 
     const isFile = (rel) => {
@@ -190,6 +190,16 @@ function prepareEntries(buffer) {
         if (reason) errors.push(reason);
         entries.push({ name, data: entry.data });
     }
+    // a file may not also be the directory of another entry (Windows and Linux both refuse that)
+    const folders = new Set();
+    for (const { name } of entries) {
+        const parts = name.toLowerCase().split('/');
+        for (let i = 1; i < parts.length; i++) folders.add(parts.slice(0, i).join('/'));
+    }
+    for (const { name } of entries) {
+        if (folders.has(name.toLowerCase())) errors.push(`Doppelte Datei: ${name}`);
+    }
+    if (!entries.length && !errors.length) errors.push('Das Paket ist leer.');
     return { errors, entries };
 }
 
@@ -302,12 +312,18 @@ async function installPackage(buffer, { officialIds, customDir, replace }) {
         try {
             await fs.promises.rename(staged, target);
         } catch (err) {
-            if (oldDir) await fs.promises.rename(oldDir, target).catch(() => {});
+            if (oldDir) {
+                await fs.promises.rename(oldDir, target).catch(() => {
+                    console.error(`Plugin ${id}: rollback failed, the previous version is kept in ${oldDir}`);
+                });
+            }
             throw err;
         }
     } catch (err) {
         await removeQuietly(incoming);
-        throw err;
+        if (err instanceof PackageError) throw err;
+        console.error(`Plugin ${id}: install failed`, err);
+        throw new PackageError('Das Plugin konnte nicht installiert werden.');
     }
     await removeQuietly(incoming);
     if (oldDir) await removeQuietly(oldDir);

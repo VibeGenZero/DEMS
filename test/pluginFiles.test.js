@@ -104,3 +104,9 @@ test('readPluginSourcesSync follows a symlinked root but not links inside', (t) 
         fs.rmSync(outside, { recursive: true, force: true });
     }
 });
+
+test('packageEntryError refuses Windows name aliases', () => {
+    for (const name of ['index.js:x.js', 'a./b.js', 'a /b.js']) {
+        assert.equal(files.packageEntryError(name), `Unerlaubter Pfad: ${name}`, name);
+    }
+});

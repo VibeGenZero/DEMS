@@ -43,6 +43,7 @@ function packageEntryError(name) {
     if (name.includes('\\') || name.includes('\0')) return unsafe;
     const segments = name.split('/');
     if (segments.some((s) => s === '' || s === '..')) return unsafe;
+    if (segments.some((s) => s.includes(':') || s.endsWith('.') || s.endsWith(' '))) return unsafe;
     if (segments.some((s) => s.startsWith('.'))) return `Versteckte Datei: ${name}`;
     if (segments.includes('node_modules')) return `node_modules wird nicht unterstützt: ${name}`;
     const notAllowed = `Nicht erlaubte Datei: ${name}`;

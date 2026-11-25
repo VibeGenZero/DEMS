@@ -136,6 +136,8 @@ test('installPackage keeps the old folder when the swap fails', async () => {
     const ctx = { officialIds: new Set(), customDir: tempDir() };
     await installPackage(zipOf(GOOD), { ...ctx, replace: false });
     const original = fs.promises.rename;
+    const logged = console.error;
+    console.error = () => {};
     let calls = 0;
     fs.promises.rename = async (...args) => {
         calls++;
@@ -143,9 +145,10 @@ test('installPackage keeps the old folder when the swap fails', async () => {
         return original(...args);
     };
     try {
-        await assert.rejects(installPackage(zipOf({ ...GOOD, version: '2.0.0' }), { ...ctx, replace: true }), /boom/);
+        await assert.rejects(installPackage(zipOf({ ...GOOD, version: '2.0.0' }), { ...ctx, replace: true }), /konnte nicht installiert werden/);
     } finally {
         fs.promises.rename = original;
+        console.error = logged;
     }
     assert.equal(JSON.parse(fs.readFileSync(path.join(ctx.customDir, 'demo', 'plugin.json'), 'utf8')).version, '1.0.0');
     assert.deepEqual(fs.readdirSync(ctx.customDir), ['demo']);
@@ -162,5 +165,80 @@ test('removePluginFolder deletes the folder and refuses bad ids', async () => {
     await installPackage(zipOf(GOOD), { ...ctx, replace: false });
     await assert.rejects(removePluginFolder(ctx.customDir, '../x'), PackageError);
     await removePluginFolder(ctx.customDir, 'demo');
+    assert.deepEqual(fs.readdirSync(ctx.customDir), []);
+});
+
+// ---- fix round 1 ----
+function withSymlinkAttr(zip, name) {
+    const buf = Buffer.from(zip);
+    let pos = 0;
+    while ((pos = buf.indexOf(Buffer.from([0x50, 0x4b, 0x01, 0x02]), pos)) >= 0) {
+        const len = buf.readUInt16LE(pos + 28);
+        if (buf.subarray(pos + 46, pos + 46 + len).toString() === name) buf.writeUInt32LE((0o120777 << 16) >>> 0, pos + 38);
+        pos += 4;
+    }
+    return buf;
+}
+
+test('an empty package is refused with a message', async () => {
+    const ctx = { officialIds: new Set(), customDir: tempDir() };
+    const onlyLitter = writeZip([{ name: '__MACOSX/a.js', data: Buffer.from('x') }]);
+    for (const zip of [writeZip([]), onlyLitter]) {
+        assert.deepEqual(checkPackage(zip, ctx).errors, ['Das Paket ist leer.']);
+        await assert.rejects(installPackage(zip, { ...ctx, replace: false }), /Das Paket ist leer\./);
+    }
+});
+
+test('a file that is also a directory prefix is refused, unexpected fs errors are wrapped', async () => {
+    const ctx = { officialIds: new Set(), customDir: tempDir() };
+    const zip = zipOf(GOOD, { 'index.js/b.js': 'x' });
+    assert.ok(checkPackage(zip, ctx).errors.some((e) => e.startsWith('Doppelte Datei')));
+    const original = fs.promises.writeFile;
+    const logged = console.error;
+    console.error = () => {};
+    fs.promises.writeFile = async () => { throw new Error(`EEXIST ${ctx.customDir}`); };
+    try {
+        await assert.rejects(installPackage(zipOf(GOOD), { ...ctx, replace: false }), (e) => e instanceof PackageError && e.message === 'Das Plugin konnte nicht installiert werden.');
+    } finally {
+        fs.promises.writeFile = original;
+        console.error = logged;
+    }
+    assert.deepEqual(fs.readdirSync(ctx.customDir), []);
+});
+
+test('analyzePlugin turns bad JSON into a PackageError', () => {
+    const dir = makePlugin();
+    fs.writeFileSync(path.join(dir, 'plugin.json'), '{ nope');
+    assert.throws(() => analyzePlugin(dir), (e) => e instanceof PackageError && e.message === 'plugin.json ist kein gültiges JSON.');
+});
+
+test('rollback failure does not hide the original error', async () => {
+    const ctx = { officialIds: new Set(), customDir: tempDir() };
+    await installPackage(zipOf(GOOD), { ...ctx, replace: false });
+    const original = fs.promises.rename;
+    const logged = console.error;
+    console.error = () => {};
+    let calls = 0;
+    fs.promises.rename = async (...args) => {
+        if (++calls >= 2) throw new Error('boom');
+        return original(...args);
+    };
+    try {
+        await assert.rejects(installPackage(zipOf({ ...GOOD, version: '2.0.0' }), { ...ctx, replace: true }), PackageError);
+    } finally {
+        fs.promises.rename = original;
+        console.error = logged;
+    }
+});
+
+test('checkPackage refuses symlink entries, case collisions, bad JSON and hostile names', async () => {
+    const ctx = { officialIds: new Set(), customDir: tempDir() };
+    const link = withSymlinkAttr(zipOf(GOOD, { 'link.js': 'target' }), 'link.js');
+    assert.ok(checkPackage(link, ctx).errors.includes('Symlinks werden nicht unterstützt: link.js'));
+    assert.ok(checkPackage(zipOf(GOOD, { 'A.js': 'x', 'a.js': 'y' }), ctx).errors.some((e) => e.startsWith('Doppelte Datei')));
+    assert.ok(checkPackage(writeZip([{ name: 'plugin.json', data: Buffer.from('{ nope') }]), ctx).errors.includes('plugin.json ist kein gültiges JSON.'));
+    const hostile = zipOf(GOOD, { '../x.js': 'x' });
+    assert.ok(checkPackage(hostile, ctx).errors.includes('Unerlaubter Pfad: ../x.js'));
+    await assert.rejects(installPackage(hostile, { ...ctx, replace: false }), /Unerlaubter Pfad: \.\.\/x\.js/);
     assert.deepEqual(fs.readdirSync(ctx.customDir), []);
 });
