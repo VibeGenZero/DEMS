@@ -182,7 +182,10 @@ function createAdminPluginsRouter(getHost, {
             res.json({ plugin });
         } catch (err) {
             if (err instanceof PluginHostError) return res.status(409).json({ error: err.message });
-            if (err instanceof PackageError) return res.status(400).json({ error: err.message });
+            // „schon installiert“ from installPackage: another install of the id landed after our own check
+            if (err instanceof PackageError) {
+                return res.status(err.message === MESSAGES.alreadyInstalled ? 409 : 400).json({ error: err.message });
+            }
             console.error('Plugin upload install error:', err);
             res.status(500).json({ error: 'Das Plugin konnte nicht installiert werden.' });
         }

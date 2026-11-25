@@ -73,6 +73,8 @@ before(async () => {
         next();
     });
     app.use('/api/admin', createAdminPluginsRouter(() => current, { uploadEnabled: () => uploadOn }));
+    // The default switch: reads PLUGINS_UPLOAD itself
+    app.use('/default/api/admin', createAdminPluginsRouter(() => current));
     await new Promise(resolve => {
         listener = app.listen(0, '127.0.0.1', resolve);
     });
@@ -552,4 +554,64 @@ test('remove: official 409, unknown 404, on 409, wrong password 401, then the fo
 
     const gone = await removePlugin('upl-a', { password: PASSWORD });
     assert.equal(gone.status, 404);
+});
+
+test('without PLUGINS_UPLOAD=true (unset or 1) the default router refuses upload, install and remove', async (t) => {
+    const saved = process.env.PLUGINS_UPLOAD;
+    t.after(() => {
+        if (saved === undefined) delete process.env.PLUGINS_UPLOAD;
+        else process.env.PLUGINS_UPLOAD = saved;
+    });
+    const send = (pathname, method, headers, body) => fetch(`${baseUrl}/default/api/admin${pathname}`, { method, headers, body });
+    const json = { 'Content-Type': 'application/json' };
+    for (const value of [undefined, '1']) {
+        if (value === undefined) delete process.env.PLUGINS_UPLOAD;
+        else process.env.PLUGINS_UPLOAD = value;
+        for (const res of [
+            await send('/plugins/upload/check', 'POST', { 'Content-Type': 'application/octet-stream' }, packageOf('upl-default')),
+            await send('/plugins/upload/install', 'POST', json, JSON.stringify({ uploadId: 'x', password: PASSWORD, replace: false })),
+            await send('/plugins/cust', 'DELETE', json, JSON.stringify({ password: PASSWORD }))
+        ]) {
+            assert.equal(res.status, 403, String(value));
+            assert.deepEqual(await res.json(), { error: UPLOAD_OFF });
+        }
+        assert.equal((await (await send('/plugins', 'GET')).json()).uploadEnabled, false);
+    }
+    assert.equal(fs.existsSync(path.join(customDir, 'cust')), true);
+
+    process.env.PLUGINS_UPLOAD = 'true';
+    assert.equal((await (await send('/plugins', 'GET')).json()).uploadEnabled, true);
+});
+
+test('remove works in safe mode: no plugin code runs', async () => {
+    const root = createTempDir('admin-plugins-safe-remove');
+    const safeCustom = path.join(root, 'custom');
+    writePlugin(safeCustom, 'safe-rm');
+    current = createPluginHost({ officialDir: path.join(root, 'official'), customDir: safeCustom, safeMode: true });
+    await current.start();
+
+    const res = await removePlugin('safe-rm', { password: PASSWORD });
+    assert.equal(res.status, 200);
+    assert.deepEqual(await res.json(), { removed: true });
+    assert.equal(fs.existsSync(path.join(safeCustom, 'safe-rm')), false);
+    assert.equal(current.list().some(plugin => plugin.id === 'safe-rm'), false);
+});
+
+test('a plugin installed meanwhile by someone else answers 409, not 400', async () => {
+    const uploadId = await uploadIdOf(packageOf('upl-race'), 'race');
+    // Another install lands between the route's own check and installPackage
+    const raced = Object.create(host);
+    raced.replacePlugin = async (id, writeFn) => {
+        writePlugin(customDir, id);
+        return writeFn();
+    };
+    current = raced;
+    try {
+        const res = await install({ uploadId, password: PASSWORD, replace: false }, 'race');
+        assert.equal(res.status, 409);
+        assert.deepEqual(await res.json(), { error: 'Das Plugin ist schon installiert.' });
+        assert.equal((await auditOf('PLUGIN_UPLOAD')).some(entry => entry.targetId === 'upl-race'), false);
+    } finally {
+        fs.rmSync(path.join(customDir, 'upl-race'), { recursive: true, force: true });
+    }
 });
