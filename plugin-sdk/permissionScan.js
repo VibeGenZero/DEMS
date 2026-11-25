@@ -23,7 +23,6 @@ const AREA_PERMISSIONS = {
     removeRole: 'discord:roles',
   },
 };
-// Tokens that make a following `ctx`/`ui` a comparison or arrow, not an assignment.
 // `=` is part of ==, ===, !=, !==, <=, >= (not an assignment) unless it ends <<=, >>=, >>>=.
 
 const DYNAMIC = (what) => `Dynamischer Zugriff auf ${what} – Berechtigung nicht erkennbar.`;
@@ -41,7 +40,9 @@ const COMPUTED_PATH = 'require/import mit berechnetem Pfad – nicht prüfbar.';
 function scanSource(code, { file, kind }) {
   // `?.` is read as `.`: drop the `?` of an optional chain.
   const raw = tokenize(code);
-  const t = raw.filter((tk, k) => !(tk.type === 'punct' && tk.value === '?' && raw[k + 1] && raw[k + 1].type === 'punct' && raw[k + 1].value === '.'));
+  const isP = (tk, v) => !!tk && tk.type === 'punct' && tk.value === v;
+  const t = raw.filter((tk, k) => !(isP(tk, '?') && isP(raw[k + 1], '.'))
+    && !(isP(tk, '.') && isP(raw[k - 1], '?') && isP(raw[k + 1], '[')));
   const permissions = new Set();
   const warnings = [];
   const imports = [];

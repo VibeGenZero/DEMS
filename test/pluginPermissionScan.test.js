@@ -168,3 +168,9 @@ test('scanPlugin normalises a leading ./ in manifest.client', () => {
   const r = scanPlugin(sources, { server: './server.js', client: './client.js' });
   assert.deepEqual(r.permissions, []);
 });
+
+test('optional bracket access warns like plain brackets', () => {
+  assert.equal(scan('ctx?.[k]').warnings[0].message, 'Dynamischer Zugriff auf ctx – Berechtigung nicht erkennbar.');
+  assert.equal(scan('ctx.events?.[k]').warnings[0].message, 'Dynamischer Zugriff auf ctx.events – Berechtigung nicht erkennbar.');
+  assert.equal(scan('ui?.[k]').warnings[0].message, 'Dynamischer Zugriff auf ui – Berechtigung nicht erkennbar.');
+});
