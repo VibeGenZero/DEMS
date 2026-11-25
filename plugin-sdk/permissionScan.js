@@ -24,7 +24,7 @@ const AREA_PERMISSIONS = {
   },
 };
 // Tokens that make a following `ctx`/`ui` a comparison or arrow, not an assignment.
-const NOT_ASSIGNMENT = new Set(['=', '!', '<', '>', '+', '-', '*', '/', '%', '&', '|', '^', '?']);
+// `=` is part of ==, ===, !=, !==, <=, >= (not an assignment) unless it ends <<=, >>=, >>>=.
 
 const DYNAMIC = (what) => `Dynamischer Zugriff auf ${what} – Berechtigung nicht erkennbar.`;
 const PASSED = (what) => `${what} wird weitergegeben – Berechtigung nicht erkennbar.`;
@@ -39,7 +39,9 @@ const COMPUTED_PATH = 'require/import mit berechnetem Pfad – nicht prüfbar.';
  * @returns {{permissions: Set<string>, warnings: {file: string, line: number, message: string}[], imports: string[]}}
  */
 function scanSource(code, { file, kind }) {
-  const t = tokenize(code);
+  // `?.` is read as `.`: drop the `?` of an optional chain.
+  const raw = tokenize(code);
+  const t = raw.filter((tk, k) => !(tk.type === 'punct' && tk.value === '?' && raw[k + 1] && raw[k + 1].type === 'punct' && raw[k + 1].value === '.'));
   const permissions = new Set();
   const warnings = [];
   const imports = [];
@@ -47,6 +49,10 @@ function scanSource(code, { file, kind }) {
   const is = (k, type, value) => !!t[k] && t[k].type === type && (value === undefined || t[k].value === value);
   const punct = (k, value) => is(k, 'punct', value);
   const notMember = (k) => !punct(k - 1, '.');
+  const isComparison = (k) => {
+    if (punct(k - 1, '=') || punct(k - 1, '!')) return true;
+    return (punct(k - 1, '<') || punct(k - 1, '>')) && !(t[k - 2] && t[k - 2].value === t[k - 1].value);
+  };
 
   const addSpecifier = (spec) => {
     if (spec.startsWith('.')) imports.push(spec);
@@ -59,7 +65,7 @@ function scanSource(code, { file, kind }) {
     const name = tok.value;
 
     if ((name === 'ctx' || name === 'ui') && notMember(i)) {
-      if (punct(i - 1, '=') && !punct(i + 1, '.') && !punct(i + 1, '[') && !(t[i - 2] && t[i - 2].type === 'punct' && NOT_ASSIGNMENT.has(t[i - 2].value))) {
+      if (punct(i - 1, '=') && !punct(i + 1, '.') && !punct(i + 1, '[') && !isComparison(i - 1)) {
         warn(tok.line, RENAMED(name));
       }
       if (punct(i + 1, '[')) { warn(tok.line, DYNAMIC(name)); continue; }
@@ -137,7 +143,7 @@ function scanPlugin(sources, manifest) {
   };
 
   // Client files first: manifest.client, every client asset, and what they import (transitively).
-  const queue = [manifest.client, ...[...sources.keys()].filter(isClientAsset)];
+  const queue = [String(manifest.client).replace(/^\.\//, ''), ...[...sources.keys()].filter(isClientAsset)];
   while (queue.length) {
     const file = queue.shift();
     if (client.has(file) || !sources.has(file) || !file.endsWith('.js')) continue;

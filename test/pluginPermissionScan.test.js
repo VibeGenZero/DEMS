@@ -137,3 +137,34 @@ test('guard: official plugins scan to their manifest', () => {
     assert.equal(requiredSdk(r.permissions, 1), manifest.sdk, name);
   }
 });
+
+test('optional chaining behaves like plain member access', () => {
+  const rows = [
+    ['ctx?.events.get(1)', ['events:read']],
+    ['ctx.events?.get(1)', ['events:read']],
+    ['ctx?.discord?.sendDM(1, "x")', ['discord:dm']],
+    ["ctx.hooks?.on('event.created', f)", ['events:read']],
+    ['ctx?.theme.x', ['theme']],
+    ['ui?.openEventEditor({})', ['events:draft']],
+  ];
+  for (const [code, expected] of rows) {
+    const r = scan(code);
+    assert.deepEqual([...r.permissions].sort(), expected, code);
+    assert.deepEqual(r.warnings, [], code);
+  }
+});
+
+test('compound assignments before ctx/ui are aliases', () => {
+  for (const code of ['x ??= ctx', 'x ||= ctx', 'x &&= ctx', 'x += ctx']) {
+    assert.equal(scan(code).warnings[0].message, 'ctx wird umbenannt oder zerlegt – Berechtigung nicht erkennbar.', code);
+  }
+  for (const code of ['a !== ctx', 'a <= ctx', 'a === ctx', 'a => ctx']) {
+    assert.deepEqual(scan(code).warnings, [], code);
+  }
+});
+
+test('scanPlugin normalises a leading ./ in manifest.client', () => {
+  const sources = new Map([['server.js', ''], ['client.js', 'fetch(x)']]);
+  const r = scanPlugin(sources, { server: './server.js', client: './client.js' });
+  assert.deepEqual(r.permissions, []);
+});
