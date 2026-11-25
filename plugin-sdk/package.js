@@ -16,7 +16,7 @@ const { scanPlugin, comparePermissions, requiredSdk, formatWarning } = require('
 const { readZip, writeZip } = require('./zip');
 
 const MANIFEST_FILE = 'plugin.json';
-const BOM = /^﻿/;
+const BOM = /^\uFEFF/;
 
 function randomHex() {
     return crypto.randomBytes(4).toString('hex');
@@ -94,7 +94,7 @@ function writeManifest(dir, nextRaw) {
     const old = fs.readFileSync(file, 'utf8');
     let text = `${JSON.stringify(nextRaw, null, 2)}\n`;
     if (old.includes('\r\n')) text = text.replace(/\n/g, '\r\n');
-    if (BOM.test(old)) text = `﻿${text}`;
+    if (BOM.test(old)) text = `\uFEFF${text}`;
     fs.writeFileSync(file, text);
 }
 

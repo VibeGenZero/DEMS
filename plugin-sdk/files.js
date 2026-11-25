@@ -89,7 +89,7 @@ function readPluginSourcesSync(dir) {
                     tooBig = true;
                     return;
                 }
-                sources.set(relName, fs.readFileSync(abs, 'utf8').replace(/^﻿/, ''));
+                sources.set(relName, fs.readFileSync(abs, 'utf8').replace(/^\uFEFF/, ''));
             }
         }
     };
