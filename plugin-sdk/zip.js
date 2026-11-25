@@ -93,6 +93,11 @@ function writeZip(entries) {
     return Buffer.concat([...locals, cd, eocd]);
 }
 
+/** @returns {number} -> Bytes as MB, one decimal at most (5 for the default limit). */
+function megabytes(bytes) {
+    return Math.round((bytes / 1048576) * 10) / 10;
+}
+
 /** Finds the end-of-central-directory record (it may be followed by a comment). */
 function findEocd(buf) {
     const lowest = Math.max(0, buf.length - 22 - 0xffff);
@@ -110,7 +115,7 @@ function findEocd(buf) {
  */
 function readZip(buffer, limits = LIMITS) {
     if (!Buffer.isBuffer(buffer) || buffer.length < 22) throw new PackageError(INVALID);
-    if (buffer.length > limits.packedBytes) throw new PackageError('Die Datei ist größer als 5 MB.');
+    if (buffer.length > limits.packedBytes) throw new PackageError(`Die Datei ist größer als ${megabytes(limits.packedBytes)} MB.`);
 
     const eocd = findEocd(buffer);
     if (eocd < 0) throw new PackageError(INVALID);
@@ -123,9 +128,10 @@ function readZip(buffer, limits = LIMITS) {
     if (count > limits.entries) throw new PackageError(`Zu viele Dateien (höchstens ${limits.entries}).`);
     if (cdOffset + cdSize > eocd) throw new PackageError(INVALID);
 
-    const result = [];
-    const seen = new Set();
-    let total = 0;
+    // Pass 1: parse every central-directory record and prove the data ranges are
+    // sane and disjoint before anything is inflated (overlaps would multiply work).
+    const records = [];
+    const ranges = [];
     let pos = cdOffset;
     for (let i = 0; i < count; i++) {
         if (pos + 46 > eocd || buffer.readUInt32LE(pos) !== SIG_CENTRAL) throw new PackageError(INVALID);
@@ -140,21 +146,37 @@ function readZip(buffer, limits = LIMITS) {
         const attrs = buffer.readUInt32LE(pos + 38);
         const localOffset = buffer.readUInt32LE(pos + 42);
         if (pos + 46 + nameLen > eocd) throw new PackageError(INVALID);
-        const name = buffer.toString('utf8', pos + 46, pos + 46 + nameLen);
+        const nameBytes = buffer.subarray(pos + 46, pos + 46 + nameLen);
+        const name = nameBytes.toString('utf8');
         pos += 46 + nameLen + extraLen + commentLen;
 
+        if (csize === 0xffffffff || usize === 0xffffffff || localOffset === 0xffffffff) throw new PackageError(INVALID);
+        if (localOffset + 30 > cdOffset || buffer.readUInt32LE(localOffset) !== SIG_LOCAL) throw new PackageError(INVALID);
+        const localNameLen = buffer.readUInt16LE(localOffset + 26);
+        const start = localOffset + 30 + localNameLen + buffer.readUInt16LE(localOffset + 28);
+        if (start + csize > cdOffset) throw new PackageError(INVALID);
+        if (!buffer.subarray(localOffset + 30, localOffset + 30 + localNameLen).equals(nameBytes)) throw new PackageError(INVALID);
+        ranges.push([localOffset, start + csize]);
+        records.push({ name, flags, method, crc, csize, usize, attrs, start });
+    }
+    ranges.sort((x, y) => x[0] - y[0]);
+    for (let i = 1; i < ranges.length; i++) {
+        if (ranges[i][0] < ranges[i - 1][1]) throw new PackageError(INVALID);
+    }
+
+    // Pass 2: filter, inflate and verify.
+    const result = [];
+    const seen = new Set();
+    let total = 0;
+    for (const { name, flags, method, crc, csize, usize, attrs, start } of records) {
         if (name.endsWith('/') || IGNORED_ENTRY.test(name)) continue;
         if (flags & 0x41) throw new PackageError(UNSUPPORTED);
-        if (method !== 0 && method !== 8) throw new PackageError(`Nicht unterstütztes Packverfahren: ${method}`);
-        if (csize === 0xffffffff || usize === 0xffffffff || localOffset === 0xffffffff) throw new PackageError(INVALID);
+        if (method !== 0 && method !== 8) throw new PackageError(`Nicht unterstütztes Packverfahren: ${name}`);
         if (usize > limits.entryBytes) throw new PackageError(`Datei zu groß: ${name}`);
         const key = name.toLowerCase();
         if (seen.has(key)) throw new PackageError(`Doppelte Datei: ${name}`);
         seen.add(key);
 
-        if (localOffset + 30 > cdOffset || buffer.readUInt32LE(localOffset) !== SIG_LOCAL) throw new PackageError(INVALID);
-        const start = localOffset + 30 + buffer.readUInt16LE(localOffset + 26) + buffer.readUInt16LE(localOffset + 28);
-        if (start + csize > cdOffset) throw new PackageError(INVALID);
         const packed = buffer.subarray(start, start + csize);
 
         let data;
@@ -173,7 +195,7 @@ function readZip(buffer, limits = LIMITS) {
         }
         if (data.length !== usize || crc32(data) !== crc) throw new PackageError(INVALID);
         total += data.length;
-        if (total > limits.unpackedBytes) throw new PackageError('Entpackt zu groß (höchstens 20 MB).');
+        if (total > limits.unpackedBytes) throw new PackageError(`Entpackt zu groß (höchstens ${megabytes(limits.unpackedBytes)} MB).`);
 
         result.push({ name, data, symlink: ((attrs >>> 16) & 0o170000) === 0o120000 });
     }

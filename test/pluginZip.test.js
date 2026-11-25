@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const zlib = require('zlib');
 const { writeZip, readZip, crc32 } = require('../plugin-sdk/zip');
 const { PackageError } = require('../plugin-sdk/errors');
+const { LIMITS } = require('../plugin-sdk/files');
 
 /** Hand-built ZIP so tests can craft headers the writer never produces. */
 function rawZip(entries, { descriptor = false, eocdTotal } = {}) {
@@ -118,7 +119,7 @@ test('structural errors', () => {
     expectError(() => readZip(rawZip([{ name: 'a', data: Buffer.from('x'), flags: 1 }])),
         'Verschlüsselte oder geteilte ZIP-Dateien werden nicht unterstützt.');
     expectError(() => readZip(rawZip([{ name: 'a.txt', data: Buffer.from('x'), method: 12 }])),
-        'Nicht unterstütztes Packverfahren: 12');
+        'Nicht unterstütztes Packverfahren: a.txt');
 });
 
 test('limits', () => {
@@ -141,4 +142,37 @@ test('duplicate names, also case-insensitive', () => {
         { name: 'A.js', data: Buffer.from('1') },
         { name: 'a.js', data: Buffer.from('2') }
     ])), 'Doppelte Datei: a.js');
+});
+
+test('overlapping data ranges are refused before anything is inflated', () => {
+    const buf = rawZip([
+        { name: 'a.txt', data: Buffer.from('abc') },
+        { name: 'a.txt', data: Buffer.from('abc') }
+    ]);
+    const cdOffset = buf.readUInt32LE(buf.length - 6);
+    buf.writeUInt32LE(0, cdOffset + 51 + 42); // second record points at the first local header
+    expectError(() => readZip(buf), 'Die Datei ist keine gültige ZIP-Datei.');
+});
+
+test('local header name must match the central directory name', () => {
+    const buf = rawZip([{ name: 'a.txt', data: Buffer.from('abc') }]);
+    buf[30] = 'x'.charCodeAt(0);
+    expectError(() => readZip(buf), 'Die Datei ist keine gültige ZIP-Datei.');
+});
+
+test('size messages follow the limits', () => {
+    const custom = { ...LIMITS, packedBytes: 1048576, unpackedBytes: 2097152 };
+    expectError(() => readZip(Buffer.alloc(2 * 1048576), custom), 'Die Datei ist größer als 1 MB.');
+    const zip = rawZip([
+        { name: 'a.bin', data: Buffer.alloc(1500000) },
+        { name: 'b.bin', data: Buffer.alloc(1500000) }
+    ]);
+    expectError(() => readZip(zip, { ...custom, entryBytes: 2097152 }), 'Entpackt zu groß (höchstens 2 MB).');
+});
+
+test('writer deflates compressible data and stores tiny or incompressible data', () => {
+    const method = (data) => writeZip([{ name: 'f', data }]).readUInt16LE(8);
+    assert.equal(method(Buffer.alloc(1000, 'a')), 8);
+    assert.equal(method(Buffer.from('x')), 0);
+    assert.equal(method(require('crypto').randomBytes(500)), 0);
 });
