@@ -55,7 +55,7 @@ CI builds both targets, starts `compose.yaml` + `compose.build.yaml` (so it test
 
 ## Custom plugins (plugin SDK)
 
-Official plugins ship in the image (`/app/plugins`, part of `COPY . .`, owned by root and read-only for DEMS). Custom plugins live on the data volume in `/app/data/plugins/<id>/` (default of `PLUGINS_DIR`; set it in `.env` to use another folder inside the container). There is no upload in the browser: copy the folder in, make it readable for the user `node`, restart, then switch the plugin on in System › Plugins (trust dialog + reset password).
+Official plugins ship in the image (`/app/plugins`, part of `COPY . .`, owned by root and read-only for DEMS). Custom plugins live on the data volume in `/app/data/plugins/<id>/` (default of `PLUGINS_DIR`; set it in `.env` to use another folder inside the container). Unless `PLUGINS_UPLOAD=true` allows a `.dems` upload in System › Plugins, there is no upload in the browser: copy the folder in, make it readable for the user `node`, restart, then switch the plugin on in System › Plugins (trust dialog + reset password).
 
 ```bash
 docker compose exec dems mkdir -p /app/data/plugins

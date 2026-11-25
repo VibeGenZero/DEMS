@@ -4075,3 +4075,49 @@ test('aiNotes longer than 4000 characters are refused', async () => {
     const ok = await admin.send('POST', '/api/admin/events', { title: 'Passt', status: 'draft', aiNotes: 'x'.repeat(4000) });
     assert.equal(ok.status, 200);
 });
+
+test('an admin uploads and installs a .dems package that then shows as custom and off', async () => {
+    // Own server: PLUGINS_UPLOAD on and a temp PLUGINS_DIR
+    const { packPlugin } = require('../plugin-sdk/package');
+    const tmpDir = createTempDir('plugin-upload');
+    const source = path.join(tmpDir, 'source', 'upload-demo');
+    fs.mkdirSync(source, { recursive: true });
+    fs.writeFileSync(path.join(source, 'plugin.json'), JSON.stringify({
+        id: 'upload-demo', name: 'Upload-Demo', version: '1.0.0', sdk: 1, author: 'Test', description: 'Hochgeladen', server: 'server.js'
+    }));
+    fs.writeFileSync(path.join(source, 'server.js'), 'module.exports = { async register() {} };');
+    const { buffer } = packPlugin(source);
+    const pluginsDir = path.join(tmpDir, 'plugins');
+
+    const own = await startServer('dev/start.js', {
+        DEV_SQLITE_PATH: path.join(tmpDir, 'dev.sqlite'),
+        DEV_UPLOAD_DIR: path.join(tmpDir, 'uploads'),
+        PLUGINS_UPLOAD: 'true',
+        PLUGINS_DIR: pluginsDir
+    });
+    try {
+        const admin = createClient(own.baseUrl);
+        assert.equal((await admin.request('/auth/dev-login/admin')).status, 302);
+        assert.equal((await (await admin.request('/api/admin/plugins')).json()).uploadEnabled, true);
+
+        const { token } = await (await admin.request('/api/csrf-token')).json();
+        const checked = await admin.request('/api/admin/plugins/upload/check', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/octet-stream', 'X-CSRF-TOKEN': token },
+            body: buffer
+        });
+        assert.equal(checked.status, 200);
+        const { uploadId, report } = await checked.json();
+        assert.equal(report.ok, true);
+
+        const installed = await admin.send('POST', '/api/admin/plugins/upload/install', { uploadId, password: 'dev', replace: false });
+        assert.equal(installed.status, 200);
+        assert.equal(fs.existsSync(path.join(pluginsDir, 'upload-demo', 'plugin.json')), true);
+
+        const listed = (await (await admin.request('/api/admin/plugins')).json()).plugins.find(plugin => plugin.id === 'upload-demo');
+        assert.equal(listed.official, false);
+        assert.equal(listed.status, 'off');
+    } finally {
+        await own.stop();
+    }
+});

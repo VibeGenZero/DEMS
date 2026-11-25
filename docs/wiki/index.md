@@ -70,7 +70,7 @@ sources: [scripts/wiki-graph.js, docs/wiki/graph.json, CLAUDE.md]
 | `scripts/plugin.js` (plugin CLI: new, check, build, install) | write-plugin |
 | `plugins/*` (official plugins, e.g. `plugins/event-submissions/`, `plugins/custom-design/`) | plugin-sdk, write-plugin |
 | `routes/plugins.js`, `routes/pluginStatic.js`, `routes/pluginTheme.js` | plugin-sdk, server, api-index, request-lifecycle, security |
-| `routes/adminPlugins.js` | plugin-sdk, routes-admin, security |
+| `routes/adminPlugins.js`, `routes/pluginUploadStore.js` | plugin-sdk, routes-admin, security |
 | `plugin-sdk/coreHooks.js` (hook emission from the core, `pluginOrigin` check) | event-lifecycle, routes-admin, data-model, plugin-sdk |
 | `routes/calendar.js`, `utils/calendarFeed.js`, `utils/calendarFeedStore.js`, `utils/icalendar.js` | routes-user, server, data-model, security |
 | `utils/serverName.js` | server |
