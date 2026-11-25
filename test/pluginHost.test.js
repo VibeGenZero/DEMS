@@ -1039,7 +1039,7 @@ test('a switch-on queued behind a replace is refused: the admin confirmed the ol
     release();
 
     assert.equal((await replacing).version, '2.0.0');
-    await assert.rejects(switching, { name: 'PluginHostError', message: CANNOT_SENTENCE });
+    await assert.rejects(switching, { name: 'PluginHostError', message: 'Das Plugin wurde inzwischen ersetzt. Prüfe es und schalte es erneut ein.' });
     assert.equal(view(host, 'swap').status, 'off');
     assert.equal(fs.existsSync(marker(customDir, 'swap')), false);
 });
@@ -1079,4 +1079,60 @@ test('removePlugin removes, then returns the orphan view or null', async () => {
     assert.deepEqual(host.list().map(item => item.id), ['kept']);
     await assert.rejects(host.removePlugin('kept', async () => { removals += 1; }), { message: 'Plugin nicht gefunden.' });
     assert.equal(removals, 2);
+});
+
+
+test('switches queued behind removing a plugin without state are refused and store nothing', async () => {
+    const { officialDir, customDir } = roots();
+    writeMarked(customDir, 'ghost');
+    const host = createPluginHost({ officialDir, customDir });
+    await host.start();
+    let release;
+    const gate = new Promise(resolve => { release = resolve; });
+
+    const removing = host.removePlugin('ghost', async () => { await gate; });
+    const switchingOn = host.setEnabled('ghost', true, { adminId: 'a' });
+    const switchingOff = host.setEnabled('ghost', false, { adminId: 'a' });
+    release();
+
+    assert.equal(await removing, null);
+    await assert.rejects(switchingOn, { name: 'PluginHostError', message: 'Plugin nicht gefunden.' });
+    await assert.rejects(switchingOff, { name: 'PluginHostError', message: 'Plugin nicht gefunden.' });
+    assert.equal((await getDoc(doc(db, 'pluginState', 'ghost'))).exists(), false);
+    assert.equal(view(host, 'ghost'), undefined);
+    assert.equal(fs.existsSync(marker(customDir, 'ghost')), false);
+});
+
+test('replacing a plugin stored on (but failed) stores it off, so the new code never starts unconfirmed', async () => {
+    const { officialDir, customDir } = roots();
+    writePlugin(customDir, 'broken', { server: serverSource('broken', "throw new Error('kaputt');") });
+    await enabledState('broken', { confirmedVersion: '1.0.0', confirmedPermissions: [] });
+    const host = createPluginHost({ officialDir, customDir });
+    await host.start();
+    assert.equal(view(host, 'broken').status, 'error');
+
+    const item = await host.replacePlugin('broken', async () => { writePlugin(customDir, 'broken'); });
+
+    assert.equal(item.status, 'restart');
+    assert.equal(item.enabled, false);
+    assert.equal((await getDoc(doc(db, 'pluginState', 'broken'))).data().enabled, false);
+});
+
+test('a replace of a new id counts as pending: reload and forget of that id are refused meanwhile', async () => {
+    const { officialDir, customDir } = roots();
+    const host = createPluginHost({ officialDir, customDir });
+    await host.start();
+    let release;
+    const gate = new Promise(resolve => { release = resolve; });
+    let written;
+    const wrote = new Promise(resolve => { written = resolve; });
+
+    const replacing = host.replacePlugin('newbie', async () => { writeMarked(customDir, 'newbie'); written(); await gate; });
+    await wrote;
+    assert.throws(() => host.reloadPlugin('newbie'), { name: 'PluginHostError', message: SWITCH_OFF_SENTENCE });
+    assert.throws(() => host.forgetPlugin('newbie'), { name: 'PluginHostError', message: SWITCH_OFF_SENTENCE });
+    release();
+
+    assert.equal((await replacing).status, 'off');
+    assert.equal(host.reloadPlugin('newbie').status, 'off');
 });

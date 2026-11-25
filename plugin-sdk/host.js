@@ -40,7 +40,8 @@ const MESSAGES = {
     badValues: 'Die Einstellungen müssen ein Objekt sein.',
     restartFirst: 'Starte DEMS neu, bevor du das Plugin wieder einschaltest.',
     switchOffFirst: 'Schalte das Plugin zuerst aus.',
-    officialRemove: 'Offizielle Plugins können nicht entfernt werden.'
+    officialRemove: 'Offizielle Plugins können nicht entfernt werden.',
+    replaced: 'Das Plugin wurde inzwischen ersetzt. Prüfe es und schalte es erneut ein.'
 };
 
 /** @typedef {import('./views').PluginView} PluginView */
@@ -392,8 +393,10 @@ function createPluginHost({
         // Switching on confirms what the admin saw: not a folder that was replaced meanwhile
         const entryAtCall = record.entry;
         return onSwitchChain(id, async () => {
-            // Checked again: the folder may have been re-read or forgotten while this switch waited
-            if (!isLoadable(record) || (enabled && record.entry !== entryAtCall)) throw new PluginHostError(MESSAGES.cannotEnable);
+            // Checked again: the folder may have been removed, re-read or forgotten while this switch waited
+            if (records.get(id) !== record) throw new PluginHostError(MESSAGES.notFound);
+            if (!isLoadable(record)) throw new PluginHostError(MESSAGES.cannotEnable);
+            if (enabled && record.entry !== entryAtCall) throw new PluginHostError(MESSAGES.replaced);
             if (enabled && record.runtime === 'restart') throw new PluginHostError(MESSAGES.restartFirst);
             const { manifest, official } = record.entry;
             if (enabled) {
@@ -431,8 +434,9 @@ function createPluginHost({
     }
 
     /** Re-reading or forgetting a folder must wait until the plugin is off and no switch runs. */
-    function refuseWhileBusy(record) {
-        if (isEnabled(record.id) || record.loading || pendingSwitches.has(record.id)) {
+    function refuseWhileBusy(id) {
+        const record = records.get(id);
+        if (pendingSwitches.has(id) || (record && (isEnabled(id) || record.loading))) {
             throw new PluginHostError(MESSAGES.switchOffFirst);
         }
     }
@@ -489,8 +493,7 @@ function createPluginHost({
      */
     function reloadPlugin(id) {
         assertCustomFolder(id);
-        const record = records.get(id);
-        if (record) refuseWhileBusy(record);
+        refuseWhileBusy(id);
         return applyReload(id);
     }
 
@@ -498,6 +501,8 @@ function createPluginHost({
      * Write a plugin folder (install or replace, e.g. `installPackage`) and
      * re-read it, on the plugin's switch chain: no switch-on can run between
      * the check and the write, and a switch-on queued behind it is refused.
+     * A plugin stored on (but failed or waiting for confirmation) is stored
+     * off, so the new code needs a new switch-on.
      *
      * @param {string} id
      * @param {() => Promise<unknown>} writeFn -> Writes `<customDir>/<id>`; when it throws, the host stays unchanged.
@@ -513,7 +518,11 @@ function createPluginHost({
             refuseWhileRunning(records.get(id));
             await writeFn();
             assertCustomFolder(id);
-            return applyReload(id);
+            applyReload(id);
+            const record = records.get(id);
+            // A plugin stored on (failed, waiting for confirmation) must not start the new code at the next boot
+            if (record.state && record.state.enabled) await persist(record, { enabled: false });
+            return viewOf(record.entry, record);
         });
     }
 
@@ -526,6 +535,8 @@ function createPluginHost({
             record.entry = null;
             record.runtime = 'off';
         } else {
+            // A switch still holding this record sees it as gone
+            record.entry = null;
             records.delete(id);
         }
     }
@@ -539,7 +550,7 @@ function createPluginHost({
      */
     function forgetPlugin(id) {
         const record = records.get(id);
-        if (record && record.entry && !record.entry.official) refuseWhileBusy(record);
+        if (!record || (record.entry && !record.entry.official)) refuseWhileBusy(id);
         applyForget(id);
     }
 
