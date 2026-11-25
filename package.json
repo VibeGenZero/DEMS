@@ -13,6 +13,7 @@
     "dev:reset": "node dev/reset.js",
     "test": "node --experimental-vm-modules --disable-warning=ExperimentalWarning --test \"test/**/*.test.js\"",
     "test:e2e": "playwright test",
+    "plugin": "node scripts/plugin.js",
     "wiki": "node scripts/wiki-graph.js",
     "wiki:check": "node scripts/wiki-graph.js --check"
   },
