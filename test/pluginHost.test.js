@@ -957,3 +957,126 @@ test('mock mode switches the dev plugin on again and confirms its new version', 
     assert.equal(stored.enabled, true);
     assert.equal(stored.confirmedVersion, '1.1.0');
 });
+
+const OFFICIAL_REMOVE_SENTENCE = 'Offizielle Plugins können nicht entfernt werden.';
+
+test('replacePlugin waits for an in-flight switch-on and then refuses without writing', async () => {
+    const { officialDir, customDir } = roots();
+    let release;
+    globalThis.__hostGate = new Promise(resolve => { release = resolve; });
+    writePlugin(customDir, 'slow', { server: serverSource('slow', 'await globalThis.__hostGate;') });
+    const host = createPluginHost({ officialDir, customDir });
+    await host.start();
+
+    const switching = host.setEnabled('slow', true, { adminId: 'a' });
+    let writes = 0;
+    const replacing = host.replacePlugin('slow', async () => { writes += 1; });
+    release();
+    await switching;
+
+    await assert.rejects(replacing, { name: 'PluginHostError', message: SWITCH_OFF_SENTENCE });
+    assert.equal(writes, 0);
+    assert.equal(view(host, 'slow').status, 'on');
+    delete globalThis.__hostGate;
+});
+
+test('replacePlugin writes once and re-reads: off when never loaded, restart when loaded', async () => {
+    const { officialDir, customDir } = roots();
+    writeMarked(customDir, 'fresh');
+    writeGood(customDir);
+    const host = createPluginHost({ officialDir, customDir });
+    await host.start();
+    await host.setEnabled('good', true, { adminId: 'a' });
+    await host.setEnabled('good', false, { adminId: 'a' });
+
+    let writes = 0;
+    const fresh = await host.replacePlugin('fresh', async () => { writes += 1; writeMarked(customDir, 'fresh', { version: '1.1.0' }); });
+    const good = await host.replacePlugin('good', async () => { writes += 1; writeGood(customDir, 'good', { version: '2.0.0' }); });
+    const added = await host.replacePlugin('added', async () => { writes += 1; writeMarked(customDir, 'added'); });
+
+    assert.equal(writes, 3);
+    assert.deepEqual([fresh.status, fresh.version], ['off', '1.1.0']);
+    assert.deepEqual([good.status, good.version], ['restart', '2.0.0']);
+    assert.deepEqual([added.status, added.version], ['off', '1.0.0']);
+    assert.deepEqual(host.list().map(item => item.id), ['added', 'fresh', 'good']);
+});
+
+test('a failing writeFn leaves the host unchanged and passes the error on', async () => {
+    const { officialDir, customDir } = roots();
+    writeMarked(customDir, 'kept');
+    const host = createPluginHost({ officialDir, customDir });
+    await host.start();
+    const before = host.list();
+
+    await assert.rejects(host.replacePlugin('kept', async () => { throw new Error('Platte voll'); }), { message: 'Platte voll' });
+    await assert.rejects(host.replacePlugin('newcomer', async () => { throw new Error('Platte voll'); }), { message: 'Platte voll' });
+
+    assert.deepEqual(host.list(), before);
+    assert.equal((await host.setEnabled('kept', true, { adminId: 'a' })).status, 'on');
+});
+
+test('replacePlugin refuses an official id without writing', async () => {
+    const { officialDir, customDir } = roots();
+    writePlugin(officialDir, 'shipped');
+    const host = createPluginHost({ officialDir, customDir });
+    await host.start();
+    let writes = 0;
+    await assert.rejects(host.replacePlugin('shipped', async () => { writes += 1; }), { name: 'PluginHostError', message: 'Plugin nicht gefunden.' });
+    await assert.rejects(host.replacePlugin('../x', async () => { writes += 1; }), { message: 'Plugin nicht gefunden.' });
+    assert.equal(writes, 0);
+});
+
+test('a switch-on queued behind a replace is refused: the admin confirmed the old folder', async () => {
+    const { officialDir, customDir } = roots();
+    writeMarked(customDir, 'swap');
+    const host = createPluginHost({ officialDir, customDir });
+    await host.start();
+    let release;
+    const gate = new Promise(resolve => { release = resolve; });
+
+    const replacing = host.replacePlugin('swap', async () => { await gate; writeMarked(customDir, 'swap', { version: '2.0.0', permissions: ['members:read'] }); });
+    const switching = host.setEnabled('swap', true, { adminId: 'a' });
+    release();
+
+    assert.equal((await replacing).version, '2.0.0');
+    await assert.rejects(switching, { name: 'PluginHostError', message: CANNOT_SENTENCE });
+    assert.equal(view(host, 'swap').status, 'off');
+    assert.equal(fs.existsSync(marker(customDir, 'swap')), false);
+});
+
+test('removePlugin refuses official, unknown and switched-on plugins without removing', async () => {
+    const { officialDir, customDir } = roots();
+    writePlugin(officialDir, 'shipped');
+    writeGood(customDir);
+    const host = createPluginHost({ officialDir, customDir });
+    await host.start();
+    await host.setEnabled('good', true, { adminId: 'a' });
+    let removals = 0;
+    const removeFn = async () => { removals += 1; };
+
+    await assert.rejects(host.removePlugin('shipped', removeFn), { name: 'PluginHostError', message: OFFICIAL_REMOVE_SENTENCE });
+    await assert.rejects(host.removePlugin('nobody', removeFn), { name: 'PluginHostError', message: 'Plugin nicht gefunden.' });
+    await assert.rejects(host.removePlugin('good', removeFn), { name: 'PluginHostError', message: SWITCH_OFF_SENTENCE });
+    assert.equal(removals, 0);
+    assert.equal(view(host, 'good').status, 'on');
+});
+
+test('removePlugin removes, then returns the orphan view or null', async () => {
+    const { officialDir, customDir } = roots();
+    writeMarked(customDir, 'kept');
+    writeMarked(customDir, 'dropped');
+    await state.writeState('kept', { enabled: false, collections: ['items'] });
+    const host = createPluginHost({ officialDir, customDir });
+    await host.start();
+    let removals = 0;
+
+    const kept = await host.removePlugin('kept', async () => { removals += 1; });
+    const dropped = await host.removePlugin('dropped', async () => { removals += 1; });
+
+    assert.equal(removals, 2);
+    assert.deepEqual([kept.status, kept.collections], ['orphaned', ['items']]);
+    assert.equal(dropped, null);
+    assert.deepEqual(host.list().map(item => item.id), ['kept']);
+    await assert.rejects(host.removePlugin('kept', async () => { removals += 1; }), { message: 'Plugin nicht gefunden.' });
+    assert.equal(removals, 2);
+});
