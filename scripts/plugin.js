@@ -1,14 +1,15 @@
 /**
  * Plugin CLI: `npm run plugin -- <command>`.
  *
- * Commands: new, check, build, install, help. `main` takes injected streams
+ * Commands: new, check, build, install, dev, help. `main` takes injected streams
  * so tests run it without a terminal; it never touches `process` itself.
  */
 const fs = require('fs');
 const path = require('path');
 const readline = require('readline/promises');
+const childProcess = require('child_process');
 const { PackageError } = require('../plugin-sdk/errors');
-const { ID_PATTERN } = require('../plugin-sdk/manifest');
+const { ID_PATTERN, validateManifest } = require('../plugin-sdk/manifest');
 const { analyzePlugin, writeManifest, packPlugin, installPackage, checkPackage } = require('../plugin-sdk/package');
 const { formatWarning } = require('../plugin-sdk/permissionScan');
 
@@ -23,6 +24,7 @@ Befehle:
                               plugin.json abgleichen und ein .dems-Paket bauen
   install <Datei.dems> [--force] [--plugins-dir <Ordner>]
                               Paket in den Plugin-Ordner installieren
+  dev <Ordner>                Plugin im Mock-Modus starten, bei Änderungen neu starten
   help                        Diese Hilfe
 
 Die Erkennung der Berechtigungen ist eine Hilfe, keine Sicherheitsprüfung.
@@ -178,8 +180,8 @@ function countEntries(buffer) {
     return require('../plugin-sdk/zip').readZip(buffer).length;
 }
 
-function officialIds() {
-    const dir = path.join(REPO, 'plugins');
+function officialIds(root = REPO) {
+    const dir = path.join(root, 'plugins');
     if (!fs.existsSync(dir)) return new Set();
     return new Set(fs.readdirSync(dir, { withFileTypes: true })
         .filter((e) => e.isDirectory() && fs.existsSync(path.join(dir, e.name, 'plugin.json')))
@@ -227,12 +229,80 @@ async function cmdInstall(args, io) {
     return 0;
 }
 
+/** Remove everything in `dir` without ever following a link into its target. */
+function clearDevDir(dir) {
+    fs.mkdirSync(dir, { recursive: true });
+    for (const name of fs.readdirSync(dir)) {
+        const entry = path.join(dir, name);
+        if (fs.lstatSync(entry).isSymbolicLink()) {
+            try {
+                fs.unlinkSync(entry);
+            } catch {
+                fs.rmdirSync(entry); // Windows junction: removes the link, not the target
+            }
+        } else {
+            fs.rmSync(entry, { force: true }); // regular file; a real folder is never expected here
+        }
+    }
+}
+
+/**
+ * Prepare `<repo>/data/dev-plugins/` with a link to the plugin folder and a nodemon config.
+ *
+ * @param {string} folder -> Plugin folder under development.
+ * @param {{ repoRoot?: string, env?: object }} options
+ * @returns {{ linkDir: string, configPath: string, env: object }}
+ */
+function prepareDev(folder, { repoRoot = REPO, env = process.env } = {}) {
+    if (env.NODE_ENV === 'production') throw new PackageError('plugin dev läuft nicht mit NODE_ENV=production.');
+    const abs = path.resolve(folder);
+    let raw;
+    try {
+        raw = JSON.parse(fs.readFileSync(path.join(abs, 'plugin.json'), 'utf8').replace(/^﻿/, ''));
+    } catch {
+        throw new PackageError('Im Ordner fehlt eine gültige plugin.json.');
+    }
+    const checked = validateManifest(raw, raw && raw.id, { fileExists: (rel) => fs.existsSync(path.join(abs, rel)) });
+    if (!checked.ok) throw new PackageError(`plugin.json ist ungültig: ${checked.reason}`);
+    const id = checked.manifest.id;
+    if (path.basename(abs) !== id) throw new PackageError('Der Ordnername muss der Plugin-ID entsprechen.');
+    if (officialIds(repoRoot).has(id)) throw new PackageError('Offizielle Plugins entwickelst du direkt mit npm run dev:mock.');
+
+    const linkDir = path.join(repoRoot, 'data', 'dev-plugins');
+    clearDevDir(linkDir);
+    fs.symlinkSync(abs, path.join(linkDir, id), 'junction');
+    const configPath = path.join(linkDir, 'nodemon.json');
+    fs.writeFileSync(configPath, `${JSON.stringify({ watch: [abs], ext: 'js,json,css', ignore: [] }, null, 2)}
+`);
+    return { linkDir, configPath, env: { ...env, PLUGINS_DIR: linkDir, PLUGINS_DEV_ID: id } };
+}
+
+/** Run DEMS in mock mode under nodemon with the one plugin mounted. */
+function cmdDev(args, io) {
+    const { positional } = parseArgs(args);
+    if (!positional[0]) throw new PackageError('Bitte einen Ordner angeben: dev <Ordner>');
+    const { configPath, env } = prepareDev(path.resolve(io.cwd, positional[0]), { repoRoot: REPO, env: io.env });
+    io.stdout.write(`Plugin ${env.PLUGINS_DEV_ID} läuft im Mock-Modus auf http://localhost:${env.PORT || 3000} (Strg+C beendet).\n`);
+    const spawn = io.spawn || childProcess.spawn;
+    const nodemon = path.join(REPO, 'node_modules', 'nodemon', 'bin', 'nodemon.js');
+    const child = spawn(process.execPath, [nodemon, '--config', configPath, path.join(REPO, 'dev', 'start.js')], { env, stdio: 'inherit' });
+    return new Promise((resolve) => {
+        child.once('error', (err) => {
+            io.stderr.write(`Start fehlgeschlagen: ${err.message}
+`);
+            resolve(1);
+        });
+        child.once('exit', (code) => resolve(code === null ? 0 : code));
+    });
+}
+
 /** Command table: add new commands here (each `(args, io) => code | Promise<code>`). */
 const COMMANDS = {
     new: cmdNew,
     check: cmdCheck,
     build: cmdBuild,
     install: cmdInstall,
+    dev: cmdDev,
     help: (args, io) => {
         io.stdout.write(USAGE);
         return 0;
@@ -271,4 +341,4 @@ if (require.main === module) {
     });
 }
 
-module.exports = { main, COMMANDS, parseArgs };
+module.exports = { main, COMMANDS, parseArgs, prepareDev };

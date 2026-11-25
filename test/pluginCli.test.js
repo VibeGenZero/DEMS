@@ -221,3 +221,102 @@ test('an unexpected error prints Unerwarteter Fehler', async () => {
     assert.match(stderr.text(), /Unerwarteter Fehler: kaputt/);
     assert.doesNotMatch(stderr.text(), /\n\s+at /);
 });
+
+// ---- dev ----
+const { prepareDev } = require('../scripts/plugin');
+
+function devRepo(officialIds = []) {
+    const repoRoot = tmp();
+    fs.mkdirSync(path.join(repoRoot, 'plugins'));
+    for (const id of officialIds) {
+        fs.mkdirSync(path.join(repoRoot, 'plugins', id));
+        fs.writeFileSync(path.join(repoRoot, 'plugins', id, 'plugin.json'), '{}');
+    }
+    return repoRoot;
+}
+
+async function scaffold(id = 'demo-plugin') {
+    const cwd = tmp();
+    const r = await run(['new', id], cwd);
+    assert.equal(r.code, 0, r.err);
+    return path.join(cwd, id);
+}
+
+test('prepareDev refuses NODE_ENV=production', async () => {
+    const folder = await scaffold();
+    assert.throws(() => prepareDev(folder, { repoRoot: devRepo(), env: { NODE_ENV: 'production' } }),
+        /plugin dev läuft nicht mit NODE_ENV=production\./);
+});
+
+test('prepareDev refuses a folder without a valid plugin.json', () => {
+    const folder = path.join(tmp(), 'demo-plugin');
+    fs.mkdirSync(folder);
+    assert.throws(() => prepareDev(folder, { repoRoot: devRepo(), env: {} }), /plugin\.json/);
+    fs.writeFileSync(path.join(folder, 'plugin.json'), '{ kaputt');
+    assert.throws(() => prepareDev(folder, { repoRoot: devRepo(), env: {} }), /plugin\.json/);
+});
+
+test('prepareDev refuses a folder name that differs from the id', async () => {
+    const folder = await scaffold();
+    const other = path.join(path.dirname(folder), 'anderer-name');
+    fs.renameSync(folder, other);
+    assert.throws(() => prepareDev(other, { repoRoot: devRepo(), env: {} }),
+        /Der Ordnername muss der Plugin-ID entsprechen\./);
+});
+
+test('prepareDev refuses an official id', async () => {
+    const folder = await scaffold();
+    assert.throws(() => prepareDev(folder, { repoRoot: devRepo(['demo-plugin']), env: {} }),
+        /Offizielle Plugins entwickelst du direkt mit npm run dev:mock\./);
+});
+
+test('prepareDev links only the plugin, writes the nodemon config and returns the env', async () => {
+    const folder = await scaffold();
+    const repoRoot = devRepo();
+    const result = prepareDev(folder, { repoRoot, env: { KEEP: '1' } });
+    const dir = path.join(repoRoot, 'data', 'dev-plugins');
+    assert.deepEqual(fs.readdirSync(dir).sort(), ['demo-plugin', 'nodemon.json']);
+    assert.equal(fs.realpathSync(path.join(dir, 'demo-plugin')), fs.realpathSync(folder));
+    assert.equal(result.linkDir, dir);
+    assert.equal(result.configPath, path.join(dir, 'nodemon.json'));
+    assert.deepEqual(JSON.parse(fs.readFileSync(result.configPath, 'utf8')),
+        { watch: [path.resolve(folder)], ext: 'js,json,css', ignore: [] });
+    assert.equal(result.env.PLUGINS_DIR, dir);
+    assert.equal(result.env.PLUGINS_DEV_ID, 'demo-plugin');
+    assert.equal(result.env.KEEP, '1');
+});
+
+test('a second prepareDev leaves the source folder untouched', async () => {
+    const folder = await scaffold();
+    const repoRoot = devRepo();
+    prepareDev(folder, { repoRoot, env: {} });
+    prepareDev(folder, { repoRoot, env: {} });
+    for (const f of ['plugin.json', 'server.js', 'client.js', 'client.css']) {
+        assert.ok(fs.existsSync(path.join(folder, f)), f);
+    }
+    assert.deepEqual(fs.readdirSync(path.join(repoRoot, 'data', 'dev-plugins')).sort(), ['demo-plugin', 'nodemon.json']);
+});
+
+test('dev spawns nodemon with the prepared env and returns its exit code', async () => {
+    const folder = await scaffold();
+    const calls = [];
+    const { EventEmitter } = require('events');
+    const spawn = (cmd, args, opts) => {
+        const child = new EventEmitter();
+        calls.push({ cmd, args, opts });
+        setImmediate(() => child.emit('exit', 0, null));
+        return child;
+    };
+    const stdout = sink();
+    const code = await main(['dev', folder], { cwd: process.cwd(), stdin: null, stdout, stderr: sink(), env: {}, isTTY: false, spawn });
+    assert.equal(code, 0);
+    assert.equal(calls.length, 1);
+    const repo = path.join(__dirname, '..');
+    assert.equal(calls[0].cmd, process.execPath);
+    assert.equal(calls[0].args[0], path.join(repo, 'node_modules', 'nodemon', 'bin', 'nodemon.js'));
+    assert.equal(calls[0].args[1], '--config');
+    assert.equal(calls[0].args[2], path.join(repo, 'data', 'dev-plugins', 'nodemon.json'));
+    assert.equal(calls[0].args[3], path.join(repo, 'dev', 'start.js'));
+    assert.equal(calls[0].opts.env.PLUGINS_DEV_ID, 'demo-plugin');
+    assert.equal(calls[0].opts.env.PLUGINS_DIR, path.join(repo, 'data', 'dev-plugins'));
+});
