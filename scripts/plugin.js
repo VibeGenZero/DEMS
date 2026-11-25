@@ -241,7 +241,7 @@ function clearDevDir(dir) {
                 fs.rmdirSync(entry); // Windows junction: removes the link, not the target
             }
         } else {
-            fs.rmSync(entry, { force: true }); // regular file; a real folder is never expected here
+            fs.rmSync(entry, { recursive: true, force: true }); // our own scratch file or folder, lstat showed it is no link
         }
     }
 }
@@ -281,18 +281,28 @@ function prepareDev(folder, { repoRoot = REPO, env = process.env } = {}) {
 function cmdDev(args, io) {
     const { positional } = parseArgs(args);
     if (!positional[0]) throw new PackageError('Bitte einen Ordner angeben: dev <Ordner>');
-    const { configPath, env } = prepareDev(path.resolve(io.cwd, positional[0]), { repoRoot: REPO, env: io.env });
+    const repoRoot = io.repoRoot || REPO;
+    const { configPath, env } = prepareDev(path.resolve(io.cwd, positional[0]), { repoRoot, env: io.env });
     io.stdout.write(`Plugin ${env.PLUGINS_DEV_ID} läuft im Mock-Modus auf http://localhost:${env.PORT || 3000} (Strg+C beendet).\n`);
     const spawn = io.spawn || childProcess.spawn;
-    const nodemon = path.join(REPO, 'node_modules', 'nodemon', 'bin', 'nodemon.js');
-    const child = spawn(process.execPath, [nodemon, '--config', configPath, path.join(REPO, 'dev', 'start.js')], { env, stdio: 'inherit' });
+    const nodemon = path.join(repoRoot, 'node_modules', 'nodemon', 'bin', 'nodemon.js');
+    const child = spawn(process.execPath, [nodemon, '--config', configPath, path.join(repoRoot, 'dev', 'start.js')], { env, stdio: 'inherit' });
+    const forward = (signal) => () => child.kill(signal);
+    const handlers = { SIGINT: forward('SIGINT'), SIGTERM: forward('SIGTERM') };
+    for (const [signal, handler] of Object.entries(handlers)) process.on(signal, handler);
+    const release = () => {
+        for (const [signal, handler] of Object.entries(handlers)) process.removeListener(signal, handler);
+    };
     return new Promise((resolve) => {
         child.once('error', (err) => {
-            io.stderr.write(`Start fehlgeschlagen: ${err.message}
-`);
+            release();
+            io.stderr.write(`Start fehlgeschlagen: ${err.message}\n`);
             resolve(1);
         });
-        child.once('exit', (code) => resolve(code === null ? 0 : code));
+        child.once('exit', (code, signal) => {
+            release();
+            resolve(signal || code === null ? 1 : code);
+        });
     });
 }
 

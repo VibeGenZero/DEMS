@@ -297,26 +297,67 @@ test('a second prepareDev leaves the source folder untouched', async () => {
     assert.deepEqual(fs.readdirSync(path.join(repoRoot, 'data', 'dev-plugins')).sort(), ['demo-plugin', 'nodemon.json']);
 });
 
-test('dev spawns nodemon with the prepared env and returns its exit code', async () => {
-    const folder = await scaffold();
-    const calls = [];
+function fakeSpawn(calls, onChild) {
     const { EventEmitter } = require('events');
-    const spawn = (cmd, args, opts) => {
+    return (cmd, args, opts) => {
         const child = new EventEmitter();
+        child.kill = (signal) => { child.killed = signal; };
         calls.push({ cmd, args, opts });
-        setImmediate(() => child.emit('exit', 0, null));
+        onChild(child);
         return child;
     };
-    const stdout = sink();
-    const code = await main(['dev', folder], { cwd: process.cwd(), stdin: null, stdout, stderr: sink(), env: {}, isTTY: false, spawn });
+}
+
+test('prepareDev removes a leftover real directory in data/dev-plugins', async () => {
+    const folder = await scaffold();
+    const repoRoot = devRepo();
+    const leftover = path.join(repoRoot, 'data', 'dev-plugins', 'alt');
+    fs.mkdirSync(leftover, { recursive: true });
+    fs.writeFileSync(path.join(leftover, 'x.txt'), 'x');
+    prepareDev(folder, { repoRoot, env: {} });
+    assert.deepEqual(fs.readdirSync(path.join(repoRoot, 'data', 'dev-plugins')).sort(), ['demo-plugin', 'nodemon.json']);
+});
+
+test('dev spawns nodemon from the injected repo root and leaves the real data/dev-plugins alone', async () => {
+    const folder = await scaffold();
+    const repoRoot = devRepo();
+    const real = path.join(__dirname, '..', 'data', 'dev-plugins');
+    const before = fs.existsSync(real) ? fs.statSync(real).mtimeMs + ':' + fs.readdirSync(real).join(',') : null;
+    const calls = [];
+    const spawn = fakeSpawn(calls, (child) => setImmediate(() => child.emit('exit', 0, null)));
+    const code = await main(['dev', folder], { cwd: process.cwd(), stdin: null, stdout: sink(), stderr: sink(), env: {}, isTTY: false, spawn, repoRoot });
     assert.equal(code, 0);
     assert.equal(calls.length, 1);
-    const repo = path.join(__dirname, '..');
+    const dir = path.join(repoRoot, 'data', 'dev-plugins');
     assert.equal(calls[0].cmd, process.execPath);
-    assert.equal(calls[0].args[0], path.join(repo, 'node_modules', 'nodemon', 'bin', 'nodemon.js'));
-    assert.equal(calls[0].args[1], '--config');
-    assert.equal(calls[0].args[2], path.join(repo, 'data', 'dev-plugins', 'nodemon.json'));
-    assert.equal(calls[0].args[3], path.join(repo, 'dev', 'start.js'));
+    assert.deepEqual(calls[0].args, [path.join(repoRoot, 'node_modules', 'nodemon', 'bin', 'nodemon.js'), '--config', path.join(dir, 'nodemon.json'), path.join(repoRoot, 'dev', 'start.js')]);
     assert.equal(calls[0].opts.env.PLUGINS_DEV_ID, 'demo-plugin');
-    assert.equal(calls[0].opts.env.PLUGINS_DIR, path.join(repo, 'data', 'dev-plugins'));
+    assert.equal(calls[0].opts.env.PLUGINS_DIR, dir);
+    const after = fs.existsSync(real) ? fs.statSync(real).mtimeMs + ':' + fs.readdirSync(real).join(',') : null;
+    assert.equal(after, before);
+});
+
+test('dev returns 1 when the child was killed by a signal and releases the signal handlers', async () => {
+    const folder = await scaffold();
+    const counts = { SIGINT: process.listenerCount('SIGINT'), SIGTERM: process.listenerCount('SIGTERM') };
+    const spawn = fakeSpawn([], (child) => setImmediate(() => child.emit('exit', null, 'SIGTERM')));
+    const code = await main(['dev', folder], { cwd: process.cwd(), stdin: null, stdout: sink(), stderr: sink(), env: {}, isTTY: false, spawn, repoRoot: devRepo() });
+    assert.equal(code, 1);
+    assert.equal(process.listenerCount('SIGINT'), counts.SIGINT);
+    assert.equal(process.listenerCount('SIGTERM'), counts.SIGTERM);
+});
+
+test('dev forwards SIGINT to the child', async () => {
+    const folder = await scaffold();
+    let kid;
+    const spawn = fakeSpawn([], (child) => {
+        kid = child;
+        setImmediate(() => {
+            process.emit('SIGINT');
+            child.emit('exit', 0, null);
+        });
+    });
+    const code = await main(['dev', folder], { cwd: process.cwd(), stdin: null, stdout: sink(), stderr: sink(), env: {}, isTTY: false, spawn, repoRoot: devRepo() });
+    assert.equal(code, 0);
+    assert.equal(kid.killed, 'SIGINT');
 });
