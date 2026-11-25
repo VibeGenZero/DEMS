@@ -67,6 +67,7 @@ sources: [scripts/wiki-graph.js, docs/wiki/graph.json, CLAUDE.md]
 | `routes/admin.js` | routes-admin, event-lifecycle, maintenance-mode |
 | `routes/user.js` | routes-user |
 | `plugin-sdk/*.js` | plugin-sdk, write-plugin |
+| `scripts/plugin.js` (plugin CLI: new, check, build, install) | write-plugin |
 | `plugins/*` (official plugins, e.g. `plugins/event-submissions/`, `plugins/custom-design/`) | plugin-sdk, write-plugin |
 | `routes/plugins.js`, `routes/pluginStatic.js`, `routes/pluginTheme.js` | plugin-sdk, server, api-index, request-lifecycle, security |
 | `routes/adminPlugins.js` | plugin-sdk, routes-admin, security |

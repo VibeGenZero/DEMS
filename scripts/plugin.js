@@ -168,7 +168,7 @@ async function cmdBuild(args, io) {
         }
     }
     const { buffer, fileName } = packPlugin(dir);
-    const out = path.resolve(io.cwd, typeof flags.out === 'string' ? flags.out : fileName);
+    const out = typeof flags.out === 'string' ? path.resolve(io.cwd, flags.out) : path.join(path.dirname(dir), fileName);
     fs.writeFileSync(out, buffer);
     io.stdout.write(`Gebaut: ${out} (${countEntries(buffer)} Dateien, ${(buffer.length / 1024).toFixed(1)} KB)\n`);
     return 0;

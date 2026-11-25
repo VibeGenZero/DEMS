@@ -157,3 +157,67 @@ test('help and unknown commands', async () => {
     assert.equal(bad.code, 1);
     assert.match(bad.err, /Unbekannter Befehl: nope/);
 });
+
+test('a fresh scaffold needs no change', async () => {
+    const cwd = tmp();
+    await run(['new', 'demo-plugin'], cwd);
+    const file = path.join(cwd, 'demo-plugin', 'plugin.json');
+    const before = fs.readFileSync(file);
+    const checked = await run(['check', 'demo-plugin'], cwd);
+    assert.equal(checked.code, 0, checked.err);
+    assert.doesNotMatch(checked.out, /^\+ /m);
+    assert.doesNotMatch(checked.out, /Warnung/);
+    assert.equal(checked.err, '');
+    const built = await run(['build', 'demo-plugin', '--yes'], cwd);
+    assert.equal(built.code, 0, built.err);
+    assert.deepEqual(fs.readFileSync(file), before);
+});
+
+test('build writes the package next to the plugin folder', async () => {
+    const cwd = tmp();
+    await run(['new', 'demo-plugin'], cwd);
+    const inside = path.join(cwd, 'demo-plugin');
+    const first = await run(['build', '.', '--yes'], inside);
+    assert.equal(first.code, 0, first.err);
+    assert.ok(fs.existsSync(path.join(cwd, 'demo-plugin-0.1.0.dems')));
+    assert.ok(!fs.existsSync(path.join(inside, 'demo-plugin-0.1.0.dems')));
+    const second = await run(['build', '.', '--yes'], inside);
+    assert.equal(second.code, 0, second.err);
+});
+
+async function packed() {
+    const cwd = tmp();
+    const plugins = path.join(cwd, 'plugins-dir');
+    await run(['new', 'demo-plugin'], cwd);
+    await run(['build', 'demo-plugin', '--yes'], cwd);
+    await run(['install', 'demo-plugin-0.1.0.dems', '--plugins-dir', plugins], cwd);
+    return { cwd, plugins };
+}
+
+test('install asks on a TTY before replacing: j replaces', async () => {
+    const { cwd, plugins } = await packed();
+    const r = await run(['install', 'demo-plugin-0.1.0.dems', '--plugins-dir', plugins], cwd, { isTTY: true, answers: 'j\n' });
+    assert.equal(r.code, 0, r.err);
+    assert.match(r.out, /demo-plugin 0\.1\.0 ersetzen durch 0\.1\.0\? \(j\/n\)/);
+    assert.match(r.out, /Installiert: demo-plugin/);
+});
+
+test('install asks on a TTY before replacing: n aborts', async () => {
+    const { cwd, plugins } = await packed();
+    const r = await run(['install', 'demo-plugin-0.1.0.dems', '--plugins-dir', plugins], cwd, { isTTY: true, answers: 'n\n' });
+    assert.equal(r.code, 1);
+    assert.match(r.out, /Abgebrochen\./);
+});
+
+test('an unexpected error is reported without a stack', async () => {
+    const r = await main(['check', 'x'], { cwd: tmp(), stdin: null, stdout: null, stderr: sink(), env: {}, isTTY: false });
+    assert.equal(r, 1);
+});
+
+test('an unexpected error prints Unerwarteter Fehler', async () => {
+    const stderr = sink();
+    const code = await main(['help'], { cwd: tmp(), stdin: null, stdout: { write() { throw new Error('kaputt'); } }, stderr, env: {}, isTTY: false });
+    assert.equal(code, 1);
+    assert.match(stderr.text(), /Unerwarteter Fehler: kaputt/);
+    assert.doesNotMatch(stderr.text(), /\n\s+at /);
+});

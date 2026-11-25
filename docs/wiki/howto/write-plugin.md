@@ -3,7 +3,7 @@ id: write-plugin
 title: How to write a plugin
 type: howto
 tags: [howto, plugins, plugin-sdk, manifest, ctx, ui, hooks, settings, discord, privacy]
-sources: [plugins/event-submissions, plugins/custom-design, plugin-sdk/manifest.js, plugin-sdk/context.js, plugin-sdk/data.js, plugin-sdk/discord.js, plugin-sdk/theme.js, plugin-sdk/themeCss.js, public/js/core/plugins.js, public/js/core/pluginTheme.js, public/js/core/passwordDialog.js, test/pluginClientGuards.test.js]
+sources: [scripts/plugin.js, plugins/event-submissions, plugins/custom-design, plugin-sdk/manifest.js, plugin-sdk/context.js, plugin-sdk/data.js, plugin-sdk/discord.js, plugin-sdk/theme.js, plugin-sdk/themeCss.js, public/js/core/plugins.js, public/js/core/pluginTheme.js, public/js/core/passwordDialog.js, test/pluginClientGuards.test.js]
 depends_on: [plugin-sdk]
 see_also: [security, frontend-app, bot, data-model, api-index, docker]
 ---
@@ -14,6 +14,8 @@ see_also: [security, frontend-app, bot, data-model, api-index, docker]
 Background (lifecycle, hooks, security model): [plugin-sdk](../concepts/plugin-sdk.md).
 
 ## 1. Folder
+
+Start with the scaffold: `npm run plugin -- new <id> [--dir <parent>]` (id `^[a-z][a-z0-9-]{2,31}$`, refuses an existing folder) writes `plugin.json` (version `0.1.0`, `sdk: 1.1`), a `server.js` with one `access: 'member'` route, a `client.js` with a tab page and `client.css`. It uses no permission, so `check` finds nothing to change.
 
 ```
 my-plugin/              # folder name = manifest id
@@ -190,12 +192,16 @@ Checked by `test/pluginClientGuards.test.js` for official plugins; for custom pl
 
 ## 6. Try it
 
+0. `npm run plugin -- check <folder>` compares `plugin.json` with the code and writes nothing: `+ <perm>` is used in the code but not declared, `? <perm> (nicht mehr gefunden)` is declared but no longer found, an `sdk` line shows a needed SDK raise, and warnings (`file:line: message`) mark code the scanner cannot judge (exit 1 only on errors). `npm run plugin -- build <folder> [--yes] [--out <file>]` prints the same, asks „plugin.json aktualisieren? (j/n)“ when the manifest would change (`--yes` skips the question; without a terminal `--yes` is required), then writes `<id>-<version>.dems` next to the plugin folder (its parent directory). Answering `n` still builds with the old manifest and warns. The detection is a help for authors, not a security check: permissions stay a guard rail, not a wall, because the scanner only reads the code and can miss dynamic access.
+
 1. Put the folder into `data/plugins/<id>/` of a checkout (or point `PLUGINS_DIR` elsewhere) and run `npm run dev:mock`.
 2. Log in as `admin`, open System › Plugins: the card shows „Nicht offiziell“, your permissions and the status. Switch it on: tick „Ich vertraue dem Code dieses Plugins“ and enter the reset password (mock mode: `dev`).
 3. Your tab appears after a reload; errors show on the card („Letzter Fehler …“) and in the log with `[plugin:<id>]`. DMs and channel posts show as `dev/mockBot.js` log lines.
 4. After changing `server.js` or `plugin.json`, restart the server (nodemon ignores `data/**`: type `rs` or stop and start); a changed `version` asks for confirmation again. If your plugin breaks the start: restart with `PLUGINS_SAFE_MODE=true`, switch the broken plugin off in System › Plugins, remove the line, restart (in safe mode plugins can only be switched off).
 
 ## 7. Install (operators)
+
+- From a package: `npm run plugin -- install <file>.dems [--force] [--plugins-dir <dir>]` (dir default `PLUGINS_DIR` or `data/plugins`) checks the package, refuses ids of official plugins and asks before it replaces an installed plugin (a terminal asks „<id> <alt> ersetzen durch <neu>? (j/n)“; without one `--force` is required). Restart DEMS afterwards, then switch the plugin on in System › Plugins.
 
 - Copy the folder onto the server into the custom plugin folder: in Docker `/app/data/plugins/<id>/` on the `dems-data` volume (see [docker](../ops/docker.md)), readable by the user `node`; then restart DEMS and switch it on in System › Plugins. There is no upload in the browser on purpose.
 - **Warning: a custom plugin is not sandboxed.** It runs inside the DEMS process with full access to DEMS, the database, the Discord bot and its token, the files and the network. The listed permissions show what it wants to use; they prevent nothing. Install only code you have read or whose author you trust. Updating the code means trusting it again (DEMS asks when the version or the permissions change).
