@@ -359,7 +359,8 @@ async function start() {
             officialDir: path.join(__dirname, 'plugins'),
             customDir: path.resolve(process.env.PLUGINS_DIR || path.join(__dirname, 'data', 'plugins')),
             safeMode: process.env.PLUGINS_SAFE_MODE === 'true',
-            mockMode: IS_MOCK_MODE
+            mockMode: IS_MOCK_MODE,
+            devPluginId: IS_MOCK_MODE ? (process.env.PLUGINS_DEV_ID || '') : ''
         });
     } catch (err) {
         console.error('❌ Plugins konnten nicht gestartet werden, DEMS läuft ohne Plugins:', err.message);

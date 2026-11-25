@@ -14,7 +14,7 @@ function view(overrides = {}) {
         description: 'Mitglieder schlagen Events vor.', official: true,
         permissions: [{ key: 'events:draft', label: 'Events für das Team vorbereiten' }],
         status: 'off', statusText: 'Aus', lastError: '', lastErrorAt: '', limitWarning: null,
-        settings: [], hasClient: true, collections: [], settingsValues: {},
+        settings: [], hasClient: true, collections: [], permissionCheck: null, settingsValues: {},
         ...overrides
     };
 }

@@ -7,11 +7,16 @@
  * stops the others or the start of DEMS. At runtime it switches plugins on
  * and off (Node cannot unload a module, so switching on again reuses the
  * first registration), builds the admin views, validates settings and
- * deletes plugin data. All state writes of one plugin go through one promise
- * chain, because `writeState` is a read-merge-write without a transaction.
+ * deletes plugin data. After an upload it re-reads one custom folder
+ * (`reloadPlugin`): a plugin whose code was already required gets runtime
+ * `restart` („Neustart nötig“) and cannot be switched on before DEMS
+ * restarts; `forgetPlugin` drops a removed folder. All state writes of one
+ * plugin go through one promise chain, because `writeState` is a
+ * read-merge-write without a transaction.
  */
+const fs = require('fs');
 const path = require('path');
-const { discoverPlugins } = require('./discovery');
+const { discoverPlugins, readCustomPlugin } = require('./discovery');
 const state = require('./state');
 const { purgeUserData, wipePluginData } = require('./data');
 const { deleteTheme } = require('./theme');
@@ -32,7 +37,8 @@ const MESSAGES = {
     cannotEnable: 'Dieses Plugin kann nicht eingeschaltet werden.',
     safeMode: 'Abgesicherter Modus aktiv – Plugins lassen sich nicht einschalten.',
     noSettings: 'Für dieses Plugin lassen sich keine Einstellungen speichern.',
-    badValues: 'Die Einstellungen müssen ein Objekt sein.'
+    badValues: 'Die Einstellungen müssen ein Objekt sein.',
+    restartFirst: 'Starte DEMS neu, bevor du das Plugin wieder einschaltest.'
 };
 
 /** @typedef {import('./views').PluginView} PluginView */
@@ -93,6 +99,7 @@ function checkSetting(setting, raw) {
  * @param {string} [options.customDir] -> Folder of the custom plugins (`PLUGINS_DIR`).
  * @param {boolean} [options.safeMode=false] -> Load no plugin code at all.
  * @param {boolean} [options.mockMode=false] -> Dev mock mode: official plugins without state start on.
+ * @param {string} [options.devPluginId=''] -> Mock mode only: this custom plugin (`plugin dev`) starts on and confirmed.
  * @param {number} [options.registerTimeoutMs=5000]
  * @param {number} [options.disableTimeoutMs=2000] -> Per `onDisable` callback.
  * @param {(file: string) => object} [options.requireModule=require] -> Loads a plugin's `server.js`.
@@ -102,7 +109,7 @@ function checkSetting(setting, raw) {
  * host.list(); // [{ id: 'event-submissions', status: 'off', statusText: 'Aus', ... }]
  */
 function createPluginHost({
-    officialDir, customDir, safeMode = false, mockMode = false,
+    officialDir, customDir, safeMode = false, mockMode = false, devPluginId = '',
     registerTimeoutMs = DEFAULT_REGISTER_TIMEOUT_MS, disableTimeoutMs = DEFAULT_DISABLE_TIMEOUT_MS,
     requireModule = require
 }) {
@@ -258,9 +265,19 @@ function createPluginHost({
         record.runtime = record.registered ? 'on' : 'error';
     }
 
+    /** The plugin under development (`plugin dev`) is trusted by its author: on and confirmed in mock mode. */
+    const isDevPlugin = record => mockMode && devPluginId !== '' && record.id === devPluginId && !record.entry.official;
+
     async function startPlugin(record) {
         if (!record.state && record.entry.official && mockMode) {
             await persist(record, { enabled: true, enabledAt: nowIso(), enabledBy: '' });
+        }
+        if (isDevPlugin(record) && (!record.state || needsConfirmation(record))) {
+            const { manifest } = record.entry;
+            await persist(record, {
+                enabled: true, enabledAt: nowIso(), enabledBy: '',
+                confirmedVersion: manifest.version, confirmedPermissions: [...manifest.permissions]
+            });
         }
         if (!record.state || !record.state.enabled) return;
         if (needsConfirmation(record)) {
@@ -348,6 +365,7 @@ function createPluginHost({
         const record = recordOf(id);
         if (safeMode && enabled) throw new PluginHostError(MESSAGES.safeMode);
         if (!isLoadable(record)) throw new PluginHostError(MESSAGES.cannotEnable);
+        if (enabled && record.runtime === 'restart') throw new PluginHostError(MESSAGES.restartFirst);
         return chain(switchChains, id, async () => {
             const { manifest, official } = record.entry;
             if (enabled) {
@@ -361,11 +379,74 @@ function createPluginHost({
             } else {
                 await persist(record, { enabled: false });
                 const wasOn = record.runtime === 'on';
-                record.runtime = 'off';
+                // New code on disk next to the old required module stays „Neustart nötig“
+                if (record.runtime !== 'restart') record.runtime = 'off';
                 if (wasOn) await runDisableCallbacks(record);
             }
             return viewOf(record.entry, record);
         });
+    }
+
+    /** @returns {Set<string>} -> Ids of the discovered official plugins. */
+    const officialIds = () => new Set(entries.filter(entry => entry.official).map(entry => entry.id));
+
+    /**
+     * The plugin's code was required since start: a successful or a failed
+     * register (Node keeps a failed module in its require cache, too), or a
+     * plugin without `server.js` that was switched on.
+     */
+    function wasLoaded(id) {
+        const record = records.get(id);
+        return Boolean(record && (record.registered || record.ctx !== null));
+    }
+
+    /** Official entries in discovery order, then the custom ones sorted by id (like `discoverPlugins`). */
+    function withCustomEntry(id, entry) {
+        const custom = entries.filter(item => !item.official && item.id !== id);
+        if (entry) custom.push(entry);
+        custom.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+        return [...entries.filter(item => item.official), ...custom];
+    }
+
+    /**
+     * Re-read one custom plugin folder (after an upload). A plugin whose code
+     * was loaded gets runtime `restart`; any other one is (again) `off` with
+     * the usual state rules. Official ids are never re-read.
+     *
+     * @returns {PluginView}
+     * @throws {PluginHostError} -> `notFound` for an official id, no plain folder name or a folder without `plugin.json`.
+     */
+    function reloadPlugin(id) {
+        const officials = officialIds();
+        const plainName = typeof id === 'string' && id !== '' && !id.startsWith('.') && path.basename(id) === id;
+        const manifestFile = customDir && plainName ? path.join(customDir, id, 'plugin.json') : '';
+        if (officials.has(id) || !manifestFile || !fs.existsSync(manifestFile)) throw new PluginHostError(MESSAGES.notFound);
+        const entry = readCustomPlugin(customDir, id, officials);
+        entries = withCustomEntry(id, entry);
+        const record = records.get(id);
+        if (!record) {
+            records.set(id, newRecord(id, entry, null));
+        } else {
+            record.runtime = wasLoaded(id) ? 'restart' : 'off';
+            record.entry = entry;
+        }
+        return viewOf(entry, records.get(id));
+    }
+
+    /**
+     * Forget a removed custom folder. With a stored state the plugin stays as
+     * orphan (its collections are needed by „Daten löschen“ and `purgeUser`).
+     */
+    function forgetPlugin(id) {
+        const record = records.get(id);
+        entries = withCustomEntry(id, null);
+        if (!record || !record.entry || record.entry.official) return;
+        if (record.state) {
+            record.entry = null;
+            record.runtime = 'off';
+        } else {
+            records.delete(id);
+        }
     }
 
     /** Store a runtime error of a plugin (route, hook); the plugin stays on. */
@@ -474,6 +555,14 @@ function createPluginHost({
         get safeMode() {
             return safeMode;
         },
+        /** @returns {string|undefined} -> `PLUGINS_DIR`, the folder uploads install into. */
+        get customDir() {
+            return customDir;
+        },
+        officialIds,
+        wasLoaded,
+        reloadPlugin,
+        forgetPlugin,
         list,
         isEnabled,
         entryOf: id => {

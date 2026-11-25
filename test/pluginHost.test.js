@@ -709,3 +709,140 @@ test('themeSources lists enabled theme plugins only, sorted, and deleteData/wipe
     await host.wipeAllData();
     assert.equal((await getDoc(doc(db, 'pluginThemes', 'zebra'))).exists(), false);
 });
+
+const RESTART_SENTENCE = 'Starte DEMS neu, bevor du das Plugin wieder einschaltest.';
+
+test('reloadPlugin of a never loaded plugin shows the new version, off, in id order', async () => {
+    const { officialDir, customDir } = roots();
+    writePlugin(officialDir, 'shipped');
+    writeMarked(customDir, 'zeta');
+    const host = createPluginHost({ officialDir, customDir });
+    await host.start();
+    assert.equal(host.customDir, customDir);
+    assert.deepEqual([...host.officialIds()], ['shipped']);
+
+    writeMarked(customDir, 'alpha', { version: '1.0.0' });
+    let item = host.reloadPlugin('alpha');
+    assert.equal(item.status, 'off');
+    assert.equal(item.version, '1.0.0');
+    assert.deepEqual(host.list().map(entry => entry.id), ['shipped', 'alpha', 'zeta']);
+
+    writeMarked(customDir, 'alpha', { version: '1.1.0' });
+    item = host.reloadPlugin('alpha');
+    assert.deepEqual([item.status, item.statusText, item.version], ['off', 'Aus', '1.1.0']);
+    assert.equal(view(host, 'alpha').version, '1.1.0');
+    assert.deepEqual([item.permissionCheck.missing, item.permissionCheck.unused, item.permissionCheck.tooBig], [[], [], false]);
+    assert.equal(host.wasLoaded('alpha'), false);
+    assert.equal(fs.existsSync(marker(customDir, 'alpha')), false);
+    assert.deepEqual(host.list().map(entry => entry.id), ['shipped', 'alpha', 'zeta']);
+});
+
+test('reloadPlugin of a loaded plugin marks it „Neustart nötig“ and refuses switching on', async () => {
+    const { officialDir, customDir } = roots();
+    writeGood(customDir);
+    const host = createPluginHost({ officialDir, customDir });
+    await host.start();
+    await host.setEnabled('good', true, { adminId: 'a' });
+    await host.setEnabled('good', false, { adminId: 'a' });
+    assert.equal(host.wasLoaded('good'), true);
+
+    writeGood(customDir, 'good', { version: '2.0.0' });
+    const item = host.reloadPlugin('good');
+
+    assert.deepEqual([item.status, item.statusText, item.version], ['restart', 'Neustart nötig', '2.0.0']);
+    await assert.rejects(host.setEnabled('good', true, { adminId: 'a' }), { name: 'PluginHostError', message: RESTART_SENTENCE });
+    assert.equal(view(host, 'good').status, 'restart');
+    assert.equal(host.isEnabled('good'), false);
+    assert.equal(record('good').registers, 1);
+    assert.equal((await host.setEnabled('good', false, { adminId: 'a' })).status, 'restart');
+});
+
+test('a failed register also counts as loaded', async () => {
+    const { officialDir, customDir } = roots();
+    writePlugin(customDir, 'thrower', { server: serverSource('thrower', "throw new Error('kaputt');") });
+    const host = createPluginHost({ officialDir, customDir });
+    await host.start();
+    await host.setEnabled('thrower', true, { adminId: 'a' });
+    await host.setEnabled('thrower', false, { adminId: 'a' });
+    assert.equal(host.wasLoaded('thrower'), true);
+    assert.equal(host.reloadPlugin('thrower').status, 'restart');
+    assert.equal(host.wasLoaded('nobody'), false);
+});
+
+test('reloadPlugin refuses an official id and a folder without plugin.json', async () => {
+    const { officialDir, customDir } = roots();
+    writePlugin(officialDir, 'shipped');
+    writePlugin(customDir, 'shipped');
+    const host = createPluginHost({ officialDir, customDir });
+    await host.start();
+    assert.throws(() => host.reloadPlugin('shipped'), { name: 'PluginHostError', message: 'Plugin nicht gefunden.' });
+    assert.throws(() => host.reloadPlugin('missing'), { name: 'PluginHostError', message: 'Plugin nicht gefunden.' });
+    writePlugin(path.dirname(customDir), 'outside');
+    for (const bad of ['../outside', '.old-abc', '']) {
+        assert.throws(() => host.reloadPlugin(bad), { message: 'Plugin nicht gefunden.' }, bad);
+    }
+    assert.equal(host.list().filter(entry => entry.id === 'shipped').length, 2);
+    assert.equal(view(host, 'shipped').official, true);
+});
+
+test('forgetPlugin keeps a plugin with state as orphan and drops one without state', async () => {
+    const { officialDir, customDir } = roots();
+    writeMarked(customDir, 'kept');
+    writeMarked(customDir, 'dropped');
+    await state.writeState('kept', { enabled: false, collections: ['items'] });
+    const host = createPluginHost({ officialDir, customDir });
+    await host.start();
+
+    host.forgetPlugin('kept');
+    host.forgetPlugin('dropped');
+
+    assert.equal(view(host, 'kept').status, 'orphaned');
+    assert.deepEqual(view(host, 'kept').collections, ['items']);
+    assert.equal(view(host, 'dropped'), undefined);
+    assert.deepEqual(host.list().map(entry => entry.id), ['kept']);
+    assert.equal(host.entryOf('kept'), null);
+});
+
+test('mock mode switches the plugin under development on and confirms it', async () => {
+    const { officialDir, customDir } = roots();
+    writeMarked(customDir, 'demo', { permissions: ['events:read'] });
+    writeMarked(customDir, 'other');
+    const host = createPluginHost({ officialDir, customDir, mockMode: true, devPluginId: 'demo' });
+    await host.start();
+
+    assert.equal(view(host, 'demo').status, 'on');
+    assert.equal(fs.existsSync(marker(customDir, 'demo')), true);
+    const stored = (await getDoc(doc(db, 'pluginState', 'demo'))).data();
+    assert.equal(stored.enabled, true);
+    assert.equal(stored.confirmedVersion, '1.0.0');
+    assert.deepEqual(stored.confirmedPermissions, ['events:read']);
+    assert.equal(view(host, 'other').status, 'off');
+});
+
+test('the plugin under development is not switched on outside mock mode', async () => {
+    const { officialDir, customDir } = roots();
+    writeMarked(customDir, 'demo');
+    const host = createPluginHost({ officialDir, customDir, mockMode: false, devPluginId: 'demo' });
+    await host.start();
+
+    assert.equal(view(host, 'demo').status, 'off');
+    assert.equal(fs.existsSync(marker(customDir, 'demo')), false);
+    assert.equal((await getDoc(doc(db, 'pluginState', 'demo'))).exists(), false);
+});
+
+test('the view carries the permission check with labels; official plugins have none', async () => {
+    const { officialDir, customDir } = roots();
+    const dm = "module.exports = { register(ctx) { ctx.discord.sendDM('1', 'Hallo'); } };";
+    writePlugin(officialDir, 'shipped', { server: dm });
+    writePlugin(customDir, 'dm-sender', { manifest: { permissions: ['theme'] }, server: dm });
+    const host = createPluginHost({ officialDir, customDir });
+    await host.start();
+
+    assert.equal(view(host, 'shipped').permissionCheck, null);
+    assert.deepEqual(view(host, 'dm-sender').permissionCheck, {
+        missing: [{ key: 'discord:dm', label: 'Direktnachrichten über den Bot senden' }],
+        unused: [{ key: 'theme', label: 'Aussehen der ganzen Seite ändern' }],
+        warnings: [],
+        tooBig: false
+    });
+});
