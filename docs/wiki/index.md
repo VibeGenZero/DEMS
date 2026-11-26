@@ -69,7 +69,7 @@ sources: [scripts/wiki-graph.js, docs/wiki/graph.json, CLAUDE.md]
 | `routes/user.js` | routes-user |
 | `plugin-sdk/*.js` | plugin-sdk, write-plugin |
 | `scripts/plugin.js` (plugin CLI: new, check, build, install) | write-plugin |
-| `scripts/studio/*` (plugin studio: server, proxy, files, child, page), `dev/studioEvents.js`, `plugin-sdk/types/` | plugin-studio, write-plugin, dev-mock-mode |
+| `scripts/studio/*` (plugin studio: server, proxy, files, child, page), `dev/studioEvents.js`, `dev/studioHost.js`, `plugin-sdk/studio.js`, `plugin-sdk/types/` | plugin-studio, write-plugin, dev-mock-mode |
 | `plugins/*` (official plugins, e.g. `plugins/event-submissions/`, `plugins/custom-design/`) | plugin-sdk, write-plugin |
 | `routes/plugins.js`, `routes/pluginStatic.js`, `routes/pluginTheme.js` | plugin-sdk, server, api-index, request-lifecycle, security |
 | `routes/adminPlugins.js`, `routes/pluginUploadStore.js` | plugin-sdk, routes-admin, security |
