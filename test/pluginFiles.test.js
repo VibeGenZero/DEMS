@@ -140,3 +140,16 @@ test('the .js test ignores case: A.JS is read and scanned', () => {
         fs.rmSync(dir, { recursive: true, force: true });
     }
 });
+
+test('packageEntryError also refuses CONIN$, CONOUT$ and COM/LPT with superscript digits', () => {
+    const names = [
+        'conin$.js', 'CONIN$.json', 'lib/ConOut$.js', 'conout$', 'conin$/a.js',
+        'com¹.js', 'COM².css', 'lib/com³.txt', 'lpt¹.js', 'LPT².json', 'lpt³/a.js', 'Lpt³'
+    ];
+    for (const name of names) {
+        assert.equal(files.packageEntryError(name), `Unerlaubter Pfad: ${name}`, name);
+    }
+    for (const name of ['conin.js', 'conout.js', 'coninx$.js', 'com⁴.js', 'lpt¹x.js', 'lib/conin$x.js']) {
+        assert.notEqual(files.packageEntryError(name), `Unerlaubter Pfad: ${name}`, name);
+    }
+});

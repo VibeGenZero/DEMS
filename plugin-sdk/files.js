@@ -33,8 +33,11 @@ const IGNORED_ENTRY = /(^|\/)(__MACOSX\/|\.DS_Store$)/;
 
 const TEXT_EXTENSIONS = new Set(['.js', '.json', '.css', '.md', '.txt']);
 
-/** Windows device names, with or without an extension; Windows cannot create such a file. */
-const DEVICE_NAME = /^(con|prn|aux|nul|com\d|lpt\d)(\.|$)/i;
+/**
+ * Windows device names, with or without an extension; Windows cannot create such a file.
+ * COM and LPT also take the superscript digits \u00b9 \u00b2 \u00b3, which Windows treats as devices too.
+ */
+const DEVICE_NAME = /^(con|prn|aux|nul|conin\$|conout\$|com[0-9\u00b9\u00b2\u00b3]|lpt[0-9\u00b9\u00b2\u00b3])(\.|$)/i;
 
 /** @returns {boolean} -> `name` ends in `.js`, in any case (`A.JS` runs like `a.js`). */
 function isJsFile(name) {
