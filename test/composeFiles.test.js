@@ -77,3 +77,12 @@ test('the image keeps the plugin CLI, so operators can install a .dems on the se
     for (const spec of requires) assert.ok(!spec.startsWith('.') || spec.startsWith('../plugin-sdk/'), spec);
     assert.match(read('docs/wiki/ops/docker.md'), /docker compose exec dems npm run plugin -- install \/app\/data\/[^ ]+\.dems/);
 });
+
+test('the plugin studio stays out of the image: scripts/ is excluded and only plugin.js is re-included', () => {
+    const lines = read('.dockerignore').split(/\r?\n/).map((l) => l.trim());
+    assert.ok(lines.includes('scripts/'));
+    assert.deepEqual(lines.filter((l) => l.startsWith('!scripts')), ['!scripts/plugin.js']);
+    // the CLI loads the studio lazily, so the image never needs it
+    assert.match(read('scripts/plugin.js'), /require\('\.\/studio'\)/);
+    assert.doesNotMatch(read('scripts/plugin.js'), /^const .*require\('\.\/studio/m);
+});

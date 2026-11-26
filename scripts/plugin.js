@@ -25,6 +25,7 @@ Befehle:
   install <Datei.dems> [--force] [--plugins-dir <Ordner>]
                               Paket in den Plugin-Ordner installieren
   dev <Ordner>                Plugin im Mock-Modus starten, bei Änderungen neu starten
+  studio [--port 3100]        Plugin-Studio im Browser öffnen
   help                        Diese Hilfe
 
 Die Erkennung der Berechtigungen ist eine Hilfe, keine Sicherheitsprüfung.
@@ -346,6 +347,20 @@ function cmdDev(args, io) {
     });
 }
 
+/** Open the plugin studio in the browser; runs until Ctrl+C. */
+async function cmdStudio(args, io) {
+    const { flags } = parseArgs(args, ['--port']);
+    let port = 3100;
+    if (flags.port !== undefined) {
+        port = Number(flags.port);
+        if (!Number.isInteger(port) || port < 0 || port > 65534) throw new PackageError('Ungültiger Port: ' + flags.port);
+    }
+    const { startStudio } = require('./studio'); // lazy: scripts/studio/ is not part of the Docker image
+    const studio = await startStudio({ port, repoRoot: io.repoRoot || REPO, env: io.env, out: io.stdout });
+    await studio.done;
+    return 0;
+}
+
 /** Command table: add new commands here (each `(args, io) => code | Promise<code>`). */
 const COMMANDS = {
     new: cmdNew,
@@ -353,6 +368,7 @@ const COMMANDS = {
     build: cmdBuild,
     install: cmdInstall,
     dev: cmdDev,
+    studio: cmdStudio,
     help: (args, io) => {
         io.stdout.write(USAGE);
         return 0;

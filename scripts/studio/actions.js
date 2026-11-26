@@ -40,7 +40,7 @@ function vscodeUrl(dir) {
  * @param {Function} [options.createChild] -> `child.createChild` (tests inject a fake).
  * @param {Function} [options.createTriggers] -> `triggers.createTriggers`.
  * @param {number} [options.debounceMs] -> Debounce of the folder watcher.
- * @returns {{ routes: object, log: object, stop(): Promise<void> }}
+ * @returns {{ routes: object, log: object, childPort(): number|null, stop(): Promise<void> }}
  */
 function createActions({
   repoRoot,
@@ -262,6 +262,8 @@ function createActions({
   return {
     routes,
     log,
+    /** Port of the running DEMS child (null while none is running or it is starting). */
+    childPort: () => (child ? child.port() : null),
     stop: () => exclusive(async () => {
       await closeCurrent();
     }),

@@ -402,3 +402,14 @@ test('the CLI resolves folders against the directory npm run was started in', ()
     assert.equal(invocationCwd({}, '/app'), '/app');
     assert.equal(invocationCwd({ INIT_CWD: '' }, '/app'), '/app');
 });
+
+test('studio refuses NODE_ENV=production', async () => {
+    const res = await run(['studio'], tmp(), { env: { NODE_ENV: 'production' } });
+    assert.equal(res.code, 1);
+    assert.match(res.err, /plugin studio läuft nicht mit NODE_ENV=production\./);
+});
+
+test('help lists studio', async () => {
+    const res = await run(['help'], tmp());
+    assert.match(res.out, /studio \[--port 3100\]\s+Plugin-Studio im Browser öffnen/);
+});
