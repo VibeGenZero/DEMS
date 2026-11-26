@@ -446,37 +446,38 @@ test('isVscodeUrl accepts only vscode://file/ links', async () => {
   }
 });
 
-test('the studio started through the CLI can scaffold a plugin (plugin.js exports are set before main runs)', async () => {
-  const { spawn } = require('node:child_process');
+test('scripts/plugin.js assigns module.exports before the main guard runs', () => {
+  const source = require('node:fs').readFileSync(path.join(__dirname, '..', 'scripts', 'plugin.js'), 'utf8');
+  const exported = source.lastIndexOf('module.exports = { main');
+  const guard = source.indexOf('if (require.main === module)');
+  assert.ok(exported > 0 && guard > 0);
+  assert.ok(exported < guard, 'the studio re-requires plugin.js while main() is still starting');
+});
+
+test('plugin.js exports are complete at the moment the CLI loads the studio', () => {
+  const { spawnSync } = require('node:child_process');
   const fs = require('node:fs');
   const os = require('node:os');
   const root = path.join(__dirname, '..');
-  const work = fs.mkdtempSync(path.join(os.tmpdir(), 'dems-studio-cli-'));
-  const env = { ...process.env, APPDATA: work, XDG_CONFIG_HOME: work };
-  delete env.NODE_ENV;
-  const proc = spawn(process.execPath, [path.join(root, 'scripts', 'plugin.js'), 'studio', '--port', '0'], { cwd: root, env });
-  let out = '';
-  proc.stdout.on('data', (d) => { out += d; });
-  proc.stderr.on('data', (d) => { out += d; });
+  const work = fs.mkdtempSync(path.join(os.tmpdir(), 'dems-studio-hook-'));
+  // Preload: when plugin.js (as entry) requires './studio', report its own exports and stop - no studio, no DEMS child.
+  const hook = path.join(work, 'hook.js');
+  fs.writeFileSync(hook, `
+    const Module = require('module');
+    const load = Module._load;
+    Module._load = function (request, parent) {
+      if (request === './studio' && parent && /plugin\.js$/.test(parent.filename)) {
+        console.log(['scaffoldPlugin', 'reportLines', 'prepareDev'].map((n) => typeof parent.exports[n]).join(' '));
+        process.exit(0);
+      }
+      return load.apply(this, arguments);
+    };`);
   try {
-    const url = await new Promise((resolve, reject) => {
-      const timer = setInterval(() => {
-        const m = /(http:\/\/127\.0\.0\.1:\d+)\/#token=([0-9a-f]+)/.exec(out);
-        if (m) { clearInterval(timer); resolve(m); }
-      }, 50);
-      setTimeout(() => { clearInterval(timer); reject(new Error(`studio did not start: ${out}`)); }, 15000);
-    });
-    const [, origin, token] = url;
-    const response = await fetch(`${origin}/api/new`, {
-      method: 'POST',
-      headers: { 'X-Studio-Token': token, Origin: origin, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: 'cli-plugin', parentDir: work }),
-    });
-    assert.equal(response.status, 200, out);
-    assert.ok(fs.existsSync(path.join(work, 'cli-plugin', 'plugin.json')));
+    const env = { ...process.env };
+    delete env.NODE_ENV;
+    const result = spawnSync(process.execPath, ['-r', hook, path.join(root, 'scripts', 'plugin.js'), 'studio', '--port', '0'], { cwd: root, env, encoding: 'utf8', timeout: 20000 });
+    assert.equal(result.stdout.trim(), 'function function function', result.stderr);
   } finally {
-    proc.kill();
-    await new Promise((resolve) => { proc.once('exit', resolve); setTimeout(resolve, 3000); });
     fs.rmSync(work, { recursive: true, force: true });
   }
 });
