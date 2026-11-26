@@ -2,7 +2,7 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');
 const path = require('path');
-const { frontendSources, REPO_ROOT } = require('./helpers');
+const { frontendSources, studioPageSources, REPO_ROOT } = require('./helpers');
 const { readCss, parseRules, readTokens, RAW_VALUE_CHECKS } = require('./cssSource');
 
 const CSS_DIR = path.join(REPO_ROOT, 'public', 'css');
@@ -181,7 +181,9 @@ test('no markup carries an inline style', () => {
         { file: 'public/index.html', source: INDEX_HTML },
         ...frontendSources().map(entry => ({ file: `public/js/${entry.file}`, source: entry.source })),
         // The persona page of the dev mock mode is served under the same policy
-        { file: 'dev/devAuth.js', source: fs.readFileSync(path.join(REPO_ROOT, 'dev', 'devAuth.js'), 'utf8') }
+        { file: 'dev/devAuth.js', source: fs.readFileSync(path.join(REPO_ROOT, 'dev', 'devAuth.js'), 'utf8') },
+        // The plugin studio page: its CSP allows style attributes only for Monaco, never for our own markup
+        ...studioPageSources()
     ];
     const offenders = sources.flatMap(({ file, source }) => source.split('\n')
         .map((line, index) => ({ line, place: `${file}:${index + 1}` }))

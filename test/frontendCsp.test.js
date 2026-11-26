@@ -2,7 +2,7 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');
 const path = require('path');
-const { loadFrontendApp, frontendSources, REPO_ROOT } = require('./helpers');
+const { loadFrontendApp, frontendSources, studioPageSources, REPO_ROOT } = require('./helpers');
 const { findMissingImports } = require('./jsSource');
 
 const INDEX_HTML = fs.readFileSync(path.join(REPO_ROOT, 'public', 'index.html'), 'utf8');
@@ -24,6 +24,12 @@ test('every action named in the markup is registered and named literally', async
         assert.doesNotMatch(name, /\$\{/, `action name built at runtime: ${name}`);
         assert.ok(registered.has(name), `action "${name}" is not registered`);
     }
+});
+
+test('the plugin studio page has no inline event handler either', () => {
+    const sources = studioPageSources();
+    assert.ok(sources.some(({ file }) => file.endsWith('/index.html')) && sources.length > 5, 'studio page files found');
+    for (const { file, source } of sources) assert.doesNotMatch(source, INLINE_HANDLER, file);
 });
 
 test('no module puts functions on window', () => {

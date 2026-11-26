@@ -694,6 +694,23 @@ function createGsapRecorder(animations) {
     };
 }
 
+const STUDIO_PAGE_DIR = path.join(REPO_ROOT, 'scripts', 'studio', 'public');
+
+/**
+ * Source of every file of the plugin studio page (its own CSP forbids inline handlers and our inline styles too).
+ *
+ * @returns {Array<{ file: string, source: string }>} -> One entry per .js/.html file, path from the repo root with /, sorted.
+ */
+function studioPageSources() {
+    return fs.readdirSync(STUDIO_PAGE_DIR, { recursive: true })
+        .filter(file => /\.(js|html)$/.test(file))
+        .sort()
+        .map(file => ({
+            file: `scripts/studio/public/${file.split(path.sep).join('/')}`,
+            source: fs.readFileSync(path.join(STUDIO_PAGE_DIR, file), 'utf8')
+        }));
+}
+
 module.exports = {
     REPO_ROOT,
     createTempDir,
@@ -710,5 +727,6 @@ module.exports = {
     streamAnswer,
     loadFrontendModules,
     frontendSources,
+    studioPageSources,
     isHidden
 };

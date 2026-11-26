@@ -63,8 +63,8 @@ function loadScript(src) {
 }
 
 /**
- * Monaco builds <style> elements at runtime and (0.58) has no option for a CSP nonce, while the page CSP only
- * accepts nonce'd style elements. So every <style> created through document.createElement gets the page nonce.
+ * Monaco builds style elements at runtime and (0.58) has no option for a CSP nonce, while the page CSP only
+ * accepts nonce'd style elements. So every style element created through document.createElement gets the page nonce.
  * The patch is global but only touches elements named 'style' and only adds the nonce attribute.
  */
 function allowMonacoStyles() {
