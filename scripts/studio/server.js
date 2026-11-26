@@ -7,6 +7,7 @@ const crypto = require('node:crypto');
 const security = require('./security');
 
 const MAX_BODY = 3 * 1024 * 1024;
+const HARD_CAP = 16 * 1024 * 1024; // beyond this the connection is dropped instead of drained
 const TYPES = {
   '.html': 'text/html; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8',
@@ -47,7 +48,7 @@ function cleanSegments(pathname) {
   for (let i = 0; i < segments.length; i += 1) {
     const s = segments[i];
     if (s === '' && i === segments.length - 1) continue;
-    if (s === '' || s.startsWith('.')) return null;
+    if (s === '' || s.startsWith('.') || s.includes(':')) return null; // ':' = NTFS streams (index.html::$DATA)
   }
   return segments;
 }
@@ -67,6 +68,7 @@ function sendFile(req, res, root, segments, extraHeaders = {}) {
     const relative = path.relative(rootReal, real);
     if (!relative || path.isAbsolute(relative) || hasDotSegment(relative)) return false;
     if (!fs.statSync(real).isFile()) return false;
+    if (['.html', '.htm'].includes(path.extname(real).toLowerCase())) return false; // the resolved file decides (short names, streams)
   } catch { return false; }
   const type = TYPES[path.extname(real).toLowerCase()] || 'application/octet-stream';
   res.writeHead(200, { 'Content-Type': type, 'X-Content-Type-Options': 'nosniff', 'Cache-Control': 'no-cache', ...extraHeaders });
@@ -75,21 +77,27 @@ function sendFile(req, res, root, segments, extraHeaders = {}) {
   return true;
 }
 
-const tooLarge = () => Object.assign(new Error('Die Anfrage ist zu groß.'), { status: 413, close: true });
+const tooLarge = (destroy) => Object.assign(new Error('Die Anfrage ist zu groß.'), { status: 413, close: true, destroy });
 
 function readBody(req) {
   return new Promise((resolve, reject) => {
-    if (Number(req.headers['content-length']) > MAX_BODY) return reject(tooLarge());
+    if (Number(req.headers['content-length']) > HARD_CAP) return reject(tooLarge(true));
     let size = 0;
     let failed = false;
     const chunks = [];
     req.on('data', (c) => {
       if (failed) return;
       size += c.length;
-      if (size > MAX_BODY) { failed = true; chunks.length = 0; reject(tooLarge()); return; }
-      chunks.push(c);
+      // Over the limit: keep reading and discarding (an early close would reset the client's connection)
+      // until the hard cap, then answer 413.
+      if (size > HARD_CAP) { failed = true; chunks.length = 0; reject(tooLarge(true)); return; }
+      if (size <= MAX_BODY) chunks.push(c); else chunks.length = 0;
     });
-    req.on('end', () => { if (!failed) resolve(Buffer.concat(chunks).toString('utf8')); });
+    req.on('end', () => {
+      if (failed) return;
+      if (size > MAX_BODY) { failed = true; return reject(tooLarge(false)); }
+      resolve(Buffer.concat(chunks).toString('utf8'));
+    });
     req.on('error', reject);
   });
 }
@@ -140,7 +148,7 @@ function createStudioServer({ port = 3100, previewPort, token, routes = {}, publ
   function handleStatic(req, res, pathname) {
     const segments = cleanSegments(pathname);
     // The page is served only by handlePage (with CSP and nonce), never as a plain file.
-    if (!segments || /.html?$/i.test(segments[segments.length - 1])) return notFound(res);
+    if (!segments || /\.html?$/i.test(segments[segments.length - 1])) return notFound(res);
     for (const [prefix, dir] of Object.entries(mounts)) {
       if (prefix.endsWith('/')) {
         if (pathname.startsWith(prefix) && sendFile(req, res, dir, segments.slice(prefix.split('/').length - 2))) return;
@@ -163,7 +171,7 @@ function createStudioServer({ port = 3100, previewPort, token, routes = {}, publ
     } catch (err) {
       if (!res.headersSent) {
         if (err && Number.isInteger(err.status)) {
-          if (err.close) res.once('finish', () => { req.resume(); setTimeout(() => req.destroy(), 1000).unref(); }); // discard the rest, then drop the connection
+          if (err.destroy) res.once('finish', () => req.destroy()); // far beyond the cap: a reset is acceptable
           return sendJson(res, err.status, { error: err.message }, err.close ? { Connection: 'close' } : {});
         }
         console.error(err && err.stack ? err.stack : err);

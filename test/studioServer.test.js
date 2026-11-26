@@ -263,3 +263,48 @@ test('405 answers carry an Allow header', async () => {
   assert.equal(res.status, 405);
   assert.equal(res.headers.allow, 'GET, HEAD');
 });
+
+test('NTFS stream suffixes and colons never reach a file', async () => {
+  for (const p of ['/vendor/lib.js:x', '/index.html:x', '/vendor/a:b/c']) {
+    assert.equal((await request('GET', p)).status, 404, p);
+  }
+  if (process.platform === 'win32') {
+    for (const p of ['/index.html::$DATA', '/Index.html::$DATA', '/%69ndex.html::$DATA', '/INDEX~1.HTM::$DATA', '/INDEX~1.HTM']) {
+      const res = await request('GET', p);
+      assert.equal(res.status, 404, p);
+      assert.ok(!res.text.includes('__NONCE__'), p);
+    }
+  }
+});
+
+test('a resolved .html file is never served as a static file', async () => {
+  const dir = path.join(tmp, 'htmlmount');
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, 'page.html'), '<p>x</p>');
+  const s = createStudioServer({ port: 0, previewPort: 1, token: TOKEN, vendorDirs: { '/m/': dir } });
+  await s.listen();
+  try {
+    const res = await new Promise((resolve) => http.get({ host: '127.0.0.1', port: s.address().port, path: '/m/page.html' }, (r) => { r.resume(); r.on('end', () => resolve(r.statusCode)); }));
+    assert.equal(res, 404);
+  } finally { await s.close(); }
+});
+
+test('fetch with an oversized body gets the German 413, not a network error', async () => {
+  for (const mb of [4, 10]) {
+    const res = await fetch(`${studioOrigin}/api/ping`, { method: 'POST', headers: { 'X-Studio-Token': TOKEN, Origin: studioOrigin }, body: 'x'.repeat(mb * 1024 * 1024) });
+    assert.equal(res.status, 413, `${mb} MB`);
+    assert.deepEqual(await res.json(), { error: 'Die Anfrage ist zu groß.' });
+  }
+});
+
+test('a body far beyond the hard cap is answered 413 without hanging', async () => {
+  const res = await new Promise((resolve) => {
+    const req = http.request({ host: '127.0.0.1', port, method: 'POST', path: '/api/ping',
+      headers: { Host: `127.0.0.1:${port}`, 'X-Studio-Token': TOKEN, Origin: studioOrigin, 'Content-Length': String(50 * 1024 * 1024) } },
+    (r) => { r.resume(); resolve(r.statusCode); });
+    req.on('error', () => resolve('closed'));
+    req.flushHeaders();
+    setTimeout(() => resolve('hang'), 2000).unref();
+  });
+  assert.ok(res === 413 || res === 'closed', String(res));
+});
