@@ -42,12 +42,14 @@ function checkToken(req, token) {
 }
 
 /** CSP of the studio page: own files only, the preview iframe, workers (Monaco), nonce for styles. */
-function pageCsp(nonce, previewPort) {
+function pageCsp(nonce, previewPort, styleFallback = 'nonce') {
+  // Browsers ignore 'unsafe-inline' when a nonce is present, so the fallback must not carry the nonce.
+  const style = styleFallback === 'unsafe-inline' ? "style-src 'self' 'unsafe-inline'" : `style-src 'self' 'nonce-${nonce}'`;
   return [
     "default-src 'self'",
     `frame-src http://127.0.0.1:${resolvePort(previewPort)}`,
     "worker-src 'self' blob:",
-    `style-src 'self' 'nonce-${nonce}'`,
+    style,
     "img-src 'self' data:",
     "font-src 'self'",
     "object-src 'none'",

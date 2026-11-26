@@ -7,10 +7,11 @@ const path = require('node:path');
 const http = require('node:http');
 const { createStudioServer } = require('../scripts/studio/server');
 const security = require('../scripts/studio/security');
+const staticGuard = require('../scripts/studio/server')._test;
 
 const TOKEN = 'a'.repeat(64);
 const PREVIEW = 4555;
-let server, port, tmp, studioOrigin;
+let server, port, tmp, studioOrigin, symlinkOk = false;
 
 function request(method, urlPath, { headers = {}, body, host } = {}) {
   return new Promise((resolve, reject) => {
@@ -36,12 +37,17 @@ before(async () => {
   fs.writeFileSync(path.join(vendor, 'lib.js'), 'export const a = 1;');
   fs.writeFileSync(path.join(vendor, '.hidden'), 'secret');
   fs.writeFileSync(path.join(tmp, 'tokens.css'), ':root{}');
-  fs.writeFileSync(path.join(tmp, 'package.json'), '{}');
+  fs.writeFileSync(path.join(tmp, 'package.json'), '{"secret":"PARENT"}');
+  fs.writeFileSync(path.join(vendor, '.hiddenfile'), 'hidden');
+  const types = path.join(tmp, 'types');
+  fs.mkdirSync(types);
+  fs.writeFileSync(path.join(types, 'host.d.ts'), 'declare const x: number;');
+  try { fs.symlinkSync(tmp, path.join(vendor, 'out'), 'junction'); symlinkOk = true; } catch { symlinkOk = false; }
   server = createStudioServer({
     port: 0,
     previewPort: PREVIEW,
     token: TOKEN,
-    vendorDirs: { '/vendor/': vendor, '/monaco/': vendor, '/css/tokens.css': path.join(tmp, 'tokens.css') },
+    vendorDirs: { '/types/': path.join(tmp, 'types'), '/vendor/': vendor, '/monaco/': vendor, '/css/tokens.css': path.join(tmp, 'tokens.css') },
     routes: {
       'GET /api/ping': async () => ({ status: 200, json: { ok: true } }),
       'POST /api/ping': async (req, body) => ({ status: 200, json: { echo: body } }),
@@ -130,9 +136,47 @@ test('static files: served, but no traversal, no dotfiles', async () => {
   }
 });
 
-test('/types/ is served read-only from plugin-sdk/types or 404', async () => {
-  const res = await request('GET', '/types/nope.d.ts');
+test('/types/ serves d.ts files read-only', async () => {
+  const res = await request('GET', '/types/host.d.ts');
+  assert.equal(res.status, 200);
+  assert.match(res.headers['content-type'], /^(text\/plain|application\/typescript)/);
+  assert.equal(res.headers['x-content-type-options'], 'nosniff');
+  assert.equal(res.text, 'declare const x: number;');
+  assert.equal((await request('GET', '/types/nope.d.ts')).status, 404);
+});
+
+test('the page is only reachable at / (never as a plain static file)', async () => {
+  for (const p of ['/%69ndex.html', '/Index.html', '/INDEX.HTML', '/index.htm', '/vendor/x.html']) {
+    const res = await request('GET', p);
+    assert.equal(res.status, 404, p);
+    assert.ok(!res.text.includes('__NONCE__'));
+  }
+  assert.equal((await request('GET', '/index.html')).status, 200);
+});
+
+test('traversal never returns the parent file', async () => {
+  for (const p of ['/vendor/../package.json', '/vendor/%2e%2e/package.json', '/vendor/..%2fpackage.json']) {
+    const res = await request('GET', p);
+    assert.ok(!res.text.includes('PARENT'), p);
+  }
+});
+
+test('a link out of the mounted folder is not followed', { skip: !symlinkOk && 'no symlink permission' }, async () => {
+  const res = await request('GET', '/vendor/out/package.json');
   assert.equal(res.status, 404);
+  assert.ok(!res.text.includes('PARENT'));
+});
+
+test('dot segments are refused after real-path resolution (8.3 names)', async () => {
+  assert.equal(staticGuard.hasDotSegment('.hiddenfile'), true);
+  assert.equal(staticGuard.hasDotSegment(path.join('a', '.b')), true);
+  assert.equal(staticGuard.hasDotSegment(path.join('..', 'a')), true);
+  assert.equal(staticGuard.hasDotSegment(path.join('a', 'b.js')), false);
+  if (process.platform === 'win32') {
+    let short = null;
+    try { short = fs.realpathSync.native(path.join(tmp, 'vendor', 'HIDDEN~1')); } catch { /* no 8.3 name */ }
+    if (short) assert.equal((await request('GET', '/monaco/HIDDEN~1')).status, 404);
+  }
 });
 
 test('route errors: status errors pass through, others are hidden', async () => {
@@ -177,4 +221,45 @@ test('security helpers', () => {
   assert.equal(security.checkToken(req({ 'x-studio-token': 'abc' }), 'abc'), true);
   assert.equal(security.checkToken(req({}), 'abc'), false);
   assert.match(security.pageCsp('N', 99), /style-src 'self' 'nonce-N'/);
+});
+
+test('JSON bodies must be plain objects', async () => {
+  for (const b of ['null', '5', '[1,2]', '"x"']) {
+    const res = await request('POST', '/api/ping', { headers: authed({ Origin: studioOrigin }), body: b });
+    assert.equal(res.status, 400, b);
+    assert.deepEqual(JSON.parse(res.text), { error: 'Ungültige Anfrage.' });
+  }
+});
+
+test('a declared oversized Content-Length is answered at once', async () => {
+  const res = await new Promise((resolve, reject) => {
+    const req = http.request({ host: '127.0.0.1', port, method: 'POST', path: '/api/ping',
+      headers: { Host: `127.0.0.1:${port}`, 'X-Studio-Token': TOKEN, Origin: studioOrigin, 'Content-Length': String(50 * 1024 * 1024) } },
+    (r) => { const c = []; r.on('data', (d) => c.push(d)); r.on('end', () => resolve({ status: r.statusCode, headers: r.headers, text: Buffer.concat(c).toString() })); });
+    req.on('error', reject);
+    req.flushHeaders(); // no body is ever sent
+    setTimeout(() => reject(new Error('no answer without a body')), 3000).unref();
+  });
+  assert.equal(res.status, 413);
+  assert.equal(res.headers.connection, 'close');
+});
+
+test('style-src fallback: nonce by default, unsafe-inline without the nonce', () => {
+  const dflt = security.pageCsp('N', 99);
+  assert.match(dflt, /style-src 'self' 'nonce-N'/);
+  assert.ok(!dflt.includes('unsafe-inline'));
+  const fb = security.pageCsp('N', 99, 'unsafe-inline');
+  assert.match(fb, /style-src 'self' 'unsafe-inline'/);
+  assert.ok(!/style-src[^;]*nonce/.test(fb));
+});
+
+test('405 carries Allow, url is null before listen', () => {
+  const s = createStudioServer({ port: 0, previewPort: 1, token: TOKEN });
+  assert.equal(s.url, null);
+});
+
+test('405 answers carry an Allow header', async () => {
+  const res = await request('DELETE', '/index.html');
+  assert.equal(res.status, 405);
+  assert.equal(res.headers.allow, 'GET, HEAD');
 });
