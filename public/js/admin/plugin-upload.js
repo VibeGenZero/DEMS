@@ -16,7 +16,8 @@ const NOT_FOUND = 'angegeben, aber nicht im Code:';
 const SWITCH_OFF = 'Schalte das Plugin zuerst aus.';
 
 // uploadId: kept check of the open dialog; replaces/ok: from its report; remove: plugin of the open remove dialog
-const upload = { uploadId: null, ok: false, replaces: null, remove: null };
+// checkId counts the checks so an answer for an older file (or a closed dialog) is ignored; busy: a request runs
+const upload = { uploadId: null, ok: false, replaces: null, remove: null, checkId: 0, busy: false };
 
 const labels = (entries) => (entries || []).map(entry => entry.label || entry.key).join(', ');
 
@@ -52,7 +53,8 @@ export function renderUploadReport(report, replaces) {
     const manifest = report.manifest;
     if (manifest) {
         const kb = Math.max(1, Math.round((report.unpackedBytes || 0) / 1024));
-        parts.push(`<p class="mb-1"><strong>${escapeHtml(`${manifest.name} ${manifest.version} · SDK ${manifest.sdk} · von ${manifest.author}`)}</strong></p>`);
+        const author = manifest.author ? ` · von ${manifest.author}` : '';
+        parts.push(`<p class="mb-1"><strong>${escapeHtml(`${manifest.name} ${manifest.version} · SDK ${manifest.sdk}${author}`)}</strong></p>`);
         parts.push(`<p class="setup-hint">${escapeHtml(`${report.fileCount} Dateien · ${kb} KB`)}</p>`);
     }
     for (const error of report.errors || []) parts.push(line('plugin-error', 'bi-x-circle', error));
@@ -95,6 +97,8 @@ function refreshInstallButton() {
 }
 
 function resetUploadDialog() {
+    upload.checkId += 1;
+    upload.busy = false;
     upload.uploadId = null;
     upload.ok = false;
     upload.replaces = null;
@@ -106,11 +110,14 @@ function resetUploadDialog() {
 
 function openPluginUpload() {
     resetUploadDialog();
+    byId('pluginUploadModal').addEventListener('hidden.bs.modal', resetUploadDialog, { once: true });
     modalOf('pluginUploadModal').show();
 }
 
 async function pluginUploadFile(element) {
     const file = element && element.files && element.files[0];
+    const checkId = upload.checkId + 1;
+    upload.checkId = checkId;
     upload.uploadId = null;
     upload.ok = false;
     upload.replaces = null;
@@ -120,6 +127,7 @@ async function pluginUploadFile(element) {
     try {
         const bytes = await file.arrayBuffer();
         const { ok, data } = await request('/api/admin/plugins/upload/check', 'POST', bytes, 'application/octet-stream');
+        if (checkId !== upload.checkId) return;
         if (!ok) return showToast(data.error || 'Das Plugin-Paket konnte nicht geprüft werden.', 'danger');
         upload.uploadId = data.uploadId || null;
         upload.ok = Boolean(data.report && data.report.ok);
@@ -127,25 +135,41 @@ async function pluginUploadFile(element) {
         byId('plugin-upload-report').innerHTML = renderUploadReport(data.report, upload.replaces);
         refreshInstallButton();
     } catch {
+        if (checkId !== upload.checkId) return;
         showToast('Das Plugin-Paket konnte nicht geprüft werden.', 'danger');
     }
 }
 
 async function installPluginUpload() {
     const password = String(byId('plugin-upload-password').value || '');
-    if (!upload.uploadId || !upload.ok || password === '') return;
+    if (upload.busy || !upload.uploadId || !upload.ok || password === '') return;
+    upload.busy = true;
+    byId('plugin-upload-confirm').disabled = true;
     const body = JSON.stringify({ uploadId: upload.uploadId, password, replace: Boolean(upload.replaces) });
     try {
         const { ok, data } = await request('/api/admin/plugins/upload/install', 'POST', body, 'application/json');
-        if (!ok) return showToast(data.error || 'Das Plugin konnte nicht installiert werden.', 'danger');
+        if (!ok) {
+            upload.busy = false;
+            refreshInstallButton();
+            return showToast(data.error || 'Das Plugin konnte nicht installiert werden.', 'danger');
+        }
         modalOf('pluginUploadModal').hide();
         resetUploadDialog();
         await loadPluginsPanel();
         const needsRestart = data.plugin && data.plugin.status === 'restart';
         showToast(`Plugin ${quoted(data.plugin && data.plugin.name)} installiert.${needsRestart ? ' Neustart nötig.' : ''}`, 'success');
     } catch {
+        upload.busy = false;
+        refreshInstallButton();
         showToast('Das Plugin konnte nicht installiert werden.', 'danger');
     }
+}
+
+function resetRemoveDialog() {
+    upload.remove = null;
+    upload.busy = false;
+    byId('plugin-remove-password').value = '';
+    byId('plugin-remove-confirm').disabled = true;
 }
 
 function openPluginRemove(element) {
@@ -155,6 +179,7 @@ function openPluginRemove(element) {
     byId('plugin-remove-name').textContent = quoted(upload.remove.name);
     byId('plugin-remove-password').value = '';
     byId('plugin-remove-confirm').disabled = true;
+    byId('pluginRemoveModal').addEventListener('hidden.bs.modal', resetRemoveDialog, { once: true });
     modalOf('pluginRemoveModal').show();
 }
 
@@ -165,16 +190,23 @@ function pluginRemoveInput() {
 async function confirmPluginRemove() {
     const target = upload.remove;
     const password = String(byId('plugin-remove-password').value || '');
-    if (!target || password === '') return;
+    if (upload.busy || !target || password === '') return;
+    upload.busy = true;
+    byId('plugin-remove-confirm').disabled = true;
     try {
         const { ok, data } = await request(`/api/admin/plugins/${encodeURIComponent(target.id)}`, 'DELETE', JSON.stringify({ password }), 'application/json');
-        if (!ok) return showToast(data.error || 'Das Plugin konnte nicht entfernt werden.', 'danger');
+        if (!ok) {
+            upload.busy = false;
+            pluginRemoveInput();
+            return showToast(data.error || 'Das Plugin konnte nicht entfernt werden.', 'danger');
+        }
         modalOf('pluginRemoveModal').hide();
-        upload.remove = null;
-        byId('plugin-remove-password').value = '';
+        resetRemoveDialog();
         await loadPluginsPanel();
         showToast(`Plugin ${quoted(target.name)} entfernt.`, 'success');
     } catch {
+        upload.busy = false;
+        pluginRemoveInput();
         showToast('Das Plugin konnte nicht entfernt werden.', 'danger');
     }
 }

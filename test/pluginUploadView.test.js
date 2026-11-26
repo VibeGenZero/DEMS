@@ -164,3 +164,131 @@ test('install stays disabled while the plugin to replace is on', async () => {
     assert.equal(element('plugin-upload-confirm').disabled, true);
     assert.match(element('plugin-upload-report').innerHTML, /Schalte das Plugin zuerst aus\./);
 });
+
+// Fix round 1
+
+const deferred = () => {
+    let resolve;
+    const promise = new Promise(done => { resolve = done; });
+    return { promise, resolve };
+};
+const file = (bytes = new Uint8Array([1, 2, 3]).buffer) => ({ files: [{ arrayBuffer: async () => bytes }] });
+const OK_CHECK = { uploadId: 'u1', report: REPORT };
+
+test('Entfernen shows in safe mode (status safe, stored off) but not on an orphaned card', async () => {
+    const { app } = await load();
+    const safe = app.renderPluginCard({ ...CUSTOM, status: 'safe', enabled: false }, { safeMode: true, uploadEnabled: true });
+    assert.match(safe, /data-click="openPluginRemove"/);
+    const stored = app.renderPluginCard({ ...CUSTOM, status: 'safe', enabled: true }, { safeMode: true, uploadEnabled: true });
+    assert.doesNotMatch(stored, /openPluginRemove/);
+    const orphan = app.renderPluginCard({ ...CUSTOM, status: 'orphaned', enabled: false }, { uploadEnabled: true });
+    assert.doesNotMatch(orphan, /openPluginRemove/);
+});
+
+test('closing the upload dialog clears the password, the file, the report and the kept check', async () => {
+    const { app, element } = await load({ '/api/admin/plugins/upload/check': OK_CHECK });
+    await app.runAction('openPluginUpload', element('plugin-upload-open'));
+    await app.runAction('pluginUploadFile', file());
+    element('plugin-upload-password').value = 'geheim';
+    await app.runAction('pluginUploadInput', element('plugin-upload-password'));
+    assert.equal(element('plugin-upload-confirm').disabled, false);
+    element('pluginUploadModal').dispatch('hidden.bs.modal');
+    assert.equal(element('plugin-upload-password').value, '');
+    assert.equal(element('plugin-upload-report').innerHTML, '');
+    assert.equal(element('plugin-upload-confirm').disabled, true);
+});
+
+test('closing the remove dialog clears its password and the target', async () => {
+    const { app, element, requests } = await load();
+    await app.runAction('openPluginRemove', { dataset: { pluginId: 'hook-recorder', pluginName: 'Hook-Rekorder' } });
+    element('plugin-remove-password').value = 'geheim';
+    element('pluginRemoveModal').dispatch('hidden.bs.modal');
+    assert.equal(element('plugin-remove-password').value, '');
+    element('plugin-remove-password').value = 'x';
+    await app.runAction('confirmPluginRemove', element('plugin-remove-confirm'));
+    assert.equal(requests.filter(request => request.method === 'DELETE').length, 0);
+});
+
+test('a second install click while the first request runs sends nothing; failure re-enables the button', async () => {
+    const gate = deferred();
+    const { app, element, requests } = await load({
+        '/api/admin/plugins/upload/check': OK_CHECK,
+        '/api/admin/plugins/upload/install': async () => { await gate.promise; return httpAnswer(401, { error: 'Ungültiges Admin-Reset-Passwort.' }); }
+    });
+    await app.runAction('pluginUploadFile', file());
+    element('plugin-upload-password').value = 'geheim';
+    await app.runAction('pluginUploadInput', element('plugin-upload-password'));
+    const first = app.runAction('installPluginUpload', element('plugin-upload-confirm'));
+    assert.equal(element('plugin-upload-confirm').disabled, true);
+    await app.runAction('installPluginUpload', element('plugin-upload-confirm'));
+    gate.resolve();
+    await first;
+    assert.equal(requests.filter(request => request.url === '/api/admin/plugins/upload/install').length, 1);
+    assert.equal(element('plugin-upload-confirm').disabled, false);
+});
+
+test('a second remove click while the first request runs sends nothing', async () => {
+    const gate = deferred();
+    const { app, element, requests } = await load({ '/api/admin/plugins/hook-recorder': async () => { await gate.promise; return { removed: true }; } });
+    await app.runAction('openPluginRemove', { dataset: { pluginId: 'hook-recorder', pluginName: 'Hook-Rekorder' } });
+    element('plugin-remove-password').value = 'geheim';
+    const first = app.runAction('confirmPluginRemove', element('plugin-remove-confirm'));
+    await app.runAction('confirmPluginRemove', element('plugin-remove-confirm'));
+    gate.resolve();
+    await first;
+    assert.equal(requests.filter(request => request.method === 'DELETE').length, 1);
+});
+
+test('the answer for an older file is ignored', async () => {
+    const slow = deferred();
+    let calls = 0;
+    const { app, element } = await load({
+        '/api/admin/plugins/upload/check': async () => {
+            calls += 1;
+            if (calls === 1) { await slow.promise; return { uploadId: 'old', report: { ...REPORT, manifest: { ...REPORT.manifest, name: 'Alt' } } }; }
+            return { uploadId: 'new', report: { ...REPORT, manifest: { ...REPORT.manifest, name: 'Neu' } } };
+        }
+    });
+    const first = app.runAction('pluginUploadFile', file());
+    await app.runAction('pluginUploadFile', file());
+    slow.resolve();
+    await first;
+    assert.match(element('plugin-upload-report').innerHTML, /Neu/);
+    assert.doesNotMatch(element('plugin-upload-report').innerHTML, /Alt/);
+});
+
+test('the answer after the dialog was closed is ignored', async () => {
+    const slow = deferred();
+    const { app, element } = await load({ '/api/admin/plugins/upload/check': async () => { await slow.promise; return OK_CHECK; } });
+    await app.runAction('openPluginUpload', element('plugin-upload-open'));
+    const pending = app.runAction('pluginUploadFile', file());
+    element('pluginUploadModal').dispatch('hidden.bs.modal');
+    slow.resolve();
+    await pending;
+    assert.equal(element('plugin-upload-report').innerHTML, '');
+});
+
+test('the raw check request carries the octet-stream type, the CSRF token and the bytes', async () => {
+    const { app, requests } = await load({ '/api/admin/plugins/upload/check': OK_CHECK });
+    const bytes = new Uint8Array([9, 8, 7]).buffer;
+    await app.runAction('pluginUploadFile', file(bytes));
+    const check = requests.find(request => request.url === '/api/admin/plugins/upload/check');
+    assert.equal(check.headers['Content-Type'], 'application/octet-stream');
+    assert.equal(check.headers['X-CSRF-TOKEN'], 'tok');
+    assert.equal(check.body, bytes);
+});
+
+test('a report that is not ok keeps Installieren disabled', async () => {
+    const { app, element } = await load({ '/api/admin/plugins/upload/check': { uploadId: null, report: { ...REPORT, ok: false, errors: ['plugin.json fehlt.'] } } });
+    await app.runAction('pluginUploadFile', file());
+    element('plugin-upload-password').value = 'geheim';
+    await app.runAction('pluginUploadInput', element('plugin-upload-password'));
+    assert.equal(element('plugin-upload-confirm').disabled, true);
+});
+
+test('the report header leaves out von without an author', async () => {
+    const { app } = await load();
+    const html = app.renderUploadReport({ ...REPORT, manifest: { ...REPORT.manifest, author: '' } }, null);
+    assert.match(html, /Hook-Rekorder 1\.2\.0 · SDK 1</);
+    assert.doesNotMatch(html, /von/);
+});

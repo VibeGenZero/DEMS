@@ -176,7 +176,7 @@ export function renderPluginCard(view, { safeMode = false, channels = [], roles 
     const orphaned = view.status === 'orphaned';
     const meta = [view.version ? `Version ${view.version}` : '', view.author].filter(Boolean).join(' · ');
     const canDelete = !readOnly && view.status !== 'on' && view.status !== 'safe';
-    const canRemove = !readOnly && uploadEnabled && !view.official && !view.enabled && view.status !== 'on' && view.status !== 'safe';
+    const canRemove = !readOnly && uploadEnabled && !view.official && !view.enabled && view.status !== 'on' && view.status !== 'orphaned';
     const removeButton = canRemove
         ? `<button type="button" class="btn btn-outline-danger btn-sm" data-click="openPluginRemove" data-plugin-id="${id}" data-plugin-name="${escapeHtml(view.name)}">
                 <i class="bi bi-x-circle me-1" aria-hidden="true"></i>Entfernen
