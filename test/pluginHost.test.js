@@ -1136,3 +1136,34 @@ test('a replace of a new id counts as pending: reload and forget of that id are 
     assert.equal((await replacing).status, 'off');
     assert.equal(host.reloadPlugin('newbie').status, 'off');
 });
+
+test('a custom folder that is or lies inside the official folder is not loaded', async () => {
+    const { officialDir } = roots();
+    writeMarked(officialDir, 'offi');
+    for (const customDir of [officialDir, path.join(officialDir, 'custom')]) {
+        writeMarked(customDir, 'sneaky');
+        await enabledState('sneaky', { confirmedVersion: '1.0.0', confirmedPermissions: [] });
+        logs.error = [];
+        const host = createPluginHost({ officialDir, customDir });
+        await host.start();
+        assert.equal(host.customDir, undefined, customDir);
+        assert.equal(logs.error.filter(line => line.includes('PLUGINS_DIR')).length, 1, customDir);
+        // its stored state alone shows as orphaned, never as a loadable custom plugin
+        assert.ok(!host.list().some(item => item.id === 'sneaky' && !item.official && item.status !== 'orphaned'), customDir);
+        // equal folders: the plugin sits in the official folder and is official by location
+        if (customDir !== officialDir) assert.equal(fs.existsSync(marker(customDir, 'sneaky')), false, customDir);
+        fs.rmSync(path.join(customDir, 'sneaky'), { recursive: true, force: true });
+    }
+});
+
+test('a custom folder next to the official one, even with a similar name, is loaded', async () => {
+    const { officialDir } = roots();
+    const customDir = `${officialDir}-custom`;
+    writeMarked(customDir, 'beside');
+    logs.error = [];
+    const host = createPluginHost({ officialDir, customDir });
+    await host.start();
+    assert.equal(host.customDir, customDir);
+    assert.deepEqual(logs.error.filter(line => line.includes('PLUGINS_DIR')), []);
+    assert.equal(view(host, 'beside').official, false);
+});

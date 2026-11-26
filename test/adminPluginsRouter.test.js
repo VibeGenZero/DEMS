@@ -615,3 +615,27 @@ test('a plugin installed meanwhile by someone else answers 409, not 400', async 
         fs.rmSync(path.join(customDir, 'upl-race'), { recursive: true, force: true });
     }
 });
+
+test('a custom plugin folder inside the official one refuses check and install with 409', async () => {
+    const root = createTempDir('admin-plugins-misplaced');
+    const officialDir = path.join(root, 'official');
+    writePlugin(officialDir, 'offi');
+    const errors = [];
+    const original = console.error;
+    console.error = (...args) => errors.push(args.join(' '));
+    try {
+        current = createPluginHost({ officialDir, customDir: path.join(officialDir, 'uploads') });
+        await current.start();
+    } finally {
+        console.error = original;
+    }
+    for (const res of [
+        await checkUpload(packageOf('upl-misplaced'), 'misplaced'),
+        await install({ uploadId: 'x', password: PASSWORD, replace: false })
+    ]) {
+        assert.equal(res.status, 409);
+        assert.deepEqual(await res.json(), { error: 'Der Plugin-Ordner ist falsch eingestellt.' });
+    }
+    assert.equal(fs.existsSync(path.join(officialDir, 'uploads')), false);
+    assert.equal(errors.filter(line => line.includes('PLUGINS_DIR')).length, 1);
+});

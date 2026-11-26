@@ -37,7 +37,8 @@ const MESSAGES = {
     tooManyChecks: 'Zu viele Prüfungen. Bitte warte ein paar Minuten.',
     uploadExpired: 'Der Upload ist abgelaufen. Bitte lade die Datei erneut hoch.',
     alreadyInstalled: 'Das Plugin ist schon installiert.',
-    officialRemove: 'Offizielle Plugins können nicht entfernt werden.'
+    officialRemove: 'Offizielle Plugins können nicht entfernt werden.',
+    badPluginDir: 'Der Plugin-Ordner ist falsch eingestellt.'
 };
 
 /** At most this many package checks per session and window (on top of the /api limiter). */
@@ -81,11 +82,15 @@ function createAdminPluginsRouter(getHost, {
     /** @returns {import('../plugin-sdk/views').PluginView|null} -> The first view with the id (an official one wins over a duplicate folder). */
     const findView = (host, id) => host.list().find(view => view.id === id) || null;
 
-    /** Upload routes need `PLUGINS_UPLOAD=true`; check and install also refuse safe mode (remove stays a way out). */
-    const requireUpload = ({ refuseSafeMode }) => (req, res, next) => {
+    /**
+     * Upload routes need `PLUGINS_UPLOAD=true`; check and install also refuse safe mode (remove
+     * stays a way out) and a host without a usable custom folder (`PLUGINS_DIR` inside `<app>/plugins`).
+     */
+    const requireUpload = ({ refuseSafeMode, needsCustomDir = false }) => (req, res, next) => {
         try {
             if (!uploadEnabled()) return res.status(403).json({ error: MESSAGES.uploadOff });
             if (refuseSafeMode && getHost().safeMode) return res.status(409).json({ error: MESSAGES.uploadSafeMode });
+            if (needsCustomDir && !getHost().customDir) return res.status(409).json({ error: MESSAGES.badPluginDir });
             next();
         } catch (err) {
             console.error('Plugin upload gate error:', err);
@@ -129,7 +134,7 @@ function createAdminPluginsRouter(getHost, {
      * `{ uploadId, report }`. Writes nothing; a package without errors is kept for install
      * under `uploadId` (null otherwise). `report.replaces` describes an installed plugin of the id.
      */
-    router.post('/plugins/upload/check', requireUpload({ refuseSafeMode: true }), checkLimiter, parsePackageBody, (req, res) => {
+    router.post('/plugins/upload/check', requireUpload({ refuseSafeMode: true, needsCustomDir: true }), checkLimiter, parsePackageBody, (req, res) => {
         try {
             if (!Buffer.isBuffer(req.body) || req.body.length === 0) return res.status(400).json({ error: MESSAGES.noFile });
             const host = getHost();
@@ -159,7 +164,7 @@ function createAdminPluginsRouter(getHost, {
      * POST /api/admin/plugins/upload/install — `{ uploadId, password, replace }` → `{ plugin }`.
      * The password is checked before the upload is taken, so a typo does not use it up.
      */
-    router.post('/plugins/upload/install', requireUpload({ refuseSafeMode: true }), async (req, res) => {
+    router.post('/plugins/upload/install', requireUpload({ refuseSafeMode: true, needsCustomDir: true }), async (req, res) => {
         try {
             const { uploadId, password, replace } = req.body || {};
             if (typeof uploadId !== 'string' || typeof replace !== 'boolean') return res.status(400).json({ error: MESSAGES.badInput });

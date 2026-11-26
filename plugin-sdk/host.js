@@ -94,12 +94,38 @@ function checkSetting(setting, raw) {
     return raw;
 }
 
+/** Real path of `dir`, or its resolved path while it does not exist. */
+function realOrResolved(dir) {
+    try {
+        return fs.realpathSync(dir);
+    } catch {
+        return path.resolve(dir);
+    }
+}
+
+/**
+ * `customDir`, or undefined when it is the official folder or lies inside it: a plugin
+ * found there would count as official, so no custom plugin is read from it.
+ *
+ * @param {string} officialDir -> Folder of the official plugins.
+ * @param {string} [customDir] -> Configured folder of the custom plugins.
+ * @returns {string|undefined}
+ */
+function usableCustomDir(officialDir, customDir) {
+    if (!customDir || !officialDir) return customDir;
+    const relative = path.relative(realOrResolved(officialDir), realOrResolved(customDir));
+    const outside = relative === '..' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative);
+    if (outside) return customDir;
+    console.error(`PLUGINS_DIR ${customDir} is the official plugin folder or lies inside it; custom plugins are not loaded and uploads are refused.`);
+    return undefined;
+}
+
 /**
  * Create the plugin host.
  *
  * @param {object} options
  * @param {string} options.officialDir -> Folder of the official plugins (`<app>/plugins`).
- * @param {string} [options.customDir] -> Folder of the custom plugins (`PLUGINS_DIR`).
+ * @param {string} [options.customDir] -> Folder of the custom plugins (`PLUGINS_DIR`); ignored when it is or lies inside `officialDir`.
  * @param {boolean} [options.safeMode=false] -> Load no plugin code at all.
  * @param {boolean} [options.mockMode=false] -> Dev mock mode: official plugins without state start on.
  * @param {string} [options.devPluginId=''] -> Mock mode only: this custom plugin (`plugin dev`) starts on and confirmed.
@@ -112,10 +138,11 @@ function checkSetting(setting, raw) {
  * host.list(); // [{ id: 'event-submissions', status: 'off', statusText: 'Aus', ... }]
  */
 function createPluginHost({
-    officialDir, customDir, safeMode = false, mockMode = false, devPluginId = '',
+    officialDir, customDir: configuredCustomDir, safeMode = false, mockMode = false, devPluginId = '',
     registerTimeoutMs = DEFAULT_REGISTER_TIMEOUT_MS, disableTimeoutMs = DEFAULT_DISABLE_TIMEOUT_MS,
     requireModule = require
 }) {
+    const customDir = usableCustomDir(officialDir, configuredCustomDir);
     const limiter = createMessageLimiter();
     /** @type {import('./discovery').PluginEntry[]} every discovered folder, in discovery order */
     let entries = [];
@@ -682,7 +709,7 @@ function createPluginHost({
         get safeMode() {
             return safeMode;
         },
-        /** @returns {string|undefined} -> `PLUGINS_DIR`, the folder uploads install into. */
+        /** @returns {string|undefined} -> `PLUGINS_DIR`, the folder uploads install into; undefined when it is unusable. */
         get customDir() {
             return customDir;
         },

@@ -120,7 +120,7 @@ Only in setup mode (afterwards 409 `Die Einrichtung ist bereits abgeschlossen.`)
 | GET | `/api/admin/audit-log` |
 | DELETE | `/api/admin/reset` (`targets` incl. `pluginData`; `users` wipes plugin data too) |
 | GET | `/api/admin/plugins` (`{ safeMode, uploadEnabled, plugins }`, views + public `settingsValues`) |
-| POST | `/api/admin/plugins/upload/check` (raw `application/octet-stream` `.dems` ≤ 5 MB, 413 above; `PLUGINS_UPLOAD=true` else 403, 409 in safe mode, 429 after 10 checks per 10 min per session; writes nothing → `{ uploadId, report }`, `uploadId` only for a package without errors, `report.replaces` for an installed id) |
+| POST | `/api/admin/plugins/upload/check` (raw `application/octet-stream` `.dems` ≤ 5 MB, 413 above; `PLUGINS_UPLOAD=true` else 403, 409 in safe mode or when `PLUGINS_DIR` is not outside `<app>/plugins` („Der Plugin-Ordner ist falsch eingestellt.“, also for install), 429 after 10 checks per 10 min per session; writes nothing → `{ uploadId, report }`, `uploadId` only for a package without errors, `report.replaces` for an installed id) |
 | POST | `/api/admin/plugins/upload/install` (`{ uploadId, password, replace }`; reset password (401) before the upload is taken, 410 expired or used, 409 already installed without `replace` or plugin on, 400 package error → `{ plugin }`; audit `PLUGIN_UPLOAD`) |
 | PUT | `/api/admin/plugins/:id/enabled` (`{ enabled, trust?, password? }`; custom plugin on needs `trust` + reset password), `/plugins/:id/settings` (`{ values, password? }`; a secret needs the reset password) |
 | DELETE | `/api/admin/plugins/:id/data` (only while off; `{ deleted }`) |
