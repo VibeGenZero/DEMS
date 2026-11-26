@@ -253,6 +253,18 @@ test('style-src fallback: nonce by default, unsafe-inline without the nonce', ()
   assert.ok(!/style-src[^;]*nonce/.test(fb));
 });
 
+test('style-src attr mode: style elements need the nonce, only style attributes are open (Monaco)', () => {
+  const csp = security.pageCsp('N', 99, 'attr');
+  assert.match(csp, /style-src 'self' 'nonce-N'/);
+  assert.match(csp, /style-src-attr 'unsafe-inline'/);
+  assert.ok(!/style-src 'self'[^;]*unsafe-inline/.test(csp));
+  assert.ok(!/style-src-attr/.test(security.pageCsp('N', 99)));
+});
+
+test('page CSP lets fonts come from data: URLs (Monaco ships its icon font inline)', () => {
+  assert.match(security.pageCsp('N', 99), /font-src 'self' data:/);
+});
+
 test('405 carries Allow, url is null before listen', () => {
   const s = createStudioServer({ port: 0, previewPort: 1, token: TOKEN });
   assert.equal(s.url, null);

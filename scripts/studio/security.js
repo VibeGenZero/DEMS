@@ -44,14 +44,17 @@ function checkToken(req, token) {
 /** CSP of the studio page: own files only, the preview iframe, workers (Monaco), nonce for styles. */
 function pageCsp(nonce, previewPort, styleFallback = 'nonce') {
   // Browsers ignore 'unsafe-inline' when a nonce is present, so the fallback must not carry the nonce.
-  const style = styleFallback === 'unsafe-inline' ? "style-src 'self' 'unsafe-inline'" : `style-src 'self' 'nonce-${nonce}'`;
+  // 'attr': style elements still need the nonce, only style attributes (which Monaco sets) are open.
+  let style = `style-src 'self' 'nonce-${nonce}'`;
+  if (styleFallback === 'unsafe-inline') style = "style-src 'self' 'unsafe-inline'";
+  if (styleFallback === 'attr') style += "; style-src-attr 'unsafe-inline'";
   return [
     "default-src 'self'",
     `frame-src http://127.0.0.1:${resolvePort(previewPort)}`,
     "worker-src 'self' blob:",
     style,
     "img-src 'self' data:",
-    "font-src 'self'",
+    "font-src 'self' data:", // Monaco's editor.main.css carries its icon font as a data: URL
     "object-src 'none'",
     "base-uri 'none'",
     "frame-ancestors 'none'",

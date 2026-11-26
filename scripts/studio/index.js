@@ -66,6 +66,7 @@ async function startStudio({ port = 3100, repoRoot = REPO, env = process.env, op
     previewPort: () => proxy.address().port,
     token,
     routes: actions.routes,
+    styleFallback: 'attr', // Monaco sets style attributes; its <style> elements carry the page nonce
     vendorDirs: {
       '/vendor/': path.join(publicDir, 'vendor'),
       '/css/tokens.css': path.join(publicDir, 'css', 'tokens.css'),
