@@ -713,3 +713,21 @@ test('mountPreview opens the frame as the selected persona and sandboxes it with
   assert.equal(frame.src, personaUrl('http://127.0.0.1:4101', 'member'));
   controller.abort();
 });
+
+test('buildDialog warns about unsaved tabs and offers to save them all first', async () => {
+  const { buildDialog } = await load('toolbar.js');
+  const clean = buildDialog({ lines: ['a'], errors: [] }, 0);
+  assert.ok(!/ungespeicherte/.test(clean.html));
+  assert.deepEqual(clean.buttons.map((b) => b.value), [false, 'build']);
+
+  const dirty = buildDialog({ lines: ['a'], errors: [] }, 2);
+  assert.match(dirty.html, /2 ungespeicherte Datei\(en\) – gebaut wird der Stand auf der Platte\./);
+  assert.deepEqual(dirty.buttons.map((b) => [b.label, b.value]), [
+    ['Abbrechen', false], ['Übernehmen und bauen', 'build'], ['Alle speichern und bauen', 'save-all'],
+  ]);
+  assert.equal(dirty.buttons.find((b) => b.primary).value, 'save-all');
+
+  const blocked = buildDialog({ lines: [], errors: ['Fehler: kaputt'] }, 1);
+  assert.deepEqual(blocked.buttons.map((b) => b.value), [false, 'save-all'], 'saving may fix what blocks the build');
+  assert.deepEqual(buildDialog({ lines: [], errors: ['Fehler: kaputt'] }, 0).buttons.map((b) => b.value), [false]);
+});

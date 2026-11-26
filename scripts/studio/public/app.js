@@ -49,7 +49,7 @@ async function main() {
         onLifecycle: (data) => preview.setStatus(data.status),
         onFiles: () => { workspace.diskChanged(); },
       });
-      mountToolbar(workspace.toolbarArea, { api, signal });
+      mountToolbar(workspace.toolbarArea, { api, signal, dirtyCount: workspace.dirtyCount, saveAll: workspace.saveAll });
     } catch (err) {
       dispose();
       throw err;

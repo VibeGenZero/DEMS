@@ -133,4 +133,5 @@ h2 { font-size: var(--font-size-lg); }
 .dbg-entry.is-error { background: var(--danger-bg); }
 .report-lines { margin: 0 0 var(--space-8); padding-left: var(--space-16); }
 .report-errors { color: var(--danger); }
+.report-unsaved { color: var(--warning); }
 .studio-dialog .report { max-height: 50vh; overflow: auto; }
