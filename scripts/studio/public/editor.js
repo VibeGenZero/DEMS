@@ -248,17 +248,24 @@ export async function createEditorHost(container, { onDirty, onSave }) {
     hint.shadow.setValue(next.text);
   }
 
-  editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
-    const active = [...entries.entries()].find(([, e]) => e.model === editor.getModel());
-    if (active) onSave(active[0]);
+  // addCommand has no disposable (its keybinding would outlive the editor); an action does.
+  const saveAction = editor.addAction({
+    id: 'studio.save',
+    label: 'Speichern',
+    keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS],
+    run() {
+      const active = [...entries.entries()].find(([, e]) => e.model === editor.getModel());
+      if (active) onSave(active[0]);
+    },
   });
+  let disposed = false;
 
   const host = {
     editor,
     has: (path) => entries.has(path),
     /** Adds a model for `path` (no-op when open). `kind`: 'server' | 'client' | null. */
     add(path, content, kind) {
-      if (entries.has(path)) return;
+      if (disposed || entries.has(path)) return;
       const model = monaco.editor.createModel(content, editorLanguage(path), pathUri(monaco, '', path));
       const entry = { model, viewState: null };
       entry.tracker = createDirtyTracker(model, (dirty) => onDirty(path, dirty));
@@ -273,6 +280,7 @@ export async function createEditorHost(container, { onDirty, onSave }) {
       }
     },
     show(path) {
+      if (disposed) return;
       const current = [...entries.values()].find((e) => e.model === editor.getModel());
       if (current) current.viewState = editor.saveViewState();
       const entry = path && entries.get(path);
@@ -301,6 +309,8 @@ export async function createEditorHost(container, { onDirty, onSave }) {
     /** Closes all models and removes the editor and the completion/hover providers. */
     dispose() {
       host.closeAll();
+      disposed = true;
+      saveAction.dispose();
       providers.dispose();
       editor.dispose();
     },

@@ -67,12 +67,17 @@ export function mountStart(root, { api, recent, onOpened }) {
   const render = () => { root.innerHTML = renderStartPage({ recent: current }); };
   render();
 
+  let busy = false; // a double-click sends one request
   async function run(task) {
+    if (busy) return;
+    busy = true;
     try {
       const { plugin } = await task();
-      onOpened(plugin);
+      if (!signal.aborted) onOpened(plugin);
     } catch (err) {
       showToast(err.message, 'danger');
+    } finally {
+      busy = false;
     }
   }
 

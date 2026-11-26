@@ -1,6 +1,6 @@
 // Workspace: file list, editor tabs, save/dirty handling and the area for the preview (next to the editor).
 import { createEditorHost } from './editor.js';
-import { askConfirm, askText, confirmDiscard, escapeHtml, showToast } from './ui.js';
+import { askConfirm as askConfirmIn, askText as askTextIn, confirmDiscard as confirmDiscardIn, escapeHtml, showToast } from './ui.js';
 
 /** 'client' for the manifest client entry and `assets/*.js`, 'server' for other .js files, else null. */
 export function typeLibFor(path, manifest) {
@@ -97,6 +97,10 @@ export async function mountWorkspace(root, { api, plugin, onLeave }) {
 
   const controller = new AbortController();
   const { signal } = controller;
+  // Dialogs of this view close when it is disposed; handlers stop after every await once it is.
+  const askText = (options) => askTextIn({ ...options, signal });
+  const askConfirm = (options) => askConfirmIn({ ...options, signal });
+  const confirmDiscard = () => confirmDiscardIn(signal);
   const dirty = new Set();
   let files = [];
   let tabs = [];
@@ -144,8 +148,11 @@ export async function mountWorkspace(root, { api, plugin, onLeave }) {
     }
     if (!editorHost.has(path)) {
       try {
-        editorHost.add(path, await api.readFile(path), typeLibFor(path, manifest));
+        const content = await api.readFile(path);
+        if (signal.aborted) return;
+        editorHost.add(path, content, typeLibFor(path, manifest));
       } catch (err) {
+        if (signal.aborted) return;
         active = null;
         editorHost.show(null);
         showMessage(err.message);
@@ -167,6 +174,7 @@ export async function mountWorkspace(root, { api, plugin, onLeave }) {
     const version = editorHost.version(path);
     try {
       await api.saveFile(path, content);
+      if (signal.aborted) return;
       if (editorHost.has(path)) editorHost.markSaved(path, version);
       if (path === 'plugin.json') await loadManifest();
       showToast(`Gespeichert: ${path}`, 'success');
@@ -177,6 +185,7 @@ export async function mountWorkspace(root, { api, plugin, onLeave }) {
 
   async function closeTab(path) {
     if (dirty.has(path) && !(await confirmDiscard())) return;
+    if (signal.aborted) return;
     editorHost.close(path);
     dirty.delete(path);
     tabs = tabs.filter((p) => p !== path);
@@ -190,10 +199,12 @@ export async function mountWorkspace(root, { api, plugin, onLeave }) {
 
   async function createFile() {
     const name = await askText({ title: 'Neue Datei', label: 'Dateiname (z. B. lib/helfer.js)', confirmLabel: 'Anlegen' });
-    if (!name) return;
+    if (!name || signal.aborted) return;
     try {
       await api.createFile(name);
+      if (signal.aborted) return;
       await refreshFiles();
+      if (signal.aborted) return;
       await openFile(name);
     } catch (err) {
       showToast(err.message, 'danger');
@@ -203,11 +214,14 @@ export async function mountWorkspace(root, { api, plugin, onLeave }) {
   async function renameFile(path) {
     if (dirty.has(path)) { showToast('Bitte die Datei zuerst speichern oder verwerfen.', 'warning'); return; }
     const to = await askText({ title: 'Datei umbenennen', label: 'Neuer Name', value: path, confirmLabel: 'Umbenennen' });
-    if (!to || to === path) return;
+    if (!to || to === path || signal.aborted) return;
     try {
       await api.renameFile(path, to);
+      if (signal.aborted) return;
       if (editorHost.has(path)) await closeTab(path);
+      if (signal.aborted) return;
       await refreshFiles();
+      if (signal.aborted) return;
       if (path === 'plugin.json' || to === 'plugin.json') await loadManifest();
     } catch (err) {
       showToast(err.message, 'danger');
@@ -215,10 +229,12 @@ export async function mountWorkspace(root, { api, plugin, onLeave }) {
   }
 
   async function deleteFile(path) {
-    if (!(await askConfirm({ title: 'Datei löschen?', message: `${path} wird gelöscht.`, confirmLabel: 'Löschen' }))) return;
+    if (!(await askConfirm({ title: 'Datei löschen?', message: `${path} wird gelöscht.`, confirmLabel: 'Löschen' })) || signal.aborted) return;
     try {
       await api.deleteFile(path);
+      if (signal.aborted) return;
       if (editorHost.has(path)) { dirty.delete(path); await closeTab(path); }
+      if (signal.aborted) return;
       await refreshFiles();
     } catch (err) {
       showToast(err.message, 'danger');
@@ -228,10 +244,14 @@ export async function mountWorkspace(root, { api, plugin, onLeave }) {
   async function upload(file) {
     if (file.size > MAX_UPLOAD_BYTES) { showToast('Datei zu groß (höchstens 2 MB).', 'danger'); return; }
     const target = await askText({ title: 'Datei hochladen', label: 'Zielpfad im Plugin', value: `assets/${file.name}`, confirmLabel: 'Hochladen' });
-    if (!target) return;
+    if (!target || signal.aborted) return;
     try {
-      await api.uploadFile(target, toBase64(await file.arrayBuffer()));
+      const data = toBase64(await file.arrayBuffer());
+      if (signal.aborted) return;
+      await api.uploadFile(target, data);
+      if (signal.aborted) return;
       await refreshFiles();
+      if (signal.aborted) return;
       showToast(`Hochgeladen: ${target}`, 'success');
     } catch (err) {
       showToast(err.message, 'danger');

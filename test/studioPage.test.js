@@ -165,3 +165,40 @@ test('mountStart returns a disposer that aborts all its listeners', async () => 
   dispose();
   assert.ok(signals.every((s) => s.aborted));
 });
+
+test('showDialog closes (null) when its signal aborts and not at all when already aborted', async () => {
+  const { showDialog } = await load('ui.js');
+  const removed = [];
+  const overlay = { innerHTML: '', className: '', addEventListener() {}, querySelector: () => ({ focus() {} }), remove: () => removed.push(true) };
+  global.document = {
+    createElement: () => overlay,
+    addEventListener() {}, removeEventListener() {},
+    body: { appendChild() {} },
+  };
+  try {
+    const controller = new AbortController();
+    const pending = showDialog({ title: 'T', buttons: [{ label: 'OK', value: true }], signal: controller.signal });
+    controller.abort();
+    assert.equal(await pending, null);
+    assert.equal(removed.length, 1);
+    assert.equal(await showDialog({ title: 'T', buttons: [], signal: controller.signal }), null);
+    assert.equal(removed.length, 1, 'no dialog was built');
+  } finally {
+    delete global.document;
+  }
+});
+
+test('mountStart sends one request for a double click', async () => {
+  const { mountStart } = await load('start.js');
+  const handlers = {};
+  const root = { innerHTML: '', addEventListener: (type, fn) => { handlers[type] = fn; } };
+  let calls = 0;
+  let release;
+  const api = { open: () => { calls += 1; return new Promise((resolve) => { release = () => resolve({ plugin: { id: 'a' } }); }); } };
+  mountStart(root, { api, recent: [], onOpened() {} });
+  const click = { target: { closest: () => ({ dataset: { action: 'open', dir: '/x' } }) } };
+  handlers.click(click);
+  handlers.click(click);
+  assert.equal(calls, 1);
+  release();
+});
