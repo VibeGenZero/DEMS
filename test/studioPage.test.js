@@ -699,12 +699,15 @@ function fakePreviewArea() {
   return { area, frame, persona };
 }
 
-test('mountPreview opens the frame as the selected persona', async () => {
+test('mountPreview opens the frame as the selected persona and sandboxes it without top navigation', async () => {
   const { mountPreview, personaUrl } = await load('preview.js');
   const { area, frame, persona } = fakePreviewArea();
   const controller = new AbortController();
   mountPreview(area, { api: {}, previewUrl: 'http://127.0.0.1:4101', status: 'running', signal: controller.signal });
   assert.equal(frame.src, personaUrl('http://127.0.0.1:4101', 'admin'), 'frame and select agree from the start');
+  const iframe = /<iframe[^>]*>/.exec(area.innerHTML)[0];
+  assert.match(iframe, /sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-downloads"/);
+  assert.ok(!/allow-top-navigation/.test(iframe));
   persona.value = 'member';
   persona.listeners.change();
   assert.equal(frame.src, personaUrl('http://127.0.0.1:4101', 'member'));

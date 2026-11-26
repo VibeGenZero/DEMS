@@ -18,6 +18,9 @@ export const HOOK_BUTTONS = [
   { action: 'checkin', label: 'Check-in' },
 ];
 
+// No allow-top-navigation: plugin code in the frame cannot navigate the studio page away.
+export const SANDBOX = 'allow-scripts allow-same-origin allow-forms allow-popups allow-downloads';
+
 /** The overlay text for a child status; null when the preview is usable. */
 export function statusOverlay(status) {
   if (status === 'starting') return 'DEMS startet neu …';
@@ -44,7 +47,7 @@ export function mountPreview(area, { api, previewUrl, status, signal }) {
       <button type="button" class="studio-btn" data-pv="reload" title="Neu laden" aria-label="Neu laden"><i class="bi bi-arrow-clockwise"></i></button>
     </div>
     <div class="pv-stage">
-      <iframe class="pv-frame" title="Vorschau"></iframe>
+      <iframe class="pv-frame" title="Vorschau" sandbox="${SANDBOX}"></iframe>
       <div class="pv-overlay is-hidden" role="status"></div>
     </div>
     <div class="pv-hooks">${HOOK_BUTTONS.map((b) => `<button type="button" class="studio-btn" data-hook="${escapeHtml(b.action)}">${escapeHtml(b.label)}</button>`).join('')}</div>
