@@ -2711,9 +2711,9 @@
             den Discord-Bot und die Datenbank, und im Browser jedes angemeldeten Mitglieds mit dessen
             Rechten — bei Admins also mit Admin-Rechten. Die Berechtigungen unten zeigen, was es nutzen
             möchte, verhindern aber nichts. Schalte es nur ein, wenn du dem Code vertraust.</p>
+          <div class="mb-3" id="plugin-trust-check-result"></div>
           <p class="form-label">Berechtigungen</p>
           <ul class="plugin-permissions" id="plugin-trust-permissions"></ul>
-          <div class="mb-3" id="plugin-trust-check-result"></div>
           <div class="form-check mb-3">
             <input class="form-check-input" type="checkbox" id="plugin-trust-check" data-change="pluginTrustInput">
             <label class="form-check-label" for="plugin-trust-check">Ich vertraue dem Code dieses Plugins</label>
@@ -2739,6 +2739,8 @@
         </div>
         <div class="modal-body">
           <p class="text-secondary">Wähle ein Paket (.dems). Es wird erst geprüft und erst nach deiner Bestätigung installiert. Danach schaltest du es selbst ein.</p>
+          <p>Ein hochgeladenes Plugin läuft nach dem Einschalten mit vollem Zugriff auf DEMS,
+            den Discord-Bot und die Datenbank. Lade nur Pakete hoch, deren Code du vertraust.</p>
           <label class="form-label" for="plugin-upload-file">Plugin-Paket</label>
           <input type="file" class="form-control mb-3" accept=".dems" data-change="pluginUploadFile" id="plugin-upload-file">
           <div class="mb-3" id="plugin-upload-report" aria-live="polite"></div>

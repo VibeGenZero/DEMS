@@ -176,6 +176,19 @@ test('an orphaned plugin has no switch and no settings, but „Daten löschen“
     assert.match(card, /deletePluginData/);
 });
 
+test('a plugin that needs a restart has a locked switch and opens no trust dialog', async () => {
+    const restart = { ...CUSTOM, status: 'restart', statusText: 'Neustart nötig' };
+    const { app, element, requests } = await openPlugins([restart]);
+    const list = element('plugins-list').innerHTML;
+    assert.match(list, /Neustart nötig/);
+    assert.match(list, /<input[^>]*data-change="togglePlugin"[^>]* disabled>/);
+    const sw = { checked: true, dataset: { pluginId: 'hook-recorder' } };
+    await app.runAction('togglePlugin', sw);
+    assert.equal(sw.checked, false);
+    assert.equal(element('plugin-trust-name').textContent, '');
+    assert.equal(putsTo(requests, '/api/admin/plugins/hook-recorder/enabled').length, 0);
+});
+
 test('safe mode disables every switch and says so', async () => {
     const safe = (overrides) => view({ status: 'safe', statusText: 'Abgesicherter Modus aktiv', ...overrides });
     const { element } = await openPlugins([safe(), safe({ ...CUSTOM, status: 'safe', statusText: 'Abgesicherter Modus aktiv' })], {}, { safeMode: true });

@@ -18,8 +18,8 @@ addSystemCategory({ id: 'plugins', label: 'Plugins', subtitle: 'Erweiterungen ei
 const LOAD_ERROR = 'Plugins konnten nicht geladen werden.';
 const NO_CHOICE = 'Keine Auswahl';
 const STATUS_TONES = { on: 'success', error: 'danger', invalid: 'danger', incompatible: 'danger', confirm: 'warning', restart: 'warning' };
-// Statuses whose switch cannot act (the server would refuse or nothing could load)
-const LOCKED_STATUSES = ['invalid', 'incompatible', 'safe'];
+// Statuses whose switch cannot act (the server would refuse, nothing could load or DEMS must restart first)
+const LOCKED_STATUSES = ['invalid', 'incompatible', 'safe', 'restart'];
 
 // views: answer of GET /api/admin/plugins in its order; trustId: plugin of the open trust dialog
 const panel = { safeMode: false, uploadEnabled: false, views: [], channels: [], roles: [], trustId: null };
@@ -363,6 +363,10 @@ async function togglePlugin(element) {
     const view = viewOf(id);
     if (!view) return;
     const enabled = element.checked === true;
+    if (enabled && LOCKED_STATUSES.includes(view.status)) {
+        element.checked = false;
+        return;
+    }
     if (enabled && !view.official) {
         // The switch moves only once the server took the confirmed request
         element.checked = false;

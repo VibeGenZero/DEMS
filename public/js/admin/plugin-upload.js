@@ -70,7 +70,7 @@ export function renderUploadReport(report, replaces) {
         parts.push(`<ul class="plugin-permissions">${warnings.map(text => `<li><i class="bi bi-info-circle me-2" aria-hidden="true"></i>${escapeHtml(text)}</li>`).join('')}</ul>`);
     }
     if (replaces) {
-        parts.push(line('plugin-warning', 'bi-arrow-repeat', `Ersetzt die installierte Version ${replaces.version}${replaces.restart ? ' (Neustart nötig)' : ''}`));
+        parts.push(line('plugin-warning', 'bi-arrow-repeat', `Ersetzt die installierte Version ${replaces.version || '(unbekannt)'}${replaces.restart ? ' (Neustart nötig)' : ''}`));
         if (replaces.enabled) parts.push(line('plugin-error', 'bi-x-circle', SWITCH_OFF));
     }
     return parts.join('');

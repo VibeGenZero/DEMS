@@ -111,6 +111,21 @@ test('the markup has the upload dialog, the remove dialog and the mismatch block
     assert.match(HTML, /id="plugin-trust-check-result"/);
 });
 
+test('the upload dialog warns about full access, the trust dialog shows the check above the permissions', () => {
+    const uploadModal = HTML.slice(HTML.indexOf('id="pluginUploadModal"'), HTML.indexOf('id="pluginRemoveModal"'));
+    assert.match(uploadModal, /<p>Ein hochgeladenes Plugin läuft nach dem Einschalten mit vollem Zugriff auf DEMS,\s+den Discord-Bot und die Datenbank\. Lade nur Pakete hoch, deren Code du vertraust\.<\/p>/);
+    const trustModal = HTML.slice(HTML.indexOf('id="pluginTrustModal"'), HTML.indexOf('id="pluginUploadModal"'));
+    assert.ok(trustModal.indexOf('id="plugin-trust-check-result"') > 0);
+    assert.ok(trustModal.indexOf('id="plugin-trust-check-result"') < trustModal.indexOf('id="plugin-trust-permissions"'));
+});
+
+test('renderUploadReport names an unknown installed version', async () => {
+    const { app } = await load();
+    const html = app.renderUploadReport(REPORT, { version: '', restart: false, enabled: false });
+    assert.match(html, /Ersetzt die installierte Version \(unbekannt\)</);
+    assert.doesNotMatch(html, /Version  /);
+});
+
 test('removing: password first, DELETE with the password, reload and toast', async () => {
     const { app, element, requests, toasts } = await load({ '/api/admin/plugins/hook-recorder': { removed: true } });
     await app.runAction('openPluginRemove', { dataset: { pluginId: 'hook-recorder', pluginName: 'Hook-Rekorder' } });
