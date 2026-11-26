@@ -123,6 +123,7 @@ sources: [scripts/wiki-graph.js, docs/wiki/graph.json, CLAUDE.md]
 | `public/js/**`, `public/theme-boot.js`, `public/design-boot.js` | frontend-app, frontend-markup |
 | `public/js/core/plugins.js` | frontend-app, plugin-sdk, write-plugin |
 | `public/js/admin/system-plugins.js` | frontend-app, plugin-sdk |
+| `public/js/admin/plugin-upload.js` | frontend-app, plugin-sdk |
 | `public/js/pages/discord-guide.js` | frontend-app, deployment |
 | `public/js/pages/profile-calendar.js` | frontend-app, routes-user |
 | `public/index.html`, `public/css/tokens.css`, `public/css/components.css`, `public/css/style.css` | frontend-markup |
