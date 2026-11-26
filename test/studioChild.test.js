@@ -45,7 +45,7 @@ function makeRepo(startJs = '') {
 }
 
 /** Fake `fork`: an EventEmitter child; a healthy one answers /healthz on env.PORT. */
-function fakeFork({ stderr } = {}) {
+function fakeFork({ stderr, healthDelayMs = 0, killFails = false } = {}) {
   const forks = [];
   const killCalls = [];
   function fork(file, args, opts) {
@@ -69,14 +69,15 @@ function fakeFork({ stderr } = {}) {
         child.server.closeAllConnections();
       } else setImmediate(done);
     };
-    child.kill = () => child.exit(null);
+    child.signals = [];
+    child.kill = (signal) => { child.signals.push(signal); child.exit(null); };
     if (stderr) {
       setTimeout(() => {
         child.stderr.write(stderr);
         setTimeout(() => child.exit(1), 20);
       }, 20);
     } else {
-      child.server = http.createServer((req, res) => res.end(req.url === '/healthz' ? 'ok' : 'x'));
+      child.server = http.createServer((req, res) => setTimeout(() => res.end(req.url === '/healthz' ? 'ok' : 'x'), healthDelayMs));
       child.server.listen(Number(opts.env.PORT), '127.0.0.1');
     }
     forks.push(child);
@@ -84,6 +85,7 @@ function fakeFork({ stderr } = {}) {
   }
   function execFile(cmd, args, cb) {
     killCalls.push([cmd, args]);
+    if (killFails) return cb(new Error('Zugriff verweigert'), '', '');
     const child = forks.find((f) => String(f.pid) === args[args.length - 1]);
     if (child) child.exit(1);
     cb(null, '', '');
@@ -101,7 +103,7 @@ function setup(options = {}) {
     folder,
     previewOrigin: PREVIEW,
     onEvent: (e) => events.push(e),
-    fork: fake.fork,
+    fork: options.wrapFork ? options.wrapFork(fake.fork) : fake.fork,
     env: cleanEnv(),
     platform: 'win32',
     execFile: fake.execFile,
@@ -233,6 +235,100 @@ test('stop() during a restart leaves no child running', async () => {
   await restarting;
   assert.equal(child.status(), 'stopped');
   assert.ok(fake.forks.every((f) => f.exitCode !== null));
+});
+
+async function waitFor(check, ms = 3000) {
+  const deadline = Date.now() + ms;
+  while (!check()) {
+    if (Date.now() > deadline) throw new Error('condition not reached');
+    await sleep(10);
+  }
+}
+
+test('start() during a stop that hits an in-flight restart ends with a running child', async () => {
+  const { fake, child } = setup({ healthDelayMs: 400 });
+  try {
+    await child.start();
+    const restarting = child.restart();
+    await waitFor(() => fake.forks.length === 2); // the new child is forked, /healthz still pending
+    const stopping = child.stop();
+    const starting = child.start();
+    await Promise.all([restarting, stopping, starting]);
+    assert.equal(child.status(), 'running');
+    assert.notEqual(child.port(), null);
+    assert.equal(fake.forks.filter((f) => f.exitCode === null).length, 1);
+  } finally {
+    await child.stop();
+  }
+});
+
+test('a throwing fork fails the start and a later restart still works', async () => {
+  let throwNext = true;
+  const wrapFork = (fork) => (...args) => {
+    if (throwNext) {
+      throwNext = false;
+      throw new Error('spawn EPERM');
+    }
+    return fork(...args);
+  };
+  const { events, child } = setup({ wrapFork });
+  try {
+    await child.start();
+    assert.equal(child.status(), 'failed');
+    const error = events.find((e) => e.type === 'error');
+    assert.deepEqual(error.data, { message: 'spawn EPERM', where: 'start' });
+    await child.restart();
+    assert.equal(child.status(), 'running');
+  } finally {
+    await child.stop();
+  }
+});
+
+test('a crash after ready reports the stderr written after the exit', async () => {
+  const { fake, events, child } = setup();
+  try {
+    await child.start();
+    const [forked] = fake.forks;
+    forked.exitCode = 1;
+    forked.server.close();
+    forked.server.closeAllConnections();
+    forked.emit('exit', 1, null);
+    assert.equal(child.status(), 'failed');
+    assert.equal(child.port(), null);
+    setTimeout(() => {
+      forked.stderr.write('Error: boom\n    at crash (server.js:3)\n');
+      forked.stderr.end();
+    }, 50);
+    await waitFor(() => events.some((e) => e.type === 'error'));
+    const error = events.find((e) => e.type === 'error');
+    assert.deepEqual(error.data, { message: 'Error: boom\n    at crash (server.js:3)', where: 'run' });
+  } finally {
+    await child.stop();
+  }
+});
+
+test('IPC from the old child after a restart is not forwarded', async () => {
+  const { fake, events, child } = setup();
+  try {
+    await child.start();
+    await child.restart();
+    const [old, fresh] = fake.forks;
+    const at = new Date().toISOString();
+    old.emit('message', { studio: true, type: 'log', pluginId: 'studio-probe', at, data: { text: 'alt' } });
+    fresh.emit('message', { studio: true, type: 'log', pluginId: 'studio-probe', at, data: { text: 'neu' } });
+    assert.deepEqual(events.filter((e) => e.type === 'log').map((e) => e.data.text), ['neu']);
+  } finally {
+    await child.stop();
+  }
+});
+
+test('stop() falls back to SIGKILL when taskkill fails', async () => {
+  const { fake, child } = setup({ killFails: true });
+  await child.start();
+  await child.stop();
+  assert.equal(fake.killCalls.length, 1);
+  assert.deepEqual(fake.forks[0].signals, ['SIGKILL']);
+  assert.equal(child.status(), 'stopped');
 });
 
 test('event log keeps 500 and drops the oldest', () => {

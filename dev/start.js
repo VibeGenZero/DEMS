@@ -6,6 +6,7 @@
  */
 process.env.DEV_MOCK = 'true';
 require('./mockMode');
+require('./studioEvents').exitOnDisconnect();
 const { seedIfEmpty } = require('./seed');
 
 seedIfEmpty().then(

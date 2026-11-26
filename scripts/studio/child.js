@@ -67,8 +67,6 @@ function createChild({
   let wanted = false;
   let restarting = null;
   let pending = false;
-  let stderr = [];
-  let partial = '';
 
   function emit(type, data) {
     try { onEvent({ type, pluginId, at: new Date().toISOString(), data }); } catch { /* the page side reports its own errors */ }
@@ -85,23 +83,29 @@ function createChild({
     emit('error', { message, where });
   }
 
-  function collect(chunk) {
-    const lines = (partial + chunk).split(/\r?\n/);
-    partial = lines.pop();
-    stderr.push(...lines);
-    if (stderr.length > STDERR_LINES) stderr = stderr.slice(stderr.length - STDERR_LINES);
+  function collect(rec, chunk) {
+    const lines = (rec.partial + chunk).split(/\r?\n/);
+    rec.partial = lines.pop();
+    rec.stderr.push(...lines);
+    if (rec.stderr.length > STDERR_LINES) rec.stderr = rec.stderr.slice(rec.stderr.length - STDERR_LINES);
   }
 
-  function lastLines() {
-    const lines = partial ? [...stderr, partial].slice(-STDERR_LINES) : stderr;
+  function lastLines(rec) {
+    const lines = rec.partial ? [...rec.stderr, rec.partial].slice(-STDERR_LINES) : rec.stderr;
     return lines.join('\n').trimEnd();
   }
+
+  /** Waits until the child's stderr is drained (at most 1 s), so the last lines hold its error. */
+  const drained = (rec) => Promise.race([rec.stderrEnded, sleep(1000)]);
 
   function killTree(rec) {
     const { pid } = rec.child;
     if (!pid || rec.exitInfo) return;
     if (platform === 'win32') {
-      execFile('taskkill', ['/T', '/F', '/PID', String(pid)], () => {});
+      execFile('taskkill', ['/T', '/F', '/PID', String(pid)], (err) => {
+        if (!err || rec.exitInfo) return;
+        try { rec.child.kill('SIGKILL'); } catch { /* already gone */ }
+      });
       return;
     }
     const signal = (name) => {
@@ -140,8 +144,15 @@ function createChild({
   async function launch() {
     if (!wanted) return;
     setStatus('starting');
-    stderr = [];
-    partial = '';
+    try {
+      await spawnAndWait();
+    } catch (err) {
+      // freePort or fork failed: report it like a failed start instead of breaking later restarts
+      if (wanted) fail(err && err.message ? err.message : String(err), 'start');
+    }
+  }
+
+  async function spawnAndWait() {
     let prepared;
     try {
       prepared = prepareDev(folder, { repoRoot, env });
@@ -160,8 +171,15 @@ function createChild({
       detached: platform !== 'win32', // own process group, so stop() reaches the whole tree
       windowsHide: true,
     });
-    const rec = { child, port, ready: false, killed: false, exitInfo: null };
+    const rec = { child, port, ready: false, killed: false, exitInfo: null, stderr: [], partial: '' };
     current = rec;
+    rec.stderrEnded = new Promise((resolve) => {
+      if (!child.stderr) return resolve();
+      child.stderr.setEncoding('utf8');
+      child.stderr.on('data', (chunk) => collect(rec, chunk));
+      child.stderr.once('end', resolve);
+      child.stderr.once('close', resolve);
+    });
     rec.exited = new Promise((resolve) => {
       const done = (info) => {
         if (rec.exitInfo) return;
@@ -169,21 +187,16 @@ function createChild({
         resolve(info);
         if (rec.ready && !rec.killed && current === rec) {
           current = null;
-          fail(lastLines() || `DEMS wurde unerwartet beendet (Code ${info.code}).`, 'run');
+          setStatus('failed');
+          drained(rec).then(() => emit('error', { message: lastLines(rec) || `DEMS wurde unerwartet beendet (Code ${info.code}).`, where: 'run' }));
         }
       };
       child.once('exit', (code, signal) => done({ code, signal }));
       child.once('error', (err) => done({ code: null, signal: null, error: err }));
     });
-    rec.stderrEnded = new Promise((resolve) => {
-      if (!child.stderr) return resolve();
-      child.stderr.setEncoding('utf8');
-      child.stderr.on('data', collect);
-      child.stderr.once('end', resolve);
-      child.stderr.once('close', resolve);
-    });
     if (child.stdout) child.stdout.resume();
     child.on('message', (msg) => {
+      if (rec.killed || (current && current !== rec)) return; // a stopped or replaced child
       if (!msg || msg.studio !== true || msg.pluginId !== pluginId) return;
       const { type, at, data } = msg;
       try { onEvent({ type, pluginId, at, data }); } catch { /* see emit */ }
@@ -195,32 +208,37 @@ function createChild({
       setStatus('running');
     } else if (outcome === 'exited') {
       current = null;
-      await Promise.race([rec.stderrEnded, sleep(1000)]);
+      await drained(rec);
       const why = rec.exitInfo.error ? rec.exitInfo.error.message : `DEMS wurde beim Start beendet (Code ${rec.exitInfo.code}).`;
-      fail(lastLines() || why, 'start');
+      fail(lastLines(rec) || why, 'start');
     } else if (outcome === 'timeout') {
       await killCurrent();
       const seconds = Math.round(readyTimeoutMs / 1000);
-      fail([`DEMS war nach ${seconds} s nicht erreichbar.`, lastLines()].filter(Boolean).join('\n'), 'start');
+      fail([`DEMS war nach ${seconds} s nicht erreichbar.`, lastLines(rec)].filter(Boolean).join('\n'), 'start');
     }
   }
 
   async function runRestarts() {
-    for (;;) {
-      pending = false;
-      await killCurrent();
-      await launch();
-      if (!pending || !wanted) {
-        restarting = null;
-        return;
+    try {
+      for (;;) {
+        pending = false;
+        await killCurrent();
+        await launch();
+        if (!pending || !wanted) return;
       }
+    } finally {
+      restarting = null; // runs in the same tick as the last check, so no restart() request is lost
     }
   }
 
   return {
     start() {
+      const wasWanted = wanted;
       wanted = true;
-      if (restarting) return restarting;
+      if (restarting) {
+        if (!wasWanted) pending = true; // a stop() is draining this run: launch once more after it
+        return restarting;
+      }
       if (current) return Promise.resolve();
       restarting = runRestarts(); // nothing to kill: a plain launch that later restart() calls queue behind
       return restarting;

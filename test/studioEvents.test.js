@@ -66,3 +66,25 @@ test('a throwing sender does not throw out of emit', () => {
     studio.setSender(() => { throw new Error('channel closed'); });
     assert.doesNotThrow(() => studio.emit('log', 'alpha', { level: 'info', text: 'x' }));
 });
+
+test('exitOnDisconnect ends DEMS when the studio drops the IPC channel', () => {
+    const { EventEmitter } = require('node:events');
+    const fakeProcess = () => Object.assign(new EventEmitter(), { env: {}, exits: [], exit(code) { this.exits.push(code); } });
+
+    const studioChild = fakeProcess();
+    studioChild.env.PLUGIN_STUDIO = '1';
+    studioChild.send = () => {};
+    assert.equal(studio.exitOnDisconnect(studioChild), true);
+    studioChild.emit('disconnect');
+    assert.deepEqual(studioChild.exits, [0]);
+
+    const noChannel = fakeProcess();
+    noChannel.env.PLUGIN_STUDIO = '1';
+    assert.equal(studio.exitOnDisconnect(noChannel), false);
+    assert.equal(noChannel.listenerCount('disconnect'), 0);
+
+    const plainFork = fakeProcess();
+    plainFork.send = () => {};
+    assert.equal(studio.exitOnDisconnect(plainFork), false);
+    assert.equal(plainFork.listenerCount('disconnect'), 0);
+});

@@ -53,4 +53,17 @@ function emit(type, pluginId, data) {
     }
 }
 
-module.exports = { isActive, emit, setSender };
+/**
+ * In studio mode, end DEMS when the studio drops the IPC channel (studio closed or crashed),
+ * so no orphaned child keeps its port.
+ *
+ * @param {object} proc -> `process` (tests pass a fake).
+ * @returns {boolean} -> True when the handler was installed.
+ */
+function exitOnDisconnect(proc = process) {
+    if (proc.env.PLUGIN_STUDIO !== '1' || typeof proc.send !== 'function') return false;
+    proc.once('disconnect', () => proc.exit(0));
+    return true;
+}
+
+module.exports = { isActive, emit, setSender, exitOnDisconnect };
