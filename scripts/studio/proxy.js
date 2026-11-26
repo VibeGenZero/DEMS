@@ -5,6 +5,8 @@ const http = require('node:http');
 const { checkHost } = require('./security');
 
 const resolvePort = (port) => (typeof port === 'function' ? port() : port);
+// The studio page may be open under either loopback name (security.checkHost accepts both)
+const studioOrigins = (studioPort) => `http://127.0.0.1:${studioPort} http://localhost:${studioPort}`;
 
 function unavailablePage(studioPort) {
   const html = '<!doctype html>\n<html lang="de"><head><meta charset="utf-8">'
@@ -16,7 +18,7 @@ function unavailablePage(studioPort) {
       'Content-Type': 'text/html; charset=utf-8',
       'Content-Length': Buffer.byteLength(html),
       'Cache-Control': 'no-store',
-      'Content-Security-Policy': `default-src 'none'; frame-ancestors http://127.0.0.1:${studioPort}`,
+      'Content-Security-Policy': `default-src 'none'; frame-ancestors ${studioOrigins(studioPort)}`,
     },
   };
 }
@@ -26,13 +28,18 @@ function rewriteHeaders(headers, { childPort, previewPort, studioPort }) {
   delete out['x-frame-options'];
   const csp = out['content-security-policy'];
   if (csp !== undefined) {
-    const replace = (value) => String(value).split(';')
-      .map((part) => (/^\s*frame-ancestors(\s|$)/i.test(part) ? ` frame-ancestors 'self' http://127.0.0.1:${studioPort}` : part))
-      .join(';').replace(/^\s+/, '');
+    const ancestors = `frame-ancestors 'self' ${studioOrigins(studioPort)}`;
+    const replace = (value) => {
+      const parts = String(value).split(';');
+      if (!parts.some((part) => /^\s*frame-ancestors(\s|$)/i.test(part))) {
+        return `${String(value).replace(/[\s;]+$/, '')}; ${ancestors}`.replace(/^;\s*/, '');
+      }
+      return parts.map((part) => (/^\s*frame-ancestors(\s|$)/i.test(part) ? ` ${ancestors}` : part)).join(';').replace(/^\s+/, '');
+    };
     out['content-security-policy'] = Array.isArray(csp) ? csp.map(replace) : replace(csp);
   }
   if (typeof out.location === 'string') {
-    const child = new RegExp(`^http://(?:127\.0\.0\.1|localhost):${childPort}(?=[/?#]|$)`, 'i');
+    const child = new RegExp(String.raw`^http://(?:127\.0\.0\.1|localhost):` + childPort + String.raw`(?=[/?#]|$)`, 'i');
     out.location = out.location.replace(child, `http://127.0.0.1:${previewPort}`);
   }
   return out;

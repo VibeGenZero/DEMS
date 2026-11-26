@@ -685,3 +685,28 @@ test('renderDebugEntry shows file:line of an error and a failed hook, escaped', 
   const plain = renderDebugEntry(ev('error', { message: 'x', where: 'run' }));
   assert.ok(!/dbg-where-file/.test(plain), 'no location without a file');
 });
+
+/** Fake preview column: records the frame address; the persona select starts at its first option (Admin). */
+function fakePreviewArea() {
+  const frame = { src: '' };
+  const overlay = { textContent: '', classList: { toggle() {} } };
+  const persona = { value: 'admin', listeners: {}, addEventListener(n, fn) { this.listeners[n] = fn; } };
+  const area = {
+    innerHTML: '',
+    addEventListener() {},
+    querySelector: (sel) => ({ '.pv-frame': frame, '.pv-overlay': overlay, '.pv-persona': persona, '.pv-debug': {} })[sel] || null,
+  };
+  return { area, frame, persona };
+}
+
+test('mountPreview opens the frame as the selected persona', async () => {
+  const { mountPreview, personaUrl } = await load('preview.js');
+  const { area, frame, persona } = fakePreviewArea();
+  const controller = new AbortController();
+  mountPreview(area, { api: {}, previewUrl: 'http://127.0.0.1:4101', status: 'running', signal: controller.signal });
+  assert.equal(frame.src, personaUrl('http://127.0.0.1:4101', 'admin'), 'frame and select agree from the start');
+  persona.value = 'member';
+  persona.listeners.change();
+  assert.equal(frame.src, personaUrl('http://127.0.0.1:4101', 'member'));
+  controller.abort();
+});

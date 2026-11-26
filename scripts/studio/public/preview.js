@@ -66,7 +66,8 @@ export function mountPreview(area, { api, previewUrl, status, signal }) {
     if (next === 'running' && needsReload) { needsReload = false; navigate(current); }
   }
 
-  if (previewUrl) navigate(previewUrl);
+  // Start as the persona the select shows (Admin), so frame and select agree
+  if (previewUrl) navigate(personaUrl(previewUrl, persona.value));
   setStatus(status);
 
   persona.addEventListener('change', () => {

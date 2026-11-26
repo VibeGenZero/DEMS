@@ -33,6 +33,11 @@ before(async () => {
       res.setHeader('Set-Cookie', ['a=1; Path=/', 'b=2; HttpOnly']);
       return res.end('ok');
     }
+    if (req.url === '/csp-noframe') { res.setHeader('Content-Security-Policy', "default-src 'self'; "); return res.end('ok'); }
+    if (req.url === '/loc-dots') {
+      res.writeHead(302, { Location: `http://127x0x0x1:${upPort}/x` });
+      return res.end();
+    }
     if (req.url === '/nocsp') { res.setHeader('X-Frame-Options', 'DENY'); return res.end('x'); }
     if (req.url === '/loc') {
       res.writeHead(302, { Location: `http://127.0.0.1:${upPort}/x` });
@@ -61,9 +66,19 @@ after(async () => { await proxy.close(); await new Promise((r) => { upstream.clo
 
 test('replaces frame-ancestors, drops X-Frame-Options, keeps cookies', async () => {
   const r = await request('GET', '/csp');
-  assert.equal(r.headers['content-security-policy'], `default-src 'self'; frame-ancestors 'self' http://127.0.0.1:${STUDIO}`);
+  assert.equal(r.headers['content-security-policy'], `default-src 'self'; frame-ancestors 'self' http://127.0.0.1:${STUDIO} http://localhost:${STUDIO}`);
   assert.equal(r.headers['x-frame-options'], undefined);
   assert.deepEqual(r.headers['set-cookie'], ['a=1; Path=/', 'b=2; HttpOnly']);
+});
+
+test('appends frame-ancestors to a CSP that has none', async () => {
+  const r = await request('GET', '/csp-noframe');
+  assert.equal(r.headers['content-security-policy'], `default-src 'self'; frame-ancestors 'self' http://127.0.0.1:${STUDIO} http://localhost:${STUDIO}`);
+});
+
+test('rewrites only a Location that really names the child (dots are literal)', async () => {
+  const r = await request('GET', '/loc-dots');
+  assert.equal(r.headers.location, `http://127x0x0x1:${upPort}/x`);
 });
 
 test('adds no CSP when the upstream has none, still drops X-Frame-Options', async () => {
@@ -107,7 +122,7 @@ test('503 German page while the target is missing', async () => {
     assert.doesNotMatch(html, /<script/i);
     assert.equal(r.headers['cache-control'], 'no-store');
     assert.match(r.headers['content-security-policy'], /default-src 'none'/);
-    assert.match(r.headers['content-security-policy'], new RegExp(`frame-ancestors http://127.0.0.1:${STUDIO}`));
+    assert.ok(r.headers['content-security-policy'].endsWith(`frame-ancestors http://127.0.0.1:${STUDIO} http://localhost:${STUDIO}`), r.headers['content-security-policy']);
   } finally { targetOn = true; }
 });
 
