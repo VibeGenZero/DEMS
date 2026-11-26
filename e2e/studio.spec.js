@@ -125,7 +125,7 @@ test.describe('plugin studio', () => {
         await page.locator('[data-hook="create"]').click();
         await expect(page.locator('.studio-toast.is-success', { hasText: 'Test-Event „Studio-Test“ als Entwurf erstellt.' })).toBeVisible({ timeout: 15_000 });
         await expect(page.locator('.studio-toast.is-danger')).toHaveCount(0);
-        await expect(page.locator('.pv-debug .dbg-entry.is-hook', { hasText: 'event.created' })).toContainText('ok', { timeout: 15_000 });
+        await expect(page.locator('.pv-debug .dbg-entry.is-hook', { hasText: 'event.created' })).toContainText(/Hook event\.created \u00b7 ok\b/, { timeout: 15_000 });
 
         await page.locator('[data-tool="build"]').click();
         const download = page.waitForEvent('download');
