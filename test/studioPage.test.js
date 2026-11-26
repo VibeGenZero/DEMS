@@ -252,13 +252,45 @@ test('renderDebugEntry renders channel, role and log entries', async () => {
 test('filterEvents keeps only the requested kinds', async () => {
   const { filterEvents } = await load('debug.js');
   const all = ['dm', 'channel', 'role', 'request', 'hook', 'log', 'error', 'lifecycle'].map((t) => ev(t, {}));
+  all.push(ev('lifecycle', { status: 'running', where: 'child' }), ev('files', {}));
   const types = (kind) => filterEvents(all, kind).map((e) => e.type);
   assert.deepEqual(types('discord'), ['dm', 'channel', 'role']);
   assert.deepEqual(types('anfragen'), ['request']);
   assert.deepEqual(types('hooks'), ['hook']);
   assert.deepEqual(types('logs'), ['log']);
   assert.deepEqual(types('fehler'), ['error']);
-  assert.equal(types('alle').length, all.length - 1, 'lifecycle is not a debug line');
+  assert.deepEqual(types('alle'), ['dm', 'channel', 'role', 'request', 'hook', 'log', 'error', 'lifecycle'],
+    'plugin status changes are lines, child status and files notices are not');
+});
+
+test('renderDebugEntry shows plugin status changes of the host as a short line', async () => {
+  const { renderDebugEntry } = await load('debug.js');
+  const text = (status) => renderDebugEntry(ev('lifecycle', { status })).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
+  assert.match(text('on'), /Plugin-Status: An/);
+  assert.match(text('error'), /Plugin-Status: Fehler/);
+  assert.match(text('restart'), /Plugin-Status: Neustart nötig/);
+  assert.match(text('off'), /Plugin-Status: Aus/);
+  assert.match(text('<x>'), /Plugin-Status: &lt;x&gt;/);
+});
+
+test('mountDebug draws host lifecycle lines and keeps child lifecycle for the overlay', async () => {
+  const { mountDebug } = await load('debug.js');
+  const dom = fakeDebugDom();
+  const { sources, create } = fakeSources();
+  const seen = [];
+  const controller = new AbortController();
+  mountDebug(dom.container, {
+    api: { eventsUrl: () => 'u', clearEvents: async () => {} }, signal: controller.signal, createEventSource: create,
+    onLifecycle: (d) => seen.push(d.status), now: () => Date.parse('2026-11-26T09:00:00.000Z'),
+  });
+  sources[0].emit(ev('lifecycle', { status: 'error' }));
+  sources[0].emit(ev('lifecycle', { status: 'starting', where: 'child' }));
+  await tick();
+  const html = dom.list.appended.join('');
+  assert.equal((html.match(/dbg-entry/g) || []).length, 1);
+  assert.match(html, /Plugin-Status: Fehler/);
+  assert.deepEqual(seen, ['starting']);
+  controller.abort();
 });
 
 test('renderCheckDialog and renderBuildPreview escape lines and errors', async () => {

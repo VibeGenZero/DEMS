@@ -12,11 +12,16 @@ const KINDS = [
   ['fehler', 'Fehler'],
 ];
 
-const NO_LINE = new Set(['lifecycle', 'files']); // studio-internal notices
+// Status of the DEMS child (`where: 'child'`) only drives the preview overlay; `files` is a studio-internal notice.
+const isChildLifecycle = (e) => e.type === 'lifecycle' && e.data && e.data.where === 'child';
+const isLine = (e) => e && e.type !== 'files' && !isChildLifecycle(e);
 
-/** Events of one filter kind; `lifecycle` and `files` events are no debug lines. */
+// Plugin status of the host (plugin-sdk/host.js setRuntime), as the admin view names it
+const PLUGIN_STATUS = { on: 'An', off: 'Aus', error: 'Fehler', confirm: 'Bestätigung nötig', restart: 'Neustart nötig' };
+
+/** Events of one filter kind; child `lifecycle` and `files` events are no debug lines. */
 export function filterEvents(events, kind) {
-  const list = events.filter((e) => e && !NO_LINE.has(e.type));
+  const list = events.filter(isLine);
   switch (kind) {
     case 'discord': return list.filter((e) => DISCORD.has(e.type));
     case 'anfragen': return list.filter((e) => e.type === 'request');
@@ -79,6 +84,8 @@ export function renderDebugEntry(event) {
       return line('hook', time, `<div><i class="bi bi-lightning"></i> Hook ${escapeHtml(d.name)} · ${d.ok ? 'ok' : 'Fehler'}${d.summary ? ` <span class="studio-muted">${escapeHtml(d.summary)}</span>` : ''}${d.ok ? '' : where(d)}${d.ok || !d.error ? '' : `<div class="dbg-dropped">${escapeHtml(d.error)}</div>`}</div>`);
     case 'log':
       return line('log', time, `<div class="dbg-log level-${escapeHtml(d.level)}"><span class="dbg-level">${escapeHtml(d.level)}</span> ${escapeHtml(d.text)}</div>`);
+    case 'lifecycle':
+      return line('lifecycle', time, `<div><i class="bi bi-plug"></i> Plugin-Status: ${escapeHtml(PLUGIN_STATUS[d.status] || d.status)}</div>`);
     case 'error':
       return line('error', time, `<div class="dbg-error"><i class="bi bi-exclamation-octagon"></i> <strong>${escapeHtml(d.where)}</strong>${where(d)} ${escapeHtml(d.message)}</div>`);
     default:
@@ -216,7 +223,7 @@ export function mountDebug(container, { api, signal, createEventSource = (url) =
     try { event = JSON.parse(message.data); } catch { return; }
     if (!event || typeof event !== 'object') return;
     if (errors) { errors = 0; setStatus(''); }
-    if (event.type === 'lifecycle') lifecycle(event);
+    if (isChildLifecycle(event)) lifecycle(event);
     else if (event.type === 'files') onFiles(event);
     else add(event);
   });
