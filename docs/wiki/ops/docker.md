@@ -64,11 +64,20 @@ docker compose exec -u root dems chown -R node:node /app/data/plugins/my-plugin
 docker compose restart dems
 ```
 
+A `.dems` package from the host goes through the plugin CLI, which the image keeps (`!scripts/plugin.js` in `.dockerignore`): copy the file onto the data volume, install it as the user `node` (the default user of `exec`, so the new folder belongs to `node`), then restart and switch it on in System › Plugins. `--force` replaces an installed plugin; `plugin dev` stays refused because the container runs with `NODE_ENV=production`.
+
+```bash
+docker compose cp ./my-plugin-1.0.0.dems dems:/app/data/my-plugin-1.0.0.dems
+docker compose exec dems npm run plugin -- install /app/data/my-plugin-1.0.0.dems
+docker compose exec dems rm /app/data/my-plugin-1.0.0.dems
+docker compose restart dems
+```
+
 A plugin that breaks the start: add `PLUGINS_SAFE_MODE=true` to `.env` and `docker compose up -d` (no plugin code runs), switch the broken plugin off in System › Plugins (in safe mode only switching off works), remove the line and `docker compose up -d` again. Read [write-plugin](../howto/write-plugin.md#7-install-operators) before installing one — custom plugins run with full access.
 
 ## .dockerignore
 
-Excludes `node_modules/`, `.env*` (except `.env.example`), `data/`, `*.sqlite*`, `.git/`, IDE folders, `docs/`, `scripts/`, `test/`, `landing/`, `ci/`, `.github/`, `.gitlab-ci.yml`, `*.md`, Docker files. The image therefore contains no secrets, docs, tests or CI files.
+Excludes `node_modules/`, `.env*` (except `.env.example`), `data/`, `*.sqlite*`, `.git/`, IDE folders, `docs/`, `scripts/` (except `scripts/plugin.js`, the plugin CLI), `test/`, `landing/`, `ci/`, `.github/`, `.gitlab-ci.yml`, `*.md`, Docker files. The image therefore contains no secrets, docs, tests or CI files.
 
 ## Gotchas
 

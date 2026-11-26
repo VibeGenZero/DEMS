@@ -65,3 +65,15 @@ test('the deployment example follows DEMS_TAG like compose.yaml', () => {
     assert.match(deployment, /image: moritakahashi\/dems:\$\{DEMS_TAG:-latest\}/);
     assert.doesNotMatch(deployment, /image: moritakahashi\/dems:latest/);
 });
+
+test('the image keeps the plugin CLI, so operators can install a .dems on the server', () => {
+    // howto/write-plugin.md and ops/docker.md document `npm run plugin -- install` in the container
+    const lines = read('.dockerignore').split(/\r?\n/).map((l) => l.trim());
+    assert.ok(lines.includes('scripts/'), 'the other scripts stay out of the image');
+    assert.ok(lines.indexOf('!scripts/plugin.js') > lines.indexOf('scripts/'), 're-included after scripts/');
+    assert.match(read('package.json'), /"plugin": "node scripts\/plugin\.js"/);
+    // the CLI may only need the SDK and Node built-ins at top level
+    const requires = [...read('scripts/plugin.js').matchAll(/^const .*require\('([^']+)'\)/gm)].map((m) => m[1]);
+    for (const spec of requires) assert.ok(!spec.startsWith('.') || spec.startsWith('../plugin-sdk/'), spec);
+    assert.match(read('docs/wiki/ops/docker.md'), /docker compose exec dems npm run plugin -- install \/app\/data\/[^ ]+\.dems/);
+});
