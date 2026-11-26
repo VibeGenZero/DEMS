@@ -100,30 +100,69 @@ function scaffoldFiles(id) {
     };
 }
 
-function cmdNew(args, io) {
-    const { positional, flags } = parseArgs(args, ['--dir']);
-    const id = positional[0];
-    if (!id) throw new PackageError('Bitte eine Plugin-ID angeben: new <id>');
+/**
+ * Create a new plugin folder `<parentDir>/<id>` with the starter files of `plugin new`.
+ *
+ * @param {string} id -> Plugin id (checked against ID_PATTERN).
+ * @param {string} parentDir -> Absolute folder the plugin folder goes into (created when missing).
+ * @returns {string} -> The new plugin folder.
+ * @throws {PackageError} -> A bad id or an existing folder.
+ */
+function scaffoldPlugin(id, parentDir) {
     if (!ID_PATTERN.test(id)) throw new PackageError(`Die ID ist nicht erlaubt: ${id}`);
-    const parent = path.resolve(io.cwd, typeof flags.dir === 'string' ? flags.dir : '.');
-    const target = path.join(parent, id);
+    const target = path.join(parentDir, id);
     if (fs.existsSync(target)) throw new PackageError(`Der Ordner existiert schon: ${target}`);
     fs.mkdirSync(target, { recursive: true });
     for (const [name, content] of Object.entries(scaffoldFiles(id))) {
         fs.writeFileSync(path.join(target, name), content);
     }
-    io.stdout.write(`Angelegt: ${target}\n`);
+    return target;
+}
+
+function cmdNew(args, io) {
+    const { positional, flags } = parseArgs(args, ['--dir']);
+    const id = positional[0];
+    if (!id) throw new PackageError('Bitte eine Plugin-ID angeben: new <id>');
+    const parent = path.resolve(io.cwd, typeof flags.dir === 'string' ? flags.dir : '.');
+    const target = scaffoldPlugin(id, parent);
+    io.stdout.write(`Angelegt: ${target}
+`);
     return 0;
+}
+
+/**
+ * The comparison as the CLI prints it, in order; `error` lines go to stderr.
+ *
+ * @param {object} analysis -> Result of `analyzePlugin`.
+ * @returns {Array<{ text: string, error: boolean }>}
+ */
+function reportEntries(analysis) {
+    const out = (text) => ({ text, error: false });
+    return [
+        ...analysis.skipped.map((name) => out(`übersprungen: ${name}`)),
+        ...analysis.errors.map((message) => ({ text: `Fehler: ${message}`, error: true })),
+        ...analysis.missing.map((p) => out(`+ ${p}`)),
+        ...analysis.unused.map((p) => out(`? ${p} (nicht mehr gefunden)`)),
+        ...(analysis.sdk !== analysis.raw.sdk ? [out(`sdk: ${analysis.raw.sdk} -> ${analysis.sdk}`)] : []),
+        ...analysis.warnings.map((w) => out(`Warnung: ${formatWarning(w)}`))
+    ];
+}
+
+/**
+ * The lines of `check` / `build` split by stream (the studio shows the same text).
+ *
+ * @param {object} analysis -> Result of `analyzePlugin`.
+ * @returns {{ lines: string[], errors: string[] }} -> `lines`: stdout lines; `errors`: the „Fehler: …“ lines.
+ */
+function reportLines(analysis) {
+    const entries = reportEntries(analysis);
+    return { lines: entries.filter((e) => !e.error).map((e) => e.text), errors: entries.filter((e) => e.error).map((e) => e.text) };
 }
 
 /** Print the comparison; returns the analysis. */
 function report(analysis, io) {
-    for (const name of analysis.skipped) io.stdout.write(`übersprungen: ${name}\n`);
-    for (const message of analysis.errors) io.stderr.write(`Fehler: ${message}\n`);
-    for (const p of analysis.missing) io.stdout.write(`+ ${p}\n`);
-    for (const p of analysis.unused) io.stdout.write(`? ${p} (nicht mehr gefunden)\n`);
-    if (analysis.sdk !== analysis.raw.sdk) io.stdout.write(`sdk: ${analysis.raw.sdk} -> ${analysis.sdk}\n`);
-    for (const w of analysis.warnings) io.stdout.write(`Warnung: ${formatWarning(w)}\n`);
+    for (const { text, error } of reportEntries(analysis)) (error ? io.stderr : io.stdout).write(`${text}
+`);
     return analysis;
 }
 
@@ -363,4 +402,4 @@ if (require.main === module) {
     });
 }
 
-module.exports = { main, COMMANDS, parseArgs, prepareDev, invocationCwd };
+module.exports = { main, COMMANDS, parseArgs, prepareDev, invocationCwd, scaffoldPlugin, reportLines };
