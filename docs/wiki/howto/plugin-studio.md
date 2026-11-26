@@ -56,4 +56,4 @@ Other DEMS output is not shown. The events come from `dev/studioEvents.js` over 
 - Refused with `NODE_ENV=production`. `scripts/studio/` is not part of the Docker image; the studio is a development tool, not something to run on a server.
 - DEMS itself has no route that writes files for the studio.
 
-Tests: `test/studio*.test.js` (units), `e2e/studio.spec.js` (browser smoke test: create, edit, save, hook, build download; it uses temp folders and `prepareDev`'s `devPluginsDir` so it never touches `data/dev-plugins`).
+Tests: `test/studio*.test.js` (units), `e2e/studio.spec.js` (browser smoke test with a real DEMS child: create a plugin, grant `events:read`, register an `event.created` hook in the editor and save, see the preview restart and the real app come back, fire „Event erstellen" and find the hook entry in the debug panel, download `e2e-demo-0.1.0.dems`; it uses temp folders and `prepareDev`'s `devPluginsDir`, so it never touches `data/dev-plugins`).
