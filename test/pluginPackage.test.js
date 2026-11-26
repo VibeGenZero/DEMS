@@ -262,6 +262,13 @@ test('packPlugin skips dot entries, node_modules and extension-less files and li
     assert.deepEqual(analyzePlugin(dir).skipped, expected);
 });
 
+test('checkPackage scans a .JS file like a .js file', () => {
+    const ctx = { officialIds: new Set(), customDir: tempDir() };
+    const report = checkPackage(zipOf(GOOD, { 'lib/A.JS': 'module.exports = (ctx) => ctx.events.list();' }), ctx);
+    assert.equal(report.ok, true, report.errors.join(' | '));
+    assert.deepEqual(report.permissions, ['events:read']);
+});
+
 test('an uploaded package still refuses what a build skips', () => {
     const ctx = { officialIds: new Set(), customDir: tempDir() };
     const { errors } = checkPackage(zipOf(GOOD, { '.gitignore': 'x', LICENSE: 'x', 'node_modules/x.js': 'x' }), ctx);

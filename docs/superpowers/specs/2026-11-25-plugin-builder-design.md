@@ -164,7 +164,8 @@ A ZIP with `plugin.json` at the root (no wrapping folder). Allowed entries:
 - `assets/<name>` matching today's `ASSET_NAME` (`js css png jpg jpeg webp gif json woff2`)
 
 Refused (build stops, install rejects): `..`, absolute or drive paths, backslashes,
-NUL, empty segments, any segment starting with `.`, `node_modules`, symlinks (ZIP
+NUL and other control characters, Windows device names (`con`, `nul`, `com1` … in any
+segment and case), empty segments, any segment starting with `.`, `node_modules`, symlinks (ZIP
 external attributes with the symlink mode, and no following symlinks while building),
 directory entries are ignored, every other extension (HTML, SVG, executables …),
 duplicate names (also case-insensitively, for Windows checkouts), encrypted or

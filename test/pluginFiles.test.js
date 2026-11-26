@@ -110,3 +110,33 @@ test('packageEntryError refuses Windows name aliases', () => {
         assert.equal(files.packageEntryError(name), `Unerlaubter Pfad: ${name}`, name);
     }
 });
+
+test('packageEntryError refuses control characters', () => {
+    for (const name of ['a\x01.js', 'lib/a\nb.js', 'a\tb.js', 'a\x1f.js', 'a\x7f.js', 'lib\r/a.js']) {
+        assert.equal(files.packageEntryError(name), `Unerlaubter Pfad: ${name}`, JSON.stringify(name));
+    }
+});
+
+test('packageEntryError refuses Windows device names in any segment and case', () => {
+    for (const name of ['con.js', 'CON.js', 'lib/nul.js', 'Aux.json', 'prn.txt', 'com1.js', 'LPT9.css', 'lib/com3/a.js', 'nul/a.js', 'con']) {
+        assert.equal(files.packageEntryError(name), `Unerlaubter Pfad: ${name}`, name);
+    }
+    for (const name of ['console.js', 'lib/control.js', 'auxiliary.json', 'com.js', 'lpt.js', 'null.js', 'lib/icon.js']) {
+        assert.equal(files.packageEntryError(name), null, name);
+    }
+});
+
+test('the .js test ignores case: A.JS is read and scanned', () => {
+    const dir = tmp();
+    try {
+        fs.mkdirSync(path.join(dir, 'lib'));
+        fs.writeFileSync(path.join(dir, 'server.js'), '');
+        fs.writeFileSync(path.join(dir, 'lib', 'A.JS'), 'ctx.events.list()');
+        const { sources } = files.readPluginSourcesSync(dir);
+        assert.deepEqual([...sources.keys()].sort(), ['lib/A.JS', 'server.js']);
+        const { scanPlugin } = require('../plugin-sdk/permissionScan');
+        assert.deepEqual(scanPlugin(sources, { server: 'server.js', client: '' }).permissions, ['events:read']);
+    } finally {
+        fs.rmSync(dir, { recursive: true, force: true });
+    }
+});

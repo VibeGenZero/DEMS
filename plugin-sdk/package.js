@@ -11,7 +11,7 @@ const path = require('path');
 const crypto = require('crypto');
 const { PackageError } = require('./errors');
 const { PERMISSIONS, ID_PATTERN, isPlainObject, validateManifest } = require('./manifest');
-const { IGNORED_ENTRY, packageEntryError, readPluginSourcesSync } = require('./files');
+const { IGNORED_ENTRY, packageEntryError, isJsFile, readPluginSourcesSync } = require('./files');
 const { scanPlugin, comparePermissions, requiredSdk, formatWarning } = require('./permissionScan');
 const { readZip, writeZip } = require('./zip');
 
@@ -259,7 +259,7 @@ function checkPackage(buffer, { officialIds, customDir }) {
 
     const sources = new Map();
     for (const [name, data] of byName) {
-        if (name.endsWith('.js') && packageEntryError(name) === null) sources.set(name, data.toString('utf8').replace(BOM, ''));
+        if (isJsFile(name) && packageEntryError(name) === null) sources.set(name, data.toString('utf8').replace(BOM, ''));
     }
     const scan = scanPlugin(sources, manifest);
     const { missing, unused } = comparePermissions(manifest.permissions, scan.permissions);

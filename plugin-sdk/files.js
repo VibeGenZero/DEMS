@@ -33,6 +33,14 @@ const IGNORED_ENTRY = /(^|\/)(__MACOSX\/|\.DS_Store$)/;
 
 const TEXT_EXTENSIONS = new Set(['.js', '.json', '.css', '.md', '.txt']);
 
+/** Windows device names, with or without an extension; Windows cannot create such a file. */
+const DEVICE_NAME = /^(con|prn|aux|nul|com\d|lpt\d)(\.|$)/i;
+
+/** @returns {boolean} -> `name` ends in `.js`, in any case (`A.JS` runs like `a.js`). */
+function isJsFile(name) {
+    return String(name).toLowerCase().endsWith('.js');
+}
+
 /**
  * @param {string} name -> Package path with forward slashes, relative to the plugin root.
  * @returns {string|null} -> German reason why the path is not allowed, null when it is.
@@ -40,10 +48,11 @@ const TEXT_EXTENSIONS = new Set(['.js', '.json', '.css', '.md', '.txt']);
 function packageEntryError(name) {
     const unsafe = `Unerlaubter Pfad: ${name}`;
     if (typeof name !== 'string' || name.startsWith('/') || /^[A-Za-z]:/.test(name)) return unsafe;
-    if (name.includes('\\') || name.includes('\0')) return unsafe;
+    if (name.includes('\\') || /[\x00-\x1f\x7f]/.test(name)) return unsafe;
     const segments = name.split('/');
     if (segments.some((s) => s === '' || s === '..')) return unsafe;
     if (segments.some((s) => s.includes(':') || s.endsWith('.') || s.endsWith(' '))) return unsafe;
+    if (segments.some((s) => DEVICE_NAME.test(s))) return unsafe;
     if (segments.some((s) => s.startsWith('.'))) return `Versteckte Datei: ${name}`;
     if (segments.includes('node_modules')) return `node_modules wird nicht unterstützt: ${name}`;
     const notAllowed = `Nicht erlaubte Datei: ${name}`;
@@ -82,7 +91,7 @@ function readPluginSourcesSync(dir) {
             const relName = rel ? `${rel}/${entry.name}` : entry.name;
             if (entry.isDirectory()) {
                 walk(relName);
-            } else if (entry.isFile() && relName.endsWith('.js') && packageEntryError(relName) === null) {
+            } else if (entry.isFile() && isJsFile(relName) && packageEntryError(relName) === null) {
                 const abs = path.join(root, relName);
                 total += fs.statSync(abs).size;
                 if (total > LIMITS.unpackedBytes) {
@@ -103,6 +112,7 @@ module.exports = {
     CONTENT_TYPES,
     IGNORED_ENTRY,
     packageEntryError,
+    isJsFile,
     isClientAsset,
     readPluginSourcesSync
 };

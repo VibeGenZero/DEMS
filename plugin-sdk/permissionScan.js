@@ -7,7 +7,7 @@
 const { tokenize } = require('./tokenize');
 const { PERMISSIONS, SDK_1_1_PERMISSIONS } = require('./manifest');
 const { HOOK_NAMES } = require('./hooks');
-const { isClientAsset } = require('./files');
+const { isClientAsset, isJsFile } = require('./files');
 
 const AREAS = ['events', 'members', 'registrations', 'discord', 'hooks'];
 const NETWORK_MODULE = /^(node:)?(http|https|http2|net|dgram|tls)$/;
@@ -23,7 +23,6 @@ const AREA_PERMISSIONS = {
     removeRole: 'discord:roles',
   },
 };
-// `=` is part of ==, ===, !=, !==, <=, >= (not an assignment) unless it ends <<=, >>=, >>>=.
 
 const DYNAMIC = (what) => `Dynamischer Zugriff auf ${what} – Berechtigung nicht erkennbar.`;
 const PASSED = (what) => `${what} wird weitergegeben – Berechtigung nicht erkennbar.`;
@@ -51,6 +50,7 @@ function scanSource(code, { file, kind }) {
   const is = (k, type, value) => !!t[k] && t[k].type === type && (value === undefined || t[k].value === value);
   const punct = (k, value) => is(k, 'punct', value);
   const notMember = (k) => !punct(k - 1, '.');
+  // `=` is part of ==, ===, !=, !==, <=, >= (not an assignment) unless it ends <<=, >>=, >>>=.
   const isComparison = (k) => {
     if (punct(k - 1, '=') || punct(k - 1, '!')) return true;
     return (punct(k - 1, '<') || punct(k - 1, '>')) && !(t[k - 2] && t[k - 2].value === t[k - 1].value);
@@ -193,7 +193,7 @@ function scanPlugin(sources, manifest) {
   const results = new Map();
   const client = new Set();
   const scanFile = (file, kind) => {
-    if (!sources.has(file) || !file.endsWith('.js')) return;
+    if (!sources.has(file) || !isJsFile(file)) return;
     if (!results.has(file) || (kind === 'client' && !client.has(file))) {
       results.set(file, scanSource(sources.get(file), { file, kind }));
     }
@@ -204,7 +204,7 @@ function scanPlugin(sources, manifest) {
   const queue = [String(manifest.client).replace(/^\.\//, ''), ...[...sources.keys()].filter(isClientAsset)];
   while (queue.length) {
     const file = queue.shift();
-    if (client.has(file) || !sources.has(file) || !file.endsWith('.js')) continue;
+    if (client.has(file) || !sources.has(file) || !isJsFile(file)) continue;
     client.add(file);
     const result = scanFile(file, 'client');
     for (const spec of result.imports) {
@@ -213,7 +213,7 @@ function scanPlugin(sources, manifest) {
     }
   }
   for (const file of sources.keys()) {
-    if (file.endsWith('.js') && !client.has(file)) scanFile(file, 'server');
+    if (isJsFile(file) && !client.has(file)) scanFile(file, 'server');
   }
 
   const found = new Set();
