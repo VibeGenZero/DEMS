@@ -352,10 +352,20 @@ async function cmdStudio(args, io) {
     const { flags } = parseArgs(args, ['--port']);
     let port = 3100;
     if (flags.port !== undefined) {
-        port = Number(flags.port);
-        if (!Number.isInteger(port) || port < 0 || port > 65534) throw new PackageError('Ungültiger Port: ' + flags.port);
+        port = /^d{1,5}$/.test(String(flags.port)) ? Number(flags.port) : -1;
+        if (port < 0 || port > 65534) throw new PackageError('Ungültiger Port: ' + flags.port);
     }
-    const { startStudio } = require('./studio'); // lazy: scripts/studio/ is not part of the Docker image
+    // Checked before the require: scripts/studio/ is not part of the Docker image
+    if (io.env.NODE_ENV === 'production') throw new PackageError('plugin studio läuft nicht mit NODE_ENV=production.');
+    let startStudio;
+    try {
+        ({ startStudio } = (io.loadStudio || (() => require('./studio')))());
+    } catch (err) {
+        if (err && err.code === 'MODULE_NOT_FOUND' && err.message.includes("'./studio'")) {
+            throw new PackageError('Das Plugin-Studio ist in dieser Installation nicht enthalten.');
+        }
+        throw err;
+    }
     const studio = await startStudio({ port, repoRoot: io.repoRoot || REPO, env: io.env, out: io.stdout });
     await studio.done;
     return 0;

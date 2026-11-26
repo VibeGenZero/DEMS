@@ -413,3 +413,30 @@ test('help lists studio', async () => {
     const res = await run(['help'], tmp());
     assert.match(res.out, /studio \[--port 3100\]\s+Plugin-Studio im Browser öffnen/);
 });
+
+function studioIo(extra) {
+    const stdout = sink();
+    const stderr = sink();
+    return { io: { cwd: tmp(), stdin: Readable.from([]), stdout, stderr, env: {}, isTTY: false, ...extra }, stderr };
+}
+
+test('studio checks NODE_ENV before it loads the module (the image has no scripts/studio)', async () => {
+    const { io, stderr } = studioIo({ env: { NODE_ENV: 'production' }, loadStudio: () => { throw new Error('geladen'); } });
+    assert.equal(await main(['studio'], io), 1);
+    assert.match(stderr.text(), /plugin studio läuft nicht mit NODE_ENV=production\./);
+});
+
+test('studio without the module says so', async () => {
+    const missing = () => { throw Object.assign(new Error("Cannot find module './studio'\nRequire stack:\n- x"), { code: 'MODULE_NOT_FOUND' }); };
+    const { io, stderr } = studioIo({ loadStudio: missing });
+    assert.equal(await main(['studio'], io), 1);
+    assert.match(stderr.text(), /Das Plugin-Studio ist in dieser Installation nicht enthalten\./);
+});
+
+test('studio rejects an empty or bad --port', async () => {
+    for (const port of ['', 'abc', '-1', '70000']) {
+        const { io, stderr } = studioIo({ loadStudio: () => { throw new Error('nicht erreichbar'); } });
+        assert.equal(await main(['studio', '--port', port], io), 1, port);
+        assert.match(stderr.text(), /Ungültiger Port: /, port);
+    }
+});

@@ -82,6 +82,15 @@ test('the plugin studio stays out of the image: scripts/ is excluded and only pl
     const lines = read('.dockerignore').split(/\r?\n/).map((l) => l.trim());
     assert.ok(lines.includes('scripts/'));
     assert.deepEqual(lines.filter((l) => l.startsWith('!scripts')), ['!scripts/plugin.js']);
+    // no negation pattern may bring scripts/studio back (small glob: * = no slash, ** = anything)
+    const escape = (x) => x.replace(/[^\w/-]/g, (c) => `\\${c}`);
+    const globToRegExp = (g) => new RegExp(`^${g.split('**').map((part) => part.split('*').map(escape).join('[^/]*')).join('.*')}$`);
+    for (const line of lines.filter((l) => l.startsWith('!') && l !== '!scripts/plugin.js')) {
+        const re = globToRegExp(line.slice(1).replace(/\/$/, ''));
+        for (const sample of ['scripts', 'scripts/studio', 'scripts/studio/index.js', 'scripts/studio/vendor/monaco/x.js']) {
+            assert.ok(!re.test(sample), `${line} would re-include ${sample}`);
+        }
+    }
     // the CLI loads the studio lazily, so the image never needs it
     assert.match(read('scripts/plugin.js'), /require\('\.\/studio'\)/);
     assert.doesNotMatch(read('scripts/plugin.js'), /^const .*require\('\.\/studio/m);

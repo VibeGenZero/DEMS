@@ -121,3 +121,55 @@ test('browser command per platform quotes the URL for the shell', () => {
   assert.equal(_test.openCommand('darwin', url).command, 'open');
   assert.deepEqual(_test.openCommand('linux', url), { command: 'xdg-open', args: [url], options: {} });
 });
+
+test('stop() survives failing steps and resolves done', async () => {
+  const realConsole = console.error;
+  console.error = () => {};
+  try {
+    const { createStudioServer } = require('../scripts/studio/server');
+    const studio = await startStudio({
+      port: 0, repoRoot: REPO, env: {}, out: sink(), configDir: configDir(), openBrowser: () => {},
+      _deps: {
+        createStudioServer: (opts) => {
+          const real = createStudioServer(opts);
+          const close = real.close;
+          return Object.defineProperties({ listen: real.listen, address: real.address, close: async () => { await close(); throw new Error('close kaputt'); } }, { url: { get: () => real.url } });
+        },
+      },
+    });
+    await studio.stop();
+    await studio.done;
+    assert.equal(await canConnect(Number(new URL(studio.url).port)), false);
+  } finally { console.error = realConsole; }
+});
+
+test('stop() gives up after the timeout', async () => {
+  const realConsole = console.error;
+  const logged = [];
+  console.error = (m) => logged.push(m);
+  try {
+    const studio = await startStudio({
+      port: 0, repoRoot: REPO, env: {}, out: sink(), configDir: configDir(), openBrowser: () => {},
+      _deps: {
+        stopTimeoutMs: 50,
+        createActions: (opts) => ({ ...require('../scripts/studio/actions').createActions(opts), stop: () => new Promise(() => {}) }),
+      },
+    });
+    await studio.stop();
+    await studio.done;
+    assert.ok(logged.some((m) => /Beenden dauert zu lange/.test(m)));
+  } finally { console.error = realConsole; }
+});
+
+test('the preview has no target while no child runs and answers 503', async () => {
+  let target;
+  const { createPreviewProxy } = require('../scripts/studio/proxy');
+  const studio = await startStudio({
+    port: 0, repoRoot: REPO, env: {}, out: sink(), configDir: configDir(), openBrowser: () => {},
+    _deps: { createPreviewProxy: (opts) => { target = opts.target; return createPreviewProxy(opts); } },
+  });
+  try {
+    assert.equal(target(), null);
+    assert.equal(await get(studio.previewPort), 503);
+  } finally { await studio.stop(); }
+});

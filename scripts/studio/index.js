@@ -40,19 +40,20 @@ function defaultOpen(url) {
  * @param {string} [options.configDir] -> Folder of `recent.json`.
  * @returns {Promise<{ url: string, previewPort: number, stop(): Promise<void>, done: Promise<void> }>}
  */
-async function startStudio({ port = 3100, repoRoot = REPO, env = process.env, openBrowser = defaultOpen, out = process.stdout, configDir } = {}) {
+async function startStudio({ port = 3100, repoRoot = REPO, env = process.env, openBrowser = defaultOpen, out = process.stdout, configDir, _deps = {} } = {}) {
   if (env.NODE_ENV === 'production') throw new PackageError('plugin studio läuft nicht mit NODE_ENV=production.');
   const token = crypto.randomBytes(32).toString('hex');
   const publicDir = path.join(repoRoot, 'public');
   let proxy;
   let server;
-  const actions = createActions({
+  const makeActions = _deps.createActions || createActions;
+  const actions = makeActions({
     repoRoot,
     env,
     ...(configDir ? { configDir } : {}),
     previewOrigin: () => proxy.url,
   });
-  proxy = createPreviewProxy({
+  proxy = (_deps.createPreviewProxy || createPreviewProxy)({
     port: port === 0 ? 0 : port + 1,
     studioPort: () => server.address().port,
     target: () => {
@@ -60,7 +61,7 @@ async function startStudio({ port = 3100, repoRoot = REPO, env = process.env, op
       return childPort ? { port: childPort } : null;
     },
   });
-  server = createStudioServer({
+  server = (_deps.createStudioServer || createStudioServer)({
     port,
     previewPort: () => proxy.address().port,
     token,
@@ -73,9 +74,18 @@ async function startStudio({ port = 3100, repoRoot = REPO, env = process.env, op
     },
   });
 
+  // Never throws: every step is caught and logged, and the whole shutdown is capped.
   const closeAll = async () => {
-    await actions.stop().catch(() => {});
-    await Promise.all([server.close(), proxy.close()]);
+    const step = async (fn) => { try { await fn(); } catch (err) { console.error(`studio stop: ${err && err.message ? err.message : err}`); } };
+    const work = (async () => {
+      await Promise.all([step(() => actions.stop()), step(() => server.close()), step(() => proxy.close())]);
+    })();
+    let timer;
+    const limit = new Promise((resolve) => {
+      timer = setTimeout(() => { console.error('Beenden dauert zu lange – erzwinge Ende.'); resolve(); }, _deps.stopTimeoutMs || 10000);
+    });
+    await Promise.race([work, limit]);
+    clearTimeout(timer);
   };
   const portError = (err, p) => (err && err.code === 'EADDRINUSE'
     ? new PackageError(`Port ${p} ist belegt. Starte mit --port <anderer Port>.`) : err);
@@ -96,7 +106,7 @@ async function startStudio({ port = 3100, repoRoot = REPO, env = process.env, op
   let stopped = null;
   let finish;
   const done = new Promise((resolve) => { finish = resolve; });
-  const onSignal = () => { stop(); };
+  const onSignal = () => { stop().catch(() => {}); };
   process.once('SIGINT', onSignal);
   process.once('SIGTERM', onSignal);
   function stop() {
