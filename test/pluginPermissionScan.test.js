@@ -174,3 +174,50 @@ test('optional bracket access warns like plain brackets', () => {
   assert.equal(scan('ctx.events?.[k]').warnings[0].message, 'Dynamischer Zugriff auf ctx.events – Berechtigung nicht erkennbar.');
   assert.equal(scan('ui?.[k]').warnings[0].message, 'Dynamischer Zugriff auf ui – Berechtigung nicht erkennbar.');
 });
+
+test('register() with another parameter name warns instead of guessing', () => {
+  const server = 'register() benennt den Parameter nicht ctx – Berechtigungen nicht erkennbar.';
+  const client = 'register() benennt den Parameter nicht ui – Berechtigungen nicht erkennbar.';
+  const rows = [
+    ['function register(context) { context.discord.sendDM(1) }', 'server', server],
+    ['function register({ discord }) { discord.sendDM(1) }', 'server', server],
+    ['async function register(c, x) {}', 'server', server],
+    ['module.exports = { async register(c) {} }', 'server', server],
+    ['module.exports = { register({ data }) {} }', 'server', server],
+    ['const register = (c) => {}', 'server', server],
+    ['const register = async c => {}', 'server', server],
+    ['const register = function (c) {}', 'server', server],
+    ['exports.register = function (c) {}', 'server', server],
+    ['module.exports.register = async (c) => {}', 'server', server],
+    ['module.exports = { register: function (c) {} }', 'server', server],
+    ['module.exports = { register: ({ hooks }) => {} }', 'server', server],
+    ['export function register(api) {}', 'client', client],
+    ['export const register = (api) => {}', 'client', client],
+  ];
+  for (const [code, kind, message] of rows) {
+    const r = scan(`\n${code}`, kind);
+    assert.deepEqual(r.permissions.size, 0, code);
+    assert.deepEqual(r.warnings, [{ file: 'server.js', line: 2, message }], code);
+  }
+});
+
+test('register() with the plain ctx/ui parameter and register calls stay silent', () => {
+  const rows = [
+    ['function register(ctx) {}', 'server'],
+    ['module.exports = { async register(ctx) {} }', 'server'],
+    ['const register = (ctx) => {}', 'server'],
+    ['const register = ctx => {}', 'server'],
+    ['exports.register = function (ctx) {}', 'server'],
+    ['module.exports = { register: async function register(ctx) {} }', 'server'],
+    ['module.exports = { register }', 'server'],
+    ['function register() {}', 'server'],
+    ['register(x);', 'server'],
+    ['if (register(x)) {}', 'server'],
+    ['export function register(ui) {}', 'client'],
+    ["ui.actions.register('a', (event) => {})", 'client'],
+    ['const ok = a === register ? b : c', 'server'],
+  ];
+  for (const [code, kind] of rows) {
+    assert.deepEqual(scan(code, kind).warnings, [], code);
+  }
+});

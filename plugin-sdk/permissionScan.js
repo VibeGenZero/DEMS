@@ -31,6 +31,7 @@ const RENAMED = (what) => `${what} wird umbenannt oder zerlegt – Berechtigung 
 const HOOK_DYNAMIC = 'Hook-Name ist kein fester Text – Berechtigung nicht erkennbar.';
 const HOOK_UNKNOWN = (name) => `Unbekannter Hook „${name}“.`;
 const COMPUTED_PATH = 'require/import mit berechnetem Pfad – nicht prüfbar.';
+const RECEIVER = (expected) => `register() benennt den Parameter nicht ${expected} – Berechtigungen nicht erkennbar.`;
 
 /**
  * @param {string} code
@@ -55,6 +56,61 @@ function scanSource(code, { file, kind }) {
     return (punct(k - 1, '<') || punct(k - 1, '>')) && !(t[k - 2] && t[k - 2].value === t[k - 1].value);
   };
 
+  const arrow = (k) => punct(k, '=') && punct(k + 1, '>');
+  // k at '(' -> index of the matching ')', -1 when it is missing.
+  const closing = (k) => {
+    let depth = 0;
+    for (let j = k; j < t.length; j++) {
+      if (punct(j, '(')) depth++;
+      else if (punct(j, ')') && --depth === 0) return j;
+    }
+    return -1;
+  };
+  // Parameter tokens [start, end) when the `register` at k defines a function:
+  // `function register(`, a method `register(…) {`, `register = (…) =>`,
+  // `register = function (`, `register: …`, `exports.register = …`. Else null.
+  const registerParams = (k) => {
+    if (punct(k + 1, '(')) {
+      if (!notMember(k)) return null;
+      const end = closing(k + 1);
+      return end > 0 && punct(end + 1, '{') ? [k + 2, end] : null;
+    }
+    const assigned = punct(k + 1, '=') && !punct(k + 2, '=') && !punct(k + 2, '>');
+    if (!assigned && !(punct(k + 1, ':') && notMember(k))) return null;
+    let v = k + 2;
+    if (is(v, 'name', 'async')) v++;
+    if (is(v, 'name', 'function')) {
+      v++;
+      if (is(v, 'name')) v++;
+      const end = punct(v, '(') ? closing(v) : -1;
+      return end > 0 ? [v + 1, end] : null;
+    }
+    if (punct(v, '(')) {
+      const end = closing(v);
+      return end > 0 && arrow(end + 1) ? [v + 1, end] : null;
+    }
+    return is(v, 'name') && arrow(v + 1) ? [v, v + 1] : null;
+  };
+  // The scan only follows the plain `ctx`/`ui`: another first parameter gets a warning, not a guess.
+  const receiverLines = new Set();
+  const checkRegister = (k) => {
+    const params = registerParams(k);
+    if (!params || params[0] >= params[1]) return;
+    const [start, end] = params;
+    let stop = end;
+    let depth = 0;
+    for (let j = start; j < end; j++) {
+      if (punct(j, '(') || punct(j, '[') || punct(j, '{')) depth++;
+      else if (punct(j, ')') || punct(j, ']') || punct(j, '}')) depth--;
+      else if (depth === 0 && punct(j, ',')) { stop = j; break; }
+    }
+    const expected = kind === 'client' ? 'ui' : 'ctx';
+    const plain = is(start, 'name', expected) && (stop === start + 1 || punct(start + 1, '='));
+    if (plain || receiverLines.has(t[k].line)) return;
+    receiverLines.add(t[k].line);
+    warn(t[k].line, RECEIVER(expected));
+  };
+
   const addSpecifier = (spec) => {
     if (spec.startsWith('.')) imports.push(spec);
     if (kind === 'server' && NETWORK_MODULE.test(spec)) permissions.add('network');
@@ -64,9 +120,10 @@ function scanSource(code, { file, kind }) {
     const tok = t[i];
     if (tok.type !== 'name') continue;
     const name = tok.value;
+    if (name === 'register') { checkRegister(i); continue; }
 
     if ((name === 'ctx' || name === 'ui') && notMember(i)) {
-      if (punct(i - 1, '=') && !punct(i + 1, '.') && !punct(i + 1, '[') && !isComparison(i - 1)) {
+      if (punct(i - 1, '=') && !punct(i + 1, '.') && !punct(i + 1, '[') && !arrow(i + 1) && !isComparison(i - 1)) {
         warn(tok.line, RENAMED(name));
       }
       if (punct(i + 1, '[')) { warn(tok.line, DYNAMIC(name)); continue; }
