@@ -182,3 +182,7 @@ Admin-side rules (reset password for secrets, audit actions, secrets only as `{ 
 - The prefill of `ui.openEventEditor` uses the editor's draft fields (`startDate`, not `start`).
 - „Event einreichen“ rejects with an inline form (ruling R10), not a dialog.
 - A route handler returning `undefined` answers `{ success: true }`.
+
+## Type description
+
+`plugin-sdk/types/dems-plugin.d.ts` declares `ctx` (`DemsServerContext`) and `ui` (`DemsClientUi`) with German JSDoc and `@permission` tags for editor completion (plugin studio). `test/pluginTypes.test.js` fails when it drifts from the real objects (member paths two levels deep) or when a tag disagrees with the permission scanner; add a member to the SDK and to the `.d.ts` together.
