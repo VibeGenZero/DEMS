@@ -336,3 +336,34 @@ test('studio: nothing is emitted without an active sender', async () => {
         studioEvents.setSender(null);
     }
 });
+
+test('studio: a route Express refuses emits an error event with where route', async () => {
+    host.routes = [route('GET', '/ok', () => ({})), { method: 'GET', path: '/(', access: 'member', handler: () => ({}) }];
+    await withStudio(async (sent) => {
+        await (await call('/api/plugins/demo/ok')).json();
+        const error = sent.find(message => message.type === 'error');
+        assert.equal(error.data.where, 'route');
+        assert.match(error.data.message, /ungültig/);
+    });
+});
+
+test('studio: a route error carries file and line of the plugin folder', async () => {
+    const dir = fs.mkdtempSync(path.join(createTempDir('plugin-frame'), 'p-'));
+    const file = path.join(dir, 'lib', 'broken.js');
+    fs.mkdirSync(path.dirname(file));
+    fs.writeFileSync(file, 'module.exports = () => {\n    throw new Error("drin");\n};\n');
+    const original = host.entryOf;
+    host.entryOf = id => ({ ...original(id), dir });
+    host.routes = [route('GET', '/frame', require(file))];
+    try {
+        await withStudio(async (sent) => {
+            await (await call('/api/plugins/demo/frame')).json();
+            const error = sent.find(message => message.type === 'error');
+            assert.equal(error.data.message, 'drin');
+            assert.equal(error.data.file, 'lib/broken.js');
+            assert.equal(error.data.line, 2);
+        });
+    } finally {
+        host.entryOf = original;
+    }
+});

@@ -14,6 +14,7 @@ const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { buildSiteUrl } = require('../utils/eventUrl');
 const { getTimezone } = require('../utils/timezone');
 const { PluginPermissionError, PluginDataError } = require('./errors');
+const { studio, studioEmit } = require('./studio');
 
 const WINDOW_MS = 600000;
 const DM_LIMIT = 200;
@@ -137,19 +138,10 @@ function buildPayload(text, link) {
 const POST_NOT_DELIVERED = 'Die Kanalnachricht wurde nicht gesendet (der Bot ist nicht bereit oder der Kanal ist nicht erreichbar).';
 const DM_NOT_DELIVERED = 'Die Direktnachricht wurde nicht zugestellt (DM-Benachrichtigungen sind ausgeschaltet oder das Mitglied ist nicht erreichbar).';
 
-/** Forward a debug event to the local plugin studio (no-op without it; the dev module is optional). */
-function studioEmit(type, pluginId, data) {
-    try {
-        require('../dev/studioEvents').emit(type, pluginId, data);
-    } catch {
-        // dev/ is not part of the runtime image
-    }
-}
-
 /** Display name of a member for the studio's debug panel; null when unknown. Studio only. */
 async function studioUserName(userId) {
     try {
-        if (!require('../dev/studioEvents').isActive()) return null;
+        if (!studio()) return null;
         const { db, doc, getDoc } = require('../firebaseAdmin');
         const snap = await getDoc(doc(db, 'users', String(userId)));
         return snap.exists() ? snap.data().displayName || null : null;

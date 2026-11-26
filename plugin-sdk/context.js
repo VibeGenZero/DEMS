@@ -18,6 +18,7 @@ const { createMembersApi } = require('./members');
 const { HOOK_NAMES, EVENT_HOOKS, REGISTRATION_HOOKS, onHook, toPluginEvent } = require('./hooks');
 const { PluginPermissionError, PluginHttpError } = require('./errors');
 const state = require('./state');
+const { studio } = require('./studio');
 
 const ACCESS = ['member', 'admin'];
 const METHODS = ['get', 'post', 'put', 'delete'];
@@ -59,16 +60,12 @@ function createLog(pluginId) {
     });
 }
 
-/** Forward a log line to the local plugin studio (no-op without it; the dev module is optional). */
+/** Forward a log line to the local plugin studio (no-op without it). */
 function studioLog(pluginId, level, args) {
-    try {
-        const studio = require('../dev/studioEvents');
-        if (!studio.isActive()) return;
-        const text = args.map(arg => (typeof arg === 'string' ? arg : stringify(arg))).join(' ');
-        studio.emit('log', pluginId, { level, text });
-    } catch {
-        // dev/ is not part of the runtime image
-    }
+    const events = studio();
+    if (!events) return;
+    const text = args.map(arg => (typeof arg === 'string' ? arg : stringify(arg))).join(' ');
+    events.emit('log', pluginId, { level, text });
 }
 
 function stringify(value) {

@@ -25,6 +25,7 @@ const { setHookGate, setHookErrorReporter, clearHooks } = require('./hooks');
 const { createContext } = require('./context');
 const { buildView } = require('./views');
 const { PluginHostError } = require('./errors');
+const { studioEmit } = require('./studio');
 
 const DEFAULT_REGISTER_TIMEOUT_MS = 5000;
 const DEFAULT_DISABLE_TIMEOUT_MS = 2000;
@@ -137,15 +138,6 @@ function usableCustomDir(officialDir, customDir) {
  * await host.start();
  * host.list(); // [{ id: 'event-submissions', status: 'off', statusText: 'Aus', ... }]
  */
-/** Forward an event to the local plugin studio (no-op without it; the dev module is optional). */
-function studioEmit(type, pluginId, data) {
-    try {
-        require('../dev/studioEvents').emit(type, pluginId, data);
-    } catch {
-        // dev/ is not part of the runtime image
-    }
-}
-
 function createPluginHost({
     officialDir, customDir: configuredCustomDir, safeMode = false, mockMode = false, devPluginId = '',
     registerTimeoutMs = DEFAULT_REGISTER_TIMEOUT_MS, disableTimeoutMs = DEFAULT_DISABLE_TIMEOUT_MS,

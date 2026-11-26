@@ -13,6 +13,8 @@
  * emission makes.
  */
 
+const { studioEmit } = require('./studio');
+
 const HOOK_NAMES = [
     'event.created', 'event.published', 'event.updated', 'event.ended',
     'event.cancelled', 'event.deleted', 'member.deleted', 'registration.checkedIn'
@@ -106,15 +108,6 @@ function isAllowed(pluginId) {
         return gate(pluginId) === true;
     } catch {
         return false;
-    }
-}
-
-/** Forward an event to the local plugin studio (no-op without it; the dev module is optional). */
-function studioEmit(type, pluginId, data) {
-    try {
-        require('../dev/studioEvents').emit(type, pluginId, data);
-    } catch {
-        // dev/ is not part of the runtime image
     }
 }
 

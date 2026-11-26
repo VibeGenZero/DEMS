@@ -40,7 +40,7 @@ function truncate(value) {
 /**
  * Send one event to the studio. Never throws.
  *
- * @param {string} type -> `dm`, `channel`, `role` or `log`.
+ * @param {string} type -> `dm`, `channel`, `role`, `log`, `request`, `hook`, `error` or `lifecycle`.
  * @param {string} pluginId
  * @param {object} data -> Event payload; strings are cut at 10 240 characters.
  */
