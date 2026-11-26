@@ -47,6 +47,7 @@ function healthy(port) {
  * @param {object} [options.env] -> Base environment handed to `prepareDev`.
  * @param {string} [options.platform] -> `process.platform` (tests).
  * @param {Function} [options.execFile] -> `child_process.execFile` (tests).
+ * @param {string} [options.devPluginsDir] -> Mount folder handed to `prepareDev` (default `<repoRoot>/data/dev-plugins`).
  * @param {number} [options.readyTimeoutMs] -> How long to wait for /healthz.
  * @returns {{ start(): Promise<void>, restart(): Promise<void>, stop(): Promise<void>, port(): number|null, status(): string }}
  */
@@ -60,6 +61,7 @@ function createChild({
   platform = process.platform,
   execFile = childProcess.execFile,
   readyTimeoutMs = 30000,
+  devPluginsDir,
 } = {}) {
   let state = 'stopped';
   let current = null; // { child, port, ready, killed, exitInfo, exited, stderrEnded }
@@ -155,7 +157,7 @@ function createChild({
   async function spawnAndWait() {
     let prepared;
     try {
-      prepared = prepareDev(folder, { repoRoot, env });
+      prepared = prepareDev(folder, { repoRoot, env, devPluginsDir });
     } catch (err) {
       fail(err.message, 'start');
       return;

@@ -291,10 +291,10 @@ function clearDevDir(dir) {
  * Prepare `<repo>/data/dev-plugins/` with a link to the plugin folder and a nodemon config.
  *
  * @param {string} folder -> Plugin folder under development.
- * @param {{ repoRoot?: string, env?: object }} options
+ * @param {{ repoRoot?: string, env?: object, devPluginsDir?: string }} options -> `devPluginsDir`: mount folder instead of `<repoRoot>/data/dev-plugins` (tests, studio smoke test).
  * @returns {{ linkDir: string, configPath: string, env: object }}
  */
-function prepareDev(folder, { repoRoot = REPO, env = process.env } = {}) {
+function prepareDev(folder, { repoRoot = REPO, env = process.env, devPluginsDir } = {}) {
     if (env.NODE_ENV === 'production') throw new PackageError('plugin dev läuft nicht mit NODE_ENV=production.');
     const abs = path.resolve(folder);
     let raw;
@@ -309,7 +309,7 @@ function prepareDev(folder, { repoRoot = REPO, env = process.env } = {}) {
     if (path.basename(abs) !== id) throw new PackageError('Der Ordnername muss der Plugin-ID entsprechen.');
     if (officialIds(repoRoot).has(id)) throw new PackageError('Offizielle Plugins entwickelst du direkt mit npm run dev:mock.');
 
-    const linkDir = path.join(repoRoot, 'data', 'dev-plugins');
+    const linkDir = devPluginsDir ? path.resolve(devPluginsDir) : path.join(repoRoot, 'data', 'dev-plugins');
     clearDevDir(linkDir);
     fs.symlinkSync(abs, path.join(linkDir, id), 'junction');
     const configPath = path.join(linkDir, 'nodemon.json');

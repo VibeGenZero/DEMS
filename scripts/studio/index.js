@@ -38,9 +38,10 @@ function defaultOpen(url) {
  * @param {Function} [options.openBrowser] -> `(url) => void`.
  * @param {{ write(text: string): void }} options.out -> Where the start line goes.
  * @param {string} [options.configDir] -> Folder of `recent.json`.
+ * @param {string} [options.devPluginsDir] -> Mount folder of the DEMS child (default `<repoRoot>/data/dev-plugins`).
  * @returns {Promise<{ url: string, previewPort: number, stop(): Promise<void>, done: Promise<void> }>}
  */
-async function startStudio({ port = 3100, repoRoot = REPO, env = process.env, openBrowser = defaultOpen, out = process.stdout, configDir, _deps = {} } = {}) {
+async function startStudio({ port = 3100, repoRoot = REPO, env = process.env, openBrowser = defaultOpen, out = process.stdout, configDir, devPluginsDir, _deps = {} } = {}) {
   if (env.NODE_ENV === 'production') throw new PackageError('plugin studio läuft nicht mit NODE_ENV=production.');
   const token = crypto.randomBytes(32).toString('hex');
   const publicDir = path.join(repoRoot, 'public');
@@ -51,6 +52,7 @@ async function startStudio({ port = 3100, repoRoot = REPO, env = process.env, op
     repoRoot,
     env,
     ...(configDir ? { configDir } : {}),
+    ...(devPluginsDir ? { devPluginsDir } : {}),
     previewOrigin: () => proxy.url,
   });
   proxy = (_deps.createPreviewProxy || createPreviewProxy)({

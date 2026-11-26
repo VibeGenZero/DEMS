@@ -17,6 +17,8 @@ Background (lifecycle, hooks, security model): [plugin-sdk](../concepts/plugin-s
 
 Start with the scaffold: `npm run plugin -- new <id> [--dir <parent>]` (id `^[a-z][a-z0-9-]{2,31}$`, refuses an existing folder) writes `plugin.json` (version `0.1.0`, `sdk: 1.1`), a `server.js` with one `access: 'member'` route, a `client.js` with a tab page and `client.css`. It uses no permission, so `check` finds nothing to change.
 
+Prefer a browser tool? `npm run plugin -- studio` starts the local plugin studio (editor with `ctx`/`ui` autocompletion, live DEMS preview, debug panel, hook buttons, build download): see [plugin-studio](plugin-studio.md).
+
 ```
 my-plugin/              # folder name = manifest id
   plugin.json           # required

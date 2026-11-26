@@ -450,3 +450,14 @@ test('studio passes a numeric --port on to startStudio', async () => {
         assert.equal(got, expected, String(arg));
     }
 });
+
+test('prepareDev mounts into devPluginsDir when given and leaves data/dev-plugins alone', async () => {
+    const folder = await scaffold();
+    const repoRoot = devRepo();
+    const mount = path.join(tmp(), 'mount');
+    const result = prepareDev(folder, { repoRoot, env: {}, devPluginsDir: mount });
+    assert.equal(result.linkDir, mount);
+    assert.equal(result.env.PLUGINS_DIR, mount);
+    assert.deepEqual(fs.readdirSync(mount).sort(), ['demo-plugin', 'nodemon.json']);
+    assert.equal(fs.existsSync(path.join(repoRoot, 'data')), false);
+});

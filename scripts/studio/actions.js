@@ -39,6 +39,7 @@ function vscodeUrl(dir) {
  * @param {object} [options.env] -> Base environment of the DEMS child.
  * @param {Function} [options.createChild] -> `child.createChild` (tests inject a fake).
  * @param {Function} [options.createTriggers] -> `triggers.createTriggers`.
+ * @param {string} [options.devPluginsDir] -> Mount folder of the child (default `<repoRoot>/data/dev-plugins`).
  * @param {number} [options.debounceMs] -> Debounce of the folder watcher.
  * @returns {{ routes: object, log: object, childPort(): number|null, stop(): Promise<void> }}
  */
@@ -50,6 +51,7 @@ function createActions({
   createChild = require('./child').createChild,
   createTriggers = require('./triggers').createTriggers,
   debounceMs = 300,
+  devPluginsDir,
 } = {}) {
   const log = createEventLog();
   let opened = null; // { dir, id, name, version } as at open time; refreshed after a valid plugin.json save
@@ -114,7 +116,7 @@ function createActions({
       await closeCurrent();
       log.clear();
       opened = { id: plugin.id, name: plugin.manifest.name, version: plugin.version, dir: plugin.dir };
-      const current = createChild({ repoRoot, folder: plugin.dir, previewOrigin: value(previewOrigin), onEvent: (e) => log.push(e), env });
+      const current = createChild({ repoRoot, folder: plugin.dir, previewOrigin: value(previewOrigin), onEvent: (e) => log.push(e), env, devPluginsDir });
       child = current;
       triggers = createTriggers({ childPort: () => current.port() });
       watcher = watchPlugin(plugin.dir, () => {
