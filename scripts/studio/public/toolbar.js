@@ -16,6 +16,11 @@ export function renderBuildPreview({ lines = [] }) {
   return `${lineList(lines)}<p class="studio-muted">Die Datei wird über den Download deines Browsers gespeichert.</p>`;
 }
 
+/** Only links into VS Code's `file` handler are followed. */
+export function isVscodeUrl(url) {
+  return typeof url === 'string' && url.startsWith('vscode://file/');
+}
+
 function saveBlob(blob, fileName) {
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
@@ -72,6 +77,7 @@ export function mountToolbar(area, { api, signal }) {
   async function vscode() {
     const { url } = await api.vscode();
     if (signal.aborted) return;
+    if (!isVscodeUrl(url)) { showToast('VS Code konnte nicht geöffnet werden.', 'danger'); return; }
     location.href = url;
   }
 

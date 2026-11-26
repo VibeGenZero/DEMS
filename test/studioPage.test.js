@@ -308,6 +308,7 @@ test('mountDebug closes the event stream on dispose and ignores late events', as
     signal: controller.signal,
     createEventSource: (url) => new FakeSource(url),
     onLifecycle: (data) => seen.push(data),
+    now: () => Date.parse('2026-11-26T09:00:00.000Z'),
   });
   assert.equal(sources.length, 1);
   assert.equal(sources[0].url, '/api/events?token=t');
@@ -319,4 +320,163 @@ test('mountDebug closes the event stream on dispose and ignores late events', as
   sources[0].listeners.studio({ data: JSON.stringify(ev('lifecycle', { status: 'running', where: 'child' })) });
   assert.equal(seen.length, 1);
   debug.dispose(); // idempotent
+});
+
+// ---- Task 11 fix round 1 ----
+
+/** Minimal fake of the debug panel DOM: counts full re-renders and appended HTML. */
+function fakeDebugDom() {
+  const makeList = () => {
+    const list = {
+      scrollTop: 0, clientHeight: 100, scrollHeight: 100, sets: 0, appended: [], removed: 0, children: 0,
+      get innerHTML() { return this._html || ''; },
+      set innerHTML(v) { this._html = v; this.sets += 1; this.children = v ? 1 : 0; },
+      insertAdjacentHTML(where, html) { assert.equal(where, 'beforeend'); this.appended.push(html); this.children += (html.match(/dbg-entry/g) || []).length; },
+      get firstElementChild() { const self = this; return self.children ? { remove() { self.removed += 1; self.children -= 1; } } : null; },
+    };
+    return list;
+  };
+  const list = makeList();
+  const status = { textContent: '', classList: { hidden: true, toggle(_, force) { this.hidden = force; } } };
+  const filter = { value: 'alle', listeners: {}, addEventListener(n, fn) { this.listeners[n] = fn; } };
+  const els = { '.dbg-list': list, '.dbg-status': status, '.dbg-filter': filter };
+  return { list, status, filter, container: { innerHTML: '', querySelector: (sel) => els[sel] || null } };
+}
+
+function fakeSources() {
+  const sources = [];
+  class FakeSource {
+    constructor(url) { this.url = url; this.closed = false; this.listeners = {}; sources.push(this); }
+    addEventListener(name, fn) { this.listeners[name] = fn; }
+    close() { this.closed = true; }
+    emit(event) { this.listeners.studio({ data: JSON.stringify(event) }); }
+  }
+  return { sources, create: (url) => new FakeSource(url) };
+}
+
+const tick = () => new Promise((resolve) => setImmediate(resolve));
+
+test('mountDebug appends new entries without re-rendering the list, and trims at the cap', async () => {
+  const { mountDebug } = await load('debug.js');
+  const dom = fakeDebugDom();
+  const { sources, create } = fakeSources();
+  const controller = new AbortController();
+  mountDebug(dom.container, { api: { eventsUrl: () => 'u', clearEvents: async () => {} }, signal: controller.signal, createEventSource: create });
+  const setsAfterMount = dom.list.sets;
+  sources[0].emit(ev('log', { level: 'info', text: 'a' }));
+  await tick();
+  const setsAfterFirst = dom.list.sets; // the empty hint is replaced once
+  for (let i = 0; i < 3; i += 1) sources[0].emit(ev('log', { level: 'info', text: `b${i}` }));
+  await tick();
+  assert.equal(dom.list.sets, setsAfterFirst, 'no full re-render for further events');
+  assert.ok(setsAfterFirst - setsAfterMount <= 1);
+  assert.equal(dom.list.appended.join('').match(/dbg-entry/g).length, 4);
+  for (let i = 0; i < 600; i += 1) sources[0].emit(ev('log', { level: 'info', text: `c${i}` }));
+  await tick();
+  assert.equal(dom.list.sets, setsAfterFirst);
+  assert.equal(dom.list.children, 500, 'DOM trimmed to the cap');
+  controller.abort();
+});
+
+test('mountDebug does not render entries outside the active filter', async () => {
+  const { mountDebug } = await load('debug.js');
+  const dom = fakeDebugDom();
+  const { sources, create } = fakeSources();
+  const controller = new AbortController();
+  mountDebug(dom.container, { api: { eventsUrl: () => 'u', clearEvents: async () => {} }, signal: controller.signal, createEventSource: create });
+  dom.filter.value = 'fehler';
+  dom.filter.listeners.change();
+  const sets = dom.list.sets;
+  sources[0].emit(ev('log', { level: 'info', text: 'x' }));
+  await tick();
+  assert.equal(dom.list.appended.length, 0);
+  assert.equal(dom.list.sets, sets);
+  controller.abort();
+});
+
+test('mountDebug applies only lifecycle events newer than the mount, once', async () => {
+  const { mountDebug } = await load('debug.js');
+  const { sources, create } = fakeSources();
+  const seen = [];
+  const controller = new AbortController();
+  mountDebug(fakeDebugDom().container, {
+    api: { eventsUrl: () => 'u', clearEvents: async () => {} }, signal: controller.signal, createEventSource: create,
+    onLifecycle: (d) => seen.push(d.status), now: () => Date.parse('2026-11-26T10:00:00.000Z'),
+  });
+  const life = (status, at) => ({ type: 'lifecycle', pluginId: 'p', at, data: { status, where: 'child' } });
+  sources[0].emit(life('starting', '2026-11-26T09:59:00.000Z')); // replay of old history
+  sources[0].emit(life('running', '2026-11-26T09:59:30.000Z'));
+  assert.deepEqual(seen, []);
+  sources[0].emit(life('starting', '2026-11-26T10:00:05.000Z'));
+  sources[0].emit(life('running', '2026-11-26T10:00:09.000Z'));
+  sources[0].emit(life('running', '2026-11-26T10:00:09.000Z')); // replay after a reconnect
+  sources[0].emit(life('starting', '2026-11-26T10:00:05.000Z'));
+  assert.deepEqual(seen, ['starting', 'running']);
+  controller.abort();
+});
+
+test('mountDebug shows the connection state on errors and gives up after 10', async () => {
+  const { mountDebug } = await load('debug.js');
+  const dom = fakeDebugDom();
+  const { sources, create } = fakeSources();
+  const controller = new AbortController();
+  mountDebug(dom.container, { api: { eventsUrl: () => 'u', clearEvents: async () => {} }, signal: controller.signal, createEventSource: create });
+  const src = sources[0];
+  src.listeners.error();
+  assert.equal(dom.status.textContent, 'Verbindung zum Studio getrennt – versuche erneut …');
+  assert.equal(dom.status.classList.hidden, false);
+  src.listeners.open();
+  assert.equal(dom.status.classList.hidden, true);
+  for (let i = 0; i < 5; i += 1) src.listeners.error();
+  src.emit(ev('log', { level: 'info', text: 'back' })); // a message resets the count
+  assert.equal(dom.status.classList.hidden, true);
+  for (let i = 0; i < 9; i += 1) src.listeners.error();
+  assert.equal(src.closed, false);
+  src.listeners.error();
+  assert.equal(src.closed, true);
+  assert.equal(dom.status.textContent, 'Verbindung getrennt. Seite mit dem Start-Link neu öffnen.');
+  controller.abort();
+});
+
+test('isVscodeUrl accepts only vscode://file/ links', async () => {
+  const { isVscodeUrl } = await load('toolbar.js');
+  assert.equal(isVscodeUrl('vscode://file/C:/Users/me/plugin'), true);
+  for (const bad of ['javascript:alert(1)', 'https://evil.example/', 'vscode://other/x', 'VSCODE://file/x', '', null, undefined, 42, { url: 'vscode://file/x' }]) {
+    assert.equal(isVscodeUrl(bad), false, String(bad));
+  }
+});
+
+test('the studio started through the CLI can scaffold a plugin (plugin.js exports are set before main runs)', async () => {
+  const { spawn } = require('node:child_process');
+  const fs = require('node:fs');
+  const os = require('node:os');
+  const root = path.join(__dirname, '..');
+  const work = fs.mkdtempSync(path.join(os.tmpdir(), 'dems-studio-cli-'));
+  const env = { ...process.env, APPDATA: work, XDG_CONFIG_HOME: work };
+  delete env.NODE_ENV;
+  const proc = spawn(process.execPath, [path.join(root, 'scripts', 'plugin.js'), 'studio', '--port', '0'], { cwd: root, env });
+  let out = '';
+  proc.stdout.on('data', (d) => { out += d; });
+  proc.stderr.on('data', (d) => { out += d; });
+  try {
+    const url = await new Promise((resolve, reject) => {
+      const timer = setInterval(() => {
+        const m = /(http:\/\/127\.0\.0\.1:\d+)\/#token=([0-9a-f]+)/.exec(out);
+        if (m) { clearInterval(timer); resolve(m); }
+      }, 50);
+      setTimeout(() => { clearInterval(timer); reject(new Error(`studio did not start: ${out}`)); }, 15000);
+    });
+    const [, origin, token] = url;
+    const response = await fetch(`${origin}/api/new`, {
+      method: 'POST',
+      headers: { 'X-Studio-Token': token, Origin: origin, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: 'cli-plugin', parentDir: work }),
+    });
+    assert.equal(response.status, 200, out);
+    assert.ok(fs.existsSync(path.join(work, 'cli-plugin', 'plugin.json')));
+  } finally {
+    proc.kill();
+    await new Promise((resolve) => { proc.once('exit', resolve); setTimeout(resolve, 3000); });
+    fs.rmSync(work, { recursive: true, force: true });
+  }
 });

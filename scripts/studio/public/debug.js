@@ -68,7 +68,7 @@ export function renderDebugEntry(event) {
     }
     case 'request':
       return line('request', time, `
-        <details><summary>${escapeHtml(d.method)} ${escapeHtml(d.path)} <span class="dbg-status">${escapeHtml(d.status)}</span> ${escapeHtml(d.ms)} ms</summary>
+        <details><summary>${escapeHtml(d.method)} ${escapeHtml(d.path)} <span class="dbg-code">${escapeHtml(d.status)}</span> ${escapeHtml(d.ms)} ms</summary>
           ${body('Anfrage', d.requestBody)}${body('Antwort', d.responseBody)}</details>`);
     case 'hook':
       return line('hook', time, `<div><i class="bi bi-lightning"></i> Hook ${escapeHtml(d.name)} · ${d.ok ? 'ok' : 'Fehler'}${d.summary ? ` <span class="studio-muted">${escapeHtml(d.summary)}</span>` : ''}${d.ok || !d.error ? '' : `<div class="dbg-dropped">${escapeHtml(d.error)}</div>`}</div>`);
@@ -81,57 +81,142 @@ export function renderDebugEntry(event) {
   }
 }
 
+const RECONNECTING = 'Verbindung zum Studio getrennt – versuche erneut …';
+const GAVE_UP = 'Verbindung getrennt. Seite mit dem Start-Link neu öffnen.';
+const MAX_CONSECUTIVE_ERRORS = 10;
+
 /**
  * Fills `container` with the panel and opens the event stream. Stream, listeners and clear requests
  * end with `signal` (or `dispose()`).
  * @param {HTMLElement} container
- * @param {{ api: object, signal: AbortSignal, createEventSource?: (url: string) => EventSource, onLifecycle?: (data: object) => void }} options
+ * @param {{ api: object, signal: AbortSignal, createEventSource?: (url: string) => EventSource, onLifecycle?: (data: object) => void, now?: () => number }} options
  * @returns {{ dispose(): void }}
  */
-export function mountDebug(container, { api, signal, createEventSource = (url) => new EventSource(url), onLifecycle = () => {} }) {
+export function mountDebug(container, { api, signal, createEventSource = (url) => new EventSource(url), onLifecycle = () => {}, now = Date.now }) {
   container.innerHTML = `
     <div class="dbg-head">
       <strong>Debug</strong>
       <select class="studio-input dbg-filter" aria-label="Filter">${KINDS.map(([id, label]) => `<option value="${id}">${label}</option>`).join('')}</select>
       <button type="button" class="studio-btn dbg-clear"><i class="bi bi-trash"></i> Leeren</button>
     </div>
+    <div class="dbg-status is-hidden" role="status"></div>
     <div class="dbg-list" role="log"></div>`;
   const listEl = container.querySelector('.dbg-list');
   const filterEl = container.querySelector('.dbg-filter');
   const clearEl = container.querySelector('.dbg-clear');
+  const statusEl = container.querySelector('.dbg-status');
+  const EMPTY = '<p class="studio-muted dbg-empty">Noch keine Ereignisse.</p>';
   let events = [];
   let kind = 'alle';
   let closed = false;
+  let errors = 0;
+  let lastLifecycleAt = now(); // lifecycle events of the replayed history are older than this
+  // Entries not yet in the DOM and old entries to drop from its start: one DOM write per burst.
+  let pendingHtml = [];
+  let pendingRemove = 0;
+  let domCount = 0;
+  let showingHint = false; // the list holds only the „Noch keine Ereignisse“ note
+  let scheduled = false;
 
+  const shows = (event) => filterEvents([event], kind).length > 0;
+
+  function setStatus(text) {
+    if (!statusEl) return;
+    statusEl.textContent = text || '';
+    statusEl.classList.toggle('is-hidden', !text);
+  }
+
+  /** Full re-render: only for the filter, „Leeren“ and a (re)opened stream. */
   function render() {
+    pendingHtml = [];
+    pendingRemove = 0;
     if (!listEl) return;
-    const stick = listEl.scrollTop + listEl.clientHeight >= listEl.scrollHeight - 8;
     const shown = filterEvents(events, kind);
-    listEl.innerHTML = shown.length ? shown.map(renderDebugEntry).join('') : '<p class="studio-muted dbg-empty">Noch keine Ereignisse.</p>';
+    domCount = shown.length;
+    showingHint = !shown.length;
+    listEl.innerHTML = shown.length ? shown.map(renderDebugEntry).join('') : EMPTY;
+    listEl.scrollTop = listEl.scrollHeight;
+  }
+
+  function flush() {
+    scheduled = false;
+    if (closed || !listEl) return;
+    const stick = listEl.scrollTop + listEl.clientHeight >= listEl.scrollHeight - 8;
+    let remove = pendingRemove;
+    pendingRemove = 0;
+    while (remove > 0 && domCount > 0) {
+      const first = listEl.firstElementChild;
+      if (first) first.remove();
+      domCount -= 1;
+      remove -= 1;
+    }
+    const html = pendingHtml.slice(remove); // entries trimmed again before they were ever drawn
+    pendingHtml = [];
+    if (html.length) {
+      if (showingHint) { listEl.innerHTML = ''; showingHint = false; }
+      listEl.insertAdjacentHTML('beforeend', html.join(''));
+      domCount += html.length;
+    }
     if (stick) listEl.scrollTop = listEl.scrollHeight;
+  }
+
+  function schedule() {
+    if (scheduled) return;
+    scheduled = true;
+    if (typeof requestAnimationFrame === 'function') requestAnimationFrame(flush);
+    else queueMicrotask(flush);
+  }
+
+  function add(event) {
+    events.push(event);
+    if (events.length > MAX_EVENTS) {
+      const oldest = events.shift();
+      if (shows(oldest)) pendingRemove += 1;
+    }
+    if (shows(event)) pendingHtml.push(renderDebugEntry(event));
+    schedule();
+  }
+
+  function lifecycle(event) {
+    const at = Date.parse(event.at);
+    if (!event.data || event.data.where !== 'child' || !(at > lastLifecycleAt)) return;
+    lastLifecycleAt = at;
+    onLifecycle(event.data);
   }
 
   const source = createEventSource(api.eventsUrl());
   // After a reconnect the server replays its whole log, so start from scratch.
-  source.addEventListener('open', () => { if (!closed) { events = []; render(); } });
+  source.addEventListener('open', () => {
+    if (closed) return;
+    errors = 0;
+    setStatus('');
+    events = [];
+    render();
+  });
+  source.addEventListener('error', () => {
+    if (closed) return;
+    errors += 1;
+    if (errors >= MAX_CONSECUTIVE_ERRORS) {
+      closed = true;
+      source.close();
+      setStatus(GAVE_UP);
+    } else {
+      setStatus(RECONNECTING);
+    }
+  });
   source.addEventListener('studio', (message) => {
     if (closed) return;
     let event;
     try { event = JSON.parse(message.data); } catch { return; }
     if (!event || typeof event !== 'object') return;
-    if (event.type === 'lifecycle') {
-      if (event.data && event.data.where === 'child') onLifecycle(event.data);
-      return;
-    }
-    events.push(event);
-    if (events.length > MAX_EVENTS) events = events.slice(events.length - MAX_EVENTS);
-    render();
+    if (errors) { errors = 0; setStatus(''); }
+    if (event.type === 'lifecycle') lifecycle(event);
+    else add(event);
   });
 
   const dispose = () => {
-    if (closed) return;
     closed = true;
-    source.close();
+    source.close(); // closing twice is harmless
   };
   signal.addEventListener('abort', dispose, { once: true });
   if (signal.aborted) dispose();
@@ -140,7 +225,7 @@ export function mountDebug(container, { api, signal, createEventSource = (url) =
   if (clearEl) {
     clearEl.addEventListener('click', async () => {
       try { await api.clearEvents(); } catch { /* clearing the own view is enough */ }
-      if (signal.aborted || closed) return;
+      if (signal.aborted) return;
       events = []; // the server does not tell open streams
       render();
     }, { signal });
