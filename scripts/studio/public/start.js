@@ -56,8 +56,13 @@ export function renderStartPage({ recent = [] } = {}) {
     </main>`;
 }
 
-/** Renders the start page into `root`; `onOpened(plugin)` runs when a plugin was opened or created. */
+/**
+ * Renders the start page into `root`; `onOpened(plugin)` runs when a plugin was opened or created.
+ * @returns {() => void} Removes the listeners again.
+ */
 export function mountStart(root, { api, recent, onOpened }) {
+  const controller = new AbortController();
+  const { signal } = controller;
   let current = recent;
   const render = () => { root.innerHTML = renderStartPage({ recent: current }); };
   render();
@@ -78,7 +83,7 @@ export function mountStart(root, { api, recent, onOpened }) {
     const data = new FormData(form);
     if (form.dataset.form === 'new') run(() => api.create(String(data.get('id')).trim(), String(data.get('parentDir')).trim()));
     else run(() => api.open(String(data.get('dir')).trim()));
-  });
+  }, { signal });
 
   root.addEventListener('click', async (event) => {
     const button = event.target.closest('button[data-action]');
@@ -93,5 +98,6 @@ export function mountStart(root, { api, recent, onOpened }) {
         showToast(err.message, 'danger');
       }
     }
-  });
+  }, { signal });
+  return () => controller.abort();
 }

@@ -15,6 +15,26 @@ export function editorLanguage(path) {
   return (dot > 0 && LANGUAGES[name.slice(dot + 1).toLowerCase()]) || 'plaintext';
 }
 
+/**
+ * Tracks whether a model differs from its last saved state. `version()` taken before a save request is passed
+ * to `markSaved(version)`, so edits typed while the request runs keep the model dirty.
+ */
+export function createDirtyTracker(model, onChange) {
+  let saved = model.getAlternativeVersionId();
+  let dirty = false;
+  const update = () => {
+    const now = model.getAlternativeVersionId() !== saved;
+    if (now !== dirty) { dirty = now; onChange(now); }
+  };
+  const subscription = model.onDidChangeContent(update);
+  return {
+    version: () => model.getAlternativeVersionId(),
+    markSaved(version = model.getAlternativeVersionId()) { saved = version; update(); },
+    isDirty: () => dirty,
+    dispose: () => subscription.dispose(),
+  };
+}
+
 const HINT_TYPES = { server: 'DemsServerContext', client: 'DemsClientUi' };
 const REGISTER = /(^|[^\w$.])((?:export\s+)?(?:async\s+)?(?:function\s+)?)register\s*\(\s*([A-Za-z_$][\w$]*)\s*[,)]/m;
 
@@ -42,7 +62,11 @@ function loadScript(src) {
   });
 }
 
-/** Monaco builds <style> elements at runtime; under the page CSP they need the page's nonce. */
+/**
+ * Monaco builds <style> elements at runtime and (0.58) has no option for a CSP nonce, while the page CSP only
+ * accepts nonce'd style elements. So every <style> created through document.createElement gets the page nonce.
+ * The patch is global but only touches elements named 'style' and only adds the nonce attribute.
+ */
 function allowMonacoStyles() {
   const meta = document.querySelector('meta[name="csp-nonce"]');
   const nonce = meta && meta.content;
@@ -109,7 +133,8 @@ function registerHintProviders(monaco, hints) {
     return hint && hint.shift ? hint : null;
   };
 
-  monaco.languages.registerCompletionItemProvider('javascript', {
+  const disposables = [];
+  disposables.push(monaco.languages.registerCompletionItemProvider('javascript', {
     triggerCharacters: ['.'],
     async provideCompletionItems(model, position) {
       const hint = activeHint(model);
@@ -140,9 +165,9 @@ function registerHintProviders(monaco, hints) {
       }
       return item;
     },
-  });
+  }));
 
-  monaco.languages.registerHoverProvider('javascript', {
+  disposables.push(monaco.languages.registerHoverProvider('javascript', {
     async provideHover(model, position) {
       const hint = activeHint(model);
       if (!hint) return null;
@@ -157,7 +182,8 @@ function registerHintProviders(monaco, hints) {
         contents: [{ value: `${fence}ts\n${partsText(info.displayParts)}\n${fence}` }, { value: describe(info) }].filter((c) => c.value),
       };
     },
-  });
+  }));
+  return { dispose: () => disposables.forEach((d) => d.dispose()) };
 }
 
 let monacoPromise = null;
@@ -202,7 +228,7 @@ const pathUri = (monaco, prefix, path) => monaco.Uri.parse(`file:///${prefix}${p
 export async function createEditorHost(container, { onDirty, onSave }) {
   const monaco = await loadMonaco();
   const hints = new Map(); // real model uri -> { shadow, at, shift, kind }
-  registerHintProviders(monaco, hints);
+  const providers = registerHintProviders(monaco, hints);
   const editor = monaco.editor.create(container, {
     model: null,
     theme: 'dems',
@@ -234,10 +260,9 @@ export async function createEditorHost(container, { onDirty, onSave }) {
     add(path, content, kind) {
       if (entries.has(path)) return;
       const model = monaco.editor.createModel(content, editorLanguage(path), pathUri(monaco, '', path));
-      const entry = { model, saved: model.getAlternativeVersionId(), viewState: null, dirty: false };
+      const entry = { model, viewState: null };
+      entry.tracker = createDirtyTracker(model, (dirty) => onDirty(path, dirty));
       entry.listener = model.onDidChangeContent(() => {
-        const dirty = model.getAlternativeVersionId() !== entry.saved;
-        if (dirty !== entry.dirty) { entry.dirty = dirty; onDirty(path, dirty); }
         if (hints.has(model.uri.toString())) refreshHint(entry);
       });
       entries.set(path, entry);
@@ -258,22 +283,27 @@ export async function createEditorHost(container, { onDirty, onSave }) {
       }
     },
     value: (path) => entries.get(path).model.getValue(),
-    markSaved(path) {
-      const entry = entries.get(path);
-      entry.saved = entry.model.getAlternativeVersionId();
-      if (entry.dirty) { entry.dirty = false; onDirty(path, false); }
-    },
+    /** Version id of the model now; take it before a save request and pass it to markSaved. */
+    version: (path) => entries.get(path).tracker.version(),
+    markSaved: (path, version) => entries.get(path).tracker.markSaved(version),
     close(path) {
       const entry = entries.get(path);
       if (!entry) return;
       if (editor.getModel() === entry.model) editor.setModel(null);
       entry.listener.dispose();
+      entry.tracker.dispose();
       const key = entry.model.uri.toString();
       if (hints.has(key)) { hints.get(key).shadow.dispose(); hints.delete(key); }
       entry.model.dispose();
       entries.delete(path);
     },
     closeAll() { [...entries.keys()].forEach((p) => host.close(p)); },
+    /** Closes all models and removes the editor and the completion/hover providers. */
+    dispose() {
+      host.closeAll();
+      providers.dispose();
+      editor.dispose();
+    },
     /** Smoke check: problems the language service finds in the SDK type file (should be none). */
     async libDiagnostics() {
       const ts = monaco.languages.typescript || monaco.typescript;

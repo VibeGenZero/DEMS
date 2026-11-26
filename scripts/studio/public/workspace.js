@@ -9,6 +9,7 @@ export function typeLibFor(path, manifest) {
   return 'server';
 }
 
+const MAX_UPLOAD_BYTES = 2 * 1024 * 1024; // LIMITS.entryBytes of the SDK
 const baseName = (path) => path.split('/').pop();
 
 /** @returns {string} HTML list of the plugin files. */
@@ -94,6 +95,8 @@ export async function mountWorkspace(root, { api, plugin, onLeave }) {
   const messageEl = $('#editor-message');
   const hostEl = $('#editor-host');
 
+  const controller = new AbortController();
+  const { signal } = controller;
   const dirty = new Set();
   let files = [];
   let tabs = [];
@@ -143,7 +146,10 @@ export async function mountWorkspace(root, { api, plugin, onLeave }) {
       try {
         editorHost.add(path, await api.readFile(path), typeLibFor(path, manifest));
       } catch (err) {
+        active = null;
+        editorHost.show(null);
         showMessage(err.message);
+        render();
         return;
       }
       tabs.push(path);
@@ -156,9 +162,12 @@ export async function mountWorkspace(root, { api, plugin, onLeave }) {
 
   async function save(path = active) {
     if (!path || !editorHost.has(path)) return;
+    // Value and version are taken together; edits typed while the request runs keep the file unsaved.
+    const content = editorHost.value(path);
+    const version = editorHost.version(path);
     try {
-      await api.saveFile(path, editorHost.value(path));
-      editorHost.markSaved(path);
+      await api.saveFile(path, content);
+      if (editorHost.has(path)) editorHost.markSaved(path, version);
       if (path === 'plugin.json') await loadManifest();
       showToast(`Gespeichert: ${path}`, 'success');
     } catch (err) {
@@ -217,6 +226,7 @@ export async function mountWorkspace(root, { api, plugin, onLeave }) {
   }
 
   async function upload(file) {
+    if (file.size > MAX_UPLOAD_BYTES) { showToast('Datei zu groß (höchstens 2 MB).', 'danger'); return; }
     const target = await askText({ title: 'Datei hochladen', label: 'Zielpfad im Plugin', value: `assets/${file.name}`, confirmLabel: 'Hochladen' });
     if (!target) return;
     try {
@@ -237,8 +247,12 @@ export async function mountWorkspace(root, { api, plugin, onLeave }) {
     'new-file': () => createFile(),
     upload: () => $('#upload-input').click(),
     async leave() {
-      if (dirty.size && !(await confirmDiscard())) return;
-      onLeave();
+      try {
+        if (dirty.size && !(await confirmDiscard())) return;
+        await onLeave();
+      } catch (err) {
+        showToast(err.message, 'danger');
+      }
     },
   };
 
@@ -246,12 +260,12 @@ export async function mountWorkspace(root, { api, plugin, onLeave }) {
     const button = event.target.closest('button[data-action]');
     const handler = button && handlers[button.dataset.action];
     if (handler) handler(button.dataset.path);
-  });
+  }, { signal });
   $('#upload-input').addEventListener('change', (event) => {
     const [file] = event.target.files;
     event.target.value = '';
     if (file) upload(file);
-  });
+  }, { signal });
 
   const onKey = (event) => {
     if ((event.ctrlKey || event.metaKey) && !event.shiftKey && !event.altKey && event.key.toLowerCase() === 's') {
@@ -262,23 +276,28 @@ export async function mountWorkspace(root, { api, plugin, onLeave }) {
   const onBeforeUnload = (event) => {
     if (dirty.size) { event.preventDefault(); event.returnValue = ''; }
   };
-  document.addEventListener('keydown', onKey);
-  window.addEventListener('beforeunload', onBeforeUnload);
+  document.addEventListener('keydown', onKey, { signal });
+  window.addEventListener('beforeunload', onBeforeUnload, { signal });
 
-  await loadManifest();
-  await refreshFiles();
-  const first = ['server.js', 'plugin.json'].find((p) => files.some((f) => f.path === p));
-  if (first) await openFile(first);
+  // Everything created so far (listeners, editor, models) goes away again when the start fails.
+  const dispose = () => {
+    controller.abort();
+    editorHost.dispose();
+  };
+  try {
+    await loadManifest();
+    await refreshFiles();
+    const first = ['server.js', 'plugin.json'].find((p) => files.some((f) => f.path === p));
+    if (first) await openFile(first);
+  } catch (err) {
+    dispose();
+    throw err;
+  }
 
   return {
     previewArea: $('#studio-preview'),
     toolbarArea: $('#studio-toolbar'),
     dirtyCount: () => dirty.size,
-    dispose() {
-      document.removeEventListener('keydown', onKey);
-      window.removeEventListener('beforeunload', onBeforeUnload);
-      editorHost.closeAll();
-      editorHost.editor.dispose();
-    },
+    dispose,
   };
 }

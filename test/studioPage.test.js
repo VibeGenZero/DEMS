@@ -10,7 +10,7 @@ test('renderStartPage escapes plugin names and marks missing folders', async () 
   const { renderStartPage } = await load('start.js');
   const html = renderStartPage({
     recent: [
-      { dir: 'C:\plugins\a', id: 'a', name: '<script>alert(1)</script>', exists: true },
+      { dir: 'C:\\plugins\\a', id: 'a', name: '<script>alert(1)</script>', exists: true },
       { dir: '/gone', id: 'gone', name: 'Weg', exists: false },
     ],
   });
@@ -124,4 +124,44 @@ test('createApi sends the token header and JSON, and turns errors into German me
   assert.deepEqual(JSON.parse(seen[1][1].body), { path: 'a.js', content: 'x' });
   await assert.rejects(api.readFile('a.js'), /Fehler/);
   assert.equal(seen[2][0], '/api/file?path=a.js');
+});
+
+function fakeModel() {
+  let version = 1;
+  const listeners = [];
+  return {
+    getAlternativeVersionId: () => version,
+    onDidChangeContent(fn) { listeners.push(fn); return { dispose() { listeners.splice(listeners.indexOf(fn), 1); } }; },
+    edit() { version += 1; listeners.slice().forEach((fn) => fn()); },
+    listeners,
+  };
+}
+
+test('createDirtyTracker: edits typed while a save runs stay unsaved', async () => {
+  const { createDirtyTracker } = await load('editor.js');
+  const model = fakeModel();
+  const seen = [];
+  const tracker = createDirtyTracker(model, (d) => seen.push(d));
+  model.edit();
+  assert.equal(tracker.isDirty(), true);
+  const version = tracker.version(); // value and version are taken before the request
+  model.edit(); // typed while the request runs
+  tracker.markSaved(version);
+  assert.equal(tracker.isDirty(), true, 'still dirty');
+  tracker.markSaved(tracker.version());
+  assert.equal(tracker.isDirty(), false);
+  assert.deepEqual(seen, [true, false]);
+  tracker.dispose();
+  assert.equal(model.listeners.length, 0);
+});
+
+test('mountStart returns a disposer that aborts all its listeners', async () => {
+  const { mountStart } = await load('start.js');
+  const signals = [];
+  const root = { innerHTML: '', addEventListener: (type, fn, options) => signals.push(options.signal) };
+  const dispose = mountStart(root, { api: {}, recent: [], onOpened() {} });
+  assert.equal(signals.length, 2);
+  assert.ok(signals.every((s) => s && !s.aborted));
+  dispose();
+  assert.ok(signals.every((s) => s.aborted));
 });

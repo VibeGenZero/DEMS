@@ -18,28 +18,39 @@ async function main() {
   const token = takeToken(window.location, window.history);
   if (!token) return fail('Der Zugangsschlüssel fehlt. Öffne das Studio über den Link, den „npm run plugin -- studio“ ausgibt.');
   const api = createApi({ token });
-  let workspace = null;
+  let disposeView = () => {}; // removes listeners and editor of the view on screen
+  let opening = false;
+
+  function swapView(dispose) {
+    disposeView();
+    disposeView = dispose;
+  }
 
   async function showStart() {
-    if (workspace) { workspace.dispose(); workspace = null; }
     const state = await api.state();
-    mountStart(root, { api, recent: state.recent, onOpened: showWorkspace });
+    swapView(() => {});
+    swapView(mountStart(root, { api, recent: state.recent, onOpened: showWorkspace }));
   }
 
   async function showWorkspace(plugin) {
+    if (opening) return;
+    opening = true;
     try {
-      workspace = await mountWorkspace(root, { api, plugin, onLeave: showStart });
-      window.studio = { api, workspace, root };
+      swapView(() => {});
+      const workspace = await mountWorkspace(root, { api, plugin, onLeave: showStart });
+      swapView(workspace.dispose);
       document.dispatchEvent(new CustomEvent('studio:workspace', { detail: { api, plugin, workspace } }));
     } catch (err) {
       showToast(err.message, 'danger');
-      await showStart();
+      try { await showStart(); } catch (again) { fail(again.message); }
+    } finally {
+      opening = false;
     }
   }
 
   const state = await api.state();
   if (state.plugin) await showWorkspace(state.plugin);
-  else mountStart(root, { api, recent: state.recent, onOpened: showWorkspace });
+  else swapView(mountStart(root, { api, recent: state.recent, onOpened: showWorkspace }));
 }
 
 main().catch((err) => fail(err.message));
