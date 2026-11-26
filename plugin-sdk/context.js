@@ -53,10 +53,32 @@ const isDocId = id => typeof id === 'string' && id.length >= 1 && id.length <= M
 function createLog(pluginId) {
     const prefix = `[plugin:${pluginId}]`;
     return Object.freeze({
-        info: (...args) => console.log(prefix, ...args),
-        warn: (...args) => console.warn(prefix, ...args),
-        error: (...args) => console.error(prefix, ...args)
+        info: (...args) => { console.log(prefix, ...args); studioLog(pluginId, 'info', args); },
+        warn: (...args) => { console.warn(prefix, ...args); studioLog(pluginId, 'warn', args); },
+        error: (...args) => { console.error(prefix, ...args); studioLog(pluginId, 'error', args); }
     });
+}
+
+/** Forward a log line to the local plugin studio (no-op without it; the dev module is optional). */
+function studioLog(pluginId, level, args) {
+    try {
+        const studio = require('../dev/studioEvents');
+        if (!studio.isActive()) return;
+        const text = args.map(arg => (typeof arg === 'string' ? arg : stringify(arg))).join(' ');
+        studio.emit('log', pluginId, { level, text });
+    } catch {
+        // dev/ is not part of the runtime image
+    }
+}
+
+function stringify(value) {
+    if (value instanceof Error) return value.message;
+    try {
+        const json = JSON.stringify(value);
+        return json === undefined ? String(value) : json;
+    } catch {
+        return String(value);
+    }
 }
 
 /** Start time of a stored event as milliseconds, Infinity without a valid date (sorts last). */

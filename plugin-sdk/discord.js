@@ -134,6 +134,30 @@ function buildPayload(text, link) {
     return { content: text, components, allowedMentions: { parse: [] } };
 }
 
+const POST_NOT_DELIVERED = 'Die Kanalnachricht wurde nicht gesendet (der Bot ist nicht bereit oder der Kanal ist nicht erreichbar).';
+const DM_NOT_DELIVERED = 'Die Direktnachricht wurde nicht zugestellt (DM-Benachrichtigungen sind ausgeschaltet oder das Mitglied ist nicht erreichbar).';
+
+/** Forward a debug event to the local plugin studio (no-op without it; the dev module is optional). */
+function studioEmit(type, pluginId, data) {
+    try {
+        require('../dev/studioEvents').emit(type, pluginId, data);
+    } catch {
+        // dev/ is not part of the runtime image
+    }
+}
+
+/** Display name of a member for the studio's debug panel; null when unknown. Studio only. */
+async function studioUserName(userId) {
+    try {
+        if (!require('../dev/studioEvents').isActive()) return null;
+        const { db, doc, getDoc } = require('../firebaseAdmin');
+        const snap = await getDoc(doc(db, 'users', String(userId)));
+        return snap.exists() ? snap.data().displayName || null : null;
+    } catch {
+        return null;
+    }
+}
+
 const defaultSendDm = (userId, payload) => require('../utils/botSettings').sendAutomaticDM(userId, payload);
 const defaultSendChannel = (channelId, payload) => require('../bot').sendPluginChannelMessage(channelId, payload);
 const defaultSetRole = (userId, roleId, give) => require('../bot').setPluginRole(userId, roleId, give);
@@ -178,10 +202,12 @@ function createDiscordApi({
         if (limiter.take(pluginId, kind)) return true;
         if (now() - limitWarnedAt[kind] >= WINDOW_MS) {
             limitWarnedAt[kind] = now();
-            log.warn(`${what} nicht gesendet: ${limiter.warning(pluginId) || 'Nachrichtengrenze erreicht'}.`);
+            log.warn(`${what} nicht gesendet: ${limitReason()}`);
         }
         return false;
     }
+
+    const limitReason = () => `${limiter.warning(pluginId) || 'Nachrichtengrenze erreicht'}.`;
 
     function refuse(what, reason) {
         log.warn(`${what} nicht gesendet: ${reason}`);
@@ -196,21 +222,39 @@ function createDiscordApi({
      */
     async function changeRole(userId, roleId, give) {
         requirePermission('discord:roles');
-        if (!isSnowflake(roleId)) throw new PluginDataError(FORBIDDEN_ROLE);
-        if (!isSnowflake(userId)) return { ok: false, reason: 'Die Nutzer-ID ist ungültig.' };
+        const report = (result, reason) => studioEmit('role', pluginId, { userId, roleId, give, result, reason: reason || null });
+        if (!isSnowflake(roleId)) {
+            report('refused', FORBIDDEN_ROLE);
+            throw new PluginDataError(FORBIDDEN_ROLE);
+        }
+        if (!isSnowflake(userId)) {
+            report('refused', 'Die Nutzer-ID ist ungültig.');
+            return { ok: false, reason: 'Die Nutzer-ID ist ungültig.' };
+        }
         if (!limiter.take(pluginId, 'role')) {
-            return { ok: false, reason: `Rollengrenze erreicht (bis ${formatClock(limiter.until(pluginId, 'role'))})` };
+            const reason = `Rollengrenze erreicht (bis ${formatClock(limiter.until(pluginId, 'role'))})`;
+            report('refused', reason);
+            return { ok: false, reason };
         }
         let result;
         try {
             result = await setRole(userId, roleId, give);
         } catch (err) {
             log.error('Rollenänderung fehlgeschlagen:', err && err.message ? err.message : err);
+            report('refused', ROLE_REASONS.refused);
             return { ok: false, reason: ROLE_REASONS.refused };
         }
-        if (result && result.ok === true) return { ok: true, changed: result.changed === true };
-        if (result && result.code === 'forbidden') throw new PluginDataError(FORBIDDEN_ROLE);
-        return { ok: false, reason: ROLE_REASONS[result && result.code] || ROLE_REASONS.refused };
+        if (result && result.ok === true) {
+            report('ok');
+            return { ok: true, changed: result.changed === true };
+        }
+        if (result && result.code === 'forbidden') {
+            report('refused', FORBIDDEN_ROLE);
+            throw new PluginDataError(FORBIDDEN_ROLE);
+        }
+        const reason = ROLE_REASONS[result && result.code] || ROLE_REASONS.refused;
+        report('refused', reason);
+        return { ok: false, reason };
     }
 
     return {
@@ -224,15 +268,30 @@ function createDiscordApi({
         async sendDM(userId, { text, link } = {}) {
             requirePermission('discord:dm');
             const what = 'Direktnachricht';
-            if (!isSnowflake(userId)) return refuse(what, 'Die Nutzer-ID ist ungültig.');
+            const report = async (result, reason) => studioEmit('dm', pluginId, {
+                userId, userName: await studioUserName(userId), text, link: link || null, result, reason: reason || null
+            });
+            /** Log the refusal, tell the studio, answer false. */
+            const refuseDm = async reason => {
+                refuse(what, reason);
+                await report('dropped', reason);
+                return false;
+            };
+            if (!isSnowflake(userId)) return refuseDm('Die Nutzer-ID ist ungültig.');
             const problem = checkText(text) || checkLink(link);
-            if (problem) return refuse(what, problem);
+            if (problem) return refuseDm(problem);
             try {
-                if (!(await userExists(userId))) return refuse(what, 'DEMS kennt dieses Mitglied nicht.');
-                if (!take('dm', what)) return false;
-                return (await sendDm(userId, buildPayload(text, link))) === true;
+                if (!(await userExists(userId))) return refuseDm('DEMS kennt dieses Mitglied nicht.');
+                if (!take('dm', what)) {
+                    await report('dropped', limitReason());
+                    return false;
+                }
+                const sent = (await sendDm(userId, buildPayload(text, link))) === true;
+                await report(sent ? 'sent' : 'dropped', sent ? null : DM_NOT_DELIVERED);
+                return sent;
             } catch (err) {
                 log.error(`${what} fehlgeschlagen:`, err.message);
+                await report('dropped', `Senden fehlgeschlagen: ${err.message}`);
                 return false;
             }
         },
@@ -247,21 +306,36 @@ function createDiscordApi({
         async sendChannelMessage(settingKey, { text, link } = {}) {
             requirePermission('discord:channel');
             const what = 'Kanalnachricht';
+            const report = (result, reason) => studioEmit('channel', pluginId, {
+                channel: settingKey, text, link: link || null, result, reason: reason || null
+            });
+            /** Log the refusal, tell the studio, answer false. */
+            const refusePost = reason => {
+                refuse(what, reason);
+                report('dropped', reason);
+                return false;
+            };
             const problem = checkText(text) || checkLink(link);
-            if (problem) return refuse(what, problem);
+            if (problem) return refusePost(problem);
             const setting = (settingsSchema || []).find(entry => entry.key === settingKey && entry.type === 'channel');
-            if (!setting) return refuse(what, `„${settingKey}“ ist keine Kanal-Einstellung dieses Plugins.`);
+            if (!setting) return refusePost(`„${settingKey}“ ist keine Kanal-Einstellung dieses Plugins.`);
             try {
                 const values = (await readSettings()) || {};
                 const channelId = values[settingKey];
                 if (channelId === undefined || channelId === null || channelId === '') {
-                    return refuse(what, `Die Einstellung „${settingKey}“ ist leer.`);
+                    return refusePost(`Die Einstellung „${settingKey}“ ist leer.`);
                 }
-                if (!isSnowflake(channelId)) return refuse(what, `Die Einstellung „${settingKey}“ enthält keine gültige Kanal-ID.`);
-                if (!take('post', what)) return false;
-                return (await sendChannel(channelId, buildPayload(text, link))) === true;
+                if (!isSnowflake(channelId)) return refusePost(`Die Einstellung „${settingKey}“ enthält keine gültige Kanal-ID.`);
+                if (!take('post', what)) {
+                    report('dropped', limitReason());
+                    return false;
+                }
+                const sent = (await sendChannel(channelId, buildPayload(text, link))) === true;
+                report(sent ? 'sent' : 'dropped', sent ? null : POST_NOT_DELIVERED);
+                return sent;
             } catch (err) {
                 log.error(`${what} fehlgeschlagen:`, err.message);
+                report('dropped', `Senden fehlgeschlagen: ${err.message}`);
                 return false;
             }
         },
