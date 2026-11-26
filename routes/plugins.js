@@ -11,12 +11,10 @@
  * answered after `handlerTimeoutMs` gets 504 and is reported; it cannot be
  * stopped, but its late result is dropped.
  */
-const fs = require('fs');
-const path = require('path');
 const express = require('express');
 const { requireAuth, requireAdmin, safeEqual } = require('../middleware/auth');
 const { PluginHttpError } = require('../plugin-sdk/errors');
-const { studio: studioEvents } = require('../plugin-sdk/studio');
+const { studio: studioEvents, pluginFrame } = require('../plugin-sdk/studio');
 
 const DEFAULT_HANDLER_TIMEOUT_MS = 30000;
 
@@ -46,41 +44,6 @@ function watchRequest(studio, req, res, pluginId) {
             responseBody
         });
     });
-}
-
-/** Real path of a plugin folder (junctions and links resolved, as `require` reports them), cached. */
-const rootCache = new Map();
-function realRoot(dir) {
-    if (!rootCache.has(dir)) {
-        let real = path.resolve(dir);
-        try {
-            real = fs.realpathSync(real);
-        } catch {
-            // keep the plain path
-        }
-        rootCache.set(dir, real);
-    }
-    return rootCache.get(dir);
-}
-
-/** First stack line that points into the plugin folder: `{ file, line }`, or `{}`. */
-function pluginFrame(err, dir) {
-    try {
-        if (!err || !err.stack || !dir) return {};
-        const root = realRoot(dir);
-        for (const line of String(err.stack).split(/\r?\n/).slice(1)) {
-            const match = /\(?((?:[A-Za-z]:)?[^():]+):(\d+):\d+\)?\s*$/.exec(line.trim().replace(/^at\s+/, ''));
-            if (!match) continue;
-            const file = path.resolve(match[1]);
-            const same = text => (process.platform === 'win32' ? text.toLowerCase() : text);
-            if (same(file).startsWith(same(root + path.sep))) {
-                return { file: path.relative(root, file).split(path.sep).join('/'), line: Number(match[2]) };
-            }
-        }
-    } catch {
-        // best effort
-    }
-    return {};
 }
 
 /** Report a failed route to the studio. */

@@ -1185,7 +1185,10 @@ test('studio: register failure emits error and lifecycle error; switching on emi
         const host = createPluginHost({ officialDir, customDir });
         await host.start();
         const failed = sent.filter(message => message.pluginId === 'throws');
-        assert.deepEqual(failed.find(message => message.type === 'error').data, { message: 'kaputt', where: 'register' });
+        const { file, line, ...rest } = failed.find(message => message.type === 'error').data;
+        assert.deepEqual(rest, { message: 'kaputt', where: 'register' });
+        assert.equal(file, 'server.js');
+        assert.equal(line, 8, 'the throw sits in line 8 of serverSource');
         assert.deepEqual(failed.filter(message => message.type === 'lifecycle').map(message => message.data), [{ status: 'error' }]);
         sent.length = 0;
         await host.setEnabled('good', true, { adminId: 'admin' });
@@ -1193,6 +1196,32 @@ test('studio: register failure emits error and lifecycle error; switching on emi
         sent.length = 0;
         await host.setEnabled('good', true, { adminId: 'admin' });
         assert.equal(sent.filter(message => message.type === 'lifecycle').length, 0, 'an unchanged value is not reported');
+    } finally {
+        studioEvents.setSender(null);
+        for (const [key, value] of Object.entries(saved)) {
+            if (value === undefined) delete process.env[key];
+            else process.env[key] = value;
+        }
+    }
+});
+
+test('studio: a syntax error in server.js reports file and line of the plugin folder', async () => {
+    const { officialDir, customDir } = roots();
+    writePlugin(customDir, 'syntax', { server: "module.exports = {\n    async register(ctx) {}\n    kaputt hier\n};\n" });
+    await enabledState('syntax', { confirmedVersion: '1.0.0', confirmedPermissions: [] });
+    const sent = [];
+    const saved = { PLUGIN_STUDIO: process.env.PLUGIN_STUDIO, DEV_MOCK: process.env.DEV_MOCK };
+    process.env.PLUGIN_STUDIO = '1';
+    process.env.DEV_MOCK = 'true';
+    studioEvents.setSender(message => sent.push(message));
+    try {
+        const host = createPluginHost({ officialDir, customDir });
+        await host.start();
+        const error = sent.find(message => message.pluginId === 'syntax' && message.type === 'error');
+        assert.ok(error, JSON.stringify(sent));
+        assert.equal(error.data.where, 'register');
+        assert.equal(error.data.file, 'server.js');
+        assert.equal(error.data.line, 3);
     } finally {
         studioEvents.setSender(null);
         for (const [key, value] of Object.entries(saved)) {

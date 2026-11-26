@@ -45,6 +45,9 @@ function body(label, value) {
   return `<div class="dbg-body"><span class="studio-muted">${escapeHtml(label)}</span><pre>${escapeHtml(value)}</pre></div>`;
 }
 
+/** `file:line` inside the plugin folder, when the event carries it. */
+const where = (d) => (d.file ? ` <code class="dbg-where-file">${escapeHtml(d.file)}${d.line ? `:${escapeHtml(d.line)}` : ''}</code>` : '');
+
 function line(kind, time, inner) {
   return `<div class="dbg-entry is-${escapeHtml(kind)}"><span class="dbg-time">${escapeHtml(time)}</span><div class="dbg-main">${inner}</div></div>`;
 }
@@ -73,11 +76,11 @@ export function renderDebugEntry(event) {
         <details><summary>${escapeHtml(d.method)} ${escapeHtml(d.path)} <span class="dbg-code">${escapeHtml(d.status)}</span> ${escapeHtml(d.ms)} ms</summary>
           ${body('Anfrage', d.requestBody)}${body('Antwort', d.responseBody)}</details>`);
     case 'hook':
-      return line('hook', time, `<div><i class="bi bi-lightning"></i> Hook ${escapeHtml(d.name)} · ${d.ok ? 'ok' : 'Fehler'}${d.summary ? ` <span class="studio-muted">${escapeHtml(d.summary)}</span>` : ''}${d.ok || !d.error ? '' : `<div class="dbg-dropped">${escapeHtml(d.error)}</div>`}</div>`);
+      return line('hook', time, `<div><i class="bi bi-lightning"></i> Hook ${escapeHtml(d.name)} · ${d.ok ? 'ok' : 'Fehler'}${d.summary ? ` <span class="studio-muted">${escapeHtml(d.summary)}</span>` : ''}${d.ok ? '' : where(d)}${d.ok || !d.error ? '' : `<div class="dbg-dropped">${escapeHtml(d.error)}</div>`}</div>`);
     case 'log':
       return line('log', time, `<div class="dbg-log level-${escapeHtml(d.level)}"><span class="dbg-level">${escapeHtml(d.level)}</span> ${escapeHtml(d.text)}</div>`);
     case 'error':
-      return line('error', time, `<div class="dbg-error"><i class="bi bi-exclamation-octagon"></i> <strong>${escapeHtml(d.where)}</strong> ${escapeHtml(d.message)}</div>`);
+      return line('error', time, `<div class="dbg-error"><i class="bi bi-exclamation-octagon"></i> <strong>${escapeHtml(d.where)}</strong>${where(d)} ${escapeHtml(d.message)}</div>`);
     default:
       return line('other', time, escapeHtml(event.type));
   }

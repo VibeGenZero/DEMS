@@ -642,3 +642,14 @@ test('mountDebug hands files events to onFiles and draws no line for them', asyn
   sources[0].emit({ type: 'files', pluginId: 'p', at: '2026-11-26T10:00:01.000Z' });
   assert.deepEqual(calls, ['files'], 'nothing after dispose');
 });
+
+test('renderDebugEntry shows file:line of an error and a failed hook, escaped', async () => {
+  const { renderDebugEntry } = await load('debug.js');
+  const error = renderDebugEntry(ev('error', { message: 'Unexpected identifier', where: 'register', file: 'server.js', line: 3 }));
+  assert.match(error, /server\.js:3/);
+  const hook = renderDebugEntry(ev('hook', { name: 'event.created', ok: false, error: 'kaputt', file: 'lib/<b>.js', line: 7 }));
+  assert.match(hook, /lib\/&lt;b&gt;\.js:7/);
+  assert.ok(!hook.includes('<b>'));
+  const plain = renderDebugEntry(ev('error', { message: 'x', where: 'run' }));
+  assert.ok(!/dbg-where-file/.test(plain), 'no location without a file');
+});

@@ -283,3 +283,28 @@ test('studio: a hook without an event summarises by the registration id', async 
         assert.equal(sent.find(message => message.type === 'hook').data.summary, 'r7');
     });
 });
+
+test('studio: a failing hook handler reports file and line of the plugin folder', async () => {
+    const fs = require('fs');
+    const path = require('path');
+    const { createTempDir } = require('./helpers');
+    const dir = fs.mkdtempSync(path.join(createTempDir('hook-frame'), 'p-'));
+    const file = path.join(dir, 'handler.js');
+    fs.writeFileSync(file, 'module.exports = () => {\n    throw new Error("im Hook");\n};\n');
+    hooks.setHookDirResolver(id => (id === 'gamma' ? dir : ''));
+    hooks.onHook('gamma', 'event.created', require(file));
+    try {
+        await withStudio(async (sent) => {
+            hooks.emitHook('event.created', { event: { id: 'e1', title: 'Raid' } });
+            await hooks.whenHooksIdle();
+            const error = sent.find(message => message.type === 'error' && message.pluginId === 'gamma');
+            assert.deepEqual(error.data, { message: 'im Hook', where: 'hook:event.created', file: 'handler.js', line: 2 });
+            const hook = sent.find(message => message.type === 'hook' && message.pluginId === 'gamma');
+            assert.equal(hook.data.file, 'handler.js');
+            assert.equal(hook.data.line, 2);
+        });
+    } finally {
+        hooks.setHookDirResolver(null);
+        hooks.clearHooks('gamma');
+    }
+});

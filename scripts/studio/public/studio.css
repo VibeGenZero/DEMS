@@ -122,6 +122,7 @@ h2 { font-size: var(--font-size-lg); }
 .dbg-link { display: inline-block; margin-top: var(--space-4); padding: var(--space-4) var(--space-8); color: var(--info); background: var(--info-bg); border: 1px solid var(--info-border); border-radius: var(--radius-sm); }
 .dbg-dropped { color: var(--warning); }
 .dbg-code { color: var(--text-secondary); }
+.dbg-where-file { color: var(--text-secondary); }
 .dbg-body pre { margin: 0; padding: var(--space-4); white-space: pre-wrap; background: var(--bg-inset); border-radius: var(--radius-sm); }
 .dbg-level { text-transform: uppercase; font-size: var(--font-size-xs); }
 .level-warn { color: var(--warning); }

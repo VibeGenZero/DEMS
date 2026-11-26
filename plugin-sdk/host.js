@@ -21,11 +21,11 @@ const state = require('./state');
 const { purgeUserData, wipePluginData } = require('./data');
 const { deleteTheme } = require('./theme');
 const { createMessageLimiter } = require('./discord');
-const { setHookGate, setHookErrorReporter, clearHooks } = require('./hooks');
+const { setHookGate, setHookErrorReporter, setHookDirResolver, clearHooks } = require('./hooks');
 const { createContext } = require('./context');
 const { buildView } = require('./views');
 const { PluginHostError } = require('./errors');
-const { studioEmit } = require('./studio');
+const { studioEmit, studioFrame } = require('./studio');
 
 const DEFAULT_REGISTER_TIMEOUT_MS = 5000;
 const DEFAULT_DISABLE_TIMEOUT_MS = 2000;
@@ -293,7 +293,7 @@ function createPluginHost({
         } catch (err) {
             record.loadError = errorMessage(err);
             console.error(`[plugin:${record.id}] register failed: ${record.loadError}`);
-            studioEmit('error', record.id, { message: record.loadError, where: 'register' });
+            studioEmit('error', record.id, { message: record.loadError, where: 'register', ...studioFrame(err, entry.dir) });
         } finally {
             attempt.open = false;
         }
@@ -350,6 +350,10 @@ function createPluginHost({
     async function run() {
         setHookGate(id => isEnabled(id));
         setHookErrorReporter((id, message) => reportError(id, message));
+        setHookDirResolver((id) => {
+            const record = records.get(id);
+            return record && record.entry ? record.entry.dir : '';
+        });
         try {
             entries = discoverPlugins({ officialDir, customDir });
         } catch (err) {
