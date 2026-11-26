@@ -1167,3 +1167,37 @@ test('a custom folder next to the official one, even with a similar name, is loa
     assert.deepEqual(logs.error.filter(line => line.includes('PLUGINS_DIR')), []);
     assert.equal(view(host, 'beside').official, false);
 });
+
+// Studio events
+const studioEvents = require('../dev/studioEvents');
+
+test('studio: register failure emits error and lifecycle error; switching on emits lifecycle on', async () => {
+    const { officialDir, customDir } = roots();
+    writePlugin(customDir, 'throws', { server: serverSource('throws', "throw new Error('kaputt');") });
+    writeGood(customDir);
+    await enabledState('throws', { confirmedVersion: '1.0.0', confirmedPermissions: [] });
+    const sent = [];
+    const saved = { PLUGIN_STUDIO: process.env.PLUGIN_STUDIO, DEV_MOCK: process.env.DEV_MOCK };
+    process.env.PLUGIN_STUDIO = '1';
+    process.env.DEV_MOCK = 'true';
+    studioEvents.setSender(message => sent.push(message));
+    try {
+        const host = createPluginHost({ officialDir, customDir });
+        await host.start();
+        const failed = sent.filter(message => message.pluginId === 'throws');
+        assert.deepEqual(failed.find(message => message.type === 'error').data, { message: 'kaputt', where: 'register' });
+        assert.deepEqual(failed.filter(message => message.type === 'lifecycle').map(message => message.data), [{ status: 'error' }]);
+        sent.length = 0;
+        await host.setEnabled('good', true, { adminId: 'admin' });
+        assert.deepEqual(sent.filter(message => message.type === 'lifecycle').map(message => [message.pluginId, message.data.status]), [['good', 'on']]);
+        sent.length = 0;
+        await host.setEnabled('good', true, { adminId: 'admin' });
+        assert.equal(sent.filter(message => message.type === 'lifecycle').length, 0, 'an unchanged value is not reported');
+    } finally {
+        studioEvents.setSender(null);
+        for (const [key, value] of Object.entries(saved)) {
+            if (value === undefined) delete process.env[key];
+            else process.env[key] = value;
+        }
+    }
+});

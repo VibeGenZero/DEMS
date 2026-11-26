@@ -42,3 +42,17 @@ test('ctx.log emits log events with joined args and still writes to the console'
     ]);
     assert.equal(events[0].pluginId, 'alpha');
 });
+
+test('an Error argument is sent with its stack, the console line stays as it was', (t) => {
+    process.env.PLUGIN_STUDIO = '1';
+    process.env.DEV_MOCK = 'true';
+    const events = [];
+    studioEvents.setSender(message => events.push(message));
+    const error = t.mock.method(console, 'error', () => {});
+    const { log } = makeCtx();
+    const err = new Error('kaputt');
+    log.error('failed:', err);
+    assert.equal(events[0].data.text, `failed: ${err.stack}`);
+    assert.match(events[0].data.text, /kaputt/);
+    assert.deepEqual(error.mock.calls[0].arguments.slice(1), ['failed:', err]);
+});

@@ -109,6 +109,21 @@ function isAllowed(pluginId) {
     }
 }
 
+/** Forward an event to the local plugin studio (no-op without it; the dev module is optional). */
+function studioEmit(type, pluginId, data) {
+    try {
+        require('../dev/studioEvents').emit(type, pluginId, data);
+    } catch {
+        // dev/ is not part of the runtime image
+    }
+}
+
+/** Short label of a hook payload for the studio: event title or id, else the registration id. */
+function summaryOf(payload) {
+    const source = (payload && (payload.event || payload.registration)) || {};
+    return String(source.title || source.id || '');
+}
+
 function reportError(pluginId, name, err) {
     console.error(`[plugin:${pluginId}] Hook ${name} failed:`, err);
     if (!errorReporter) return;
@@ -134,7 +149,11 @@ async function runHandler(pluginId, name, handler, payload, generation) {
     try {
         // A late settle of the handler is ignored: race already listens to it, so nothing goes unhandled
         await Promise.race([Promise.resolve().then(() => handler(payload)), timedOut]);
+        studioEmit('hook', pluginId, { name, summary: summaryOf(payload), ok: true, error: '' });
     } catch (err) {
+        const message = err && err.message ? err.message : String(err);
+        studioEmit('hook', pluginId, { name, summary: summaryOf(payload), ok: false, error: message });
+        studioEmit('error', pluginId, { message, where: `hook:${name}` });
         reportError(pluginId, name, err);
     } finally {
         clearTimeout(slowTimer);

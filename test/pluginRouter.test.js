@@ -270,3 +270,69 @@ test('static files: client.js and client.css reached through a link out of the p
     }
     assert.equal((await call('/plugins/demo/client.js')).status, 200);
 });
+
+// Studio events: only with an active sender
+const studioEvents = require('../dev/studioEvents');
+
+async function withStudio(fn) {
+    const sent = [];
+    const saved = { PLUGIN_STUDIO: process.env.PLUGIN_STUDIO, DEV_MOCK: process.env.DEV_MOCK, NODE_ENV: process.env.NODE_ENV };
+    process.env.PLUGIN_STUDIO = '1';
+    process.env.DEV_MOCK = 'true';
+    delete process.env.NODE_ENV;
+    studioEvents.setSender(message => sent.push(message));
+    try {
+        await fn(sent);
+    } finally {
+        studioEvents.setSender(null);
+        for (const [key, value] of Object.entries(saved)) {
+            if (value === undefined) delete process.env[key];
+            else process.env[key] = value;
+        }
+    }
+}
+
+test('studio: a plugin request emits one request event with both bodies', async () => {
+    host.routes = [route('POST', '/x', () => ({ ok: true }))];
+    await withStudio(async (sent) => {
+        const res = await call('/api/plugins/demo/x', { method: 'POST', body: { a: 1 } });
+        assert.equal(res.status, 200);
+        await res.json();
+        const requests = sent.filter(message => message.type === 'request');
+        assert.equal(requests.length, 1);
+        assert.equal(requests[0].pluginId, 'demo');
+        const { method, path: requestPath, status, ms, requestBody, responseBody } = requests[0].data;
+        assert.equal(method, 'POST');
+        assert.equal(requestPath, '/x');
+        assert.equal(status, 200);
+        assert.equal(typeof ms, 'number');
+        assert.equal(requestBody, JSON.stringify({ a: 1 }));
+        assert.equal(responseBody, JSON.stringify({ ok: true }));
+    });
+});
+
+test('studio: a failing route emits a request with 500 and an error event with where route', async () => {
+    host.errors.length = 0;
+    host.routes = [route('GET', '/boom', () => { throw new Error('kaputt'); })];
+    await withStudio(async (sent) => {
+        const res = await call('/api/plugins/demo/boom');
+        assert.equal(res.status, 500);
+        await res.json();
+        assert.equal(sent.find(message => message.type === 'request').data.status, 500);
+        const error = sent.find(message => message.type === 'error');
+        assert.equal(error.data.where, 'route');
+        assert.equal(error.data.message, 'kaputt');
+    });
+});
+
+test('studio: nothing is emitted without an active sender', async () => {
+    host.routes = [route('GET', '/quiet', () => ({ ok: true }))];
+    const sent = [];
+    studioEvents.setSender(message => sent.push(message));
+    try {
+        await (await call('/api/plugins/demo/quiet')).json();
+        assert.equal(sent.length, 0);
+    } finally {
+        studioEvents.setSender(null);
+    }
+});

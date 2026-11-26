@@ -53,6 +53,7 @@ see_also: [docker, deployment, dev-mock-mode]
 | `PLUGINS_SAFE_MODE` | no | `false` | `true` → DEMS starts without running any plugin code (no `server.js` is loaded, `GET /api/plugins` is `[]`, plugin routes and files answer 404, plugins cannot be switched on, only off) — the way out when a plugin prevents the start: restart with `PLUGINS_SAFE_MODE=true`, switch the broken plugin off in System › Plugins, remove the line, restart. Environment-only |
 | `PLUGINS_UPLOAD` | no | `false` | `true` → admins can upload, replace and remove custom `.dems` plugin packages in System › Plugins (install and remove need `ADMIN_RESET_PASSWORD`; uploaded code gets full process access; upload and install are refused while `PLUGINS_SAFE_MODE=true`, remove still works there). Off: upload, install and remove answer 403 and code reaches `PLUGINS_DIR` only through the server's file system. Environment-only |
 | `DEV_MOCK` | no | — | dev mock mode (set automatically by `npm run dev:mock`) |
+| `PLUGIN_STUDIO` | no | — | internal: set by the local plugin studio for its DEMS child (with `DEV_MOCK=true` and an IPC channel it makes `dev/studioEvents.js` forward plugin debug events); never set it by hand, never in production |
 | `DEV_SQLITE_PATH` | no | `data/dems.dev.sqlite` | database of the dev mock mode |
 | `DEV_UPLOAD_DIR` | no | `data/dev-uploads` | banner folder of the dev mock mode (becomes `UPLOAD_DIR`) |
 | `DEMS_DEV_PORT` | no | `3000` | host port in `compose.dev.yaml` |

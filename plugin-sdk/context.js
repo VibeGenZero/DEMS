@@ -72,7 +72,7 @@ function studioLog(pluginId, level, args) {
 }
 
 function stringify(value) {
-    if (value instanceof Error) return value.message;
+    if (value instanceof Error) return value.stack || value.message;
     try {
         const json = JSON.stringify(value);
         return json === undefined ? String(value) : json;

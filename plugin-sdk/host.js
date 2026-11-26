@@ -137,6 +137,15 @@ function usableCustomDir(officialDir, customDir) {
  * await host.start();
  * host.list(); // [{ id: 'event-submissions', status: 'off', statusText: 'Aus', ... }]
  */
+/** Forward an event to the local plugin studio (no-op without it; the dev module is optional). */
+function studioEmit(type, pluginId, data) {
+    try {
+        require('../dev/studioEvents').emit(type, pluginId, data);
+    } catch {
+        // dev/ is not part of the runtime image
+    }
+}
+
 function createPluginHost({
     officialDir, customDir: configuredCustomDir, safeMode = false, mockMode = false, devPluginId = '',
     registerTimeoutMs = DEFAULT_REGISTER_TIMEOUT_MS, disableTimeoutMs = DEFAULT_DISABLE_TIMEOUT_MS,
@@ -183,6 +192,13 @@ function createPluginHost({
     function persist(record, patch) {
         record.state = { ...state.normalizeState(record.state || {}), ...patch };
         return serializeWrite(record.id, () => state.writeState(record.id, patch));
+    }
+
+    /** Set `record.runtime`; a changed value is reported to the studio. */
+    function setRuntime(record, value) {
+        if (record.runtime === value) return;
+        record.runtime = value;
+        studioEmit('lifecycle', record.id, { status: value });
     }
 
     function newRecord(id, entry, storedState) {
@@ -285,6 +301,7 @@ function createPluginHost({
         } catch (err) {
             record.loadError = errorMessage(err);
             console.error(`[plugin:${record.id}] register failed: ${record.loadError}`);
+            studioEmit('error', record.id, { message: record.loadError, where: 'register' });
         } finally {
             attempt.open = false;
         }
@@ -313,7 +330,7 @@ function createPluginHost({
         }
         // A re-read (`restart`) or a forgotten folder while register ran keeps its state
         if (record.runtime === 'restart' || !record.entry) return;
-        record.runtime = record.registered ? 'on' : 'error';
+        setRuntime(record, record.registered ? 'on' : 'error');
     }
 
     /** The plugin under development (`plugin dev`) is trusted by its author: on and confirmed in mock mode. */
@@ -332,7 +349,7 @@ function createPluginHost({
         }
         if (!record.state || !record.state.enabled) return;
         if (needsConfirmation(record)) {
-            record.runtime = 'confirm';
+            setRuntime(record, 'confirm');
             return;
         }
         await load(record);
@@ -438,7 +455,7 @@ function createPluginHost({
                 await persist(record, { enabled: false });
                 const wasOn = record.runtime === 'on';
                 // New code on disk next to the old required module stays „Neustart nötig“
-                if (record.runtime !== 'restart') record.runtime = 'off';
+                if (record.runtime !== 'restart') setRuntime(record, 'off');
                 if (wasOn) await runDisableCallbacks(record);
             }
             return viewOf(record.entry, record);
@@ -500,10 +517,10 @@ function createPluginHost({
         const record = records.get(id);
         if (!record) {
             const created = newRecord(id, entry, null);
-            if (wasLoaded(id)) created.runtime = 'restart';
             records.set(id, created);
+            if (wasLoaded(id)) setRuntime(created, 'restart');
         } else {
-            record.runtime = wasLoaded(id) ? 'restart' : 'off';
+            setRuntime(record, wasLoaded(id) ? 'restart' : 'off');
             record.entry = entry;
         }
         return viewOf(entry, records.get(id));
@@ -560,7 +577,7 @@ function createPluginHost({
         if (!record || !record.entry || record.entry.official) return;
         if (record.state) {
             record.entry = null;
-            record.runtime = 'off';
+            setRuntime(record, 'off');
         } else {
             // A switch still holding this record sees it as gone
             record.entry = null;
