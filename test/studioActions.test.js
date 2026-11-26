@@ -365,3 +365,37 @@ test('POST /api/trigger refuses an unknown action', async () => {
   assert.equal(res.status, 400);
   assert.deepEqual(res.data, { error: 'Unbekannte Aktion.' });
 });
+
+test('POST /api/new refuses a parent folder that is missing or a file, without creating it', async () => {
+  const { call } = await setup();
+  const parent = tempDir('studio-parent');
+  const missing = path.join(parent, 'gibt-es-nicht');
+  const gone = await call('POST', '/api/new', { id: 'neu', parentDir: missing });
+  assert.equal(gone.status, 400);
+  assert.deepEqual(gone.data, { error: 'Den Ordner gibt es nicht.' });
+  assert.equal(fs.existsSync(missing), false, 'no mkdir -p of the parent');
+  const file = path.join(parent, 'datei.txt');
+  fs.writeFileSync(file, 'x');
+  const isFile = await call('POST', '/api/new', { id: 'neu', parentDir: file });
+  assert.equal(isFile.status, 400);
+  assert.deepEqual(isFile.data, { error: 'Der Ordner ist eine Datei.' });
+});
+
+test('POST /api/open needs a full path and refuses official plugins', async () => {
+  const repoRoot = tempDir('studio-repo');
+  const { call, fake } = await setup({ repoRoot });
+  const relative = await call('POST', '/api/open', { dir: 'plugins/irgendwas' });
+  assert.equal(relative.status, 400);
+  assert.deepEqual(relative.data, { error: 'Bitte einen vollständigen Pfad angeben.' });
+
+  const { scaffoldPlugin } = require('../scripts/plugin');
+  fs.mkdirSync(path.join(repoRoot, 'plugins', 'offiziell'), { recursive: true });
+  fs.writeFileSync(path.join(repoRoot, 'plugins', 'offiziell', 'plugin.json'), '{}');
+  const copy = scaffoldPlugin('offiziell', tempDir('studio-parent'));
+  const official = await call('POST', '/api/open', { dir: copy });
+  assert.equal(official.status, 400);
+  assert.deepEqual(official.data, { error: 'Offizielle Plugins entwickelst du direkt mit npm run dev:mock.' });
+  assert.equal(fake.made.length, 0, 'no child for an official plugin');
+  const state = await call('GET', '/api/state');
+  assert.equal(state.data.plugin, null);
+});

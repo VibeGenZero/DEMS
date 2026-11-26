@@ -413,7 +413,7 @@ function invocationCwd(env, cwd) {
 }
 
 // Exported before main() runs: the studio requires this file again (scaffoldPlugin, reportLines) while main is still starting.
-module.exports = { main, COMMANDS, parseArgs, prepareDev, invocationCwd, scaffoldPlugin, reportLines };
+module.exports = { main, COMMANDS, parseArgs, prepareDev, invocationCwd, scaffoldPlugin, reportLines, officialIds };
 
 if (require.main === module) {
     main(process.argv.slice(2), {

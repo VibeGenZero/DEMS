@@ -10,7 +10,7 @@ const { createEventLog, eventStream, watchPlugin } = require('./events');
 const { PackageError } = require('../../plugin-sdk/errors');
 const { ID_PATTERN } = require('../../plugin-sdk/manifest');
 const { analyzePlugin, writeManifest, packPlugin } = require('../../plugin-sdk/package');
-const { scaffoldPlugin, reportLines } = require('../plugin');
+const { scaffoldPlugin, reportLines, officialIds } = require('../plugin');
 
 const { StudioError } = files;
 const MANIFEST = 'plugin.json';
@@ -27,6 +27,9 @@ function text(v, message) {
 const pathArg = (v) => text(v, 'Bitte einen Pfad angeben.');
 const sha256 = (content) => crypto.createHash('sha256').update(Buffer.from(content, 'utf8')).digest('hex');
 const CHANGED_OUTSIDE = 'Die Datei wurde außerhalb des Studios geändert.';
+const FULL_PATH = 'Bitte einen vollständigen Pfad angeben.';
+// Same refusal as prepareDev: an official plugin runs in the normal dev mode
+const OFFICIAL = 'Offizielle Plugins entwickelst du direkt mit npm run dev:mock.';
 
 /** `vscode://file/<abs dir>` with forward slashes; segments are URL-encoded, a drive letter stays as it is. */
 function vscodeUrl(dir) {
@@ -115,7 +118,9 @@ function createActions({
 
   function open(folder) {
     return exclusive(async () => {
+      if (!path.isAbsolute(folder)) throw new StudioError(FULL_PATH, 400);
       const plugin = files.openPlugin(folder);
+      if (officialIds(repoRoot).has(plugin.id)) throw new StudioError(OFFICIAL, 400);
       await closeCurrent();
       log.clear();
       opened = { id: plugin.id, name: plugin.manifest.name, version: plugin.version, dir: plugin.dir };
@@ -138,7 +143,11 @@ function createActions({
     const id = body.id;
     if (typeof id !== 'string' || !ID_PATTERN.test(id)) throw new StudioError('Die ID ist nicht erlaubt.', 400);
     const parent = text(body.parentDir, 'Bitte einen Ordner angeben.');
-    if (!path.isAbsolute(parent)) throw new StudioError('Bitte einen vollständigen Pfad angeben.', 400);
+    if (!path.isAbsolute(parent)) throw new StudioError(FULL_PATH, 400);
+    let parentStat;
+    try { parentStat = fs.statSync(parent); } catch { parentStat = null; }
+    if (!parentStat) throw new StudioError('Den Ordner gibt es nicht.', 400);
+    if (!parentStat.isDirectory()) throw new StudioError('Der Ordner ist eine Datei.', 400);
     if (fs.existsSync(path.join(parent, id))) throw new StudioError(`Den Ordner gibt es schon: ${id}`, 409);
     let dir;
     try {
