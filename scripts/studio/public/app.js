@@ -43,7 +43,12 @@ async function main() {
     try {
       const state = await api.state();
       const preview = mountPreview(workspace.previewArea, { api, previewUrl: state.previewUrl, status: state.child, signal });
-      mountDebug(preview.debugArea, { api, signal, onLifecycle: (data) => preview.setStatus(data.status) });
+      mountDebug(preview.debugArea, {
+        api,
+        signal,
+        onLifecycle: (data) => preview.setStatus(data.status),
+        onFiles: () => { workspace.diskChanged(); },
+      });
       mountToolbar(workspace.toolbarArea, { api, signal });
     } catch (err) {
       dispose();

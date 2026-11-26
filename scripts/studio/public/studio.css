@@ -79,6 +79,7 @@ h2 { font-size: var(--font-size-lg); }
 .file-tool { display: none; padding: var(--space-4); color: var(--text-secondary); background: none; border: 0; cursor: pointer; }
 .file-item:hover .file-tool, .file-item:focus-within .file-tool { display: inline-flex; }
 .dirty-dot { color: var(--accent-text); }
+.tab-conflict { color: var(--warning); }
 
 .ws-editor { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 .editor-tabs { display: flex; overflow-x: auto; background: var(--bg-secondary); border-bottom: 1px solid var(--border-subtle); }

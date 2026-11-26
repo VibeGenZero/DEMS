@@ -203,6 +203,13 @@ const readFile = guard('gelesen', (dir, rel) => {
     return text;
 });
 
+/** sha256 (hex) of the file's bytes; null when the file is missing. */
+const fileHash = guard('gelesen', (dir, rel) => {
+    const { abs, exists } = resolveInside(dir, rel);
+    if (!exists || !fs.statSync(abs).isFile()) return null;
+    return crypto.createHash('sha256').update(fs.readFileSync(abs)).digest('hex');
+});
+
 /** The folder (what the build would pack) must stay within the package limits after the change. */
 function checkFolderLimits(root, { addCount, addBytes }) {
     let count = addCount;
@@ -292,4 +299,4 @@ const deleteFile = guard('gespeichert', (dir, rel) => {
     fs.unlinkSync(abs);
 });
 
-module.exports = { StudioError, openPlugin, listFiles, readFile, writeFile, writeBinary, createFile, renameFile, deleteFile };
+module.exports = { StudioError, openPlugin, listFiles, readFile, fileHash, writeFile, writeBinary, createFile, renameFile, deleteFile };

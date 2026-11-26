@@ -1,6 +1,7 @@
 // Workspace: file list, editor tabs, save/dirty handling and the area for the preview (next to the editor).
 import { createEditorHost } from './editor.js';
-import { askConfirm as askConfirmIn, askText as askTextIn, confirmDiscard as confirmDiscardIn, escapeHtml, showToast } from './ui.js';
+import { CONFLICT_TITLE, createDiskState, saveTab, syncTabs } from './disk.js';
+import { askConfirm as askConfirmIn, askText as askTextIn, confirmDiscard as confirmDiscardIn, escapeHtml, showDialog, showToast } from './ui.js';
 
 /** 'client' for the manifest client entry and `assets/*.js`, 'server' for other .js files, else null. */
 export function typeLibFor(path, manifest) {
@@ -35,10 +36,13 @@ export function renderFileList(files, { active = null, dirty = new Set() } = {})
   return `<ul class="file-list">${items.join('')}</ul>`;
 }
 
-function renderTabs(tabs, { active, dirty }) {
+const conflictMark = `<i class="bi bi-exclamation-triangle-fill tab-conflict" title="${escapeHtml(CONFLICT_TITLE)}" aria-label="${escapeHtml(CONFLICT_TITLE)}"></i> `;
+
+/** @returns {string} HTML of the editor tabs; a tab whose file changed on disk under unsaved edits gets a marker. */
+export function renderTabs(tabs, { active, dirty, conflicts = new Set() }) {
   return tabs.map((path) => `
     <div class="editor-tab${path === active ? ' is-active' : ''}">
-      <button type="button" class="tab-open" data-action="tab" data-path="${escapeHtml(path)}" title="${escapeHtml(path)}">${escapeHtml(baseName(path))}${dirty.has(path) ? ' <span class="dirty-dot" aria-label="Ungespeichert">●</span>' : ''}</button>
+      <button type="button" class="tab-open" data-action="tab" data-path="${escapeHtml(path)}" title="${escapeHtml(path)}">${conflicts.has(path) ? conflictMark : ''}${escapeHtml(baseName(path))}${dirty.has(path) ? ' <span class="dirty-dot" aria-label="Ungespeichert">●</span>' : ''}</button>
       <button type="button" class="tab-close" data-action="close" data-path="${escapeHtml(path)}" title="Schließen" aria-label="Schließen"><i class="bi bi-x"></i></button>
     </div>`).join('');
 }
@@ -53,8 +57,10 @@ function toBase64(buffer) {
 /**
  * @param {HTMLElement} root
  * @param {{ api: object, plugin: { name: string, version: string, id: string }, onLeave(): void }} options
- * @returns {Promise<{ previewArea: HTMLElement, toolbarArea: HTMLElement, dirtyCount(): number, dispose(): void }>}
- *   `previewArea` and `toolbarArea` are left empty for the preview, debug panel and toolbar.
+ * @returns {Promise<{ previewArea: HTMLElement, toolbarArea: HTMLElement, dirtyCount(): number, saveAll(): Promise<boolean>,
+ *   diskChanged(): Promise<void>, dispose(): void }>}
+ *   `previewArea` and `toolbarArea` are left empty for the preview, debug panel and toolbar; `diskChanged` follows a
+ *   change in the plugin folder (file list, open tabs).
  */
 export async function mountWorkspace(root, { api, plugin, onLeave }) {
   root.innerHTML = `
@@ -102,6 +108,7 @@ export async function mountWorkspace(root, { api, plugin, onLeave }) {
   const askConfirm = (options) => askConfirmIn({ ...options, signal });
   const confirmDiscard = () => confirmDiscardIn(signal);
   const dirty = new Set();
+  const disk = createDiskState();
   let files = [];
   let tabs = [];
   let active = null;
@@ -117,7 +124,7 @@ export async function mountWorkspace(root, { api, plugin, onLeave }) {
 
   function render() {
     fileListEl.innerHTML = renderFileList(files, { active, dirty });
-    tabsEl.innerHTML = renderTabs(tabs, { active, dirty });
+    tabsEl.innerHTML = renderTabs(tabs, { active, dirty, conflicts: disk.conflicts() });
   }
 
   function showMessage(text) {
@@ -148,9 +155,10 @@ export async function mountWorkspace(root, { api, plugin, onLeave }) {
     }
     if (!editorHost.has(path)) {
       try {
-        const content = await api.readFile(path);
-        if (signal.aborted) return;
+        const { content, hash } = await api.readFileInfo(path);
+        if (signal.aborted || editorHost.has(path)) return;
         editorHost.add(path, content, typeLibFor(path, manifest));
+        disk.track(path, hash);
       } catch (err) {
         if (signal.aborted) return;
         active = null;
@@ -167,20 +175,89 @@ export async function mountWorkspace(root, { api, plugin, onLeave }) {
     render();
   }
 
+  async function askConflict(path) {
+    const answer = await showDialog({
+      signal,
+      title: 'Datei außerhalb des Studios geändert',
+      message: `${path} wurde auf der Platte geändert. „Neu laden“ verwirft deine Änderungen, „Überschreiben“ ersetzt die Datei auf der Platte.`,
+      buttons: [
+        { label: 'Abbrechen', value: 'cancel' },
+        { label: 'Neu laden', value: 'reload' },
+        { label: 'Überschreiben', value: 'overwrite', className: 'is-danger', primary: true },
+      ],
+    });
+    return answer ? answer.value : 'cancel';
+  }
+
+  /** @returns {Promise<boolean>} -> True when the file is on disk as in the editor (saved or reloaded). */
   async function save(path = active) {
-    if (!path || !editorHost.has(path)) return;
+    if (!path || !editorHost.has(path)) return false;
     // Value and version are taken together; edits typed while the request runs keep the file unsaved.
     const content = editorHost.value(path);
     const version = editorHost.version(path);
     try {
-      await api.saveFile(path, content);
-      if (signal.aborted) return;
-      if (editorHost.has(path)) editorHost.markSaved(path, version);
+      const outcome = await saveTab({
+        path,
+        content,
+        state: disk,
+        save: api.saveFile,
+        read: api.readFileInfo,
+        reload: (p, text) => editorHost.reload(p, text),
+        askConflict,
+      });
+      if (signal.aborted) return false;
+      render();
+      if (outcome === 'cancelled') return false;
+      if (outcome === 'saved' && editorHost.has(path)) editorHost.markSaved(path, version);
       if (path === 'plugin.json') await loadManifest();
-      showToast(`Gespeichert: ${path}`, 'success');
+      showToast(outcome === 'saved' ? `Gespeichert: ${path}` : `Neu geladen: ${path}`, 'success');
+      return true;
     } catch (err) {
-      showToast(err.message, 'danger');
+      if (!signal.aborted) showToast(err.message, 'danger');
+      return false;
     }
+  }
+
+  /** Saves every tab with unsaved edits; false when one of them was not saved. */
+  async function saveAll() {
+    let all = true;
+    for (const path of [...dirty]) {
+      if (!(await save(path))) all = false;
+      if (signal.aborted) return false;
+    }
+    return all;
+  }
+
+  // The folder changed on disk (studio-internal `files` event): file list, manifest and open tabs follow it.
+  let syncing = null;
+  let syncAgain = false;
+  async function syncDisk() {
+    await refreshFiles();
+    if (signal.aborted) return;
+    await loadManifest();
+    if (signal.aborted) return;
+    const open = [...tabs];
+    await syncTabs({
+      paths: open,
+      state: disk,
+      read: api.readFileInfo,
+      isDirty: (path) => dirty.has(path),
+      reload: (path, content) => editorHost.reload(path, content),
+    });
+    if (signal.aborted) return;
+    open.filter((path) => !tabs.includes(path)).forEach((path) => disk.forget(path)); // closed meanwhile
+    render();
+  }
+  function diskChanged() {
+    if (signal.aborted) return Promise.resolve();
+    if (syncing) { syncAgain = true; return syncing; }
+    syncing = (async () => {
+      do {
+        syncAgain = false;
+        try { await syncDisk(); } catch (err) { if (!signal.aborted) showToast(err.message, 'danger'); }
+      } while (syncAgain && !signal.aborted);
+    })().finally(() => { syncing = null; });
+    return syncing;
   }
 
   async function closeTab(path) {
@@ -188,6 +265,7 @@ export async function mountWorkspace(root, { api, plugin, onLeave }) {
     if (signal.aborted) return;
     editorHost.close(path);
     dirty.delete(path);
+    disk.forget(path);
     tabs = tabs.filter((p) => p !== path);
     if (active === path) {
       active = tabs[tabs.length - 1] || null;
@@ -318,6 +396,8 @@ export async function mountWorkspace(root, { api, plugin, onLeave }) {
     previewArea: $('#studio-preview'),
     toolbarArea: $('#studio-toolbar'),
     dirtyCount: () => dirty.size,
+    saveAll,
+    diskChanged,
     dispose,
   };
 }

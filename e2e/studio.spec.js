@@ -89,8 +89,19 @@ test.describe('plugin studio', () => {
         fs.writeFileSync(manifestFile, JSON.stringify(manifest, null, 2));
         await restarted();
 
-        // Edit in the editor: register an event.created hook, so the hook really runs in the child
+        // server.js is open and clean: a change on disk reaches the editor (studio-internal files event)
         const serverFile = path.join(pluginDir, 'server.js');
+        const editorText = (file) => page.evaluate((name) => {
+            const model = window.monaco.editor.getModels().find((m) => m.uri.path === `/${name}`);
+            return model ? model.getValue() : '';
+        }, file);
+        await expect.poll(() => editorText('server.js'), { timeout: 30_000 }).toContain('register(ctx)');
+        fs.writeFileSync(serverFile, `${fs.readFileSync(serverFile, 'utf8')}\n// von der Platte\n`);
+        await expect.poll(() => editorText('server.js'), { timeout: 15_000 }).toContain('// von der Platte');
+        await expect(page.locator('#editor-tabs .tab-conflict')).toHaveCount(0);
+        await restarted();
+
+        // Edit in the editor: register an event.created hook, so the hook really runs in the child
         await page.locator('#file-list [data-action="file"][data-path="server.js"]').click();
         const editor = page.locator('#editor-host .monaco-editor').first();
         await expect(editor).toBeVisible({ timeout: 30_000 });

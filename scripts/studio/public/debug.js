@@ -12,9 +12,11 @@ const KINDS = [
   ['fehler', 'Fehler'],
 ];
 
-/** Events of one filter kind; `lifecycle` events are no debug lines. */
+const NO_LINE = new Set(['lifecycle', 'files']); // studio-internal notices
+
+/** Events of one filter kind; `lifecycle` and `files` events are no debug lines. */
 export function filterEvents(events, kind) {
-  const list = events.filter((e) => e && e.type !== 'lifecycle');
+  const list = events.filter((e) => e && !NO_LINE.has(e.type));
   switch (kind) {
     case 'discord': return list.filter((e) => DISCORD.has(e.type));
     case 'anfragen': return list.filter((e) => e.type === 'request');
@@ -89,10 +91,11 @@ const MAX_CONSECUTIVE_ERRORS = 10;
  * Fills `container` with the panel and opens the event stream. Stream, listeners and clear requests
  * end with `signal` (or `dispose()`).
  * @param {HTMLElement} container
- * @param {{ api: object, signal: AbortSignal, createEventSource?: (url: string) => EventSource, onLifecycle?: (data: object) => void, now?: () => number }} options
+ * @param {{ api: object, signal: AbortSignal, createEventSource?: (url: string) => EventSource, onLifecycle?: (data: object) => void,
+ *   onFiles?: (event: object) => void, now?: () => number }} options -> `onFiles`: the plugin folder changed on disk.
  * @returns {{ dispose(): void }}
  */
-export function mountDebug(container, { api, signal, createEventSource = (url) => new EventSource(url), onLifecycle = () => {}, now = Date.now }) {
+export function mountDebug(container, { api, signal, createEventSource = (url) => new EventSource(url), onLifecycle = () => {}, onFiles = () => {}, now = Date.now }) {
   container.innerHTML = `
     <div class="dbg-head">
       <strong>Debug</strong>
@@ -211,6 +214,7 @@ export function mountDebug(container, { api, signal, createEventSource = (url) =
     if (!event || typeof event !== 'object') return;
     if (errors) { errors = 0; setStatus(''); }
     if (event.type === 'lifecycle') lifecycle(event);
+    else if (event.type === 'files') onFiles(event);
     else add(event);
   });
 

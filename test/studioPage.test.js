@@ -481,3 +481,164 @@ test('plugin.js exports are complete at the moment the CLI loads the studio', ()
     fs.rmSync(work, { recursive: true, force: true });
   }
 });
+
+test('createDiskState: keep, reload or conflict after the folder changed', async () => {
+  const { createDiskState } = await load('disk.js');
+  const disk = createDiskState();
+  disk.track('server.js', 'h1');
+  disk.track('plugin.json', 'p1');
+  assert.equal(disk.hash('server.js'), 'h1');
+  assert.equal(disk.compare('server.js', 'h1', false), 'keep');
+  assert.equal(disk.compare('server.js', 'h2', false), 'reload');
+  assert.equal(disk.hasConflict('server.js'), false);
+  assert.equal(disk.compare('plugin.json', 'p2', true), 'conflict');
+  assert.equal(disk.hasConflict('plugin.json'), true);
+  assert.deepEqual([...disk.conflicts()], ['plugin.json']);
+  assert.equal(disk.hash('plugin.json'), 'p1', 'the base hash stays, so the next save meets the 409 path');
+  assert.equal(disk.compare('plugin.json', 'p1', true), 'keep', 'the disk went back: no conflict any more');
+  assert.equal(disk.hasConflict('plugin.json'), false);
+  assert.equal(disk.compare('server.js', null, false), 'conflict', 'a file gone from disk is marked, not reloaded');
+  disk.track('server.js', 'h3');
+  assert.equal(disk.hasConflict('server.js'), false);
+  disk.forget('server.js');
+  assert.equal(disk.hash('server.js'), undefined);
+});
+
+test('syncTabs reloads clean tabs with new disk content and marks dirty ones', async () => {
+  const { createDiskState, syncTabs } = await load('disk.js');
+  const disk = createDiskState();
+  disk.track('a.js', 'a1');
+  disk.track('b.js', 'b1');
+  disk.track('c.js', 'c1');
+  disk.track('gone.js', 'g1');
+  const onDisk = { 'a.js': { content: 'A2', hash: 'a2' }, 'b.js': { content: 'B2', hash: 'b2' }, 'c.js': { content: 'C1', hash: 'c1' } };
+  const reloaded = [];
+  await syncTabs({
+    paths: ['a.js', 'b.js', 'c.js', 'gone.js'],
+    state: disk,
+    read: async (p) => { if (!onDisk[p]) throw Object.assign(new Error('Datei nicht gefunden'), { status: 404 }); return onDisk[p]; },
+    isDirty: (p) => p === 'b.js',
+    reload: (p, content) => reloaded.push([p, content]),
+  });
+  assert.deepEqual(reloaded, [['a.js', 'A2']]);
+  assert.equal(disk.hash('a.js'), 'a2');
+  assert.equal(disk.hasConflict('b.js'), true);
+  assert.equal(disk.hash('b.js'), 'b1');
+  assert.equal(disk.hasConflict('c.js'), false);
+  assert.equal(disk.hasConflict('gone.js'), true);
+});
+
+test('syncTabs does not reload a tab that got edits while its file was read', async () => {
+  const { createDiskState, syncTabs } = await load('disk.js');
+  const disk = createDiskState();
+  disk.track('a.js', 'a1');
+  let dirty = false;
+  const reloaded = [];
+  await syncTabs({
+    paths: ['a.js'],
+    state: disk,
+    read: async () => { dirty = true; return { content: 'A2', hash: 'a2' }; },
+    isDirty: () => dirty,
+    reload: (p, content) => reloaded.push([p, content]),
+  });
+  assert.deepEqual(reloaded, []);
+  assert.equal(disk.hasConflict('a.js'), true);
+});
+
+test('saveTab sends the base hash, and on 409 reloads, overwrites or cancels as chosen', async () => {
+  const { createDiskState, saveTab } = await load('disk.js');
+  const conflict = () => Object.assign(new Error('Die Datei wurde außerhalb des Studios geändert.'), { status: 409 });
+  const run = async (choice, { fail = true } = {}) => {
+    const disk = createDiskState();
+    disk.track('a.js', 'old');
+    const saves = [];
+    const reloaded = [];
+    const asked = [];
+    const outcome = await saveTab({
+      path: 'a.js',
+      content: 'mine',
+      state: disk,
+      save: async (p, content, baseHash) => {
+        saves.push([p, content, baseHash]);
+        if (fail && saves.length === 1) throw conflict();
+        return { ok: true, hash: `h-${content}` };
+      },
+      read: async () => ({ content: 'theirs', hash: 'h-theirs' }),
+      reload: (p, content) => reloaded.push([p, content]),
+      askConflict: async (p) => { asked.push(p); return choice; },
+    });
+    return { outcome, saves, reloaded, asked, disk };
+  };
+
+  const plain = await run(null, { fail: false });
+  assert.equal(plain.outcome, 'saved');
+  assert.deepEqual(plain.saves, [['a.js', 'mine', 'old']]);
+  assert.deepEqual(plain.asked, []);
+  assert.equal(plain.disk.hash('a.js'), 'h-mine');
+
+  const overwrite = await run('overwrite');
+  assert.equal(overwrite.outcome, 'saved');
+  assert.deepEqual(overwrite.asked, ['a.js']);
+  assert.deepEqual(overwrite.saves, [['a.js', 'mine', 'old'], ['a.js', 'mine', undefined]]);
+  assert.equal(overwrite.disk.hash('a.js'), 'h-mine');
+
+  const reload = await run('reload');
+  assert.equal(reload.outcome, 'reloaded');
+  assert.deepEqual(reload.reloaded, [['a.js', 'theirs']]);
+  assert.equal(reload.disk.hash('a.js'), 'h-theirs');
+  assert.equal(reload.disk.hasConflict('a.js'), false);
+
+  const cancel = await run(null);
+  assert.equal(cancel.outcome, 'cancelled');
+  assert.equal(cancel.saves.length, 1);
+  assert.equal(cancel.disk.hash('a.js'), 'old');
+
+  const other = createDiskState();
+  await assert.rejects(saveTab({
+    path: 'a.js', content: 'x', state: other,
+    save: async () => { throw Object.assign(new Error('Kaputt.'), { status: 400 }); },
+    read: async () => null, reload: () => {}, askConflict: async () => 'overwrite',
+  }), { message: 'Kaputt.' });
+});
+
+test('renderTabs marks a tab whose file changed on disk', async () => {
+  const { renderTabs } = await load('workspace.js');
+  const html = renderTabs(['a.js', 'b.js'], { active: 'a.js', dirty: new Set(['b.js']), conflicts: new Set(['b.js']) });
+  const [first, second] = html.split('class="editor-tab').slice(1);
+  assert.ok(!/Auf der Platte geändert/.test(first));
+  assert.match(second, /title="Auf der Platte geändert"/);
+  assert.match(second, /bi-exclamation-triangle/);
+});
+
+test('createApi passes the base hash and keeps the status of a failed request', async () => {
+  const { createApi } = await load('api.js');
+  const seen = [];
+  const answers = [
+    { ok: true, status: 200, json: async () => ({ path: 'a.js', content: 'x', hash: 'h1' }) },
+    { ok: false, status: 409, json: async () => ({ error: 'Die Datei wurde außerhalb des Studios geändert.' }) },
+  ];
+  const api = createApi({ token: 'tok', fetchFn: async (url, init) => { seen.push([url, init]); return answers.shift(); } });
+  assert.deepEqual(await api.readFileInfo('a.js'), { content: 'x', hash: 'h1' });
+  await assert.rejects(api.saveFile('a.js', 'y', 'h1'), (err) => err.status === 409 && /außerhalb/.test(err.message));
+  assert.deepEqual(JSON.parse(seen[1][1].body), { path: 'a.js', content: 'y', baseHash: 'h1' });
+});
+
+test('mountDebug hands files events to onFiles and draws no line for them', async () => {
+  const { mountDebug, filterEvents } = await load('debug.js');
+  const dom = fakeDebugDom();
+  const { sources, create } = fakeSources();
+  const calls = [];
+  const controller = new AbortController();
+  mountDebug(dom.container, {
+    api: { eventsUrl: () => 'u', clearEvents: async () => {} }, signal: controller.signal, createEventSource: create,
+    onFiles: (event) => calls.push(event.type),
+  });
+  sources[0].emit({ type: 'files', pluginId: 'p', at: '2026-11-26T10:00:00.000Z' });
+  await tick();
+  assert.deepEqual(calls, ['files']);
+  assert.equal(dom.list.appended.length, 0);
+  assert.deepEqual(filterEvents([{ type: 'files' }], 'alle'), []);
+  controller.abort();
+  sources[0].emit({ type: 'files', pluginId: 'p', at: '2026-11-26T10:00:01.000Z' });
+  assert.deepEqual(calls, ['files'], 'nothing after dispose');
+});

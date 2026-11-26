@@ -29,11 +29,16 @@ export function createApi({ token, fetchFn = (...args) => fetch(...args) }) {
         const data = await response.json();
         if (data && typeof data.error === 'string') message = data.error;
       } catch { /* keep the generic message */ }
-      throw new Error(message);
+      throw Object.assign(new Error(message), { status: response.status });
     }
     return response;
   }
   const json = async (method, path, body) => (await request(method, path, body)).json();
+  /** Content and sha256 of the file as it is on disk. */
+  async function readFileInfo(path) {
+    const { content, hash } = await json('GET', `/api/file?path=${encodeURIComponent(path).replace(/%2F/gi, '/')}`);
+    return { content, hash };
+  }
 
   return {
     request,
@@ -42,10 +47,10 @@ export function createApi({ token, fetchFn = (...args) => fetch(...args) }) {
     create: (id, parentDir) => json('POST', '/api/new', { id, parentDir }),
     removeRecent: (dir) => json('POST', '/api/recent/remove', { dir }),
     listFiles: () => json('GET', '/api/files'),
-    async readFile(path) {
-      return (await json('GET', `/api/file?path=${encodeURIComponent(path).replace(/%2F/gi, '/')}`)).content;
-    },
-    saveFile: (path, content) => json('PUT', '/api/file', { path, content }),
+    readFile: async (path) => (await readFileInfo(path)).content,
+    readFileInfo,
+    /** `baseHash`: the disk state the edit started from; a file changed since then fails with status 409. */
+    saveFile: (path, content, baseHash) => json('PUT', '/api/file', baseHash === undefined ? { path, content } : { path, content, baseHash }),
     createFile: (path) => json('POST', '/api/file', { path }),
     uploadFile: (path, base64) => json('POST', '/api/file', { path, base64 }),
     renameFile: (from, to) => json('POST', '/api/file/rename', { from, to }),

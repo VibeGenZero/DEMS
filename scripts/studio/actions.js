@@ -1,6 +1,7 @@
 'use strict';
 // API routes of the plugin studio: open/new plugin, recent list, file API, check, build,
 // event stream, hook triggers and the VS Code link. Wires files, child, events and triggers.
+const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
 const files = require('./files');
@@ -24,6 +25,8 @@ function text(v, message) {
 }
 
 const pathArg = (v) => text(v, 'Bitte einen Pfad angeben.');
+const sha256 = (content) => crypto.createHash('sha256').update(Buffer.from(content, 'utf8')).digest('hex');
+const CHANGED_OUTSIDE = 'Die Datei wurde außerhalb des Studios geändert.';
 
 /** `vscode://file/<abs dir>` with forward slashes; segments are URL-encoded, a drive letter stays as it is. */
 function vscodeUrl(dir) {
@@ -121,6 +124,8 @@ function createActions({
       triggers = createTriggers({ childPort: () => current.port() });
       watcher = watchPlugin(plugin.dir, () => {
         refresh();
+        // Studio-internal: the page refreshes its file list and open tabs (no debug line, not kept)
+        log.broadcast({ type: 'files', pluginId: plugin.id, at: new Date().toISOString() });
         current.restart().catch((err) => console.error(`studio child: ${err && err.stack ? err.stack : err}`));
       }, { debounceMs });
       bestEffort(() => recent.add(configDir, { dir: plugin.dir, id: plugin.id, name: plugin.manifest.name }));
@@ -218,14 +223,20 @@ function createActions({
     'GET /api/file': (req, body, query) => {
       const dir = requireOpen();
       const rel = pathArg(query.path);
-      return { json: { path: rel, content: files.readFile(dir, rel) } };
+      const content = files.readFile(dir, rel);
+      return { json: { path: rel, content, hash: sha256(content) } };
     },
     'PUT /api/file': (req, body) => {
       const dir = requireOpen();
       const rel = pathArg(body.path);
+      // baseHash: the hash the page loaded or last saved; without it (old clients) the save overwrites
+      if (body.baseHash !== undefined) {
+        if (typeof body.baseHash !== 'string') throw new StudioError('Ungültiger Stand der Datei.', 400);
+        if (files.fileHash(dir, rel) !== body.baseHash) throw new StudioError(CHANGED_OUTSIDE, 409);
+      }
       files.writeFile(dir, rel, body.content);
       if (rel === MANIFEST) refresh();
-      return ok();
+      return { json: { ok: true, hash: sha256(body.content) } };
     },
     'POST /api/file': (req, body) => {
       const dir = requireOpen();

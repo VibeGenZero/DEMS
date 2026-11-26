@@ -8,6 +8,9 @@ const path = require('node:path');
 const { createStudioServer } = require('../scripts/studio/server');
 const { createActions } = require('../scripts/studio/actions');
 const { readZip } = require('../plugin-sdk/zip');
+const crypto = require('node:crypto');
+
+const sha256 = (text) => crypto.createHash('sha256').update(Buffer.from(text, 'utf8')).digest('hex');
 
 const TOKEN = 'a'.repeat(64);
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -139,12 +142,59 @@ test('PUT /api/file writes the file and the watcher restarts the child', async (
   child.calls.length = 0;
   const res = await call('PUT', '/api/file', { path: 'server.js', content: 'module.exports = { register() {} };\n' });
   assert.equal(res.status, 200);
-  assert.deepEqual(res.data, { ok: true });
+  assert.deepEqual(res.data, { ok: true, hash: sha256('module.exports = { register() {} };\n') });
   assert.equal(fs.readFileSync(path.join(parent, 'watch-plugin', 'server.js'), 'utf8'), 'module.exports = { register() {} };\n');
   assert.ok(await waitFor(() => child.calls.includes('restart')), JSON.stringify(child.calls));
 
   const read = await call('GET', '/api/file?path=server.js');
-  assert.deepEqual(read.data, { path: 'server.js', content: 'module.exports = { register() {} };\n' });
+  assert.deepEqual(read.data, { path: 'server.js', content: 'module.exports = { register() {} };\n', hash: sha256('module.exports = { register() {} };\n') });
+});
+
+test('PUT /api/file with a baseHash that no longer matches the disk is refused with 409 and writes nothing', async () => {
+  const { call } = await setup();
+  const parent = tempDir('studio-parent');
+  await call('POST', '/api/new', { id: 'conflict-plugin', parentDir: parent });
+  const file = path.join(parent, 'conflict-plugin', 'server.js');
+  const read = await call('GET', '/api/file?path=server.js');
+  assert.equal(read.data.hash, sha256(fs.readFileSync(file, 'utf8')));
+
+  const same = await call('PUT', '/api/file', { path: 'server.js', content: 'eins\n', baseHash: read.data.hash });
+  assert.equal(same.status, 200, JSON.stringify(same.data));
+  assert.equal(same.data.hash, sha256('eins\n'));
+
+  fs.writeFileSync(file, 'von außen\n');
+  const stale = await call('PUT', '/api/file', { path: 'server.js', content: 'zwei\n', baseHash: same.data.hash });
+  assert.equal(stale.status, 409);
+  assert.deepEqual(stale.data, { error: 'Die Datei wurde außerhalb des Studios geändert.' });
+  assert.equal(fs.readFileSync(file, 'utf8'), 'von außen\n');
+
+  const forced = await call('PUT', '/api/file', { path: 'server.js', content: 'zwei\n' });
+  assert.equal(forced.status, 200);
+  assert.equal(fs.readFileSync(file, 'utf8'), 'zwei\n');
+
+  fs.rmSync(file);
+  const gone = await call('PUT', '/api/file', { path: 'server.js', content: 'drei\n', baseHash: forced.data.hash });
+  assert.equal(gone.status, 409, 'a file deleted on disk is a conflict too');
+  const bad = await call('PUT', '/api/file', { path: 'server.js', content: 'drei\n', baseHash: 42 });
+  assert.equal(bad.status, 400);
+});
+
+test('a change in the plugin folder is broadcast as a files event that the log does not keep', async () => {
+  const { call, actions } = await setup();
+  const parent = tempDir('studio-parent');
+  await call('POST', '/api/new', { id: 'files-plugin', parentDir: parent });
+  await sleep(150);
+  const seen = [];
+  const unsubscribe = actions.log.subscribe((e) => seen.push(e));
+  try {
+    fs.writeFileSync(path.join(parent, 'files-plugin', 'client.css'), 'body {}\n');
+    assert.ok(await waitFor(() => seen.some((e) => e.type === 'files')), JSON.stringify(seen));
+    const event = seen.find((e) => e.type === 'files');
+    assert.equal(typeof event.at, 'string');
+    assert.ok(!actions.log.list().some((e) => e.type === 'files'), 'not replayed as a debug line');
+  } finally {
+    unsubscribe();
+  }
 });
 
 test('create, upload, rename and delete files', async () => {

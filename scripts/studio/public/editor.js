@@ -291,6 +291,13 @@ export async function createEditorHost(container, { onDirty, onSave }) {
       }
     },
     value: (path) => entries.get(path).model.getValue(),
+    /** Replaces the content with the file as it is on disk; the tab is clean afterwards. */
+    reload(path, content) {
+      const entry = entries.get(path);
+      if (disposed || !entry) return;
+      if (entry.model.getValue() !== content) entry.model.setValue(content);
+      entry.tracker.markSaved();
+    },
     /** Version id of the model now; take it before a save request and pass it to markSaved. */
     version: (path) => entries.get(path).tracker.version(),
     markSaved: (path, version) => entries.get(path).tracker.markSaved(version),

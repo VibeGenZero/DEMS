@@ -7,19 +7,24 @@ const path = require('node:path');
  * Bounded in-memory event log with subscribers.
  *
  * @param {{ max?: number }} options -> Number of events kept; the oldest are dropped.
- * @returns {{ push(event): void, list(): object[], clear(): void, subscribe(fn): () => void }}
+ * @returns {{ push(event): void, broadcast(event): void, list(): object[], clear(): void, subscribe(fn): () => void }}
  */
 function createEventLog({ max = 500 } = {}) {
   let events = [];
   const subscribers = new Set();
+  function send(event) {
+    for (const fn of subscribers) {
+      try { fn(event); } catch { /* a broken subscriber must not stop the others */ }
+    }
+  }
   return {
     push(event) {
       events.push(event);
       if (events.length > max) events = events.slice(events.length - max);
-      for (const fn of subscribers) {
-        try { fn(event); } catch { /* a broken subscriber must not stop the others */ }
-      }
+      send(event);
     },
+    /** Send to the open streams only; the log does not keep it (studio-internal notices). */
+    broadcast: send,
     list: () => events.slice(),
     clear() { events = []; },
     subscribe(fn) {
