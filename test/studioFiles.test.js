@@ -62,8 +62,9 @@ test('listFiles hides dot entries, node_modules and extension-less files', () =>
   fs.writeFileSync(path.join(dir, '.hidden.js'), '');
   fs.writeFileSync(path.join(dir, 'index.html'), '<p>');
   const list = files.listFiles(dir);
-  assert.deepEqual(list.map((f) => f.path), ['client.js', 'plugin.json', 'server.js']);
-  assert.ok(list.every((f) => f.text && f.size > 0));
+  assert.deepEqual(list.map((f) => f.path), ['client.js', 'index.html', 'plugin.json', 'server.js']);
+  assert.deepEqual(list.find((f) => f.path === 'index.html'), { path: 'index.html', size: 3, text: false, allowed: false });
+  assert.ok(list.filter((f) => f.path !== 'index.html').every((f) => f.text && f.allowed && f.size > 0));
 });
 
 test('readFile and writeFile round-trip; writes are atomic and leave no temp file', () => {
@@ -169,4 +170,95 @@ test('recent.load survives a corrupt file', () => {
   fs.mkdirSync(cfg);
   fs.writeFileSync(path.join(cfg, 'recent.json'), '{nope');
   assert.deepEqual(recent.load(cfg), []);
+});
+
+function fresh(id) {
+  return files.openPlugin(makePlugin(tmp, id)).dir;
+}
+
+test('new files can be created in existing folders (write, create, upload, rename into)', () => {
+  const d = fresh('fresh-one');
+  files.writeFile(d, 'lib/a.js', 'a');
+  files.writeFile(d, 'lib/b.js', 'b');
+  files.createFile(d, 'lib/c.js');
+  files.writeBinary(d, 'assets/one.png', Buffer.from([1, 2]));
+  files.writeBinary(d, 'assets/two.png', Buffer.from([1, 2]));
+  files.renameFile(d, 'server.js', 'lib/server.js');
+  files.writeFile(d, 'lib/deep/x.js', 'x');
+  assert.ok(files.listFiles(d).some((f) => f.path === 'lib/deep/x.js'));
+  assert.equal(files.readFile(d, 'lib/server.js'), 'module.exports = {};\n');
+});
+
+test('a case-only rename changes the case on disk', () => {
+  const d = fresh('fresh-case');
+  files.writeFile(d, 'a.js', 'a');
+  files.renameFile(d, 'a.js', 'A.JS');
+  const names = files.listFiles(d).map((f) => f.path);
+  assert.ok(names.includes('A.JS') && !names.includes('a.js'), names.join());
+});
+
+test('refused-but-safe files are listed, can be deleted and renamed out, never written to', () => {
+  const d = fresh('fresh-refused');
+  fs.writeFileSync(path.join(d, 'index.html'), '<p>');
+  fs.mkdirSync(path.join(d, 'assets', 'sub'), { recursive: true });
+  fs.writeFileSync(path.join(d, 'assets', 'sub', 'x.png'), 'p');
+  fs.writeFileSync(path.join(d, 'LICENSE'), 'MIT');
+  const list = files.listFiles(d);
+  assert.equal(list.find((f) => f.path === 'assets/sub/x.png').allowed, false);
+  assert.ok(!list.some((f) => f.path === 'LICENSE'));
+  refused(() => files.deleteFile(d, 'LICENSE'), /Nicht erlaubte/);
+  refused(() => files.writeFile(d, 'index.html', 'x'), /Nicht erlaubte/);
+  refused(() => files.createFile(d, 'other.html'), /Nicht erlaubte/);
+  refused(() => files.renameFile(d, 'server.js', 'server.html'), /Nicht erlaubte/);
+  refused(() => files.deleteFile(d, '.git/x.js'), /Versteckte/);
+  files.renameFile(d, 'index.html', 'index.txt');
+  files.deleteFile(d, 'assets/sub/x.png');
+  assert.ok(files.listFiles(d).some((f) => f.path === 'index.txt' && f.allowed));
+  assert.ok(!files.listFiles(d).some((f) => f.path === 'assets/sub/x.png'));
+});
+
+test('a folder swapped for a link after open is refused', { skip: !linkOk && 'no link permission' }, () => {
+  const d = fresh('fresh-swap');
+  fs.renameSync(d, `${d}-moved`);
+  fs.symlinkSync(path.join(tmp, 'outside'), d, 'junction');
+  refused(() => files.writeFile(d, 'x.js', 'x'), /Ordner/);
+  assert.equal(fs.existsSync(path.join(tmp, 'outside', 'x.js')), false);
+  fs.rmSync(d);
+});
+
+test('OS litter names are refused for writes', () => {
+  refused(() => files.writeFile(dir, '__MACOSX/x.js', 'x'));
+  refused(() => files.writeFile(dir, 'a/.DS_Store', 'x'));
+});
+
+test('unexpected fs errors become German StudioErrors without paths', () => {
+  const d = fresh('fresh-err');
+  const orig = { rename: fs.renameSync, error: console.error };
+  fs.renameSync = () => { throw Object.assign(new Error(`EACCES ${d}`), { code: 'EACCES' }); };
+  console.error = () => {};
+  try {
+    assert.throws(() => files.writeFile(d, 'e.js', 'x'), (e) => e instanceof files.StudioError && e.status === 500 && /gespeichert/.test(e.message) && !e.message.includes(d));
+    assert.deepEqual(fs.readdirSync(d).filter((n) => n.endsWith('.tmp')), []);
+  } finally {
+    fs.renameSync = orig.rename;
+    console.error = orig.error;
+  }
+});
+
+test('folder limits: file count and unpacked size', () => {
+  const d = fresh('fresh-limit');
+  for (let i = 0; i < 296; i++) fs.writeFileSync(path.join(d, `f${i}.js`), '');
+  files.createFile(d, 'last.js');
+  assert.throws(() => files.createFile(d, 'over.js'), /Das Plugin wird zu groß/);
+  assert.throws(() => files.writeFile(d, 'over2.js', 'x'), /Das Plugin wird zu groß/);
+  const b = fresh('fresh-bytes');
+  for (let i = 0; i < 9; i++) fs.writeFileSync(path.join(b, `big${i}.json`), Buffer.alloc(2 * 1024 * 1024, 0x61));
+  assert.throws(() => files.writeBinary(b, 'assets/z.png', Buffer.alloc(2 * 1024 * 1024)), /Das Plugin wird zu groß/);
+  files.writeFile(b, 'small.js', 'x');
+});
+
+test('openPlugin refuses an oversized plugin.json', () => {
+  const d = makePlugin(tmp, 'fresh-bigjson');
+  fs.writeFileSync(path.join(d, 'plugin.json'), Buffer.alloc(3 * 1024 * 1024, 0x20));
+  assert.throws(() => files.openPlugin(d), /zu groß/);
 });
