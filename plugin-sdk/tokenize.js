@@ -96,7 +96,7 @@ function tokenize(code) {
     const c = src[i];
 
     if (isNl(c)) { newline(); continue; }
-    if (c === ' ' || c === '\t' || c === '\f' || c === '\v' || c === ' ' || c === '﻿') { i++; continue; }
+    if (c === ' ' || c === '\t' || c === '\f' || c === '\v' || c === '\u00A0' || c === '\uFEFF') { i++; continue; }
 
     // Comments
     if (c === '/' && src[i + 1] === '/') {
