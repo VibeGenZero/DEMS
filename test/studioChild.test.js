@@ -432,9 +432,19 @@ test('watchPlugin coalesces a burst and ignores dot entries and node_modules', a
   }
 });
 
-function portClosed(port) {
+function statusWithHost(port, host) {
+  return new Promise((resolve, reject) => {
+    const req = http.get({ host: '127.0.0.1', port, path: '/healthz', headers: { host }, agent: false }, (res) => {
+      res.resume();
+      resolve(res.statusCode);
+    });
+    req.on('error', reject);
+  });
+}
+
+function portClosed(port, host = '127.0.0.1') {
   return new Promise((resolve) => {
-    const socket = net.connect({ host: '127.0.0.1', port });
+    const socket = net.connect({ host, port });
     socket.once('connect', () => { socket.destroy(); resolve(false); });
     socket.once('error', () => resolve(true));
   });
@@ -466,6 +476,10 @@ test('runs the real DEMS mock child on a temp plugin folder and stops it', { tim
     port = child.port();
     const health = await fetch(`http://127.0.0.1:${port}/healthz`);
     assert.equal(health.status, 200);
+    assert.equal(await statusWithHost(port, 'example.test'), 403, 'a foreign Host is refused');
+    assert.equal(await statusWithHost(port, new URL(PREVIEW).host), 200, 'the preview origin is accepted');
+    const lan = Object.values(os.networkInterfaces()).flat().find((a) => a && !a.internal && a.family === 'IPv4');
+    if (lan) assert.equal(await portClosed(port, lan.address), true, 'the child listens on 127.0.0.1 only');
     const deadline = Date.now() + 5000;
     while (!events.some((e) => e.type === 'log') && Date.now() < deadline) await sleep(50);
     const log = events.find((e) => e.type === 'log');
