@@ -126,8 +126,7 @@ function cmdNew(args, io) {
     if (!id) throw new PackageError('Bitte eine Plugin-ID angeben: new <id>');
     const parent = path.resolve(io.cwd, typeof flags.dir === 'string' ? flags.dir : '.');
     const target = scaffoldPlugin(id, parent);
-    io.stdout.write(`Angelegt: ${target}
-`);
+    io.stdout.write(`Angelegt: ${target}\n`);
     return 0;
 }
 
@@ -162,8 +161,7 @@ function reportLines(analysis) {
 
 /** Print the comparison; returns the analysis. */
 function report(analysis, io) {
-    for (const { text, error } of reportEntries(analysis)) (error ? io.stderr : io.stdout).write(`${text}
-`);
+    for (const { text, error } of reportEntries(analysis)) (error ? io.stderr : io.stdout).write(`${text}\n`);
     return analysis;
 }
 
@@ -313,8 +311,7 @@ function prepareDev(folder, { repoRoot = REPO, env = process.env, devPluginsDir 
     clearDevDir(linkDir);
     fs.symlinkSync(abs, path.join(linkDir, id), 'junction');
     const configPath = path.join(linkDir, 'nodemon.json');
-    fs.writeFileSync(configPath, `${JSON.stringify({ watch: [abs], ext: 'js,json,css', ignore: [] }, null, 2)}
-`);
+    fs.writeFileSync(configPath, `${JSON.stringify({ watch: [abs], ext: 'js,json,css', ignore: [] }, null, 2)}\n`);
     return { linkDir, configPath, env: { ...env, PLUGINS_DIR: linkDir, PLUGINS_DEV_ID: id } };
 }
 

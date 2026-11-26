@@ -139,7 +139,7 @@ function openPlugin(folder) {
     if (stat.size > LIMITS.entryBytes) throw new StudioError('Die plugin.json ist zu groß.', 400);
     let raw;
     try {
-        raw = JSON.parse(fs.readFileSync(manifestFile, 'utf8').replace(/^﻿/, ''));
+        raw = JSON.parse(fs.readFileSync(manifestFile, 'utf8').replace(/^\uFEFF/, ''));
     } catch {
         throw new StudioError('Die plugin.json ist kein gültiges JSON.', 400);
     }

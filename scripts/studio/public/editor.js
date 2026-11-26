@@ -321,14 +321,6 @@ export async function createEditorHost(container, { onDirty, onSave }) {
       providers.dispose();
       editor.dispose();
     },
-    /** Smoke check: problems the language service finds in the SDK type file (should be none). */
-    async libDiagnostics() {
-      const ts = monaco.languages.typescript || monaco.typescript;
-      const uri = 'file:///dems-plugin.d.ts';
-      const worker = await (await ts.getJavaScriptWorker())(monaco.Uri.parse(uri));
-      const found = [...(await worker.getSyntacticDiagnostics(uri)), ...(await worker.getSemanticDiagnostics(uri))];
-      return found.map((d) => (typeof d.messageText === 'string' ? d.messageText : d.messageText.messageText));
-    },
   };
   return host;
 }

@@ -493,12 +493,21 @@ test('plugin.js exports are complete at the moment the CLI loads the studio', ()
   const root = path.join(__dirname, '..');
   const work = fs.mkdtempSync(path.join(os.tmpdir(), 'dems-studio-hook-'));
   // Preload: when plugin.js (as entry) requires './studio', report its own exports and stop - no studio, no DEMS child.
+  // Any other load of scripts/studio would start a real studio, so it fails the run instead.
   const hook = path.join(work, 'hook.js');
+  const studioEntry = path.join(root, 'scripts', 'studio', 'index.js');
   fs.writeFileSync(hook, `
     const Module = require('module');
     const load = Module._load;
+    const studioEntry = ${JSON.stringify(studioEntry)};
     Module._load = function (request, parent) {
-      if (request === './studio' && parent && /plugin\.js$/.test(parent.filename)) {
+      let resolved = null;
+      try { resolved = Module._resolveFilename(request, parent); } catch { /* load reports it */ }
+      if (resolved === studioEntry) {
+        if (!parent || !/plugin\\.js$/.test(parent.filename)) {
+          console.log('unexpected studio load from ' + (parent && parent.filename));
+          process.exit(1);
+        }
         console.log(['scaffoldPlugin', 'reportLines', 'prepareDev'].map((n) => typeof parent.exports[n]).join(' '));
         process.exit(0);
       }

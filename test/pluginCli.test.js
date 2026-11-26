@@ -461,3 +461,22 @@ test('prepareDev mounts into devPluginsDir when given and leaves data/dev-plugin
     assert.deepEqual(fs.readdirSync(mount).sort(), ['demo-plugin', 'nodemon.json']);
     assert.equal(fs.existsSync(path.join(repoRoot, 'data')), false);
 });
+
+test('CLI output and the nodemon config end lines with \\n only, whatever the checkout uses', async () => {
+    const cwd = tmp();
+    const created = await run(['new', 'eol-plugin'], cwd);
+    assert.equal(created.code, 0, created.err);
+    assert.equal(created.out, `Angelegt: ${path.join(cwd, 'eol-plugin')}\n`);
+    const checked = await run(['check', path.join(cwd, 'eol-plugin')], cwd);
+    assert.ok(!/\r/.test(checked.out + checked.err), JSON.stringify(checked.out));
+    const repoRoot = devRepo();
+    const result = prepareDev(path.join(cwd, 'eol-plugin'), { repoRoot, env: {} });
+    const config = fs.readFileSync(result.configPath, 'utf8');
+    assert.ok(config.endsWith('}\n') && !config.includes('\r'), JSON.stringify(config));
+});
+
+test('scripts/plugin.js has no template string that spans a raw line break', () => {
+    const source = fs.readFileSync(path.join(__dirname, '..', 'scripts', 'plugin.js'), 'utf8');
+    // A template whose closing backtick starts the next line: `...<line break>`);
+    assert.doesNotMatch(source, /`[^`\n]*\r?\n`/);
+});

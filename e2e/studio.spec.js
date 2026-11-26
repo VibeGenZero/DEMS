@@ -105,6 +105,15 @@ test.describe('plugin studio', () => {
         await page.locator('#file-list [data-action="file"][data-path="server.js"]').click();
         const editor = page.locator('#editor-host .monaco-editor').first();
         await expect(editor).toBeVisible({ timeout: 30_000 });
+        // The SDK type file the editor loads for ctx/ui hints has no problems for the language service
+        const typeProblems = await page.evaluate(async () => {
+            const ts = window.monaco.languages.typescript || window.monaco.typescript;
+            const uri = 'file:///dems-plugin.d.ts';
+            const worker = await (await ts.getJavaScriptWorker())(window.monaco.Uri.parse(uri));
+            const found = [...(await worker.getSyntacticDiagnostics(uri)), ...(await worker.getSemanticDiagnostics(uri))];
+            return found.map((d) => (typeof d.messageText === 'string' ? d.messageText : d.messageText.messageText));
+        });
+        expect(typeProblems).toEqual([]);
         await editor.click();
         const changed = await page.evaluate(() => {
             const model = window.monaco.editor.getModels().find((m) => m.uri.path.endsWith('/server.js'));
