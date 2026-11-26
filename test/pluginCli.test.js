@@ -440,3 +440,13 @@ test('studio rejects an empty or bad --port', async () => {
         assert.match(stderr.text(), /Ungültiger Port: /, port);
     }
 });
+
+test('studio passes a numeric --port on to startStudio', async () => {
+    for (const [arg, expected] of [['3200', 3200], ['0', 0], [undefined, 3100]]) {
+        let got;
+        const loadStudio = () => ({ startStudio: async (opts) => { got = opts.port; return { done: Promise.resolve() }; } });
+        const { io } = studioIo({ loadStudio });
+        assert.equal(await main(arg === undefined ? ['studio'] : ['studio', '--port', arg], io), 0, String(arg));
+        assert.equal(got, expected, String(arg));
+    }
+});

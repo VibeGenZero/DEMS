@@ -352,7 +352,7 @@ async function cmdStudio(args, io) {
     const { flags } = parseArgs(args, ['--port']);
     let port = 3100;
     if (flags.port !== undefined) {
-        port = /^d{1,5}$/.test(String(flags.port)) ? Number(flags.port) : -1;
+        port = /^\d{1,5}$/.test(String(flags.port)) ? Number(flags.port) : -1;
         if (port < 0 || port > 65534) throw new PackageError('Ungültiger Port: ' + flags.port);
     }
     // Checked before the require: scripts/studio/ is not part of the Docker image
