@@ -48,7 +48,8 @@ function applyMockEnvironment() {
     env.DISCORD_ADMIN_ROLE_ID = MOCK_GUILD.ROLE_ID.ADMIN;
     env.DISCORD_ANNOUNCE_CHANNEL_ID = MOCK_GUILD.CHANNEL_ID.ANNOUNCEMENTS;
     env.DISCORD_EVENT_CATEGORY_ID = '';
-    env.BASE_URL = `http://localhost:${env.PORT || 3000}`;
+    // The plugin studio sets the preview origin for its DEMS child; links must point through its proxy
+    if (!(env.PLUGIN_STUDIO === '1' && env.BASE_URL)) env.BASE_URL = `http://localhost:${env.PORT || 3000}`;
 
     // Comment ↔ thread sync (B-16) on, so the mock log shows it; DISCORD_THREAD_SYNC=false turns it off
     if (!env.DISCORD_THREAD_SYNC) env.DISCORD_THREAD_SYNC = 'true';
