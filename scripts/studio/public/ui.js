@@ -12,9 +12,10 @@ export function escapeHtml(value) {
 /**
  * Shows a modal dialog and resolves with the pressed button's value (null on Escape).
  * `fields` (optional) are text inputs; then the result is `{ value, fields }` for the confirm button.
+ * `html` (optional) is markup the caller has already escaped (check/build reports).
  * `signal` (optional): aborting it closes the dialog (resolves null), e.g. when the view that opened it goes away.
  */
-export function showDialog({ title, message = '', buttons, fields = [], signal }) {
+export function showDialog({ title, message = '', html = '', buttons, fields = [], signal }) {
   return new Promise((resolve) => {
     if (signal && signal.aborted) { resolve(null); return; }
     const overlay = document.createElement('div');
@@ -29,6 +30,7 @@ export function showDialog({ title, message = '', buttons, fields = [], signal }
       <div class="studio-dialog" role="dialog" aria-modal="true" aria-label="${escapeHtml(title)}">
         <h2>${escapeHtml(title)}</h2>
         ${message ? `<p>${escapeHtml(message)}</p>` : ''}
+        ${html ? `<div class="report">${html}</div>` : ''}
         ${inputs}
         <div class="studio-dialog-actions">${actions}</div>
       </div>`;

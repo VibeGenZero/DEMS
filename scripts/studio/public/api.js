@@ -50,5 +50,17 @@ export function createApi({ token, fetchFn = (...args) => fetch(...args) }) {
     uploadFile: (path, base64) => json('POST', '/api/file', { path, base64 }),
     renameFile: (from, to) => json('POST', '/api/file/rename', { from, to }),
     deleteFile: (path) => json('DELETE', '/api/file', { path }),
+    // EventSource cannot send headers, so the stream takes the token as its only query parameter.
+    eventsUrl: () => `/api/events?token=${encodeURIComponent(token)}`,
+    clearEvents: () => json('POST', '/api/events/clear', {}),
+    check: () => json('POST', '/api/check', {}),
+    buildPreview: () => json('POST', '/api/build', { apply: false }),
+    async buildDownload() {
+      const response = await request('POST', '/api/build', { apply: true });
+      const match = /filename="([^"]+)"/.exec(response.headers.get('Content-Disposition') || '');
+      return { blob: await response.blob(), fileName: match ? match[1] : 'plugin.dems' };
+    },
+    trigger: (action) => json('POST', '/api/trigger', { action }),
+    vscode: () => json('GET', '/api/vscode'),
   };
 }

@@ -202,3 +202,121 @@ test('mountStart sends one request for a double click', async () => {
   assert.equal(calls, 1);
   release();
 });
+
+// ---- Task 11: debug panel, check/build renderers, preview, hook buttons ----
+
+const ev = (type, data, pluginId = 'p') => ({ type, pluginId, at: '2026-11-26T10:00:00.000Z', data });
+const XSS = '<img src=x onerror=alert(1)>';
+
+test('renderDebugEntry escapes DM text, user name, link, request bodies and log text', async () => {
+  const { renderDebugEntry } = await load('debug.js');
+  const dm = renderDebugEntry(ev('dm', { userId: '1', userName: XSS, text: XSS, link: XSS, result: 'sent', reason: null }));
+  const request = renderDebugEntry(ev('request', { method: 'POST', path: `/x${XSS}`, status: 201, ms: 12, requestBody: XSS, responseBody: XSS }));
+  const log = renderDebugEntry(ev('log', { level: 'warn', text: XSS }));
+  const error = renderDebugEntry(ev('error', { message: XSS, where: XSS }));
+  const hook = renderDebugEntry(ev('hook', { name: XSS, summary: XSS, ok: false, error: XSS }));
+  for (const html of [dm, request, log, error, hook]) {
+    assert.ok(!html.includes('<img'), html);
+    assert.ok(html.includes('&lt;img'), html);
+  }
+  assert.match(request, /POST/);
+  assert.match(request, /201/);
+  assert.match(request, /12 ms/);
+  assert.match(request, /<details/);
+  assert.match(hook, /Hook /);
+  assert.match(hook, /Fehler/);
+});
+
+test('renderDebugEntry shows a dropped DM with its reason and a sent DM like a Discord message', async () => {
+  const { renderDebugEntry } = await load('debug.js');
+  const dropped = renderDebugEntry(ev('dm', { userId: '1', userName: 'Lena', text: 'Hi', link: null, result: 'dropped', reason: 'Die Nutzer-ID ist ungültig.' }));
+  assert.match(dropped, /nicht gesendet: Die Nutzer-ID ist ungültig\./);
+  const sent = renderDebugEntry(ev('dm', { userId: '1', userName: 'Lena', text: 'Hi', link: { label: 'Öffnen', url: 'http://x' }, result: 'sent', reason: null }));
+  assert.match(sent, /<strong>Lena<\/strong>/);
+  assert.match(sent, /Hi/);
+  assert.match(sent, /Öffnen/);
+  assert.ok(!/nicht gesendet/.test(sent));
+});
+
+test('renderDebugEntry renders channel, role and log entries', async () => {
+  const { renderDebugEntry } = await load('debug.js');
+  assert.match(renderDebugEntry(ev('channel', { channel: 'news', text: 'T', link: null, result: 'sent', reason: null })), /#news/);
+  const role = renderDebugEntry(ev('role', { userId: 'u1', roleId: 'r9', give: true, result: 'ok', reason: null }));
+  assert.match(role, /Rolle r9 an u1 vergeben/);
+  assert.match(renderDebugEntry(ev('role', { userId: 'u1', roleId: 'r9', give: false, result: 'ok', reason: null })), /entzogen/);
+  assert.match(renderDebugEntry(ev('log', { level: 'error', text: 'x' })), /level-error/);
+  assert.match(renderDebugEntry(ev('error', { message: 'm', where: 'run' })), /run/);
+  assert.match(renderDebugEntry(ev('hook', { name: 'event.ended', summary: '', ok: true, error: '' })), /Hook event\.ended · ok/);
+});
+
+test('filterEvents keeps only the requested kinds', async () => {
+  const { filterEvents } = await load('debug.js');
+  const all = ['dm', 'channel', 'role', 'request', 'hook', 'log', 'error', 'lifecycle'].map((t) => ev(t, {}));
+  const types = (kind) => filterEvents(all, kind).map((e) => e.type);
+  assert.deepEqual(types('discord'), ['dm', 'channel', 'role']);
+  assert.deepEqual(types('anfragen'), ['request']);
+  assert.deepEqual(types('hooks'), ['hook']);
+  assert.deepEqual(types('logs'), ['log']);
+  assert.deepEqual(types('fehler'), ['error']);
+  assert.equal(types('alle').length, all.length - 1, 'lifecycle is not a debug line');
+});
+
+test('renderCheckDialog and renderBuildPreview escape lines and errors', async () => {
+  const { renderCheckDialog, renderBuildPreview } = await load('toolbar.js');
+  const lines = ['+ discord:dm', 'übersprungen: .git', XSS];
+  const check = renderCheckDialog({ lines, errors: [`Fehler: ${XSS}`] });
+  assert.ok(!check.includes('<img'));
+  assert.match(check, /\+ discord:dm/);
+  assert.match(check, /übersprungen: \.git/);
+  assert.match(check, /Fehler: &lt;img/);
+  assert.equal((check.match(/Fehler: Fehler/g) || []).length, 0, 'no doubled prefix');
+  const build = renderBuildPreview({ lines });
+  assert.ok(!build.includes('<img'));
+  assert.match(build, /\+ discord:dm/);
+  assert.match(renderCheckDialog({ lines: [], errors: [] }), /Alles in Ordnung/);
+});
+
+test('statusOverlay and personaUrl', async () => {
+  const { statusOverlay, personaUrl, PERSONAS } = await load('preview.js');
+  assert.equal(statusOverlay('starting'), 'DEMS startet neu …');
+  assert.equal(statusOverlay('failed'), 'DEMS konnte nicht starten – siehe Debug');
+  assert.equal(statusOverlay('running'), null);
+  assert.deepEqual(PERSONAS.map((p) => p.id), ['admin', 'raider', 'member', 'newbie']);
+  assert.equal(personaUrl('http://127.0.0.1:3101', 'raider'), 'http://127.0.0.1:3101/auth/dev-login/raider');
+  assert.equal(personaUrl('http://127.0.0.1:3101/', 'a/../b'), 'http://127.0.0.1:3101/auth/dev-login/a%2F..%2Fb');
+});
+
+test('api exposes the event stream URL with the token as the only query parameter', async () => {
+  const { createApi } = await load('api.js');
+  const api = createApi({ token: 'abc123', fetchFn: async () => { throw new Error('unused'); } });
+  assert.equal(api.eventsUrl(), '/api/events?token=abc123');
+});
+
+test('mountDebug closes the event stream on dispose and ignores late events', async () => {
+  const { mountDebug } = await load('debug.js');
+  const sources = [];
+  class FakeSource {
+    constructor(url) { this.url = url; this.closed = false; this.listeners = {}; sources.push(this); }
+    addEventListener(name, fn) { this.listeners[name] = fn; }
+    close() { this.closed = true; }
+  }
+  const container = { innerHTML: '', querySelector: () => null };
+  const seen = [];
+  const controller = new AbortController();
+  const debug = mountDebug(container, {
+    api: { eventsUrl: () => '/api/events?token=t', clearEvents: async () => {} },
+    signal: controller.signal,
+    createEventSource: (url) => new FakeSource(url),
+    onLifecycle: (data) => seen.push(data),
+  });
+  assert.equal(sources.length, 1);
+  assert.equal(sources[0].url, '/api/events?token=t');
+  sources[0].listeners.studio({ data: JSON.stringify(ev('lifecycle', { status: 'starting', where: 'child' })) });
+  sources[0].listeners.studio({ data: 'not json' });
+  assert.deepEqual(seen, [{ status: 'starting', where: 'child' }]);
+  debug.dispose();
+  assert.equal(sources[0].closed, true);
+  sources[0].listeners.studio({ data: JSON.stringify(ev('lifecycle', { status: 'running', where: 'child' })) });
+  assert.equal(seen.length, 1);
+  debug.dispose(); // idempotent
+});

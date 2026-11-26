@@ -2,6 +2,9 @@
 import { createApi, takeToken } from './api.js';
 import { mountStart } from './start.js';
 import { mountWorkspace } from './workspace.js';
+import { mountPreview } from './preview.js';
+import { mountDebug } from './debug.js';
+import { mountToolbar } from './toolbar.js';
 import { escapeHtml, showToast } from './ui.js';
 
 const root = document.getElementById('app');
@@ -32,13 +35,30 @@ async function main() {
     swapView(mountStart(root, { api, recent: state.recent, onOpened: showWorkspace }));
   }
 
+  // Preview, debug panel and toolbar share one lifetime (signal) with the workspace; returns the joint disposer.
+  async function mountTools(workspace) {
+    const controller = new AbortController();
+    const { signal } = controller;
+    const dispose = () => { controller.abort(); workspace.dispose(); };
+    try {
+      const state = await api.state();
+      const preview = mountPreview(workspace.previewArea, { api, previewUrl: state.previewUrl, status: state.child, signal });
+      mountDebug(preview.debugArea, { api, signal, onLifecycle: (data) => preview.setStatus(data.status) });
+      mountToolbar(workspace.toolbarArea, { api, signal });
+    } catch (err) {
+      dispose();
+      throw err;
+    }
+    return dispose;
+  }
+
   async function showWorkspace(plugin) {
     if (opening) return;
     opening = true;
     try {
       swapView(() => {});
       const workspace = await mountWorkspace(root, { api, plugin, onLeave: showStart });
-      swapView(workspace.dispose);
+      swapView(await mountTools(workspace));
       document.dispatchEvent(new CustomEvent('studio:workspace', { detail: { api, plugin, workspace } }));
     } catch (err) {
       showToast(err.message, 'danger');
