@@ -394,3 +394,11 @@ test('build still stops on a file with a disallowed extension', async () => {
     assert.match(built.err, /Nicht erlaubte Datei: index\.html/);
     assert.ok(!fs.existsSync(path.join(cwd, 'demo-plugin-0.1.0.dems')));
 });
+
+test('the CLI resolves folders against the directory npm run was started in', () => {
+    // `npm run` switches to the repo root; npm keeps the caller's directory in INIT_CWD
+    const { invocationCwd } = require('../scripts/plugin');
+    assert.equal(invocationCwd({ INIT_CWD: '/home/me/plugins' }, '/app'), '/home/me/plugins');
+    assert.equal(invocationCwd({}, '/app'), '/app');
+    assert.equal(invocationCwd({ INIT_CWD: '' }, '/app'), '/app');
+});

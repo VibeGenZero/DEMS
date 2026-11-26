@@ -339,9 +339,20 @@ async function main(argv, io) {
     }
 }
 
+/**
+ * `npm run` starts the script in the repo root; npm keeps the caller's directory in INIT_CWD.
+ *
+ * @param {object} env -> Environment of the process.
+ * @param {string} cwd -> Working directory of the process.
+ * @returns {string} -> Directory that relative folders and files are resolved against.
+ */
+function invocationCwd(env, cwd) {
+    return env.INIT_CWD || cwd;
+}
+
 if (require.main === module) {
     main(process.argv.slice(2), {
-        cwd: process.cwd(),
+        cwd: invocationCwd(process.env, process.cwd()),
         stdin: process.stdin,
         stdout: process.stdout,
         stderr: process.stderr,
@@ -352,4 +363,4 @@ if (require.main === module) {
     });
 }
 
-module.exports = { main, COMMANDS, parseArgs, prepareDev };
+module.exports = { main, COMMANDS, parseArgs, prepareDev, invocationCwd };
