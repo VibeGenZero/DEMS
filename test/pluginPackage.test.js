@@ -77,9 +77,9 @@ test('packPlugin builds a root-level package named after id and version', () => 
     assert.deepEqual(readZip(buffer).map((e) => e.name).sort(), ['index.js', 'plugin.json']);
 });
 
-test('packPlugin refuses index.html, node_modules and symlinks', (t) => {
+test('packPlugin refuses index.html and symlinks', (t) => {
     assert.throws(() => packPlugin(makePlugin(MANIFEST, { 'index.html': '<p>' })), (e) => e instanceof PackageError && e.message.includes('index.html'));
-    assert.throws(() => packPlugin(makePlugin(MANIFEST, { 'node_modules/a.js': 'x' })), (e) => e instanceof PackageError && e.message.includes('node_modules'));
+    assert.throws(() => packPlugin(makePlugin(MANIFEST, { 'index.html': '<p>', '.gitignore': 'x', LICENSE: 'x' })), /Nicht erlaubte Datei: index\.html/);
     const dir = makePlugin();
     try {
         fs.symlinkSync(tempDir(), path.join(dir, 'link.js'), 'junction');
@@ -241,4 +241,31 @@ test('checkPackage refuses symlink entries, case collisions, bad JSON and hostil
     assert.ok(checkPackage(hostile, ctx).errors.includes('Unerlaubter Pfad: ../x.js'));
     await assert.rejects(installPackage(hostile, { ...ctx, replace: false }), /Unerlaubter Pfad: \.\.\/x\.js/);
     assert.deepEqual(fs.readdirSync(ctx.customDir), []);
+});
+
+test('packPlugin skips dot entries, node_modules and extension-less files and lists them', () => {
+    const dir = makePlugin(MANIFEST, {
+        '.git/config': 'x',
+        '.git/objects/ab.js': 'x',
+        '.gitignore': 'node_modules/',
+        '.vscode/settings.json': '{}',
+        LICENSE: 'MIT',
+        'node_modules/x.js': 'x',
+        'lib/.eslintrc.json': '{}',
+        'lib/NOTES': 'x',
+        'lib/a.js': ''
+    });
+    const expected = ['.git', '.gitignore', '.vscode', 'LICENSE', 'lib/.eslintrc.json', 'lib/NOTES', 'node_modules'];
+    const { buffer, skipped } = packPlugin(dir);
+    assert.deepEqual(readZip(buffer).map((e) => e.name).sort(), ['index.js', 'lib/a.js', 'plugin.json']);
+    assert.deepEqual(skipped, expected);
+    assert.deepEqual(analyzePlugin(dir).skipped, expected);
+});
+
+test('an uploaded package still refuses what a build skips', () => {
+    const ctx = { officialIds: new Set(), customDir: tempDir() };
+    const { errors } = checkPackage(zipOf(GOOD, { '.gitignore': 'x', LICENSE: 'x', 'node_modules/x.js': 'x' }), ctx);
+    assert.ok(errors.includes('Versteckte Datei: .gitignore'), errors.join(' | '));
+    assert.ok(errors.includes('Nicht erlaubte Datei: LICENSE'), errors.join(' | '));
+    assert.ok(errors.includes('node_modules wird nicht unterstützt: node_modules/x.js'), errors.join(' | '));
 });

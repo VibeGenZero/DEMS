@@ -169,6 +169,10 @@ external attributes with the symlink mode, and no following symlinks while build
 directory entries are ignored, every other extension (HTML, SVG, executables …),
 duplicate names (also case-insensitively, for Windows checkouts), encrypted or
 multi-disk ZIPs, compression other than stored/deflate.
+Building from a folder is more forgiving (controller ruling after the final review):
+`build` skips dot entries at any depth (`.git/`, `.gitignore`, `.vscode/`), `node_modules`
+and files without an extension (`LICENSE`) and prints „übersprungen: <name>“ for each
+(`check` too); install and upload still refuse them.
 
 Limits (constants in `plugin-sdk/files.js`): 5 MB file, 20 MB unpacked total, 300
 entries, 2 MB per single entry unpacked; the inflater stops at the declared size plus

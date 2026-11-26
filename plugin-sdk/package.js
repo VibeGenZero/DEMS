@@ -26,7 +26,7 @@ function randomHex() {
  * Compare a plugin folder's manifest with what its code really uses.
  *
  * @param {string} dir -> Plugin root (may itself be a link; links inside are never followed).
- * @returns {{ raw: object, manifest: object|null, errors: string[], found: string[], warnings: object[], missing: string[], unused: string[], sdk: number, nextRaw: object, changed: boolean }}
+ * @returns {{ raw: object, manifest: object|null, errors: string[], found: string[], warnings: object[], missing: string[], unused: string[], sdk: number, nextRaw: object, changed: boolean, skipped: string[] }}
  * @throws {Error} -> When `plugin.json` is unreadable or no JSON object.
  */
 function analyzePlugin(dir) {
@@ -79,7 +79,8 @@ function analyzePlugin(dir) {
         unused,
         sdk,
         nextRaw,
-        changed: JSON.stringify(nextRaw) !== JSON.stringify(raw)
+        changed: JSON.stringify(nextRaw) !== JSON.stringify(raw),
+        skipped: collectFiles(root).skipped
     };
 }
 
@@ -98,20 +99,31 @@ function writeManifest(dir, nextRaw) {
     fs.writeFileSync(file, text);
 }
 
-/** Collect the files of a plugin folder: refused paths are listed, a symlink stops at once. */
+/**
+ * Collect the files a build packs. Dot entries, `node_modules` and files without an
+ * extension (`.git/`, `.gitignore`, `LICENSE`) are skipped, a skipped folder once and
+ * never entered; other refused paths are listed; links are listed and never followed.
+ */
 function collectFiles(root) {
     const files = [];
     const problems = [];
+    const skipped = [];
+    const links = [];
     const walk = (rel) => {
         for (const name of fs.readdirSync(path.join(root, rel)).sort()) {
             const relName = rel ? `${rel}/${name}` : name;
             if (IGNORED_ENTRY.test(relName)) continue;
+            if (name.startsWith('.') || name === 'node_modules') {
+                skipped.push(relName);
+                continue;
+            }
             const stat = fs.lstatSync(path.join(root, relName));
-            if (stat.isSymbolicLink()) throw new PackageError(`Symlinks werden nicht unterstützt: ${relName}`);
-            if (stat.isDirectory()) {
-                if (name.startsWith('.')) problems.push(`Versteckte Datei: ${relName}`);
-                else if (name === 'node_modules') problems.push(`node_modules wird nicht unterstützt: ${relName}`);
-                else walk(relName);
+            if (stat.isSymbolicLink()) {
+                links.push(relName);
+            } else if (stat.isDirectory()) {
+                walk(relName);
+            } else if (path.extname(name) === '') {
+                skipped.push(relName);
             } else {
                 const reason = packageEntryError(relName);
                 if (reason) problems.push(reason);
@@ -120,24 +132,25 @@ function collectFiles(root) {
         }
     };
     walk('');
-    return { files, problems };
+    return { files, problems, skipped, links };
 }
 
 /**
  * @param {string} dir -> Plugin root.
- * @returns {{ buffer: Buffer, fileName: string }}
+ * @returns {{ buffer: Buffer, fileName: string, skipped: string[] }} -> `skipped`: entries the build left out.
  * @throws {PackageError} -> Refused paths, symlinks, an invalid manifest or a broken limit.
  */
 function packPlugin(dir) {
     const root = fs.realpathSync(dir);
-    const { files, problems } = collectFiles(root);
+    const { files, problems, skipped, links } = collectFiles(root);
+    if (links.length) throw new PackageError(`Symlinks werden nicht unterstützt: ${links[0]}`);
     if (problems.length) throw new PackageError(problems.join(' · '));
     const analysis = analyzePlugin(root);
     if (!analysis.manifest) throw new PackageError(analysis.errors[0]);
     const entries = files.map((name) => ({ name, data: fs.readFileSync(path.join(root, name)) }));
     const buffer = writeZip(entries);
     readZip(buffer); // the package must pass the limits it will meet on upload
-    return { buffer, fileName: `${analysis.manifest.id}-${analysis.manifest.version}.dems` };
+    return { buffer, fileName: `${analysis.manifest.id}-${analysis.manifest.version}.dems`, skipped };
 }
 
 function emptyReport(buffer) {

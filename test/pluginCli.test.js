@@ -361,3 +361,36 @@ test('dev forwards SIGINT to the child', async () => {
     assert.equal(code, 0);
     assert.equal(kid.killed, 'SIGINT');
 });
+
+test('build and check skip .git, .gitignore, LICENSE and node_modules and say so', async () => {
+    const cwd = tmp();
+    await run(['new', 'demo-plugin'], cwd);
+    const dir = path.join(cwd, 'demo-plugin');
+    fs.mkdirSync(path.join(dir, '.git'));
+    fs.writeFileSync(path.join(dir, '.git', 'HEAD'), 'ref: refs/heads/main');
+    fs.writeFileSync(path.join(dir, '.gitignore'), 'node_modules/');
+    fs.writeFileSync(path.join(dir, 'LICENSE'), 'MIT');
+    fs.mkdirSync(path.join(dir, 'node_modules'));
+    fs.writeFileSync(path.join(dir, 'node_modules', 'x.js'), 'x');
+    const lines = ['übersprungen: .git', 'übersprungen: .gitignore', 'übersprungen: LICENSE', 'übersprungen: node_modules'];
+
+    const checked = await run(['check', 'demo-plugin'], cwd);
+    assert.equal(checked.code, 0, checked.err);
+    for (const line of lines) assert.ok(checked.out.split('\n').includes(line), line);
+
+    const built = await run(['build', 'demo-plugin', '--yes'], cwd);
+    assert.equal(built.code, 0, built.err);
+    for (const line of lines) assert.equal(built.out.split('\n').filter((l) => l === line).length, 1, line);
+    const names = require('../plugin-sdk/zip').readZip(fs.readFileSync(path.join(cwd, 'demo-plugin-0.1.0.dems'))).map((e) => e.name).sort();
+    assert.deepEqual(names, ['client.css', 'client.js', 'plugin.json', 'server.js']);
+});
+
+test('build still stops on a file with a disallowed extension', async () => {
+    const cwd = tmp();
+    await run(['new', 'demo-plugin'], cwd);
+    fs.writeFileSync(path.join(cwd, 'demo-plugin', 'index.html'), '<p>');
+    const built = await run(['build', 'demo-plugin', '--yes'], cwd);
+    assert.equal(built.code, 1);
+    assert.match(built.err, /Nicht erlaubte Datei: index\.html/);
+    assert.ok(!fs.existsSync(path.join(cwd, 'demo-plugin-0.1.0.dems')));
+});

@@ -118,6 +118,7 @@ function cmdNew(args, io) {
 
 /** Print the comparison; returns the analysis. */
 function report(analysis, io) {
+    for (const name of analysis.skipped) io.stdout.write(`übersprungen: ${name}\n`);
     for (const message of analysis.errors) io.stderr.write(`Fehler: ${message}\n`);
     for (const p of analysis.missing) io.stdout.write(`+ ${p}\n`);
     for (const p of analysis.unused) io.stdout.write(`? ${p} (nicht mehr gefunden)\n`);
