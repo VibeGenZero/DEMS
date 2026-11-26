@@ -191,7 +191,7 @@ function officialIds(root = REPO) {
 
 function readVersion(dir) {
     try {
-        return JSON.parse(fs.readFileSync(path.join(dir, 'plugin.json'), 'utf8').replace(/^﻿/, '')).version || '?';
+        return JSON.parse(fs.readFileSync(path.join(dir, 'plugin.json'), 'utf8').replace(/^\uFEFF/, '')).version || '?';
     } catch {
         return '?';
     }
@@ -259,7 +259,7 @@ function prepareDev(folder, { repoRoot = REPO, env = process.env } = {}) {
     const abs = path.resolve(folder);
     let raw;
     try {
-        raw = JSON.parse(fs.readFileSync(path.join(abs, 'plugin.json'), 'utf8').replace(/^﻿/, ''));
+        raw = JSON.parse(fs.readFileSync(path.join(abs, 'plugin.json'), 'utf8').replace(/^\uFEFF/, ''));
     } catch {
         throw new PackageError('Im Ordner fehlt eine gültige plugin.json.');
     }

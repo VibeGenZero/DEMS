@@ -1,6 +1,8 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { tokenize } = require('../plugin-sdk/tokenize');
+const fs = require('node:fs');
+const path = require('node:path');
 
 const values = (code) => tokenize(code).map((t) => t.value);
 const names = (code) => tokenize(code).filter((t) => t.type === 'name').map((t) => t.value);
@@ -93,4 +95,21 @@ test('an unterminated regex does not swallow the newline', () => {
 test('keywords used as property names do not start a regex', () => {
   const n = names('a.in / 2; ctx.x(); b / 3');
   assert.ok(n.includes('ctx') && n.includes('x'));
+});
+
+test('identifiers up to U+FFFF still tokenize as names', () => {
+  assert.deepEqual(names('const ä￯ = 1'), ['const', 'ä￯']);
+});
+
+test('SDK, CLI and route sources spell BOM, noncharacters and controls as escapes', () => {
+  // A raw U+FEFF or U+FFFF is invisible in an editor and easy to break by accident
+  const root = path.join(__dirname, '..');
+  const files = [
+    ...fs.readdirSync(path.join(root, 'plugin-sdk')).filter((f) => f.endsWith('.js')).map((f) => `plugin-sdk/${f}`),
+    ...fs.readdirSync(path.join(root, 'routes')).filter((f) => f.endsWith('.js')).map((f) => `routes/${f}`),
+    'scripts/plugin.js',
+  ];
+  const raw = /[﻿￾￿\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/;
+  const hits = files.filter((f) => raw.test(fs.readFileSync(path.join(root, f), 'utf8')));
+  assert.deepEqual(hits, []);
 });

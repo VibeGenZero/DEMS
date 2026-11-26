@@ -9,8 +9,8 @@ const REGEX_PRECEDING_NAMES = new Set([
   'throw', 'case', 'do', 'else', 'yield', 'await',
 ]);
 
-const isIdentStart = (c) => /[A-Za-z_$\u0080-￿]/.test(c);
-const isIdentPart = (c) => /[A-Za-z0-9_$\u0080-￿]/.test(c);
+const isIdentStart = (c) => /[A-Za-z_$\u0080-\uFFFF]/.test(c);
+const isIdentPart = (c) => /[A-Za-z0-9_$\u0080-\uFFFF]/.test(c);
 const isDigit = (c) => c >= '0' && c <= '9';
 
 /**
