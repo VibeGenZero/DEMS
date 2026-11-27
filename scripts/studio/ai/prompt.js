@@ -63,9 +63,11 @@ Regeln:
  * @returns {{ guide: string, types: string }}
  */
 function loadKnowledge(repoRoot) {
+  // A Windows checkout has CRLF line ends: send LF only, the model gains nothing from "\r"
+  const read = (...parts) => fs.readFileSync(path.join(repoRoot, ...parts), 'utf8').replace(/\r\n/g, '\n');
   return {
-    guide: fs.readFileSync(path.join(repoRoot, 'scripts', 'studio', 'ai', 'sdk-guide.md'), 'utf8'),
-    types: fs.readFileSync(path.join(repoRoot, 'plugin-sdk', 'types', 'dems-plugin.d.ts'), 'utf8')
+    guide: read('scripts', 'studio', 'ai', 'sdk-guide.md'),
+    types: read('plugin-sdk', 'types', 'dems-plugin.d.ts')
   };
 }
 

@@ -15,6 +15,9 @@ const GUIDE_PATH = path.join(REPO_ROOT, 'scripts', 'studio', 'ai', 'sdk-guide.md
 const knowledge = { guide: 'GUIDE-TEXT', types: 'declare namespace DemsPlugin {}' };
 const BIG = 1000000;
 
+// Line ends depend on the checkout (CRLF on Windows): compare and measure with LF
+const readLf = (file) => fs.readFileSync(file, 'utf8').replace(/\r\n/g, '\n');
+
 const build = (over = {}) => buildPrompt({
   knowledge, files: [], history: [], message: 'Bau mir ein Plugin.', errors: [], contextTokens: BIG, maxTokens: 1000, ...over
 });
@@ -29,24 +32,24 @@ test('the constants follow the spec', () => {
 });
 
 test('sdk-guide.md mentions every permission and hook', () => {
-  const guide = fs.readFileSync(GUIDE_PATH, 'utf8');
+  const guide = readLf(GUIDE_PATH);
   for (const permission of Object.keys(PERMISSIONS)) assert.ok(guide.includes(permission), `permission ${permission} missing`);
   for (const hook of HOOK_NAMES) assert.ok(guide.includes(hook), `hook ${hook} missing`);
-  assert.ok(fs.statSync(GUIDE_PATH).size <= 12 * 1024, 'guide larger than 12 kB');
+  assert.ok(Buffer.byteLength(guide, 'utf8') <= 12 * 1024, 'guide larger than 12 kB');
 });
 
 test('loadKnowledge reads the guide and the type description at call time', () => {
   const real = loadKnowledge(REPO_ROOT);
-  assert.equal(real.guide, fs.readFileSync(GUIDE_PATH, 'utf8'));
-  assert.equal(real.types, fs.readFileSync(path.join(REPO_ROOT, 'plugin-sdk', 'types', 'dems-plugin.d.ts'), 'utf8'));
+  assert.equal(real.guide, readLf(GUIDE_PATH));
+  assert.equal(real.types, readLf(path.join(REPO_ROOT, 'plugin-sdk', 'types', 'dems-plugin.d.ts')));
 
   const root = fs.mkdtempSync(path.join(require('node:os').tmpdir(), 'dems-prompt-'));
   try {
     fs.mkdirSync(path.join(root, 'scripts', 'studio', 'ai'), { recursive: true });
     fs.mkdirSync(path.join(root, 'plugin-sdk', 'types'), { recursive: true });
     fs.writeFileSync(path.join(root, 'scripts', 'studio', 'ai', 'sdk-guide.md'), 'eins');
-    fs.writeFileSync(path.join(root, 'plugin-sdk', 'types', 'dems-plugin.d.ts'), 'typ');
-    assert.deepEqual(loadKnowledge(root), { guide: 'eins', types: 'typ' });
+    fs.writeFileSync(path.join(root, 'plugin-sdk', 'types', 'dems-plugin.d.ts'), 'typ\r\nzwei\r\n');
+    assert.deepEqual(loadKnowledge(root), { guide: 'eins', types: 'typ\nzwei\n' });
     fs.writeFileSync(path.join(root, 'scripts', 'studio', 'ai', 'sdk-guide.md'), 'zwei');
     assert.equal(loadKnowledge(root).guide, 'zwei');
   } finally {
