@@ -13,6 +13,8 @@ const { createActions } = require('../scripts/studio/actions');
 const { createAiRoutes } = require('../scripts/studio/ai/routes');
 const { createEventLog } = require('../scripts/studio/events');
 const { scaffoldPlugin } = require('../scripts/plugin');
+const { estimateTokens } = require('../scripts/studio/ai/prompt');
+const { AiError } = require('../ai/errors');
 
 const REPO = path.join(__dirname, '..');
 const TOKEN = 'b'.repeat(64);
@@ -308,6 +310,8 @@ test('a new missing permission triggers exactly one repair call', async () => {
   assert.match(repair.at(-1).content, /^Bitte korrigiere:\n- .*discord:dm/);
   const statuses = res.events.filter((e) => e.event === 'status').map((e) => e.data.text);
   assert.ok(statuses.includes('Bessere nach …'), JSON.stringify(statuses));
+  const repairStatus = res.events.filter((e) => e.event === 'status' && e.data.phase === 'repair');
+  assert.equal(repairStatus.length, 1, 'the repair status carries phase "repair"');
   const proposal = proposalOf(res);
   assert.deepEqual(proposal.newProblems, []);
   assert.equal(proposal.reply, 'Berechtigung ergänzt.');
@@ -428,6 +432,7 @@ test('chat passes limits, timeouts and the abort signal to the client', async ()
   assert.equal(seen.args.maxTokens, 4096);
   assert.equal(seen.args.timeoutMs, 20 * 60 * 1000);
   assert.equal(seen.args.idleTimeoutMs, 120000);
+  assert.equal(seen.args.firstByteTimeoutMs, 300000, 'the first chunk may take 300 s (prompt processing)');
   assert.ok(seen.args.signal instanceof AbortSignal);
   assert.equal(typeof seen.args.onToken, 'function');
 });
@@ -596,4 +601,174 @@ test('the key never appears', async (t) => {
   await call('POST', '/api/ai/undo');
   assert.ok(bodies.length >= 6);
   for (const text of [...bodies, ...logged]) assert.equal(text.includes(KEY), false, text.slice(0, 300));
+});
+
+/**
+ * AI routes on their own studio server with a fake client: `answers` is a queue of answer texts
+ * (an Error is thrown instead), every call's arguments land in `calls`.
+ */
+async function direct({ settings: patch = {}, answers = [], fileApi, id = 'direkt-plugin' } = {}) {
+  const configDir = tempDir('studio-ai-direct');
+  writeSettings(configDir, 9, patch);
+  const dir = scaffoldPlugin(id, tempDir('studio-ai-direct-parent'));
+  const calls = [];
+  const ai = createAiRoutes({
+    configDir,
+    repoRoot: REPO,
+    requireOpen: () => dir,
+    log: createEventLog(),
+    refresh: () => {},
+    ...(fileApi ? { fileApi } : {}),
+    getAiClient: () => ({
+      chat: async (args) => {
+        calls.push(args);
+        const next = answers.shift();
+        if (next instanceof Error) throw next;
+        const text = next === undefined ? 'Okay.' : next;
+        args.onToken(text);
+        return { text };
+      },
+    }),
+  });
+  const server = createStudioServer({ port: 0, previewPort: 4101, token: TOKEN, routes: ai.routes });
+  await server.listen();
+  stops.push(() => server.close());
+  async function post(pathname, body) {
+    const res = await fetch(`${server.url}${pathname}`, {
+      method: 'POST',
+      headers: { 'X-Studio-Token': TOKEN, Origin: server.url, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const text = await res.text();
+    if ((res.headers.get('content-type') || '').includes('event-stream')) return { status: res.status, events: parseFrames(text) };
+    return { status: res.status, data: text ? JSON.parse(text) : null };
+  }
+  const read = (rel) => fs.readFileSync(path.join(dir, rel), 'utf8');
+  return { calls, dir, read, chat: (body) => post('/api/ai/chat', { history: [], buffers: [], open: [], ...body }), post };
+}
+
+const tokensOf = (messages) => messages.reduce((sum, m) => sum + estimateTokens(m.text), 0);
+
+test('what the prompt left out arrives as its own notice event', async () => {
+  const { chat, dir } = await direct();
+  fs.writeFileSync(path.join(dir, 'big.md'), 'b'.repeat(250 * 1024));
+  const res = await chat({ message: 'Hallo' });
+  const notices = res.events.filter((e) => e.event === 'notice');
+  assert.equal(notices.length, 1, JSON.stringify(res.events.map((e) => e.event)));
+  assert.match(notices[0].data.text, /^Nicht mitgeschickt \(zu wenig Platz\): Dateien big\.md$/);
+  assert.equal(res.events.some((e) => e.event === 'status' && /Nicht mitgeschickt/.test(e.data.text)), false);
+});
+
+test('the fixed history cap is not reported as lack of space', async () => {
+  const { chat } = await direct();
+  const history = [];
+  for (let i = 0; i < 12; i += 1) history.push({ role: 'user', text: `Frage ${i}` }, { role: 'assistant', text: `Antwort ${i}` });
+  const res = await chat({ message: 'Weiter', history });
+  assert.equal(res.events.some((e) => e.event === 'notice'), false, JSON.stringify(res.events));
+});
+
+test('a repair over the budget compacts the first answer to its file list', async () => {
+  const broken = `module.exports = (;\n// ${'x'.repeat(120000)}\n`;
+  const { chat, calls } = await direct({ answers: [`Erster Versuch.\n${block('server.js', broken)}`, `Repariert.\n${block('server.js', SERVER)}`] });
+  const res = await chat({ message: 'Los', history: [{ role: 'user', text: 'Alt' }, { role: 'assistant', text: 'Alte Antwort' }] });
+  assert.equal(calls.length, 2);
+  const repair = calls[1].messages;
+  const budget = 32768 - 8192;
+  assert.ok(estimateTokens(calls[1].system) + tokensOf(repair) <= budget, 'the repair request fits the budget');
+  assert.equal(repair.at(-2).role, 'assistant');
+  assert.match(repair.at(-2).text, /\[Dateien: server\.js\]/);
+  assert.equal(repair.at(-2).text.includes('xxxxxxxxxx'), false);
+  assert.match(repair.at(-1).text, /^Bitte korrigiere:/);
+  assert.equal(repair[0].role, 'user');
+  const proposal = proposalOf(res);
+  assert.deepEqual(proposal.newProblems, []);
+  assert.equal(proposal.files[0].after, SERVER);
+});
+
+test('a repair that fits keeps the full first answer', async () => {
+  const { chat, calls } = await direct({ answers: [`Versuch.\n${block('server.js', 'module.exports = (;\n')}`, `Gut.\n${block('server.js', SERVER)}`] });
+  await chat({ message: 'Los' });
+  assert.equal(calls.length, 2);
+  assert.match(calls[1].messages.at(-2).text, /<<<DATEI server\.js\nmodule\.exports = \(;/);
+});
+
+test('a repair that cannot fit is skipped: the proposal keeps its problems and the chat says why', async () => {
+  const { chat, calls } = await direct({ answers: [`Versuch.\n${block('server.js', 'module.exports = (;\n')}`] });
+  const res = await chat({
+    message: 'Los',
+    buffers: [{ path: 'notes.md', content: 'n'.repeat(80000) }], // open buffers are never cut
+    open: ['notes.md'],
+  });
+  assert.equal(calls.length, 1, 'no repair call');
+  const proposal = proposalOf(res);
+  assert.ok(proposal.newProblems.some((p) => p.file === 'server.js'), JSON.stringify(proposal.newProblems));
+  const notices = res.events.filter((e) => e.event === 'notice').map((e) => e.data.text);
+  assert.ok(notices.includes('Nachbessern übersprungen (zu wenig Platz): die Probleme stehen beim Vorschlag.'), JSON.stringify(notices));
+  assert.equal(res.events.some((e) => e.event === 'status' && e.data.phase === 'repair'), false);
+});
+
+test('a certificate failure logs the --use-system-ca hint, never the key', async (t) => {
+  const logged = [];
+  t.mock.method(console, 'error', (...args) => { logged.push(args.map(String).join(' ')); });
+  const { chat } = await direct({ answers: [new AiError('certificate', { detail: 'SELF_SIGNED_CERT_IN_CHAIN' })] });
+  const res = await chat({ message: `Hallo ${KEY}` });
+  assert.equal(res.events.at(-1).event, 'error');
+  assert.equal(logged.length, 1);
+  assert.match(logged[0], /^Studio-KI fehlgeschlagen: certificate SELF_SIGNED_CERT_IN_CHAIN – .*--use-system-ca/);
+  assert.equal(logged[0].includes(KEY), false);
+});
+
+/** A file API whose writes and deletes fail once for each path added to `failing`. */
+function failingFiles(failing) {
+  const files = require('../scripts/studio/files');
+  const fail = (rel) => {
+    if (!failing.has(rel)) return;
+    failing.delete(rel);
+    throw new Error('Platte voll');
+  };
+  return {
+    ...files,
+    writeFile: (dir, rel, content) => { fail(rel); return files.writeFile(dir, rel, content); },
+    deleteFile: (dir, rel) => { fail(rel); return files.deleteFile(dir, rel); },
+  };
+}
+
+test('a failed write during apply rolls the earlier writes back', async (t) => {
+  t.mock.method(console, 'error', () => {});
+  const failing = new Set();
+  const answer = `Neu.\n${block('notes.md', NOTES)}${block('server.js', SERVER)}${block('client.css', '/* ki */\n')}`;
+  const { chat, post, read, dir } = await direct({ answers: [answer], fileApi: failingFiles(failing) });
+  const before = { server: read('server.js'), css: read('client.css') };
+  const proposal = proposalOf(await chat({ message: 'Los' }));
+  failing.add('client.css');
+  const failed = await post('/api/ai/apply', { id: proposal.id });
+  assert.equal(failed.status, 500);
+  assert.deepEqual(failed.data, { error: 'Interner Fehler im Studio.' });
+  assert.equal(read('server.js'), before.server, 'the replaced file is restored');
+  assert.equal(fs.existsSync(path.join(dir, 'notes.md')), false, 'the created file is removed');
+  assert.equal(read('client.css'), before.css);
+  assert.equal((await post('/api/ai/undo', {})).status, 409, 'a failed apply leaves nothing to undo');
+  const again = await post('/api/ai/apply', { id: proposal.id });
+  assert.equal(again.status, 200, 'the proposal can be applied once the disk works again');
+  assert.deepEqual(again.data.written, ['notes.md', 'server.js', 'client.css']);
+});
+
+test('a failed write during undo keeps the undo for the next try', async (t) => {
+  t.mock.method(console, 'error', () => {});
+  const failing = new Set();
+  const { chat, post, read, dir } = await direct({ answers: [CLEAN], fileApi: failingFiles(failing) });
+  const before = read('server.js');
+  const proposal = proposalOf(await chat({ message: 'Los' }));
+  assert.equal((await post('/api/ai/apply', { id: proposal.id })).status, 200);
+  failing.add('notes.md');
+  const failed = await post('/api/ai/undo', {});
+  assert.equal(failed.status, 500);
+  assert.equal(read('server.js'), before, 'the entry before the failure is restored');
+  assert.equal(fs.existsSync(path.join(dir, 'notes.md')), true);
+  const again = await post('/api/ai/undo', {});
+  assert.equal(again.status, 200);
+  // server.js no longer holds the applied content, so the second undo counts it as changed and leaves it
+  assert.deepEqual(again.data, { ok: true, restored: ['notes.md'], conflicts: ['server.js'], message: CHANGED });
+  assert.equal(read('server.js'), before);
+  assert.equal(fs.existsSync(path.join(dir, 'notes.md')), false);
 });

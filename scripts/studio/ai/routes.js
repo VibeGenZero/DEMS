@@ -10,8 +10,8 @@ const path = require('node:path');
 const files = require('../files');
 const settings = require('./settings');
 const { readBody } = require('../server');
-const { createAnswerParser, AnswerError } = require('./answer');
-const { loadKnowledge, buildPrompt, PromptError, MAX_ERRORS } = require('./prompt');
+const { createAnswerParser, AnswerError, compactTurn } = require('./answer');
+const { loadKnowledge, buildPrompt, estimateTokens, PromptError, MAX_ERRORS } = require('./prompt');
 const { evaluate, needsRepair, repairMessage } = require('./proposal');
 const { AiError, AI_ERROR_MESSAGES } = require('../../../ai/errors');
 
@@ -21,6 +21,8 @@ const MAX_MESSAGE = 4000;
 const MAX_HISTORY = 20;
 const TOTAL_TIMEOUT_MS = 20 * 60 * 1000;
 const IDLE_TIMEOUT_MS = 120000;
+// Before the first chunk the provider processes the whole prompt: local Ollama on a CPU can need minutes
+const FIRST_BYTE_TIMEOUT_MS = 300000;
 const ERROR_LINE_MAX = 1000;
 // Keys shorter than this are not redacted: replacing a short dummy key such as `password` or `test`
 // would corrupt ordinary code and text in the answer. Real provider keys are far longer.
@@ -36,6 +38,9 @@ const NOTHING_TO_UNDO = 'Nichts zum Rückgängigmachen.';
 const BAD_REQUEST = 'Ungültige Anfrage.';
 const STOPPED = 'Der Chat wurde abgebrochen.';
 const INTERNAL = 'Interner Fehler im Studio.';
+const REPAIRING = 'Bessere nach …';
+const REPAIR_SKIPPED = 'Nachbessern übersprungen (zu wenig Platz): die Probleme stehen beim Vorschlag.';
+const CERTIFICATE_HINT = 'Node vertraut dem Zertifikat nicht (Virenscanner oder Proxy prüft HTTPS?): das Studio mit node --use-system-ca starten (z. B. NODE_OPTIONS=--use-system-ca) oder NODE_EXTRA_CA_CERTS setzen.';
 
 const sha256 = (content) => crypto.createHash('sha256').update(Buffer.from(content, 'utf8')).digest('hex');
 const isPlainObject = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
@@ -162,14 +167,34 @@ function createRedactor(key) {
 
 /**
  * Console line of a failed chat: code, HTTP status and the network cause code (e.g. ECONNRESET)
- * only, never prompt, answer or key.
+ * only, never prompt, answer or key. A certificate problem names the way out.
  */
 function logFailure(err) {
   let code = (err && err.name) || 'Error'; // an unexpected error: its class name, never its text
   if (err instanceof AiError || err instanceof AnswerError || err instanceof PromptError) code = err.code;
   const status = err instanceof AiError && err.status !== undefined ? ` HTTP ${err.status}` : '';
   const detail = err instanceof AiError && err.detail ? ` ${err.detail}` : '';
-  console.error(`Studio-KI fehlgeschlagen: ${code}${status}${detail}`);
+  const hint = err instanceof AiError && err.code === 'certificate' ? ` – ${CERTIFICATE_HINT}` : '';
+  console.error(`Studio-KI fehlgeschlagen: ${code}${status}${detail}${hint}`);
+}
+
+/**
+ * The messages of the repair request within the budget (`contextTokens - maxTokens`): the history
+ * goes first (from the front, so it still starts with an author turn), then the first answer shrinks
+ * to its explanation and file list. @returns {Array<object>|null} -> null when even that does not fit.
+ */
+function repairMessages({ prompt, answer, request, budget }) {
+  const size = (messages) => estimateTokens(prompt.system) + messages.reduce((sum, m) => sum + estimateTokens(m.text), 0);
+  const history = prompt.messages.slice(0, -1);
+  const tail = (text) => [prompt.messages[prompt.messages.length - 1], { role: 'assistant', text }, { role: 'user', text: request }];
+  const build = (text) => [...history, ...tail(text)];
+  while (history.length && size(build(answer)) > budget) {
+    history.shift();
+    while (history.length && history[0].role !== 'user') history.shift();
+  }
+  if (size(build(answer)) <= budget) return build(answer);
+  const compact = compactTurn(answer);
+  return size(tail(compact)) <= budget ? tail(compact) : null;
 }
 
 function streamError(err) {
@@ -187,9 +212,10 @@ function streamError(err) {
  * @param {{ list(): object[] }} options.log -> Studio event log (plugin errors for `includeErrors`).
  * @param {() => void} options.refresh -> Re-read name and version after a plugin.json change.
  * @param {Function} [options.getAiClient] -> `ai/client.js` `getAiClient` (tests inject a fake).
+ * @param {object} [options.fileApi] -> The studio file API apply and undo write through (tests inject failures).
  * @returns {{ routes: object, reset(): void }}
  */
-function createAiRoutes({ configDir, repoRoot, requireOpen, log, refresh, getAiClient = require('../../../ai/client').getAiClient }) {
+function createAiRoutes({ configDir, repoRoot, requireOpen, log, refresh, getAiClient = require('../../../ai/client').getAiClient, fileApi = files }) {
   let running = null; // { controller } of the chat in progress
   let proposal = null; // { id, dir, files: [{ path, after, base }], unsaved: Map<path, { content, base }> }
   let undo = null; // { dir, entries: [{ path, before: string|null, afterHash }] }
@@ -222,6 +248,7 @@ function createAiRoutes({ configDir, repoRoot, requireOpen, log, refresh, getAiC
       maxTokens,
       timeoutMs: TOTAL_TIMEOUT_MS,
       idleTimeoutMs: IDLE_TIMEOUT_MS,
+      firstByteTimeoutMs: FIRST_BYTE_TIMEOUT_MS,
       signal,
       onToken: (piece) => {
         streamed = true;
@@ -275,8 +302,9 @@ function createAiRoutes({ configDir, repoRoot, requireOpen, log, refresh, getAiC
         contextTokens: config.contextTokens,
         maxTokens: config.maxTokens,
       });
+      // its own event: the page keeps it on the message (a status is replaced by the next one)
       const notice = omittedNotice(prompt.omitted);
-      if (notice) send('status', { text: notice });
+      if (notice) send('notice', { text: notice });
       const client = getAiClient({ env: settings.toEnv(config) });
       const call = (p) => ask({ client, prompt: p, maxTokens: config.maxTokens, signal, key: config.apiKey, send });
 
@@ -289,12 +317,13 @@ function createAiRoutes({ configDir, repoRoot, requireOpen, log, refresh, getAiC
       let reply = first.reply;
       let proposed = first.files;
       let result = evaluate({ current, proposed });
-      if (needsRepair(result)) {
-        send('status', { text: 'Bessere nach …' });
-        const second = await call({
-          system: prompt.system,
-          messages: [...prompt.messages, { role: 'assistant', text: first.answer }, { role: 'user', text: repairMessage(result) }],
-        });
+      const repair = needsRepair(result) ? repairMessages({
+        prompt, answer: first.answer, request: repairMessage(result), budget: config.contextTokens - config.maxTokens,
+      }) : null;
+      if (needsRepair(result) && !repair) send('notice', { text: REPAIR_SKIPPED });
+      if (repair) {
+        send('status', { text: REPAIRING, phase: 'repair' }); // the page clears the first answer's text on it
+        const second = await call({ system: prompt.system, messages: repair });
         if (second.files.length) {
           // The repair may resend only the fixed files: it goes over the first answer
           const byPath = new Map(first.files.map((f) => [f.path, f]));
@@ -345,8 +374,8 @@ function createAiRoutes({ configDir, repoRoot, requireOpen, log, refresh, getAiC
   function rollback(dir, entries) {
     for (const entry of [...entries].reverse()) {
       try {
-        if (entry.before === null) files.deleteFile(dir, entry.path);
-        else files.writeFile(dir, entry.path, entry.before);
+        if (entry.before === null) fileApi.deleteFile(dir, entry.path);
+        else fileApi.writeFile(dir, entry.path, entry.before);
       } catch (err) {
         console.error(`studio ai: ${err && err.message ? err.message : err}`);
       }
@@ -362,14 +391,14 @@ function createAiRoutes({ configDir, repoRoot, requireOpen, log, refresh, getAiC
       ...proposal.files.map((f) => ({ path: f.path, content: f.after, base: f.base })),
       ...[...proposal.unsaved].filter(([rel]) => save.has(rel)).map(([rel, b]) => ({ path: rel, content: b.content, base: b.base })),
     ].filter((w) => !skip.has(w.path));
-    const conflicts = writes.filter((w) => files.fileHash(dir, w.path) !== w.base).map((w) => w.path);
+    const conflicts = writes.filter((w) => fileApi.fileHash(dir, w.path) !== w.base).map((w) => w.path);
     if (conflicts.length) return { status: 409, json: { error: CHANGED, conflicts } };
 
     const entries = [];
     try {
       for (const w of writes) {
-        const before = files.fileHash(dir, w.path) === null ? null : files.readFile(dir, w.path);
-        files.writeFile(dir, w.path, w.content);
+        const before = fileApi.fileHash(dir, w.path) === null ? null : fileApi.readFile(dir, w.path);
+        fileApi.writeFile(dir, w.path, w.content);
         entries.push({ path: w.path, before, afterHash: sha256(w.content) });
       }
     } catch (err) {
@@ -389,12 +418,12 @@ function createAiRoutes({ configDir, repoRoot, requireOpen, log, refresh, getAiC
     const restored = [];
     const conflicts = [];
     for (const entry of entries) {
-      if (files.fileHash(dir, entry.path) !== entry.afterHash) {
+      if (fileApi.fileHash(dir, entry.path) !== entry.afterHash) {
         conflicts.push(entry.path);
         continue;
       }
-      if (entry.before === null) files.deleteFile(dir, entry.path);
-      else files.writeFile(dir, entry.path, entry.before);
+      if (entry.before === null) fileApi.deleteFile(dir, entry.path);
+      else fileApi.writeFile(dir, entry.path, entry.before);
       restored.push(entry.path);
     }
     // Cleared only after the loop: a failed write keeps the undo (restored files then count as conflicts)

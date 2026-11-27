@@ -2,7 +2,7 @@
 /**
  * Checks an AI proposal in memory before the author sees a diff: path rules, manifest,
  * JS syntax (compile only, plugin code never runs) and the permission scan.
- * Only problems that are new compared with the current files cause a repair round.
+ * Only problems that are new compared with the current files (and dropped files) cause a repair round.
  */
 const vm = require('node:vm');
 const path = require('node:path');
@@ -12,6 +12,7 @@ const { validateManifest, isPlainObject, PERMISSIONS } = require('../../../plugi
 const { scanPlugin, comparePermissions, requiredSdk } = require('../../../plugin-sdk/permissionScan');
 
 const MANIFEST_FILE = 'plugin.json';
+const DEFAULT_CLIENT = 'client.js';
 const BINARY_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.webp', '.gif', '.woff2']);
 const SPAWN_TIMEOUT_MS = 10000;
 
@@ -101,8 +102,8 @@ function checkSet(files) {
     }
 
     const scanned = raw ? scanSet(files, raw, manifest) : null;
-    // without a readable manifest nothing is known to be a client file except assets
-    const client = scanned ? scanned.clients : new Set([...files.keys()].filter(isClientAsset));
+    // without a readable manifest the client entry is unknown: assume the default `client.js` (and every asset)
+    const client = scanned ? scanned.clients : new Set([...files.keys()].filter((name) => name === DEFAULT_CLIENT || isClientAsset(name)));
     for (const [file, source] of files) {
         if (!isJsFile(file)) continue;
         const failed = checkSyntax(file, String(source).replace(/^﻿/, ''), client.has(file));
@@ -178,16 +179,18 @@ function evaluate({ current, proposed }) {
     return finish(current, merged, files, dropped);
 }
 
+/** Problems of the merged set: `oldProblems` existed before (and the proposal keeps them), the rest is new. */
 function finish(current, merged, files, dropped) {
-    const oldProblems = checkSet(current);
-    const known = new Set(oldProblems.map((p) => p.key));
-    const newProblems = checkSet(merged).filter((p) => !known.has(p.key));
+    const known = new Set(checkSet(current).map((p) => p.key));
+    const problems = checkSet(merged);
+    const oldProblems = problems.filter((p) => known.has(p.key));
+    const newProblems = problems.filter((p) => !known.has(p.key));
     return { files, dropped, newProblems, oldProblems, permissionChanges: permissionChangesOf(merged) };
 }
 
-/** @returns {boolean} -> A repair round is worth it: the proposal introduced a problem. */
+/** @returns {boolean} -> A repair round is worth it: the proposal introduced a problem or wrote a file that was dropped. */
 function needsRepair(result) {
-    return result.newProblems.length > 0;
+    return result.newProblems.length > 0 || result.dropped.length > 0;
 }
 
 /** @returns {string} -> German request to the model that lists what to fix. */

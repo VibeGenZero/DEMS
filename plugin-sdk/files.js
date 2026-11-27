@@ -114,6 +114,7 @@ module.exports = {
     ASSET_NAME,
     CONTENT_TYPES,
     IGNORED_ENTRY,
+    TEXT_EXTENSIONS,
     packageEntryError,
     isJsFile,
     isClientAsset,

@@ -15,6 +15,7 @@
 const fs = require('fs');
 const path = require('path');
 const { SDK_1_1_PERMISSIONS } = require('../../../plugin-sdk/manifest');
+const { TEXT_EXTENSIONS, ASSET_NAME, CONTENT_TYPES } = require('../../../plugin-sdk/files');
 const { FILE_START, FILE_END, compactTurn } = require('./answer');
 
 const FILE_TEXT_CAP = 200 * 1024;
@@ -37,6 +38,13 @@ const estimateTokens = (text) => Math.ceil(String(text).length / 3);
 
 const sdk11 = SDK_1_1_PERMISSIONS.map((name) => `\`${name}\``).join(' oder ');
 
+// The file rule follows the SDK allow-list: its text extensions outside assets/ and, inside, the asset
+// types served with a charset (text); the model cannot write binary files. The name characters mirror
+// ASSET_NAME (checked by a drift test).
+const orList = (items) => (items.length > 1 ? `${items.slice(0, -1).join(', ')} oder ${items[items.length - 1]}` : items.join(''));
+const TEXT_ASSETS = Object.keys(CONTENT_TYPES).filter((ext) => ASSET_NAME.test(`a${ext}`) && /charset=/.test(CONTENT_TYPES[ext]));
+const FILE_RULE = `- Keine HTML- oder SVG-Dateien. Außerhalb von \`assets/\` nur ${[...TEXT_EXTENSIONS].join(', ')}; in \`assets/\` nur flache Namen aus [A-Za-z0-9_-] mit ${orList(TEXT_ASSETS)}. Binärdateien (Bilder, Schriften) kannst du nicht schreiben. Keine Pfade mit \`..\`, \`\\\`, \`/\` am Anfang, Punkt-Dateien oder \`node_modules\`.`;
+
 const RULES = `Du schreibst Plugins für DEMS (Event-Verwaltung für Discord-Communities) im lokalen Plugin-Studio. Der SDK-Leitfaden und die Typbeschreibung unten sind dein Wissen über das SDK.
 
 Antwortformat:
@@ -47,7 +55,7 @@ Antwortformat:
 
 Regeln:
 - Texte für Nutzer (Oberfläche, \`{ error }\`-Meldungen, Discord-Nachrichten, Einstellungen, name und description in plugin.json) auf Deutsch; Code und Kommentare auf Englisch.
-- Keine HTML- oder SVG-Dateien. Außerhalb von \`assets/\` nur .js, .json, .css, .md, .txt; in \`assets/\` nur flache Namen aus [A-Za-z0-9_-] mit .js, .css oder .json. Binärdateien (Bilder, Schriften) kannst du nicht schreiben. Keine Pfade mit \`..\`, \`\\\`, \`/\` am Anfang, Punkt-Dateien oder \`node_modules\`.
+${FILE_RULE}
 - Im Client-Code kein \`style="…"\`, kein \`<style>\`, keine Inline-Handler wie \`onclick=\` (die CSP von DEMS blockiert sie); Aktionen über \`data-click\`/\`data-change\`/\`data-input\` und \`ui.actions.register\`.
 - Symbole nur als Bootstrap Icons (\`bi-*\`), keine Emojis.
 - Erfinde keine SDK-Methoden: nutze nur, was die Typbeschreibung auflistet. Keine npm-Pakete, keine DEMS-Dateien.
@@ -138,6 +146,7 @@ function startWithUser(turns) {
  * @param {number} input.contextTokens
  * @param {number} input.maxTokens
  * @returns {{ system: string, messages: Array<{ role: string, text: string }>, omitted: { turns: number, files: string[], errors: number } }}
+ *   `omitted.turns` counts only the turns cut for lack of space, not the fixed cap of MAX_TURNS.
  * @throws {PromptError} code 'context_too_small' when rules, guide and types alone exceed the budget
  */
 function buildPrompt({ knowledge, files = [], history = [], message = '', errors = [], contextTokens, maxTokens }) {
@@ -157,7 +166,7 @@ function buildPrompt({ knowledge, files = [], history = [], message = '', errors
     role: turn.role,
     text: turn.role === 'assistant' ? compactTurn(turn.text) : turn.text
   }));
-  omitted.turns = valid.length - turns.length + startWithUser(turns);
+  startWithUser(turns); // neither the fixed cap nor a leading AI turn is a lack of space: not counted
 
   const { kept, dropped } = capFiles(files.map((file) => ({ path: String(file.path), content: String(file.content), open: file.open === true })));
   omitted.files.push(...dropped);

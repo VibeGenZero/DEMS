@@ -110,7 +110,7 @@ test('history keeps the last 10 turns and compacts file blocks of assistant turn
   assert.equal(kept.length, MAX_TURNS);
   assert.equal(kept[0].text, 'Frage 4');
   assert.equal(kept[0].role, 'user');
-  assert.equal(prompt.omitted.turns, 4);
+  assert.equal(prompt.omitted.turns, 0, 'the fixed cap is not a lack of space');
   for (const turn of kept.filter((entry) => entry.role === 'assistant')) {
     assert.ok(turn.text.includes('[Dateien: server.js]'));
     assert.ok(!turn.text.includes('const geheim'));
@@ -121,7 +121,21 @@ test('a history cut never starts with an assistant turn', () => {
   const history = [{ role: 'assistant', text: 'Hallo' }, { role: 'user', text: 'Frage' }, { role: 'assistant', text: 'Antwort' }];
   const prompt = build({ history });
   assert.equal(prompt.messages[0].role, 'user');
-  assert.equal(prompt.omitted.turns, 1);
+  assert.equal(prompt.omitted.turns, 0, 'a leading AI turn is not cut for lack of space');
+});
+
+test('the file rule of the prompt is built from the SDK allow-list', () => {
+  const { TEXT_EXTENSIONS, ASSET_NAME, CONTENT_TYPES } = require('../plugin-sdk/files');
+  const rule = build().system.split('\n').find((line) => line.startsWith('- Keine HTML'));
+  assert.ok(rule, 'file rule present');
+  assert.ok(rule.includes([...TEXT_EXTENSIONS].join(', ')), rule);
+  const textAssets = Object.keys(CONTENT_TYPES).filter((ext) => ASSET_NAME.test(`a${ext}`) && /charset=/.test(CONTENT_TYPES[ext]));
+  assert.deepEqual(textAssets, ['.js', '.css', '.json']);
+  assert.ok(rule.includes('.js, .css oder .json'), rule);
+  // the name characters the rule names
+  assert.ok(rule.includes('[A-Za-z0-9_-]'));
+  assert.equal(ASSET_NAME.test('aZ09_-.js'), true);
+  for (const bad of ['a.b.js', 'ä.js', 'a b.js', '.js']) assert.equal(ASSET_NAME.test(bad), false, bad);
 });
 
 test('files beyond 200 kB are listed by name only', () => {

@@ -165,3 +165,27 @@ test('a shebang line does not break the server syntax check', () => {
   current.set('server.js', '#!/usr/bin/env node\nmodule.exports = {};\n');
   assert.deepEqual(checkSet(current).filter((p) => p.file === 'server.js'), []);
 });
+
+test('a proposal that fixes an old error does not list it as old', () => {
+  const current = load();
+  current.set('server.js', 'module.exports = (;');
+  const fixed = evaluate({ current, proposed: [{ path: 'server.js', content: 'module.exports = {};\n' }] });
+  assert.deepEqual(fixed.oldProblems, []);
+  assert.deepEqual(fixed.newProblems, []);
+  const kept = evaluate({ current, proposed: [{ path: 'client.css', content: 'a{}' }] });
+  assert.ok(kept.oldProblems.some((p) => p.file === 'server.js'), 'an error the proposal keeps stays old');
+});
+
+test('with an unreadable plugin.json client.js is still checked as an ES module', () => {
+  const current = load();
+  current.set('plugin.json', '{ not json');
+  current.set('client.js', 'import { a } from "./assets/view.js";\nexport function register(ui) { return a; }\n');
+  assert.deepEqual(checkSet(current).filter((p) => p.file === 'client.js'), []);
+});
+
+test('an answer whose files were all dropped needs a repair', () => {
+  const result = evaluate({ current: load(), proposed: [{ path: 'index.html', content: '<p>' }] });
+  assert.deepEqual(result.files, []);
+  assert.deepEqual(result.newProblems, []);
+  assert.equal(needsRepair(result), true);
+});
