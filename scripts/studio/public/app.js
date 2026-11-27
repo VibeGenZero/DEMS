@@ -48,8 +48,9 @@ async function main() {
         signal,
         onLifecycle: (data) => preview.setStatus(data.status),
         onFiles: () => { workspace.diskChanged(); },
+        onError: () => workspace.ai.pluginError(),
       });
-      mountToolbar(workspace.toolbarArea, { api, signal, dirtyCount: workspace.dirtyCount, saveAll: workspace.saveAll });
+      mountToolbar(workspace.toolbarArea, { api, signal, dirtyCount: workspace.dirtyCount, saveAll: workspace.saveAll, openAiSettings: workspace.ai.openSettings });
     } catch (err) {
       dispose();
       throw err;

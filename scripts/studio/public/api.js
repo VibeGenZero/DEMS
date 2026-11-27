@@ -10,9 +10,11 @@ export function takeToken(location, history) {
 }
 
 export function createApi({ token, fetchFn = (...args) => fetch(...args) }) {
-  async function request(method, path, body) {
+  /** `signal` (optional) aborts the request; the AbortError is passed on unchanged. */
+  async function request(method, path, body, { signal } = {}) {
     const headers = { 'X-Studio-Token': token };
     const init = { method, headers };
+    if (signal) init.signal = signal;
     if (body !== undefined) {
       headers['Content-Type'] = 'application/json';
       init.body = JSON.stringify(body);
@@ -20,16 +22,20 @@ export function createApi({ token, fetchFn = (...args) => fetch(...args) }) {
     let response;
     try {
       response = await fetchFn(path, init);
-    } catch {
+    } catch (err) {
+      if (err && err.name === 'AbortError') throw err;
       throw new Error('Das Studio ist nicht erreichbar.');
     }
     if (!response.ok) {
       let message = `Fehler (${response.status}).`;
+      const extra = { status: response.status };
       try {
         const data = await response.json();
         if (data && typeof data.error === 'string') message = data.error;
+        // A refused AI apply names the files that changed meanwhile
+        if (data && Array.isArray(data.conflicts)) extra.conflicts = data.conflicts;
       } catch { /* keep the generic message */ }
-      throw Object.assign(new Error(message), { status: response.status });
+      throw Object.assign(new Error(message), extra);
     }
     return response;
   }
@@ -67,5 +73,14 @@ export function createApi({ token, fetchFn = (...args) => fetch(...args) }) {
     },
     trigger: (action) => json('POST', '/api/trigger', { action }),
     vscode: () => json('GET', '/api/vscode'),
+    aiSettings: () => json('GET', '/api/ai/settings'),
+    saveAiSettings: (body) => json('PUT', '/api/ai/settings', body),
+    testAi: (body) => json('POST', '/api/ai/test', body),
+    aiModels: (body) => json('POST', '/api/ai/models', body),
+    /** The chat answers an event stream: the caller reads `response.body`. */
+    aiChat: (body, { signal } = {}) => request('POST', '/api/ai/chat', body, { signal }),
+    /** A refused apply rejects with `conflicts` (paths changed since the proposal). */
+    aiApply: (body) => json('POST', '/api/ai/apply', body),
+    aiUndo: () => json('POST', '/api/ai/undo', {}),
   };
 }

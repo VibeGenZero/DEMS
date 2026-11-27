@@ -1,4 +1,4 @@
-// Toolbar of the studio: check, build and the VS Code link.
+// Toolbar of the studio: check, build, the AI settings and the VS Code link.
 import { escapeHtml, showDialog, showToast } from './ui.js';
 
 const lineList = (lines) => (lines.length ? `<ul class="report-lines">${lines.map((l) => `<li>${escapeHtml(l)}</li>`).join('')}</ul>` : '');
@@ -50,13 +50,15 @@ function saveBlob(blob, fileName) {
 
 /**
  * @param {HTMLElement} area
- * @param {{ api: object, signal: AbortSignal, dirtyCount?: () => number, saveAll?: () => Promise<boolean> }} options
- *   -> `dirtyCount`/`saveAll`: the workspace's unsaved tabs, for „Bauen“.
+ * @param {{ api: object, signal: AbortSignal, dirtyCount?: () => number, saveAll?: () => Promise<boolean>,
+ *   openAiSettings?: () => Promise<void> }} options
+ *   -> `dirtyCount`/`saveAll`: the workspace's unsaved tabs, for „Bauen“; `openAiSettings`: „KI-Einstellungen“ of the KI column.
  */
-export function mountToolbar(area, { api, signal, dirtyCount = () => 0, saveAll = async () => true }) {
+export function mountToolbar(area, { api, signal, dirtyCount = () => 0, saveAll = async () => true, openAiSettings = async () => {} }) {
   area.innerHTML = `
     <button type="button" class="studio-btn" data-tool="check"><i class="bi bi-check2-circle"></i> Prüfen</button>
     <button type="button" class="studio-btn is-primary" data-tool="build"><i class="bi bi-box-seam"></i> Bauen</button>
+    <button type="button" class="studio-btn" data-tool="aiSettings" title="KI-Einstellungen" aria-label="KI-Einstellungen">KI <i class="bi bi-gear"></i></button>
     <button type="button" class="studio-btn" data-tool="vscode"><i class="bi bi-code-slash"></i> In VS Code öffnen</button>`;
 
   async function check() {
@@ -94,7 +96,7 @@ export function mountToolbar(area, { api, signal, dirtyCount = () => 0, saveAll 
     location.href = url;
   }
 
-  const tools = { check, build, vscode };
+  const tools = { check, build, aiSettings: () => openAiSettings(), vscode };
   area.addEventListener('click', async (event) => {
     const button = event.target.closest('[data-tool]');
     if (!button || button.disabled) return;

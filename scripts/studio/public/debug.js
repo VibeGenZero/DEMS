@@ -102,10 +102,11 @@ const MAX_CONSECUTIVE_ERRORS = 10;
  * end with `signal` (or `dispose()`).
  * @param {HTMLElement} container
  * @param {{ api: object, signal: AbortSignal, createEventSource?: (url: string) => EventSource, onLifecycle?: (data: object) => void,
- *   onFiles?: (event: object) => void, now?: () => number }} options -> `onFiles`: the plugin folder changed on disk.
+ *   onFiles?: (event: object) => void, onError?: (event: object) => void, now?: () => number }} options -> `onFiles`: the plugin folder
+ *   changed on disk; `onError`: an `error` event newer than every one reported before (a reconnect replays the log).
  * @returns {{ dispose(): void }}
  */
-export function mountDebug(container, { api, signal, createEventSource = (url) => new EventSource(url), onLifecycle = () => {}, onFiles = () => {}, now = Date.now }) {
+export function mountDebug(container, { api, signal, createEventSource = (url) => new EventSource(url), onLifecycle = () => {}, onFiles = () => {}, onError = () => {}, now = Date.now }) {
   container.innerHTML = `
     <div class="dbg-head">
       <strong>Debug</strong>
@@ -197,6 +198,15 @@ export function mountDebug(container, { api, signal, createEventSource = (url) =
     onLifecycle(event.data);
   }
 
+  let lastErrorAt = -Infinity; // errors of a replayed log that were reported already are older than this
+  function reportError(event) {
+    const parsed = Date.parse(event.at);
+    const at = Number.isNaN(parsed) ? now() : parsed;
+    if (!(at > lastErrorAt)) return;
+    lastErrorAt = at;
+    onError(event);
+  }
+
   const source = createEventSource(api.eventsUrl());
   // After a reconnect the server replays its whole log, so start from scratch.
   source.addEventListener('open', () => {
@@ -225,7 +235,10 @@ export function mountDebug(container, { api, signal, createEventSource = (url) =
     if (errors) { errors = 0; setStatus(''); }
     if (isChildLifecycle(event)) lifecycle(event);
     else if (event.type === 'files') onFiles(event);
-    else add(event);
+    else {
+      add(event);
+      if (event.type === 'error') reportError(event);
+    }
   });
 
   const dispose = () => {

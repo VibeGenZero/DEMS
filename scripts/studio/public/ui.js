@@ -12,7 +12,8 @@ export function escapeHtml(value) {
 /**
  * Shows a modal dialog and resolves with the pressed button's value (null on Escape).
  * `fields` (optional) are text inputs; then the result is `{ value, fields }` for the confirm button.
- * `html` (optional) is markup the caller has already escaped (check/build reports).
+ * `html` (optional) is markup the caller has already escaped (check/build reports); its checked `data-check`
+ * boxes come back as `checked` (their data-check values).
  * `signal` (optional): aborting it closes the dialog (resolves null), e.g. when the view that opened it goes away.
  */
 export function showDialog({ title, message = '', html = '', buttons, fields = [], signal }) {
@@ -41,7 +42,9 @@ export function showDialog({ title, message = '', html = '', buttons, fields = [
       resolve(value);
     };
     const read = () => fields.map((f, i) => overlay.querySelector(`[data-field="${i}"]`).value);
-    const press = (i) => finish({ value: buttons[i].value, fields: read() });
+    // Checkboxes in `html` named by data-check (e.g. „mit speichern“ of the AI apply dialog)
+    const checked = () => [...overlay.querySelectorAll('input[type="checkbox"][data-check]')].filter((box) => box.checked).map((box) => box.dataset.check);
+    const press = (i) => finish({ value: buttons[i].value, fields: read(), checked: checked() });
     function onAbort() { finish(null); }
     function onKey(event) {
       if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); finish(null); }

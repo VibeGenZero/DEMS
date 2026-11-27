@@ -2,6 +2,10 @@
 import { createEditorHost } from './editor.js';
 import { CONFLICT_TITLE, createDiskState, saveTab, syncTabs } from './disk.js';
 import { askConfirm as askConfirmIn, askText as askTextIn, confirmDiscard as confirmDiscardIn, escapeHtml, showDialog, showToast } from './ui.js';
+import { mountAi } from './ai.js';
+
+// Below this width the „KI“ column becomes a tab next to „Vorschau“ (studio.css uses the same break).
+const NARROW = '(max-width: 1199.98px)';
 
 /** 'client' for the manifest client entry and `assets/*.js`, 'server' for other .js files, else null. */
 export function typeLibFor(path, manifest) {
@@ -58,7 +62,7 @@ function toBase64(buffer) {
  * @param {HTMLElement} root
  * @param {{ api: object, plugin: { name: string, version: string, id: string }, onLeave(): void }} options
  * @returns {Promise<{ previewArea: HTMLElement, toolbarArea: HTMLElement, dirtyCount(): number, saveAll(): Promise<boolean>,
- *   diskChanged(): Promise<void>, dispose(): void }>}
+ *   diskChanged(): Promise<void>, ai: { pluginError(): void, openSettings(): Promise<void> }, dispose(): void }>}
  *   `previewArea` and `toolbarArea` are left empty for the preview, debug panel and toolbar; `diskChanged` follows a
  *   change in the plugin folder (file list, open tabs).
  */
@@ -68,6 +72,7 @@ export async function mountWorkspace(root, { api, plugin, onLeave }) {
       <header class="ws-header">
         <div class="ws-title"><i class="bi bi-puzzle"></i> <strong>${escapeHtml(plugin.name || plugin.id)}</strong> <span class="studio-muted">${escapeHtml(plugin.version || '')}</span></div>
         <div class="ws-toolbar" id="studio-toolbar"></div>
+        <button type="button" class="studio-btn" data-action="toggle-ai" aria-pressed="true" title="KI-Spalte ein- oder ausblenden"><i class="bi bi-stars"></i> KI</button>
         <button type="button" class="studio-btn" data-action="leave">Plugin wechseln</button>
       </header>
       <div class="ws-columns">
@@ -89,6 +94,11 @@ export async function mountWorkspace(root, { api, plugin, onLeave }) {
             <div id="editor-message" class="editor-message is-hidden"></div>
           </div>
         </section>
+        <div class="ws-side-tabs editor-tabs">
+          <div class="editor-tab is-active"><button type="button" class="tab-open" data-action="side-tab" data-path="preview">Vorschau</button></div>
+          <div class="editor-tab"><button type="button" class="tab-open" data-action="side-tab" data-path="ai"><i class="bi bi-stars"></i> KI</button></div>
+        </div>
+        <section class="ws-ai" id="studio-ai"></section>
         <section class="ws-preview" id="studio-preview">
           <p class="studio-muted">Die Vorschau erscheint hier.</p>
         </section>
@@ -260,6 +270,33 @@ export async function mountWorkspace(root, { api, plugin, onLeave }) {
     return syncing;
   }
 
+  // Files the studio AI wrote or restored: their open tabs take the disk state (unsaved edits went into the write).
+  async function reloadFiles(paths) {
+    for (const path of paths) {
+      if (!editorHost.has(path)) continue;
+      let file = null;
+      try { file = await api.readFileInfo(path); } catch { file = null; }
+      if (signal.aborted) return;
+      if (!file) { dirty.delete(path); await closeTab(path); continue; } // removed by undo
+      editorHost.reload(path, file.content);
+      disk.track(path, file.hash);
+    }
+    await diskChanged();
+  }
+
+  // „KI“ column: on wide windows a column the header button collapses, on narrow ones a tab next to „Vorschau“.
+  const columnsEl = $('.ws-columns');
+  const narrow = window.matchMedia(NARROW);
+  let aiOpen = true;
+  let sideTab = 'preview';
+  function layout() {
+    columnsEl.classList.toggle('is-ai-closed', !aiOpen);
+    columnsEl.classList.toggle('is-tab-ai', sideTab === 'ai');
+    $('[data-action="toggle-ai"]').setAttribute('aria-pressed', String(narrow.matches ? sideTab === 'ai' : aiOpen));
+    root.querySelectorAll('[data-action="side-tab"]').forEach((b) => b.parentElement.classList.toggle('is-active', b.dataset.path === sideTab));
+  }
+  narrow.addEventListener('change', layout, { signal });
+
   async function closeTab(path) {
     if (dirty.has(path) && !(await confirmDiscard())) return;
     if (signal.aborted) return;
@@ -344,6 +381,12 @@ export async function mountWorkspace(root, { api, plugin, onLeave }) {
     delete: (path) => deleteFile(path),
     'new-file': () => createFile(),
     upload: () => $('#upload-input').click(),
+    'toggle-ai': () => {
+      if (narrow.matches) sideTab = sideTab === 'ai' ? 'preview' : 'ai';
+      else aiOpen = !aiOpen;
+      layout();
+    },
+    'side-tab': (tab) => { sideTab = tab === 'ai' ? 'ai' : 'preview'; layout(); },
     async leave() {
       try {
         if (dirty.size && !(await confirmDiscard())) return;
@@ -377,6 +420,14 @@ export async function mountWorkspace(root, { api, plugin, onLeave }) {
   document.addEventListener('keydown', onKey, { signal });
   window.addEventListener('beforeunload', onBeforeUnload, { signal });
 
+  const ai = mountAi($('#studio-ai'), {
+    api,
+    signal,
+    buffers: () => [...dirty].filter((path) => editorHost.has(path)).map((path) => ({ path, content: editorHost.value(path), hash: disk.hash(path) })),
+    openPaths: () => [...tabs],
+    reloadFiles,
+  });
+
   // Everything created so far (listeners, editor, models) goes away again when the start fails.
   const dispose = () => {
     controller.abort();
@@ -398,6 +449,7 @@ export async function mountWorkspace(root, { api, plugin, onLeave }) {
     dirtyCount: () => dirty.size,
     saveAll,
     diskChanged,
+    ai,
     dispose,
   };
 }
