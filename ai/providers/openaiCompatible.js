@@ -54,7 +54,7 @@ function create({ baseUrl, apiKey, model, fetchImpl = fetch }) {
         return response;
     }
 
-    async function chat({ system, messages, maxTokens, timeoutMs, idleTimeoutMs, signal, onToken, json }) {
+    async function chat({ system, messages, maxTokens, timeoutMs, idleTimeoutMs, firstByteTimeoutMs, signal, onToken, json }) {
         const systemText = [system, json ? JSON_HINT : ''].filter(Boolean).join('\n\n');
         const body = {
             model,
@@ -68,10 +68,10 @@ function create({ baseUrl, apiKey, model, fetchImpl = fetch }) {
             body.stream = true;
             body.stream_options = { include_usage: true };
         }
-        const call = createCallSignal({ timeoutMs, idleTimeoutMs, signal });
+        const call = createCallSignal({ timeoutMs, idleTimeoutMs, firstByteTimeoutMs, signal });
         try {
             const response = await post(body, { combined: call.signal, signal });
-            call.touch();
+            call.responded();
             const result = onToken ? await readStream(response, onToken, call.touch) : await readPlain(response);
             if (!result.text.trim()) throw new AiError('empty_answer');
             return result;
