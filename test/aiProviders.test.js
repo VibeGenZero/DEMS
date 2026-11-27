@@ -396,3 +396,89 @@ test('readServerSentEvents: CRLF, comments, split chunks, multi-line data, trail
         { event: 'message', data: 'tail' },
     ]);
 });
+
+const SSE_ADAPTERS = [
+    {
+        name: 'openai',
+        adapter: openai,
+        first: 'data: {"choices":[{"delta":{"content":"a"}}]}\n\n',
+        piece: (i) => `data: {"choices":[{"delta":{"content":"${i}"}}]}\n\n`,
+        end: 'data: [DONE]\n\n',
+    },
+    {
+        name: 'anthropic',
+        adapter: anthropic,
+        first: 'data: {"type":"content_block_delta","delta":{"text":"a"}}\n\n',
+        piece: (i) => `data: {"type":"content_block_delta","delta":{"text":"${i}"}}\n\n`,
+        end: 'data: {"type":"message_stop"}\n\n',
+    },
+];
+
+test('idleTimeoutMs aborts a stalled stream', async () => {
+    for (const { name, adapter, first } of SSE_ADAPTERS) {
+        const fake = await startFake((req, res) => {
+            res.writeHead(200, { 'Content-Type': 'text/event-stream' });
+            res.write(first); // one chunk, then silence
+        });
+        try {
+            const client = adapter.create({ baseUrl: fake.baseUrl, apiKey: SECRET, model: 'm' });
+            const started = Date.now();
+            await assert.rejects(
+                client.chat({ system: 's', messages: MESSAGES, maxTokens: 5, timeoutMs: 5000, idleTimeoutMs: 100, onToken: () => {} }),
+                (err) => err instanceof AiError && err.code === 'timeout',
+                name,
+            );
+            assert.ok(Date.now() - started < 1000, `${name} aborts on silence`);
+        } finally { await fake.stop(); }
+    }
+});
+
+test('idleTimeoutMs also covers the wait for the first byte', async () => {
+    for (const { adapter } of SSE_ADAPTERS) {
+        const fake = await startFake(() => { /* never answers */ });
+        try {
+            const client = adapter.create({ baseUrl: fake.baseUrl, apiKey: SECRET, model: 'm' });
+            const started = Date.now();
+            await assert.rejects(
+                client.chat({ system: 's', messages: MESSAGES, maxTokens: 5, timeoutMs: 5000, idleTimeoutMs: 100, onToken: () => {} }),
+                (err) => err instanceof AiError && err.code === 'timeout',
+            );
+            assert.ok(Date.now() - started < 1000);
+        } finally { await fake.stop(); }
+    }
+});
+
+test('a slow steady stream passes the idle timeout', async () => {
+    for (const { name, adapter, piece, end } of SSE_ADAPTERS) {
+        const fake = await startFake((req, res) => {
+            res.writeHead(200, { 'Content-Type': 'text/event-stream' });
+            let i = 0;
+            const timer = setInterval(() => {
+                i++;
+                res.write(piece(i % 10));
+                if (i === 10) { clearInterval(timer); res.end(end); }
+            }, 60);
+        });
+        try {
+            const client = adapter.create({ baseUrl: fake.baseUrl, apiKey: SECRET, model: 'm' });
+            const result = await client.chat({ system: 's', messages: MESSAGES, maxTokens: 5, timeoutMs: 5000, idleTimeoutMs: 150, onToken: () => {} });
+            assert.equal(result.text, '1234567890', name);
+        } finally { await fake.stop(); }
+    }
+});
+
+test('without idleTimeoutMs the total timeout still caps a stalled stream', async () => {
+    for (const { adapter, first } of SSE_ADAPTERS) {
+        const fake = await startFake((req, res) => {
+            res.writeHead(200, { 'Content-Type': 'text/event-stream' });
+            res.write(first);
+        });
+        try {
+            const client = adapter.create({ baseUrl: fake.baseUrl, apiKey: SECRET, model: 'm' });
+            await assert.rejects(
+                client.chat({ system: 's', messages: MESSAGES, maxTokens: 5, timeoutMs: 200, onToken: () => {} }),
+                (err) => err instanceof AiError && err.code === 'timeout',
+            );
+        } finally { await fake.stop(); }
+    }
+});

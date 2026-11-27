@@ -4,8 +4,8 @@ const { AiError, errorFromStatus, errorFromThrown } = require('../errors');
 const { readServerSentEvents } = require('./sse');
 const { JSON_HINT } = require('./jsonHint');
 const { modelIdsOf } = require('./modelIds');
+const { createCallSignal } = require('./callSignal');
 
-const DEFAULT_TIMEOUT_MS = 60000;
 // Long-standing stable version; the provider keeps existing parameters per version.
 const API_VERSION = '2023-06-01';
 
@@ -36,8 +36,7 @@ function create({ baseUrl, apiKey, model, fetchImpl = fetch }) {
         return response;
     }
 
-    async function chat({ system, messages, maxTokens, timeoutMs, signal, onToken, json }) {
-        const timeout = AbortSignal.timeout(timeoutMs || DEFAULT_TIMEOUT_MS);
+    async function chat({ system, messages, maxTokens, timeoutMs, idleTimeoutMs, signal, onToken, json }) {
         const systemText = [system, json ? JSON_HINT : ''].filter(Boolean).join('\n\n');
         const body = {
             model,
@@ -46,19 +45,23 @@ function create({ baseUrl, apiKey, model, fetchImpl = fetch }) {
         };
         if (systemText) body.system = systemText;
         if (onToken) body.stream = true;
-        const response = await send(`${root}/messages`, {
-            method: 'POST',
-            headers: headers({ 'Content-Type': 'application/json' }),
-            body: JSON.stringify(body),
-            signal: signal ? AbortSignal.any([timeout, signal]) : timeout,
-        }, signal);
+        const call = createCallSignal({ timeoutMs, idleTimeoutMs, signal });
         try {
-            const result = onToken ? await readStream(response, onToken) : await readPlain(response);
+            const response = await send(`${root}/messages`, {
+                method: 'POST',
+                headers: headers({ 'Content-Type': 'application/json' }),
+                body: JSON.stringify(body),
+                signal: call.signal,
+            }, signal);
+            call.touch();
+            const result = onToken ? await readStream(response, onToken, call.touch) : await readPlain(response);
             if (!result.text.trim()) throw new AiError('empty_answer');
             return result;
         } catch (err) {
             if (signal && signal.aborted) throw err;
             throw errorFromThrown(err);
+        } finally {
+            call.done();
         }
     }
 
@@ -94,7 +97,7 @@ async function readPlain(response) {
     };
 }
 
-async function readStream(response, onToken) {
+async function readStream(response, onToken, touch) {
     let text = '';
     const usage = { inputTokens: 0, outputTokens: 0 };
     // message_start carries the input count, message_delta the final output count.
@@ -104,6 +107,7 @@ async function readStream(response, onToken) {
         if (Number.isFinite(raw.output_tokens)) usage.outputTokens = raw.output_tokens;
     };
     for await (const evt of readServerSentEvents(response)) {
+        touch();
         let data;
         try { data = JSON.parse(evt.data); } catch { continue; }
         const type = data.type || evt.event;
