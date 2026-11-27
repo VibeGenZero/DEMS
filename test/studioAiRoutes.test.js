@@ -259,6 +259,7 @@ test('the history alternates: same-role turns are merged and a trailing user tur
     history: [
       { role: 'assistant', text: 'Vorab' },
       { role: 'user', text: 'Eins' },
+      { role: 'assistant', text: '   ' }, // an empty turn is dropped, so the user turns around it merge
       { role: 'user', text: 'Zwei' },
       { role: 'assistant', text: `Antwort\n${block('server.js', SERVER)}` },
       { role: 'user', text: 'Abgebrochen' },
@@ -544,16 +545,24 @@ test('undo keeps a file saved by hand afterwards', async () => {
 });
 
 test('opening another plugin clears proposal and undo', async () => {
-  const { chat, call, provider, parent } = await setup();
-  provider.answers.push(CLEAN, CLEAN);
+  const { chat, call, provider, parent, dir } = await setup();
+  provider.answers.push(CLEAN, `Noch mehr.\n${block('notes2.md', NOTES)}`);
   const first = proposalOf(await chat({ message: 'Los' }));
   assert.equal((await call('POST', '/api/ai/apply', { id: first.id })).status, 200);
   const second = proposalOf(await chat({ message: 'Nochmal' }));
   assert.ok(second);
   const other = await call('POST', '/api/new', { id: 'zweites-plugin', parentDir: parent });
   assert.equal(other.status, 200);
-  assert.equal((await call('POST', '/api/ai/apply', { id: second.id })).status, 409);
-  assert.deepEqual((await call('POST', '/api/ai/undo')).data, { error: 'Nichts zum Rückgängigmachen.' });
+  // back to the first plugin: proposal and undo of its earlier session must be gone, not just hidden
+  assert.equal((await call('POST', '/api/open', { dir })).status, 200);
+  const apply = await call('POST', '/api/ai/apply', { id: second.id });
+  assert.equal(apply.status, 409);
+  assert.deepEqual(apply.data, { error: 'Der Vorschlag ist nicht mehr aktuell.' });
+  assert.equal(fs.existsSync(path.join(dir, 'notes2.md')), false);
+  const undo = await call('POST', '/api/ai/undo');
+  assert.equal(undo.status, 409);
+  assert.deepEqual(undo.data, { error: 'Nichts zum Rückgängigmachen.' });
+  assert.equal(fs.existsSync(path.join(dir, 'notes.md')), true, 'the applied file stays');
 });
 
 test('the key never appears', async (t) => {

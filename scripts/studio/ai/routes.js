@@ -22,7 +22,9 @@ const MAX_HISTORY = 20;
 const TOTAL_TIMEOUT_MS = 20 * 60 * 1000;
 const IDLE_TIMEOUT_MS = 120000;
 const ERROR_LINE_MAX = 1000;
-const MIN_REDACTED_KEY = 8; // a shorter key would mangle ordinary text; real provider keys are far longer
+// Keys shorter than this are not redacted: replacing a short dummy key such as `password` or `test`
+// would corrupt ordinary code and text in the answer. Real provider keys are far longer.
+const MIN_REDACTED_KEY = 8;
 const HASH = /^[0-9a-f]{64}$/;
 
 const NOT_CONFIGURED = 'Die KI ist noch nicht eingerichtet.';
@@ -62,7 +64,7 @@ function normalizeHistory(value) {
   if (!Array.isArray(value)) throw new StudioError(BAD_REQUEST, 400);
   const turns = [];
   for (const entry of value.slice(-MAX_HISTORY)) {
-    if (!isPlainObject(entry) || (entry.role !== 'user' && entry.role !== 'assistant') || typeof entry.text !== 'string') continue;
+    if (!isPlainObject(entry) || (entry.role !== 'user' && entry.role !== 'assistant') || typeof entry.text !== 'string' || !entry.text.trim()) continue;
     const last = turns[turns.length - 1];
     if (last && last.role === entry.role) last.text = `${last.text}\n\n${entry.text}`;
     else turns.push({ role: entry.role, text: entry.text });
@@ -139,6 +141,7 @@ function omittedNotice(omitted) {
  * that could still become the key is held back until the next chunk (or `flush`).
  */
 function createRedactor(key) {
+  // A key under MIN_REDACTED_KEY characters passes through unchanged (see the constant)
   if (typeof key !== 'string' || key.length < MIN_REDACTED_KEY) return { push: (chunk) => String(chunk), flush: () => '' };
   let held = '';
   return {
