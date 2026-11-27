@@ -59,6 +59,30 @@ export async function syncTabs({ paths, state, read, isDirty, reload }) {
 }
 
 /**
+ * Loads the disk state into the open tabs of files the studio AI wrote or restored. A file gone from
+ * disk (404, removed by undo) closes its tab; any other read error keeps the tab as it is.
+ * @param {{ paths: string[], state: object, read(path): Promise<{ content: string, hash: string }>,
+ *   reload(path, content): void, close(path): Promise<void> }} options
+ * @returns {Promise<Array<{ path: string, message: string }>>} -> The files that could not be read.
+ */
+export async function reloadTabs({ paths, state, read, reload, close }) {
+  const failed = [];
+  for (const path of paths) {
+    let file;
+    try {
+      file = await read(path);
+    } catch (err) {
+      if (err && err.status === 404) await close(path);
+      else failed.push({ path, message: err && err.message ? err.message : String(err) });
+      continue;
+    }
+    reload(path, file.content);
+    state.track(path, file.hash);
+  }
+  return failed;
+}
+
+/**
  * Saves a tab against its base hash. When the file changed on disk (409) `askConflict(path)` decides:
  * 'reload' (drop the local edits, load the disk), 'overwrite' (save without base hash) or anything else (cancel).
  * @returns {Promise<'saved'|'reloaded'|'cancelled'>}

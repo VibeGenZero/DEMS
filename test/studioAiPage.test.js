@@ -193,7 +193,7 @@ test('isConfiguredView needs provider, model and a key where the provider needs 
   assert.equal(isConfiguredView(view({ provider: 'openrouter', apiKeySet: true })), true);
 });
 
-test('chatHistory sends the last 10 turns and names the files of earlier proposals', async () => {
+test('chatHistory sends the last 10 messages and names the files of earlier proposals', async () => {
   const { chatHistory } = await load('ai.js');
   const messages = [
     { role: 'user', text: 'Mach was' },
@@ -202,9 +202,9 @@ test('chatHistory sends the last 10 turns and names the files of earlier proposa
   ];
   for (let i = 0; i < 12; i += 1) messages.push({ role: 'user', text: `Frage ${i}` }, { role: 'assistant', text: `Antwort ${i}` });
   const history = chatHistory(messages);
-  assert.equal(history.length, 20);
-  assert.deepEqual(history[0], { role: 'user', text: 'Frage 2' });
-  assert.deepEqual(history[19], { role: 'assistant', text: 'Antwort 11' });
+  assert.equal(history.length, 10, 'author and AI messages together, like MAX_TURNS of prompt.js');
+  assert.deepEqual(history[0], { role: 'user', text: 'Frage 7' });
+  assert.deepEqual(history[9], { role: 'assistant', text: 'Antwort 11' });
   assert.deepEqual(chatHistory(messages.slice(0, 3)), [
     { role: 'user', text: 'Mach was' },
     { role: 'assistant', text: 'Fertig.\n\n[Dateien: server.js, client.js]' },
@@ -271,4 +271,209 @@ test('the permission texts of the diff view cover exactly the SDK permissions', 
   const { PERMISSION_TEXT } = await load('ai-diff.js');
   const { PERMISSIONS } = require('../plugin-sdk/manifest');
   assert.deepEqual(Object.keys(PERMISSION_TEXT).sort(), Object.keys(PERMISSIONS).sort());
+});
+
+test('keyKept: the „gespeichert“ hint only while a save keeps the stored key', async () => {
+  const { keyKept, keyHint } = await load('ai-settings.js');
+  const stored = view({ provider: 'openrouter', baseUrl: 'https://openrouter.ai/api/v1', apiKeySet: true });
+  assert.equal(keyKept(stored, { provider: 'openrouter', baseUrl: 'https://openrouter.ai/api/v1/' }), true);
+  assert.equal(keyKept(stored, { provider: 'openrouter', baseUrl: '' }), true, 'empty = the default address');
+  assert.equal(keyKept(stored, { provider: 'openrouter', baseUrl: 'https://example.com/v1' }), false, 'another address drops the key');
+  assert.equal(keyKept(stored, { provider: 'ollama', baseUrl: 'https://openrouter.ai/api/v1' }), false, 'another provider drops the key');
+  assert.equal(keyKept(view({ provider: 'openrouter' }), { provider: 'openrouter', baseUrl: '' }), false, 'no stored key');
+  const ollama = view({ provider: 'ollama', baseUrl: 'http://localhost:11434/v1', apiKeySet: true });
+  assert.equal(keyKept(ollama, { provider: 'ollama', baseUrl: 'https://ollama.com/v1' }), false, 'the Cloud preset drops a local key');
+  assert.equal(keyHint({ ...ollama, apiKeySet: true }), 'gespeichert');
+  assert.equal(keyHint({ ...ollama, apiKeySet: false }), 'nur für die Cloud nötig');
+  assert.equal(keyHint(view({ provider: 'openrouter' })), 'API-Schlüssel');
+});
+
+test('a proposal without files offers neither „Ansehen“ nor „Übernehmen“', async () => {
+  const { renderProposalSummary } = await load('ai.js');
+  const html = renderProposalSummary(proposal({ files: [], newProblems: [], oldProblems: [], permissionChanges: { added: [], sdk: null } }));
+  assert.match(html, /0 Dateien geändert/);
+  assert.match(html, /index\.html|\.\.\/x\.js/, 'the dropped files are still named');
+  for (const action of ['ai-view', 'ai-apply', 'ai-discard']) assert.ok(!html.includes(`data-action="${action}"`), action);
+  assert.match(html, /Nichts zu übernehmen/);
+});
+
+test('renderMessage keeps the notices of a message', async () => {
+  const { renderMessage } = await load('ai.js');
+  const html = renderMessage({ role: 'assistant', text: 'Hallo', notices: [`Nicht mitgeschickt (zu wenig Platz): Dateien ${XSS}`], index: 3 });
+  assert.match(html, /class="ai-msg-notice[^"]*"/);
+  assert.match(html, /Nicht mitgeschickt \(zu wenig Platz\): Dateien &lt;img/);
+  assert.match(html, /data-turn="3"/);
+});
+
+// ---- mountAi in a small fake DOM: only what the column touches ----
+
+/** An element of the fake DOM: records innerHTML writes; `query` answers querySelector. */
+function fakeElement(query = () => null) {
+  const el = {
+    html: '', writes: 0, value: '', disabled: false, scrollTop: 0, clientHeight: 100, scrollHeight: 100, listeners: {},
+    classList: { toggle() {}, add() {}, remove() {} },
+    get innerHTML() { return el.html; },
+    set innerHTML(v) { el.html = String(v); el.writes += 1; },
+    addEventListener(type, fn) { el.listeners[type] = fn; },
+    removeEventListener() {},
+    querySelector: (sel) => query(sel),
+    querySelectorAll: () => [],
+    focus() {},
+    remove() { el.removed = true; },
+    setAttribute() {},
+    appendChild() {},
+  };
+  return el;
+}
+
+/** A fetch body the test feeds chunk by chunk (`push`, `end`, `fail`). */
+function controlledBody() {
+  const queue = [];
+  const waiting = [];
+  const deliver = (item) => { const next = waiting.shift(); if (next) next(item); else queue.push(item); };
+  const encoder = new TextEncoder();
+  return {
+    body: { getReader: () => ({ read: () => new Promise((resolve) => { const item = queue.shift(); if (item) resolve(item); else waiting.push(resolve); }).then((item) => { if (item.error) throw item.error; return item; }) }) },
+    push: (text) => deliver({ value: encoder.encode(text), done: false }),
+    end: () => deliver({ value: undefined, done: true }),
+    fail: (error) => deliver({ error }),
+  };
+}
+
+const sse = (event, data) => `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
+const settle = async () => { for (let i = 0; i < 10; i += 1) await new Promise((resolve) => setImmediate(resolve)); };
+
+/** Mounts the AI column with a fake api; returns handles to drive it. */
+async function mountColumn(t, { applyAnswers = [] } = {}) {
+  const { mountAi } = await load('ai.js');
+  t.mock.timers.enable({ apis: ['setTimeout'] }); // toasts remove themselves later; never in this test
+  const dialogs = [];
+  const toasts = [];
+  const frames = [];
+  globalThis.requestAnimationFrame = (fn) => frames.push(fn);
+  globalThis.document = {
+    createElement: () => {
+      const el = fakeElement((sel) => (sel.startsWith('[data-button]') ? { focus() {} } : null));
+      return el;
+    },
+    getElementById: () => null,
+    addEventListener() {},
+    removeEventListener() {},
+    body: { appendChild: (el) => { if (el.className === 'studio-dialog-overlay') dialogs.push(el); else if (el.className && el.className.startsWith('studio-toast')) toasts.push(el); } },
+  };
+  t.after(() => { delete globalThis.document; delete globalThis.requestAnimationFrame; });
+
+  const turns = new Map();
+  const list = fakeElement((sel) => {
+    const match = /^\[data-turn="(\d+)"\]$/.exec(sel);
+    if (!match || !list.html.includes(`data-turn="${match[1]}"`)) return null;
+    if (!turns.has(match[1])) turns.set(match[1], { outer: [], set outerHTML(v) { this.outer.push(String(v)); } });
+    return turns.get(match[1]);
+  });
+  const parts = { '.ai-list': list, '.ai-compose': fakeElement(), '.ai-chips': fakeElement(), '.ai-input': fakeElement(), '[data-action="ai-stop"]': fakeElement(), '[data-action="ai-send"]': fakeElement() };
+  const container = fakeElement((sel) => parts[sel] || null);
+  const editor = new Map([['server.js', 'A']]);
+  const calls = { chat: [], apply: [] };
+  const bodies = [];
+  const api = {
+    aiSettings: async () => view(),
+    aiChat: async (body) => { calls.chat.push(body); const b = controlledBody(); bodies.push(b); return { body: b.body }; },
+    aiApply: async (body) => { calls.apply.push(body); return applyAnswers.shift() || { ok: true, written: [] }; },
+    aiUndo: async () => ({ ok: true, restored: [], conflicts: [] }),
+  };
+  const controller = new AbortController();
+  t.after(() => controller.abort());
+  mountAi(container, {
+    api,
+    signal: controller.signal,
+    buffers: () => [...editor].map(([path, content]) => ({ path, content })),
+    openPaths: () => ['server.js'],
+    reloadFiles: async () => {},
+  });
+  await settle();
+  const click = (action, index) => container.listeners.click({ target: { closest: () => ({ disabled: false, dataset: { action, index: String(index) } }) } });
+  const send = async (text) => { parts['.ai-input'].value = text; click('ai-send'); await settle(); };
+  const runFrames = () => { while (frames.length) frames.shift()(); };
+  return { list, turns, editor, calls, bodies, dialogs, toasts, click, send, runFrames };
+}
+
+const PROPOSAL = {
+  id: 'p1', reply: 'Erledigt.', files: [{ path: 'server.js', before: 'A', after: 'KI', isNew: false }],
+  dropped: [], newProblems: [], oldProblems: [], permissionChanges: { added: [], sdk: null }, unsaved: [],
+};
+
+test('mountAi: text typed in the editor after sending is a conflict at apply, not overwritten', async (t) => {
+  const column = await mountColumn(t);
+  await column.send('Ändere server.js');
+  assert.equal(column.calls.chat.length, 1);
+  assert.deepEqual(column.calls.chat[0].buffers, [{ path: 'server.js', content: 'A' }]);
+  column.bodies[0].push(sse('proposal', PROPOSAL));
+  column.bodies[0].end();
+  await settle();
+  column.editor.set('server.js', 'A und mehr'); // typed while the AI answered
+  column.click('ai-apply', 1);
+  await settle();
+  assert.equal(column.dialogs.length, 1, 'the apply dialog names the conflict');
+  assert.match(column.dialogs[0].html, /Datei wurde inzwischen geändert: <code>server\.js<\/code>/);
+  column.dialogs[0].listeners.click({ target: { closest: () => ({ dataset: { button: '1' } }) } }); // „Ohne diese übernehmen“
+  await settle();
+  assert.equal(column.calls.apply.length, 1);
+  assert.deepEqual(column.calls.apply[0].skip, ['server.js']);
+  assert.deepEqual(column.calls.apply[0].save, []);
+});
+
+test('mountAi: while streaming only the live message is redrawn', async (t) => {
+  const column = await mountColumn(t);
+  await column.send('Erste Frage');
+  column.bodies[0].push(sse('done', { reply: 'Erste Antwort' }));
+  column.bodies[0].end();
+  await settle();
+  await column.send('Zweite Frage');
+  const writes = column.list.writes;
+  column.bodies[1].push(sse('token', { text: 'Teil 1 ' }));
+  await settle();
+  column.runFrames();
+  column.bodies[1].push(sse('token', { text: 'Teil 2' }));
+  await settle();
+  column.runFrames();
+  assert.equal(column.list.writes, writes, 'the list itself is not rewritten while streaming');
+  const live = column.turns.get('3');
+  assert.ok(live && live.outer.length >= 2, 'the live message is redrawn');
+  assert.match(live.outer.at(-1), /Teil 1 Teil 2/);
+  assert.equal(column.turns.has('1'), false, 'older messages are left alone');
+  column.bodies[1].end();
+  await settle();
+  assert.ok(column.list.writes > writes, 'the end of the stream redraws the list');
+});
+
+test('mountAi: a notice stays on the message, the repair phase clears the first text', async (t) => {
+  const column = await mountColumn(t);
+  await column.send('Los');
+  const body = column.bodies[0];
+  body.push(sse('notice', { text: 'Nicht mitgeschickt (zu wenig Platz): Dateien big.md' }));
+  body.push(sse('token', { text: 'Erster Versuch' }));
+  body.push(sse('status', { text: 'Prüfe den Vorschlag …' }));
+  body.push(sse('status', { text: 'Etwas anderes', phase: 'repair' }));
+  body.push(sse('token', { text: 'Zweiter Versuch' }));
+  await settle();
+  column.runFrames();
+  const live = column.turns.get('1').outer.at(-1);
+  assert.match(live, /Zweiter Versuch/);
+  assert.ok(!live.includes('Erster Versuch'), 'the repair answer replaces the first one');
+  assert.match(live, /Nicht mitgeschickt \(zu wenig Platz\): Dateien big\.md/);
+  body.push(sse('proposal', PROPOSAL));
+  body.end();
+  await settle();
+  assert.match(column.list.html, /Nicht mitgeschickt \(zu wenig Platz\): Dateien big\.md/, 'the notice outlives the status line');
+  assert.match(column.list.html, /1 Datei geändert/);
+});
+
+test('mountAi: a broken stream shows the German message, a refused request the studio error', async (t) => {
+  const column = await mountColumn(t);
+  await column.send('Los');
+  column.bodies[0].push(sse('token', { text: 'Ich fange an' }));
+  column.bodies[0].fail(new TypeError('network error'));
+  await settle();
+  assert.match(column.list.html, /Die Verbindung zur KI wurde unterbrochen\./);
+  assert.ok(!column.list.html.includes('network error'));
 });

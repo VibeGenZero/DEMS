@@ -1,6 +1,6 @@
 // Workspace: file list, editor tabs, save/dirty handling and the area for the preview (next to the editor).
 import { createEditorHost } from './editor.js';
-import { CONFLICT_TITLE, createDiskState, saveTab, syncTabs } from './disk.js';
+import { CONFLICT_TITLE, createDiskState, reloadTabs, saveTab, syncTabs } from './disk.js';
 import { askConfirm as askConfirmIn, askText as askTextIn, confirmDiscard as confirmDiscardIn, escapeHtml, showDialog, showToast } from './ui.js';
 import { mountAi } from './ai.js';
 
@@ -272,15 +272,19 @@ export async function mountWorkspace(root, { api, plugin, onLeave }) {
 
   // Files the studio AI wrote or restored: their open tabs take the disk state (unsaved edits went into the write).
   async function reloadFiles(paths) {
-    for (const path of paths) {
-      if (!editorHost.has(path)) continue;
-      let file = null;
-      try { file = await api.readFileInfo(path); } catch { file = null; }
-      if (signal.aborted) return;
-      if (!file) { dirty.delete(path); await closeTab(path); continue; } // removed by undo
-      editorHost.reload(path, file.content);
-      disk.track(path, file.hash);
-    }
+    const failed = await reloadTabs({
+      paths: paths.filter((path) => editorHost.has(path)),
+      state: disk,
+      read: (path) => api.readFileInfo(path),
+      reload: (path, content) => { if (!signal.aborted) editorHost.reload(path, content); },
+      close: async (path) => { // removed by undo
+        if (signal.aborted) return;
+        dirty.delete(path);
+        await closeTab(path);
+      },
+    });
+    if (signal.aborted) return;
+    if (failed.length) showToast(`Nicht neu geladen: ${failed.map((f) => f.path).join(', ')} (${failed[0].message})`, 'warning');
     await diskChanged();
   }
 

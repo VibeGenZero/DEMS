@@ -586,6 +586,33 @@ test('syncTabs does not reload a tab that got edits while its file was read', as
   assert.equal(disk.hasConflict('a.js'), true);
 });
 
+test('reloadTabs closes a tab only when its file is gone (404), other read errors keep it', async () => {
+  const { createDiskState, reloadTabs } = await load('disk.js');
+  const disk = createDiskState();
+  disk.track('a.js', 'a1');
+  disk.track('gone.js', 'g1');
+  disk.track('busy.js', 'b1');
+  const onDisk = { 'a.js': { content: 'A2', hash: 'a2' } };
+  const reloaded = [];
+  const closed = [];
+  const failed = await reloadTabs({
+    paths: ['a.js', 'gone.js', 'busy.js'],
+    state: disk,
+    read: async (p) => {
+      if (p === 'busy.js') throw Object.assign(new Error('Das Studio ist nicht erreichbar.'), {});
+      if (!onDisk[p]) throw Object.assign(new Error('Datei nicht gefunden'), { status: 404 });
+      return onDisk[p];
+    },
+    reload: (p, content) => reloaded.push([p, content]),
+    close: async (p) => { closed.push(p); },
+  });
+  assert.deepEqual(reloaded, [['a.js', 'A2']]);
+  assert.equal(disk.hash('a.js'), 'a2');
+  assert.deepEqual(closed, ['gone.js'], 'only the removed file closes');
+  assert.deepEqual(failed, [{ path: 'busy.js', message: 'Das Studio ist nicht erreichbar.' }]);
+  assert.equal(disk.hash('busy.js'), 'b1', 'a tab that could not be read keeps its state');
+});
+
 test('saveTab sends the base hash, and on 409 reloads, overwrites or cancels as chosen', async () => {
   const { createDiskState, saveTab } = await load('disk.js');
   const conflict = () => Object.assign(new Error('Die Datei wurde außerhalb des Studios geändert.'), { status: 409 });

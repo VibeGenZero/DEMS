@@ -5,6 +5,28 @@ import { escapeHtml, showToast } from './ui.js';
 const OLLAMA_HINT = 'Lokale Modelle brauchen viel Kontext. Setze in Ollama die Kontextlänge mindestens auf den Wert „Kontextlänge“ hier (Standard 32768, <code>OLLAMA_CONTEXT_LENGTH</code>), sonst schneidet Ollama das SDK-Wissen ab.';
 const defaultContext = (provider) => (provider === 'ollama' ? 32768 : 128000);
 const providerOf = (view, id) => (Array.isArray(view.providers) ? view.providers.find((p) => p.id === id) : null) || null;
+const endpointOf = (view, provider, baseUrl) => {
+  const entry = providerOf(view, provider);
+  return String(baseUrl || (entry ? entry.defaultBaseUrl : '')).trim().replace(/\/+$/, '');
+};
+
+/**
+ * True when saving `typed` keeps the stored key: same provider and address, as `save` in settings.js decides.
+ * @param {object} stored -> The settings view (`apiKeySet`, `provider`, `baseUrl`, `providers`).
+ * @param {{ provider: string, baseUrl: string }} typed
+ */
+export function keyKept(stored, typed) {
+  return Boolean(stored && stored.apiKeySet && typed.provider === stored.provider
+    && endpointOf(stored, typed.provider, typed.baseUrl) === endpointOf(stored, stored.provider, stored.baseUrl));
+}
+
+/** @returns {string} -> Placeholder of the key field: „gespeichert“ only while the stored key stays. */
+export function keyHint(view) {
+  const entry = providerOf(view, view.provider);
+  if (view.apiKeySet) return 'gespeichert';
+  if (entry && !entry.keyRequired) return 'nur für die Cloud nötig';
+  return 'API-Schlüssel';
+}
 
 /** True when a chat can start: provider, model and, where the provider needs one, a stored key. */
 export function isConfiguredView(view) {
@@ -27,9 +49,6 @@ export function renderSettingsForm(view) {
     ...providers.map((p) => `<option value="${escapeHtml(p.id)}"${p.id === view.provider ? ' selected' : ''}>${escapeHtml(p.label)}</option>`),
   ].join('');
   const ollama = view.provider === 'ollama';
-  let keyHint = 'API-Schlüssel';
-  if (view.apiKeySet) keyHint = 'gespeichert';
-  else if (entry && !entry.keyRequired) keyHint = 'nur für die Cloud nötig';
   return `
     <label class="studio-field">
       <span>Anbieter</span>
@@ -39,7 +58,7 @@ export function renderSettingsForm(view) {
       <button type="button" class="studio-btn" data-preset="local">Lokal</button>
       <button type="button" class="studio-btn" data-preset="cloud">Cloud</button></div>` : ''}
     ${input('baseUrl', 'Adresse (Base URL)', `type="url" value="${escapeHtml(view.baseUrl || '')}" placeholder="${escapeHtml(entry ? entry.defaultBaseUrl : '')}"`)}
-    ${input('apiKey', 'API-Schlüssel', `type="password" placeholder="${escapeHtml(keyHint)}"`)}
+    ${input('apiKey', 'API-Schlüssel', `type="password" placeholder="${escapeHtml(keyHint(view))}"`)}
     <label class="studio-field">
       <span>Modell</span>
       <span class="ai-model-row">
@@ -117,19 +136,26 @@ export async function openAiSettings({ api, signal }) {
       if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); finish(false); }
     }
 
-    // Another provider: its default address and context length; a stored key belongs to the stored provider only
+    // Another provider: its default address and context length; a stored key belongs to the stored connection only
     function providerChanged() {
       const typed = read();
       const next = providerOf(view, typed.provider);
       const contextWasDefault = Number(typed.contextTokens) === defaultContext(view.provider);
+      const baseUrl = next ? next.defaultBaseUrl : '';
       view = {
         ...view,
         ...typed,
-        baseUrl: next ? next.defaultBaseUrl : '',
+        baseUrl,
         contextTokens: contextWasDefault ? defaultContext(typed.provider) : typed.contextTokens,
-        apiKeySet: Boolean(stored.apiKeySet && typed.provider === stored.provider),
+        apiKeySet: keyKept(stored, { provider: typed.provider, baseUrl }),
       };
       draw();
+    }
+    // Another address (typed or a preset): the key placeholder follows what a save would do with the key
+    function addressChanged() {
+      const typed = read();
+      view = { ...view, apiKeySet: keyKept(stored, typed) };
+      field('apiKey').placeholder = keyHint({ ...view, provider: typed.provider });
     }
 
     async function run(action, button) {
@@ -169,7 +195,7 @@ export async function openAiSettings({ api, signal }) {
       const preset = event.target.closest('[data-preset]');
       if (preset) {
         const url = (stored.ollamaPresets || {})[preset.dataset.preset];
-        if (url) field('baseUrl').value = url;
+        if (url) { field('baseUrl').value = url; addressChanged(); }
         return;
       }
       const button = event.target.closest('[data-ai-settings]');
@@ -177,6 +203,9 @@ export async function openAiSettings({ api, signal }) {
     });
     overlay.addEventListener('change', (event) => {
       if (event.target.matches('[data-field="provider"]')) providerChanged();
+    });
+    overlay.addEventListener('input', (event) => {
+      if (event.target.matches('[data-field="baseUrl"]')) addressChanged();
     });
     document.addEventListener('keydown', onKey, true);
     if (signal) signal.addEventListener('abort', onAbort, { once: true });

@@ -4,8 +4,7 @@ import { openDiffView, renderApplyDialog, renderProposalNotes } from './ai-diff.
 import { isConfiguredView, openAiSettings } from './ai-settings.js';
 import { escapeHtml, showDialog, showToast } from './ui.js';
 
-const MAX_TURNS = 10; // the request sends the last 10 turns (author + AI = 20 entries)
-const REPAIR_STATUS = 'Bessere nach …'; // routes.js: the repair round streams a whole new answer
+const MAX_HISTORY = 10; // the request sends the last 10 messages (author and AI together)
 const THINKING = 'Denkt nach …';
 const ERROR_PROMPT = 'Erkläre und behebe diesen Fehler.';
 const STOPPED = 'Der Chat wurde abgebrochen.';
@@ -67,7 +66,8 @@ export function renderProposalSummary(proposal, { index = 0, applied = false, cl
   const button = (action, label, icon, className = '') => `<button type="button" class="studio-btn${className}" data-action="${action}" data-index="${escapeHtml(index)}"><i class="bi ${icon}"></i> ${label}</button>`;
   const view = button('ai-view', 'Ansehen', 'bi-file-diff');
   let actions;
-  if (applied) actions = `<span class="studio-muted">${APPLIED}</span>${view}${button('ai-undo', 'Rückgängig', 'bi-arrow-counterclockwise')}`;
+  if (!files.length) actions = '<span class="studio-muted">Nichts zu übernehmen.</span>'; // every file was dropped
+  else if (applied) actions = `<span class="studio-muted">${APPLIED}</span>${view}${button('ai-undo', 'Rückgängig', 'bi-arrow-counterclockwise')}`;
   else if (closed) actions = `<span class="studio-muted">${escapeHtml(closed)}</span>${view}`;
   else actions = `${view}${button('ai-apply', 'Übernehmen', 'bi-check2', ' is-primary')}${button('ai-discard', 'Verwerfen', 'bi-x-lg')}`;
   return `
@@ -80,11 +80,12 @@ export function renderProposalSummary(proposal, { index = 0, applied = false, cl
 }
 
 /** @returns {string} escaped HTML of one chat message. */
-export function renderMessage({ role, text, status, error, proposal, applied, closed, index = 0 }) {
+export function renderMessage({ role, text, status, notices = [], error, proposal, applied, closed, index = 0 }) {
   const mine = role === 'user';
   return `
-    <div class="ai-msg ${mine ? 'is-user' : 'is-assistant'}">
+    <div class="ai-msg ${mine ? 'is-user' : 'is-assistant'}" data-turn="${escapeHtml(index)}">
       <div class="ai-msg-who">${mine ? 'Du' : 'KI'}</div>
+      ${notices.map((n) => `<div class="ai-msg-notice studio-muted"><i class="bi bi-info-circle"></i> ${escapeHtml(n)}</div>`).join('')}
       ${text ? `<div class="ai-msg-text">${renderInline(text)}</div>` : ''}
       ${status ? `<div class="ai-msg-status studio-muted"><i class="bi bi-hourglass-split"></i> ${escapeHtml(status)}</div>` : ''}
       ${error ? `<div class="ai-msg-error is-error"><i class="bi bi-exclamation-octagon"></i> ${escapeHtml(error)}</div>` : ''}
@@ -103,8 +104,9 @@ export function emptyStateHtml() {
 }
 
 /**
- * The history the chat request sends: the last 10 turns; the AI's turns carry their explanation and, instead of the
- * file blocks, „[Dateien: …]“ (the current files go along in full anyway). Running and failed exchanges are left out.
+ * The history the chat request sends: the last 10 messages; the AI's messages carry their explanation and, instead of
+ * the file blocks, „[Dateien: …]“ (the current files go along in full anyway). The running exchange and a request that
+ * got no answer are left out; a stopped or broken answer goes along with the text that arrived.
  */
 export function chatHistory(messages) {
   const turns = [];
@@ -115,7 +117,7 @@ export function chatHistory(messages) {
     if (files.length) text = `${text}\n\n[Dateien: ${files.map((f) => f.path).join(', ')}]`.trim();
     if (text) turns.push({ role: m.role, text });
   }
-  return turns.slice(-2 * MAX_TURNS);
+  return turns.slice(-MAX_HISTORY);
 }
 
 /**
@@ -149,6 +151,7 @@ export function mountAi(container, { api, signal, buffers, openPaths, reloadFile
   let running = null; // AbortController of the chat in progress
   let errorSeen = false;
   let scheduled = false;
+  let liveIndex = -1; // index of the streaming AI message in `messages`
 
   function render() {
     scheduled = false;
@@ -165,11 +168,22 @@ export function mountAi(container, { api, signal, buffers, openPaths, reloadFile
     if (stick) listEl.scrollTop = listEl.scrollHeight;
   }
 
+  // While a chat streams only its message is redrawn: clicks on older buttons and text selections survive
+  function renderLive() {
+    scheduled = false;
+    if (signal.aborted) return;
+    const node = running && liveIndex >= 0 ? listEl.querySelector(`[data-turn="${liveIndex}"]`) : null;
+    if (!node) { render(); return; }
+    const stick = listEl.scrollTop + listEl.clientHeight >= listEl.scrollHeight - 8;
+    node.outerHTML = renderMessage({ ...messages[liveIndex], index: liveIndex });
+    if (stick) listEl.scrollTop = listEl.scrollHeight;
+  }
+
   function schedule() {
     if (scheduled) return;
     scheduled = true;
-    if (typeof requestAnimationFrame === 'function') requestAnimationFrame(render);
-    else queueMicrotask(render);
+    if (typeof requestAnimationFrame === 'function') requestAnimationFrame(renderLive);
+    else queueMicrotask(renderLive);
   }
 
   async function refreshSettings() {
@@ -196,7 +210,9 @@ export function mountAi(container, { api, signal, buffers, openPaths, reloadFile
       live.text += String(data.text || '');
     } else if (event === 'status') {
       live.status = String(data.text || '');
-      if (live.status === REPAIR_STATUS) live.text = ''; // the repair answer replaces the first one
+      if (data.phase === 'repair') live.text = ''; // the repair round streams a whole new answer
+    } else if (event === 'notice') { // what was left out: stays on the message
+      live.notices = [...(live.notices || []), String(data.text || '')];
     } else if (event === 'proposal') {
       for (const m of messages) if (m.proposal && !m.applied && !m.closed) m.closed = STALE; // the studio keeps the last one only
       live.proposal = data;
@@ -233,22 +249,26 @@ export function mountAi(container, { api, signal, buffers, openPaths, reloadFile
     const live = { role: 'assistant', text: '', status: THINKING, pending: true, sent: new Map(sent.map((b) => [b.path, b.content])) };
     const history = chatHistory(messages);
     messages.push(user, live);
+    liveIndex = messages.length - 1;
     const controller = new AbortController();
     running = controller;
     const stop = () => controller.abort();
     signal.addEventListener('abort', stop, { once: true });
     if (includeErrors) errorSeen = false;
     render();
+    let response = null;
     try {
-      const response = await api.aiChat({ message, history, buffers: sent, open: openPaths(), includeErrors }, { signal: controller.signal });
+      response = await api.aiChat({ message, history, buffers: sent, open: openPaths(), includeErrors }, { signal: controller.signal });
       await readStream(response, live);
     } catch (err) {
       if (err && err.name === 'AbortError') live.error = STOPPED;
-      else {
+      else if (response) live.error = BROKEN; // the stream broke off (e.g. a TypeError of reader.read())
+      else { // the studio refused the request: its German message
         live.error = err.message;
         if (err.status === 409) refreshSettings(); // not configured (any more)?
       }
     } finally {
+      liveIndex = -1;
       signal.removeEventListener('abort', stop);
       running = null;
       live.pending = false;
@@ -261,7 +281,7 @@ export function mountAi(container, { api, signal, buffers, openPaths, reloadFile
 
   async function apply(index) {
     const msg = messages[index];
-    if (!msg || !msg.proposal || msg.applied || msg.closed || msg.busy) return;
+    if (!msg || !msg.proposal || !(msg.proposal.files || []).length || msg.applied || msg.closed || msg.busy) return;
     const proposal = msg.proposal;
     const unsavedAll = proposal.unsaved || [];
     // Typed in the editor after the message was sent: writing over these files would lose those edits
@@ -344,7 +364,7 @@ export function mountAi(container, { api, signal, buffers, openPaths, reloadFile
 
   async function view(index) {
     const msg = messages[index];
-    if (!msg || !msg.proposal) return;
+    if (!msg || !msg.proposal || !(msg.proposal.files || []).length) return;
     const choice = await openDiffView({ proposal: msg.proposal, signal, actions: !msg.applied && !msg.closed });
     if (choice === 'apply') await apply(index);
     else if (choice === 'discard') discard(index);
