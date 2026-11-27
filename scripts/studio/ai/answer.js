@@ -31,6 +31,7 @@ function createAnswerParser() {
   let buffer = '';
   let reply = '';
   let current = null; // { path, lines } while inside a block
+  let midLine = false; // a partial line was already shown: the rest of that line is never a marker
   const files = new Map();
 
   const closeBlock = () => {
@@ -60,13 +61,16 @@ function createAnswerParser() {
       let text = '';
       let nl;
       while ((nl = buffer.indexOf('\n')) !== -1) {
-        text += handleLine(buffer.slice(0, nl));
+        const line = buffer.slice(0, nl);
+        text += midLine ? line + '\n' : handleLine(line);
+        midLine = false;
         buffer = buffer.slice(nl + 1);
       }
       // A trailing "\r" may be the first half of "\r\n": keep it back with the partial line.
-      if (!current && buffer && !couldBeStart(buffer) && !buffer.endsWith('\r')) {
+      if (!current && buffer && (midLine || !couldBeStart(buffer)) && !buffer.endsWith('\r')) {
         text += buffer;
         buffer = '';
+        midLine = true;
       }
       reply += text;
       return { text, writing: current ? current.path : null };
@@ -76,8 +80,8 @@ function createAnswerParser() {
       if (buffer) {
         const line = buffer.replace(/\r$/, '');
         buffer = '';
-        const tail = handleLine(line);
-        reply += current || !tail ? tail : tail.slice(0, -1);
+        const tail = midLine ? line : handleLine(line);
+        reply += current || midLine || !tail ? tail : tail.slice(0, -1);
       }
       if (current) throw new AnswerError('incomplete', 'File block was not closed');
       return {

@@ -133,3 +133,18 @@ test('compactTurn merges adjacent blocks into one run', () => {
 test('compactTurn leaves text without blocks alone', () => {
   assert.equal(compactTurn('nur Text'), 'nur Text');
 });
+
+test('a marker after text that was already streamed mid-line is ordinary text', () => {
+  const input = 'Schreibe <<<DATEI x.js\nrest\n>>>DATEI\nEnde\n';
+  for (const size of [1, 3, 7, input.length]) {
+    const r = feedAll(input, size);
+    assert.deepEqual(r.files, [], `size ${size}`);
+    assert.equal(r.reply, 'Schreibe <<<DATEI x.js\nrest\n>>>DATEI\nEnde', `size ${size}`);
+  }
+  const p = createAnswerParser();
+  p.push('Schreibe ');
+  p.push('<<<DATEI x.js\nconst a=1;\n>>>DATEI\nEnde\n');
+  const out = p.end();
+  assert.deepEqual(out.files, []);
+  assert.equal(out.reply, 'Schreibe <<<DATEI x.js\nconst a=1;\n>>>DATEI\nEnde');
+});
