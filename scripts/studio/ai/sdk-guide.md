@@ -12,7 +12,7 @@ The type description after this guide is the exact list of `ctx` and `ui` member
 <id>/assets/<name> optional, flat: [A-Za-z0-9_-]+ with .js .css .png .jpg .jpeg .webp .gif .json .woff2
 ```
 
-- Outside `assets/` only `.js`, `.json`, `.css`, `.md`, `.txt` (subfolders ok, e.g. `lib/rules.js` for server code). Never `.html`, `.svg`, `.ts`, dot files or `node_modules`.
+- Outside `assets/` only `.js`, `.json`, `.css`, `.md`, `.txt` (subfolders ok, e.g. `lib/rules.js`). Never `.html`, `.svg`, `.ts`, dot files or `node_modules`.
 - The browser loads only `client.js`, `client.css` and `assets/<name>`: split client code into `assets/*.js` and import it relatively (`import { view } from './assets/view.js'`). Every `assets/*.js` is client code.
 - Server code may `require` Node built-ins and its own files (`require('./rules')`); no npm packages.
 
@@ -22,7 +22,7 @@ The type description after this guide is the exact list of `ctx` and `ui` member
 { "id": "my-plugin", "name": "Mein Plugin", "version": "1.0.0", "sdk": 1.1,
   "description": "Kurz, was es tut.", "author": "Name", "server": "server.js", "client": "client.js",
   "permissions": ["events:read"],
-  "settings": [{ "key": "notifyChannel", "type": "channel", "label": "Kanal für Hinweise", "help": "Leer lassen für keine Hinweise." }] }
+  "settings": [{ "key": "notifyChannel", "type": "channel", "label": "Kanal für Hinweise" }] }
 ```
 
 - `id` `^[a-z][a-z0-9-]{2,31}$` = folder name. `version` `x.y.z`. `sdk` is the number `1` or `1.1`; use `1.1` (required for `registrations:read`, `discord:roles`).
@@ -44,11 +44,11 @@ The type description after this guide is the exact list of `ctx` and `ui` member
 | `theme` | `ctx.theme.*`, `ui.theme.*` |
 | `network` | server code using `fetch`, `WebSocket` or `http`/`https`/`http2`/`net`/`dgram`/`tls` |
 
-Free: `ctx.data`, `ctx.settings`, `ctx.routes`, `ctx.log`, `ctx.audit`, `ctx.siteUrl`, `ctx.events.url`, `ctx.profile.badges`, hook `member.deleted`, the rest of `ui`. A missing permission throws. The permission check reads the code and follows only the names `ctx` and `ui`: write `register(ctx)` / `register(ui)` and call `ctx.events.list()` directly (no destructuring of `ctx`, no `ctx[name]`).
+Free: `ctx.data`, `ctx.settings`, `ctx.routes`, `ctx.log`, `ctx.audit`, `ctx.siteUrl`, `ctx.events.url`, `ctx.profile.badges`, hook `member.deleted`, the rest of `ui`. A missing permission throws; `network` does not throw (check, build and install find it). The permission check reads the code and follows only the names `ctx` and `ui`: write `register(ctx)` / `register(ui)` and call `ctx.events.list()` directly (no destructuring of `ctx`, no `ctx[name]`).
 
 ## Server: register(ctx)
 
-`register` may be async and must finish within 5 s. Routes, hooks and profile badges can be added only while it runs, never later from a hook, route or timer.
+`register` may be async and must finish within 5 s. Routes, hooks and profile badges can be added only while it runs.
 
 ### Routes
 
@@ -100,16 +100,16 @@ ctx.routes.get('/items', { access: 'member' }, async ({ user, params, query, bod
 
 ### Discord (`ctx.discord`)
 
-- `sendDM(userId, { text, link? })`, `sendChannelMessage(settingKey, { text, link? })` resolve `true`/`false` and never throw (except a missing permission). `settingKey` is the key of one of the plugin's own `channel` settings, never a channel id.
+- `sendDM(userId, { text, link? })`, `sendChannelMessage(settingKey, { text, link? })` resolve `true`/`false` (`false`: unknown member for a DM, invalid text/link, limit, not delivered) and never throw (except a missing permission). `settingKey` is the key of one of the plugin's own `channel` settings, never a channel id.
 - `text` 1–2000 chars, plain, German; nobody is pinged. `link` `{ label (1–80), url }` adds a button; `url` must point into DEMS: `ctx.events.url(id)` or `ctx.siteUrl('p/<id>/<param>')`.
-- Per plugin and 10 min: 200 DMs, 30 channel posts, 500 role changes; beyond that `false`.
+- Per plugin and 10 min: 200 DMs, 30 channel posts, 500 role changes; beyond that `false` (roles: `{ ok: false, reason }`).
 - Do not await messages in a route: `ctx.discord.sendDM(id, msg).catch(err => ctx.log.error(err.message))`.
 - `listRoles()`: `{ id, name, color }[]` the plugin may give; `addRole(userId, roleId)` / `removeRole(…)`: `{ ok: true, changed }` or `{ ok: false, reason }`; a forbidden role throws. Admins pick a role through a `role` setting.
 
 ### Other
 
 - `ctx.profile.badges(({ userId }) => [...])` once in `register`: `ProfileBadge[]` for the member's own profile (`icon: 'bi-*'`, `color: '#rrggbb'`, `progress` 0..1), within 2 s, at most 50.
-- `ctx.theme.saveDraft(css)`, `discardDraft()`, `publish(css)`, `clear()`: site-wide stylesheet (≤ 50000 chars, no backslash, no `url()`/`@import`); only from `access: 'admin'` routes.
+- `ctx.theme.saveDraft(css)`, `discardDraft()`, `publish(css)`, `clear()`: site-wide stylesheet (≤ 50000 chars, no backslash, no `url()`/`@import`); only from `access: 'admin'` routes (DEMS does not check the caller).
 - `ctx.log.info/warn/error(...)`, `ctx.siteUrl(hash)` (`<BASE_URL>/#<hash>`), `ctx.onDisable(fn)` (2 s), `ctx.plugin` `{ id, version, official }`.
 
 ## Client: register(ui)
