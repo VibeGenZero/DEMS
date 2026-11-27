@@ -6,6 +6,7 @@
  */
 const { test, expect } = require('@playwright/test');
 const fs = require('fs');
+const http = require('http');
 const os = require('os');
 const path = require('path');
 const { startStudio } = require('../scripts/studio');
@@ -140,5 +141,102 @@ test.describe('plugin studio', () => {
         const download = page.waitForEvent('download');
         await page.getByRole('button', { name: 'Übernehmen und bauen' }).click();
         expect((await download).suggestedFilename()).toBe('e2e-demo-0.1.0.dems');
+    });
+});
+
+test.describe('plugin studio AI assistant', () => {
+    test.setTimeout(120_000);
+    const AI_SERVER = "module.exports = {\n    async register(ctx) {\n        ctx.log.info('von der KI');\n    }\n};\n";
+    let studio;
+    let temp;
+    let provider;
+
+    test.beforeAll(async ({}, testInfo) => {
+        if (testInfo.project.name !== 'desktop') return;
+        temp = fs.mkdtempSync(path.join(os.tmpdir(), 'dems-studio-ai-e2e-'));
+        // Fake provider: one OpenAI-style SSE answer with a single file block, whatever is asked
+        provider = http.createServer((req, res) => {
+            req.resume();
+            req.on('end', () => {
+                const answer = `Ich habe den Server angepasst.\n<<<DATEI server.js\n${AI_SERVER}>>>DATEI\n`;
+                res.writeHead(200, { 'Content-Type': 'text/event-stream' });
+                const chunks = answer.match(/[\s\S]{1,40}/g);
+                for (const content of chunks) res.write(`data: ${JSON.stringify({ choices: [{ delta: { content } }] })}\n\n`);
+                res.write(`data: ${JSON.stringify({ choices: [{ delta: {}, finish_reason: 'stop' }] })}\n\ndata: [DONE]\n\n`);
+                res.end();
+            });
+        });
+        await new Promise((resolve) => provider.listen(0, '127.0.0.1', resolve));
+        const configDir = path.join(temp, 'config');
+        fs.mkdirSync(configDir, { recursive: true });
+        fs.writeFileSync(path.join(configDir, 'ai.json'), JSON.stringify({
+            provider: 'ollama',
+            baseUrl: `http://127.0.0.1:${provider.address().port}/v1`,
+            model: 'm',
+            maxTokens: 8192,
+            contextTokens: 32768
+        }));
+        studio = await startStudio({
+            port: 0,
+            out: { write() {} },
+            openBrowser: () => {},
+            configDir,
+            devPluginsDir: path.join(temp, 'mount'),
+            env: {
+                ...process.env,
+                NODE_ENV: 'test',
+                DEV_SQLITE_PATH: path.join(temp, 'studio.sqlite'),
+                DEV_UPLOAD_DIR: path.join(temp, 'uploads')
+            }
+        });
+    });
+
+    test.afterAll(async () => {
+        if (studio) await studio.stop();
+        if (provider) await new Promise((resolve) => provider.close(resolve));
+        if (temp) fs.rmSync(temp, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+    });
+
+    test('chat, view diff, apply and undo', async ({ page }, testInfo) => {
+        test.skip(testInfo.project.name !== 'desktop', 'desktop only');
+        const violations = [];
+        page.on('console', (msg) => { if (/Content Security Policy|Refused to/i.test(msg.text())) violations.push(msg.text()); });
+        const parent = path.join(temp, 'plugins');
+        fs.mkdirSync(parent);
+        await page.goto(studio.url);
+        await page.locator('form[data-form="new"] input[name="id"]').fill('ai-demo');
+        await page.locator('form[data-form="new"] input[name="parentDir"]').fill(parent);
+        await page.getByRole('button', { name: 'Plugin anlegen' }).click();
+
+        const serverFile = path.join(parent, 'ai-demo', 'server.js');
+        const original = () => fs.readFileSync(serverFile, 'utf8');
+        const editorText = (file) => page.evaluate((name) => {
+            const model = window.monaco && window.monaco.editor.getModels().find((m) => m.uri.path === `/${name}`);
+            return model ? model.getValue() : '';
+        }, file);
+        await expect.poll(() => editorText('server.js'), { timeout: 30_000 }).toContain('register(ctx)');
+        const before = original();
+        expect(before).not.toContain('von der KI');
+
+        const ai = page.locator('#studio-ai');
+        await ai.locator('.ai-input').fill('Schreibe eine Log-Zeile.');
+        await ai.getByRole('button', { name: 'Senden' }).click();
+        await expect(ai.locator('.ai-proposal-title')).toContainText('1 Datei geändert', { timeout: 30_000 });
+
+        await ai.getByRole('button', { name: 'Ansehen' }).click();
+        const diff = page.locator('.ai-diff');
+        await expect(diff).toBeVisible();
+        await expect(diff.locator('.monaco-diff-editor')).toBeVisible({ timeout: 30_000 });
+        await diff.getByRole('button', { name: 'Schließen' }).click();
+        await expect(diff).toHaveCount(0);
+
+        await ai.getByRole('button', { name: 'Übernehmen' }).click();
+        await expect.poll(original, { timeout: 15_000 }).toBe(AI_SERVER);
+        await expect.poll(() => editorText('server.js'), { timeout: 15_000 }).toContain('von der KI');
+
+        await ai.getByRole('button', { name: 'Rückgängig' }).click();
+        await expect.poll(original, { timeout: 15_000 }).toBe(before);
+        await expect.poll(() => editorText('server.js'), { timeout: 15_000 }).not.toContain('von der KI');
+        expect(violations).toEqual([]);
     });
 });

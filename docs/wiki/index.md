@@ -38,7 +38,7 @@ sources: [scripts/wiki-graph.js, docs/wiki/graph.json, CLAUDE.md]
 | date polls, voting on dates | date-polls, routes-polls, discord-integration |
 | AI: event assistant, `/ask`, editor drafts, providers | ai-integration, configuration, security |
 | plugins, SDK (write, install, switch, hooks) | plugin-sdk, write-plugin, security |
-| plugin studio (editor, preview, debug panel, build download) | plugin-studio, write-plugin |
+| plugin studio (editor, preview, debug panel, build download, AI chat) | plugin-studio, write-plugin, ai-integration |
 | add an event field | add-event-field, data-model |
 | touch registration forms | form-fields, add-form-field-type |
 | change Discord behaviour | bot, discord-integration, add-bot-feature |
@@ -70,6 +70,7 @@ sources: [scripts/wiki-graph.js, docs/wiki/graph.json, CLAUDE.md]
 | `plugin-sdk/*.js` | plugin-sdk, write-plugin |
 | `scripts/plugin.js` (plugin CLI: new, check, build, install) | write-plugin |
 | `scripts/studio/*` (plugin studio: server, proxy, files, child, page), `dev/studioEvents.js`, `dev/studioHost.js`, `plugin-sdk/studio.js`, `plugin-sdk/types/` | plugin-studio, write-plugin, dev-mock-mode |
+| `scripts/studio/ai/*`, `scripts/studio/public/ai*.js` (studio AI chat: settings, prompt, proposal, diff, apply/undo), `ai/providers/callSignal.js` | plugin-studio, ai-integration |
 | `plugins/*` (official plugins, e.g. `plugins/event-submissions/`, `plugins/custom-design/`) | plugin-sdk, write-plugin |
 | `routes/plugins.js`, `routes/pluginStatic.js`, `routes/pluginTheme.js` | plugin-sdk, server, api-index, request-lifecycle, security |
 | `routes/adminPlugins.js`, `routes/pluginUploadStore.js` | plugin-sdk, routes-admin, security |

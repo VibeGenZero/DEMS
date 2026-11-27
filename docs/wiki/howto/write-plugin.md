@@ -57,7 +57,7 @@ The browser can load only `client.js`, `client.css` and `assets/<name>` (one lev
 | `version` | `x.y.z`. Changing it on a custom plugin makes the admin confirm again |
 | `name` / `description` / `author` | required ≤ 40 / optional ≤ 200 / optional ≤ 60 characters, German |
 | `server` / `client` | optional relative file names inside the folder (no `..`, `\`, `:`, leading `/`); must exist |
-| `permissions` | list of known names: `events:read`, `events:draft`, `members:read`, `discord:dm`, `discord:channel`, `theme`, `network`. Ask only for what you use; a new one on a custom plugin makes the admin confirm again |
+| `permissions` | list of known names: `events:read`, `events:draft`, `members:read`, `discord:dm`, `discord:channel`, `theme`, `network`, plus the SDK 1.1 ones `registrations:read` and `discord:roles`. Ask only for what you use; a new one on a custom plugin makes the admin confirm again |
 | `settings` | list of `{ key, type, label, help?, required?, options? }`; `key` `^[a-zA-Z][a-zA-Z0-9]{0,31}$`, unique; `type` one of `text`, `textarea`, `number`, `boolean`, `select` (needs `options`: strings or `{ value, label }`), `channel`, `role`, `secret` |
 
 DEMS draws the settings form in System › Plugins and validates it: numbers finite, `select` only its options, `channel`/`role` Discord ids picked from the bot's lists, text ≤ 4000, `required` must be filled; `null`/`''` clears. A `secret` shows only „gesetzt“/„nicht gesetzt“ and needs the reset password to change.

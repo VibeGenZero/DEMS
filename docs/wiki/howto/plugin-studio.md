@@ -2,10 +2,10 @@
 id: plugin-studio
 title: How to use the plugin studio
 type: howto
-tags: [howto, plugins, plugin-sdk, studio, editor, debug, local, development]
-sources: [scripts/studio/, scripts/plugin.js, dev/studioEvents.js, dev/studioHost.js, plugin-sdk/studio.js, plugin-sdk/types/dems-plugin.d.ts, plugin-sdk/discord.js, test/studioActions.test.js, e2e/studio.spec.js]
+tags: [howto, plugins, plugin-sdk, studio, editor, debug, local, development, ai]
+sources: [scripts/studio/, scripts/plugin.js, dev/studioEvents.js, dev/studioHost.js, plugin-sdk/studio.js, plugin-sdk/types/dems-plugin.d.ts, plugin-sdk/discord.js, test/studioActions.test.js, e2e/studio.spec.js, ai/providers/callSignal.js, scripts/studio/ai/, scripts/studio/public/ai.js, scripts/studio/public/ai-diff.js, scripts/studio/public/ai-settings.js]
 depends_on: [write-plugin, plugin-sdk, dev-mock-mode]
-see_also: [security, docker, run-and-debug]
+see_also: [security, docker, run-and-debug, ai-integration]
 ---
 # How to use the plugin studio
 
@@ -52,6 +52,22 @@ Other DEMS output is not shown. The events come from `dev/studioEvents.js` over 
 
 „In VS Code öffnen“ opens the plugin folder through a `vscode://file/<folder>` link; the studio only follows links of that form. Without VS Code nothing happens besides a possible browser prompt.
 
+## KI-Assistent
+
+The „KI“ column (toggle „KI“ in the top bar; a tab next to the preview on narrow windows) chats with an AI about the open plugin and proposes file changes. It reuses `ai/` (see [ai-integration](../concepts/ai-integration.md)) with its own settings.
+
+**Setup:** „KI-Einstellungen“ (gear in the top bar, or „KI einrichten“ in the empty column): provider (`openrouter`, `ollama`, `anthropic`, `openai`, `gemini`), model („Modelle laden“ lists them), „Verbindung testen“ works with the typed values. The base URL is prefilled per provider. Ollama has two presets: „Lokal“ `http://localhost:11434/v1` (no key) and „Cloud“ `https://ollama.com/v1` (key needed). „Maximale Antwortlänge“ (`maxTokens`, 1024–64000, default 8192) and „Kontextlänge“ (`contextTokens`, 8192–1000000, default 32768 for Ollama, else 128000) bound a request. Ollama's OpenAI endpoint cannot set the context per request, so set the context length in Ollama itself (`OLLAMA_CONTEXT_LENGTH`) to at least the „Kontextlänge“ value, otherwise Ollama cuts off the SDK knowledge.
+
+**Where the settings live:** `ai.json` in the studio config folder next to `recent.json` (file mode `0600` where the OS supports it). The key stays there: it is never sent to the page (only `apiKeySet`), a save that changes provider or base URL without a new key drops it, and the studio never reads `AI_*` from the environment.
+
+**What goes to the provider:** the system prompt (rules, `scripts/studio/ai/sdk-guide.md`, `plugin-sdk/types/dems-plugin.d.ts`), the plugin's text files (at most 200 kB in total, larger files by name only; unsaved editor tabs win over the disk copy, `node_modules`, dot entries and binaries are skipped), the last 10 turns of the chat and, on „Fehler an KI schicken“, up to 20 recent errors. The input budget is `contextTokens − maxTokens`; what does not fit is cut (old turns, then large closed files, then errors) and the chat says so. The page sends nothing before you press „Senden“ (Enter; Umschalt+Enter is a new line).
+
+**Proposal, diff, apply, undo:** the AI answers with explanation text and complete file blocks; the chat shows „<n> Datei(en) geändert“. Nothing is written until „Übernehmen“. „Ansehen“ opens a diff per file (new files against empty). „Übernehmen“ writes through the file API, reloads open tabs and offers „Rückgängig“ (last apply only: replaced files come back, created files are removed). Unsaved tabs the AI worked on can be saved with it („mit speichern“); a file that changed since the proposal (on disk or typed in its tab) is not overwritten: you skip it or cancel. Opening another plugin clears proposal, undo and chat.
+
+**Repair round:** the studio checks a proposal in memory (paths and sizes, `plugin.json`, JS syntax, permissions and `sdk` via the permission scan). Problems new with the proposal trigger exactly one repair request to the AI; what still fails is shown with the diff, and problems that existed before are marked „bestand schon vorher“.
+
+**Limits:** one chat request at a time (a second one gets „Die KI arbeitet noch.“), messages up to 4000 characters, a request that stays silent for 120 s is aborted (`idleTimeoutMs`), „Stopp“ aborts it. The address guard of `ai/` stays on. The studio only proposes files inside the plugin folder; the AI never runs code.
+
 ## Limits and security model
 
 - Local only: both servers listen on `127.0.0.1`; requests need `Host` `127.0.0.1:<port>` or `localhost:<port>`. The DEMS child also listens on `127.0.0.1` only and answers only its preview origin and its own port (`dev/studioHost.js`).
@@ -60,4 +76,4 @@ Other DEMS output is not shown. The events come from `dev/studioEvents.js` over 
 - Refused with `NODE_ENV=production`. `scripts/studio/` is not part of the Docker image; the studio is a development tool, not something to run on a server.
 - DEMS itself has no route that writes files for the studio.
 
-Tests: `test/studio*.test.js` (units), `e2e/studio.spec.js` (browser smoke test with a real DEMS child: create a plugin, grant `events:read`, change the open `server.js` on disk and see the editor reload it, check the SDK type file has no language-service problems, register an `event.created` hook in the editor and save, see the preview restart and the real app come back, fire „Event erstellen" and find „Hook event.created · ok“ in the debug panel, download `e2e-demo-0.1.0.dems`; it uses temp folders and `prepareDev`'s `devPluginsDir`, so it never touches `data/dev-plugins`).
+Tests: `test/studio*.test.js` (units), `e2e/studio.spec.js` (browser smoke test with a real DEMS child: create a plugin, grant `events:read`, change the open `server.js` on disk and see the editor reload it, check the SDK type file has no language-service problems, register an `event.created` hook in the editor and save, see the preview restart and the real app come back, fire „Event erstellen" and find „Hook event.created · ok“ in the debug panel, download `e2e-demo-0.1.0.dems`; a second test starts a fake provider on `127.0.0.1` with its own `ai.json`, chats, views the diff, applies and undoes a one-file proposal and expects no CSP violation; both use temp folders and `prepareDev`'s `devPluginsDir`, so it never touches `data/dev-plugins`).

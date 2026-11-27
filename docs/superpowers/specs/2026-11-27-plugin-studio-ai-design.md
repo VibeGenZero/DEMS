@@ -225,7 +225,8 @@ the proposal; remaining errors are shown with it.
 - `apply` compares each file's current content (disk or the buffer hash the page
   sends) with the one the proposal was built from; a file changed in between is not
   written silently — the page shows „Datei wurde inzwischen geändert“ for it and the
-  author confirms or skips that file.
+  author skips that file or cancels the apply (controller ruling during implementation:
+  no force overwrite, because overwriting would discard edits the AI never saw).
 - Unsaved buffers at „Übernehmen“ *(builder check, my call)*: the proposal was built
   on the sent buffers, so the apply dialog lists every other file whose unsaved buffer
   was sent („Ungespeichert, die KI hat damit gearbeitet: client.js“) with a checkbox
