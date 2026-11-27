@@ -145,3 +145,23 @@ test('repairMessage names each new problem and each dropped file', () => {
   for (const p of result.newProblems) assert.ok(text.includes(p.message));
   assert.ok(text.includes('index.html'));
 });
+
+test('a non-asset module imported from the client entry is checked as an ES module', () => {
+  const current = load();
+  current.set('client.js', 'import { helper } from "./lib/helper.js";\nexport default helper;\n');
+  current.set('lib/helper.js', 'export const helper = 1;\n');
+  assert.deepEqual(checkSet(current).filter((p) => p.file === 'lib/helper.js'), []);
+});
+
+test('a server file only named in a client comment stays CommonJS', () => {
+  const current = load();
+  current.set('client.js', '// see: import x from "./server.js"\nexport const a = 1;\n');
+  current.set('server.js', 'if (!process) return;\nmodule.exports = {};\n');
+  assert.deepEqual(checkSet(current).filter((p) => p.file === 'server.js'), []);
+});
+
+test('a shebang line does not break the server syntax check', () => {
+  const current = load();
+  current.set('server.js', '#!/usr/bin/env node\nmodule.exports = {};\n');
+  assert.deepEqual(checkSet(current).filter((p) => p.file === 'server.js'), []);
+});

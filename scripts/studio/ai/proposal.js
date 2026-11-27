@@ -20,7 +20,7 @@ const problem = (kind, file, message, detail = message) => ({ key: `${kind}:${fi
 /** Compile a CommonJS file without running it. @returns {{ line: number, reason: string }|null} */
 function checkCommonJs(file, source) {
     try {
-        new vm.Script(`(function (exports, require, module, __filename, __dirname) {${source}\n})`, { filename: file });
+        new vm.Script(`(function (exports, require, module, __filename, __dirname) {${source.replace(/^#!.*/, '')}\n})`, { filename: file });
         return null;
     } catch (err) {
         const line = /:(\d+)\n/.exec(String(err.stack || '')); // "<file>:<line>" heads the stack
@@ -33,7 +33,8 @@ function checkModule(source) {
     const run = spawnSync(process.execPath, ['--check', '--input-type=module'], {
         input: source, encoding: 'utf8', timeout: SPAWN_TIMEOUT_MS, windowsHide: true
     });
-    if (run.status === 0 && !run.error) return null;
+    if (run.status === 0) return null;
+    if (run.error || run.status === null) return null; // the check could not run: no verdict, never a syntax error
     const text = String(run.stderr || '');
     const line = /^\[stdin\]:(\d+)/m.exec(text);
     const reason = /^\w*Error: (.*)$/m.exec(text);
@@ -48,28 +49,6 @@ function checkSyntax(file, source, asModule) {
         syntaxCache.set(cacheKey, asModule ? checkModule(source) : checkCommonJs(file, source));
     }
     return syntaxCache.get(cacheKey);
-}
-
-/** Client files: `manifest.client`, `assets/*.js` and what they import with a relative path. */
-function clientFiles(files, entry) {
-    const client = new Set();
-    const queue = [entry, ...[...files.keys()].filter(isClientAsset)];
-    while (queue.length) {
-        const file = queue.shift();
-        if (client.has(file) || !files.has(file) || !isJsFile(file)) continue;
-        client.add(file);
-        const specs = String(files.get(file)).matchAll(/(?:\bfrom|\bimport)\s*\(?\s*['"](\.{1,2}\/[^'"]+)['"]/g);
-        for (const [, spec] of specs) {
-            const parts = file.split('/').slice(0, -1);
-            for (const seg of spec.split('/')) {
-                if (seg === '.' || seg === '') continue;
-                if (seg === '..') parts.pop(); else parts.push(seg);
-            }
-            const base = parts.join('/');
-            queue.push(files.has(base) ? base : `${base}.js`);
-        }
-    }
-    return client;
 }
 
 /** @returns {number|null} -> The sdk version plugin.json needs when it is higher than the declared one. */
@@ -101,7 +80,7 @@ function scanSet(files, raw, manifest) {
     });
     const declared = Array.isArray(raw.permissions) ? raw.permissions.filter((p) => typeof p === 'string') : [];
     const { missing } = comparePermissions(declared, scan.permissions);
-    return { found: scan.permissions, declared, missing: Object.keys(PERMISSIONS).filter((p) => missing.includes(p)) };
+    return { found: scan.permissions, clients: new Set(scan.clients), declared, missing: Object.keys(PERMISSIONS).filter((p) => missing.includes(p)) };
 }
 
 /**
@@ -121,8 +100,9 @@ function checkSet(files) {
         else problems.push(problem('manifest', MANIFEST_FILE, `plugin.json: ${result.reason}`));
     }
 
-    const entryClient = raw && typeof raw.client === 'string' ? raw.client.replace(/^\.\//, '') : '';
-    const client = clientFiles(files, entryClient);
+    const scanned = raw ? scanSet(files, raw, manifest) : null;
+    // without a readable manifest nothing is known to be a client file except assets
+    const client = scanned ? scanned.clients : new Set([...files.keys()].filter(isClientAsset));
     for (const [file, source] of files) {
         if (!isJsFile(file)) continue;
         const failed = checkSyntax(file, String(source).replace(/^﻿/, ''), client.has(file));
@@ -133,7 +113,7 @@ function checkSet(files) {
     }
 
     if (raw) {
-        const { found, declared, missing } = scanSet(files, raw, manifest);
+        const { found, declared, missing } = scanned;
         for (const permission of missing) {
             problems.push(problem('permission', MANIFEST_FILE, `Der Code braucht die Berechtigung „${permission}“, sie fehlt in plugin.json.`));
         }

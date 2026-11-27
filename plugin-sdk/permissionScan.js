@@ -187,7 +187,7 @@ function resolveImport(fromFile, spec, sources) {
 /**
  * @param {Map<string, string>} sources -> relative posix path to text
  * @param {{server: string, client: string}} manifest
- * @returns {{permissions: string[], warnings: {file: string, line: number, message: string}[]}}
+ * @returns {{permissions: string[], warnings: {file: string, line: number, message: string}[], clients: string[]}} -> clients: files loaded in the browser (ES modules)
  */
 function scanPlugin(sources, manifest) {
   const results = new Map();
@@ -224,7 +224,7 @@ function scanPlugin(sources, manifest) {
     r.permissions.forEach(p => found.add(p));
     warnings.push(...r.warnings);
   }
-  return { permissions: Object.keys(PERMISSIONS).filter(p => found.has(p)), warnings };
+  return { permissions: Object.keys(PERMISSIONS).filter(p => found.has(p)), warnings, clients: [...client] };
 }
 
 /** @returns {{missing: string[], unused: string[]}} -> missing: found but not declared; unused: declared but not found. */
