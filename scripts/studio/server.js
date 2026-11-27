@@ -79,6 +79,7 @@ function sendFile(req, res, root, segments, extraHeaders = {}) {
 
 const tooLarge = (destroy) => Object.assign(new Error('Die Anfrage ist zu groß.'), { status: 413, close: true, destroy });
 
+/** The request body as UTF-8 text within MAX_BODY; beyond it a 413 error (`status`). Raw routes read their body with it. */
 function readBody(req) {
   return new Promise((resolve, reject) => {
     if (Number(req.headers['content-length']) > HARD_CAP) return reject(tooLarge(true));
@@ -196,4 +197,4 @@ function createStudioServer({ port = 3100, previewPort, token, routes = {}, publ
   };
 }
 
-module.exports = { createStudioServer, _test: { hasDotSegment } };
+module.exports = { createStudioServer, readBody, _test: { hasDotSegment } };

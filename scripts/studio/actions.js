@@ -1,6 +1,6 @@
 'use strict';
 // API routes of the plugin studio: open/new plugin, recent list, file API, check, build,
-// event stream, hook triggers and the VS Code link. Wires files, child, events and triggers.
+// event stream, hook triggers, the VS Code link and the AI routes. Wires files, child, events, triggers and ai/.
 const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -11,6 +11,8 @@ const { PackageError } = require('../../plugin-sdk/errors');
 const { ID_PATTERN } = require('../../plugin-sdk/manifest');
 const { analyzePlugin, writeManifest, packPlugin } = require('../../plugin-sdk/package');
 const { scaffoldPlugin, reportLines, officialIds } = require('../plugin');
+const aiSettings = require('./ai/settings');
+const { createAiRoutes } = require('./ai/routes');
 
 const { StudioError } = files;
 const MANIFEST = 'plugin.json';
@@ -41,7 +43,7 @@ function vscodeUrl(dir) {
  * @param {object} options
  * @param {string} options.repoRoot -> Repository with `dev/start.js` (the child mounts the plugin below it).
  * @param {string|(() => string)} options.previewOrigin -> Origin of the preview proxy (a function: known after listen).
- * @param {string} [options.configDir] -> Folder of `recent.json`.
+ * @param {string} [options.configDir] -> Folder of `recent.json` and `ai.json`.
  * @param {object} [options.env] -> Base environment of the DEMS child.
  * @param {Function} [options.createChild] -> `child.createChild` (tests inject a fake).
  * @param {Function} [options.createTriggers] -> `triggers.createTriggers`.
@@ -108,7 +110,11 @@ function createActions({
     } catch { /* check and build report the problem */ }
   }
 
+  const ai = createAiRoutes({ configDir, repoRoot, requireOpen, log, refresh });
+
+  /** Also ends a running AI chat and forgets its proposal and undo: they belong to the closed plugin. */
   async function closeCurrent() {
+    ai.reset();
     if (watcher) watcher.close();
     watcher = null;
     if (child) await child.stop();
@@ -279,6 +285,8 @@ function createActions({
       return { json: await triggers.run(body.action) };
     },
     'GET /api/vscode': () => ({ json: { url: vscodeUrl(requireOpen()) } }),
+    ...aiSettings.routes(configDir),
+    ...ai.routes,
   };
 
   return {
