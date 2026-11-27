@@ -235,6 +235,9 @@ the proposal; remaining errors are shown with it.
   before the apply, including those saved buffers.
 - Timeout *(builder check, my call)*: per provider call (first answer and repair each)
   an **idle timeout** of 120 s without a new token and a total cap of 20 minutes.
+  Before the **first** stream chunk the idle limit is 300 s (optional
+  `firstByteTimeoutMs`, off by default): a local Ollama on a CPU can need more than
+  120 s to process a 20k-token prompt *(controller ruling during implementation)*.
   Today `timeoutMs` in both adapters is a total timeout; they get an optional
   `idleTimeoutMs` (reset on every stream chunk). DEMS's own calls do not pass it and
   keep their behaviour. Errors use `AI_ERROR_MESSAGES` and
@@ -272,7 +275,9 @@ the proposal; remaining errors are shown with it.
   appears above the input.
 - Chat history: kept in page memory for the open plugin; the request sends the last
   10 turns, with file blocks of older assistant turns replaced by „[Dateien:
-  server.js, client.js]“ (the current files are always sent in full anyway).
+  server.js, client.js]“ (the current files are always sent in full anyway). A
+  turn is one message (author and AI messages count together), matching
+  `MAX_TURNS` of `prompt.js` *(controller ruling during the final review)*.
 
 ### Files
 

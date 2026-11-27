@@ -230,9 +230,25 @@ test.describe('plugin studio AI assistant', () => {
         await diff.getByRole('button', { name: 'Schließen' }).click();
         await expect(diff).toHaveCount(0);
 
+        // The preview is up before the apply; record its restart overlay so a fast restart is not missed
+        const overlay = page.locator('.pv-overlay');
+        const appShell = page.frameLocator('.pv-frame').locator('#main-navbar #nav-brand-name');
+        await expect(overlay).toBeHidden({ timeout: 60_000 });
+        await expect(appShell).toBeVisible({ timeout: 60_000 });
+        await page.evaluate(() => {
+            window.__sawRestart = false;
+            const node = document.querySelector('.pv-overlay');
+            new MutationObserver(() => { if (/startet neu/.test(node.textContent)) window.__sawRestart = true; })
+                .observe(node, { childList: true, characterData: true, subtree: true });
+        });
+
         await ai.getByRole('button', { name: 'Übernehmen' }).click();
         await expect.poll(original, { timeout: 15_000 }).toBe(AI_SERVER);
         await expect.poll(() => editorText('server.js'), { timeout: 15_000 }).toContain('von der KI');
+        // The written server.js restarts the preview, then the app is back
+        await expect.poll(() => page.evaluate(() => window.__sawRestart), { timeout: 30_000 }).toBe(true);
+        await expect(overlay).toBeHidden({ timeout: 60_000 });
+        await expect(appShell).toBeVisible({ timeout: 60_000 });
 
         await ai.getByRole('button', { name: 'Rückgängig' }).click();
         await expect.poll(original, { timeout: 15_000 }).toBe(before);
