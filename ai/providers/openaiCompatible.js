@@ -4,8 +4,7 @@ const { AiError, errorFromStatus, errorFromThrown } = require('../errors');
 const { readServerSentEvents } = require('./sse');
 const { JSON_HINT } = require('./jsonHint');
 const { modelIdsOf } = require('./modelIds');
-
-const DEFAULT_TIMEOUT_MS = 60000;
+const { createCallSignal } = require('./callSignal');
 
 /**
  * Adapter for servers that speak the OpenAI chat completions dialect
@@ -22,11 +21,6 @@ function create({ baseUrl, apiKey, model, fetchImpl = fetch }) {
         return result;
     }
 
-    function signalFor(timeoutMs, signal) {
-        const timeout = AbortSignal.timeout(timeoutMs || DEFAULT_TIMEOUT_MS);
-        return signal ? AbortSignal.any([timeout, signal]) : timeout;
-    }
-
     async function send(url, init, callerSignal) {
         let response;
         try {
@@ -40,9 +34,8 @@ function create({ baseUrl, apiKey, model, fetchImpl = fetch }) {
 
     // Newer OpenAI models reject max_tokens, some compatible servers only know it.
     // So the newer name goes first and the old one is the single fallback after a 400.
-    async function post(body, { timeoutMs, signal }) {
+    async function post(body, { combined, signal }) {
         const { limit, ...rest } = body;
-        const combined = signalFor(timeoutMs, signal);
         const attempt = (limitKey) => send(`${root}/chat/completions`, {
             method: 'POST',
             headers: headers({ 'Content-Type': 'application/json' }),
@@ -61,7 +54,7 @@ function create({ baseUrl, apiKey, model, fetchImpl = fetch }) {
         return response;
     }
 
-    async function chat({ system, messages, maxTokens, timeoutMs, signal, onToken, json }) {
+    async function chat({ system, messages, maxTokens, timeoutMs, idleTimeoutMs, firstByteTimeoutMs, signal, onToken, json }) {
         const systemText = [system, json ? JSON_HINT : ''].filter(Boolean).join('\n\n');
         const body = {
             model,
@@ -75,14 +68,18 @@ function create({ baseUrl, apiKey, model, fetchImpl = fetch }) {
             body.stream = true;
             body.stream_options = { include_usage: true };
         }
-        const response = await post(body, { timeoutMs, signal });
+        const call = createCallSignal({ timeoutMs, idleTimeoutMs, firstByteTimeoutMs, signal });
         try {
-            const result = onToken ? await readStream(response, onToken) : await readPlain(response);
+            const response = await post(body, { combined: call.signal, signal });
+            call.responded();
+            const result = onToken ? await readStream(response, onToken, call.touch) : await readPlain(response);
             if (!result.text.trim()) throw new AiError('empty_answer');
             return result;
         } catch (err) {
             if (signal && signal.aborted) throw err;
             throw errorFromThrown(err);
+        } finally {
+            call.done();
         }
     }
 
@@ -90,7 +87,7 @@ function create({ baseUrl, apiKey, model, fetchImpl = fetch }) {
         const response = await send(`${root}/models`, {
             method: 'GET',
             headers: headers(),
-            signal: signalFor(15000),
+            signal: AbortSignal.timeout(15000),
         });
         if (!response.ok) {
             await response.body?.cancel().catch(() => {});
@@ -120,10 +117,11 @@ async function readPlain(response) {
     return { text: typeof content === 'string' ? content : '', usage: usageOf(json.usage) };
 }
 
-async function readStream(response, onToken) {
+async function readStream(response, onToken, touch) {
     let text = '';
     let usage = usageOf(null);
     for await (const evt of readServerSentEvents(response)) {
+        touch();
         if (evt.data === '[DONE]') break;
         let chunk;
         try { chunk = JSON.parse(evt.data); } catch { continue; }

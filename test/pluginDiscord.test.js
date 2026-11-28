@@ -359,3 +359,103 @@ test('listRoles hands out id, name and colour only, as copies', async () => {
     listed[0].name = 'x';
     assert.equal(roles[0].name, 'VIP');
 });
+
+// ── Studio events (dev/studioEvents.js) ─────────────────────────────────
+
+const studioEvents = require('../dev/studioEvents');
+
+function withStudio(fn) {
+    return async () => {
+        const events = [];
+        const saved = { PLUGIN_STUDIO: process.env.PLUGIN_STUDIO, DEV_MOCK: process.env.DEV_MOCK };
+        process.env.PLUGIN_STUDIO = '1';
+        process.env.DEV_MOCK = 'true';
+        studioEvents.setSender(message => events.push(message));
+        try {
+            await fn(events);
+        } finally {
+            studioEvents.setSender(null);
+            for (const [key, value] of Object.entries(saved)) {
+                if (value === undefined) delete process.env[key];
+                else process.env[key] = value;
+            }
+        }
+    };
+}
+
+const forEvent = (events, type) => events.filter(event => event.type === type).map(event => ({ pluginId: event.pluginId, ...event.data }));
+
+test('a sent DM emits a dm event with result sent', withStudio(async (events) => {
+    await api().sendDM(USER, { text: 'Hallo', link: DEMS_LINK });
+    const [dm] = forEvent(events, 'dm');
+    assert.equal(dm.pluginId, 'alpha');
+    assert.equal(dm.userId, USER);
+    assert.equal(dm.text, 'Hallo');
+    assert.deepEqual(dm.link, DEMS_LINK);
+    assert.equal(dm.result, 'sent');
+    assert.equal(dm.reason, null);
+}));
+
+test('a DM refused by the limiter emits dropped with the German reason, even without a second warning', withStudio(async (events) => {
+    const limiter = createMessageLimiter({ now });
+    const discord = api({ limiter });
+    for (let i = 0; i < 200; i++) await discord.sendDM(USER, { text: 'x' });
+    await discord.sendDM(USER, { text: 'x' });
+    await discord.sendDM(USER, { text: 'x' });
+    const dms = forEvent(events, 'dm');
+    assert.equal(dms.length, 202);
+    assert.equal(dms[201].result, 'dropped');
+    assert.match(dms[201].reason, /Nachrichtengrenze erreicht/);
+    assert.equal(sentDms.length, 200);
+}));
+
+test('a DM with a refused text, an unknown member or a delivery that fails emits dropped', withStudio(async (events) => {
+    const discord = api();
+    await discord.sendDM(USER, { text: '' });
+    await discord.sendDM(STRANGER, { text: 'Hallo' });
+    const failing = createDiscordApi({
+        pluginId: 'alpha', permissions: ['discord:dm'], readSettings: async () => ({}), settingsSchema: SCHEMA,
+        limiter: createMessageLimiter({ now }), log, now, userExists: async () => true, sendDm: async () => false
+    });
+    await failing.sendDM(USER, { text: 'Hallo' });
+    const dms = forEvent(events, 'dm');
+    assert.equal(dms.length, 3);
+    assert.ok(dms.every(dm => dm.result === 'dropped' && typeof dm.reason === 'string' && dm.reason !== ''));
+    assert.match(dms[1].reason, /kennt dieses Mitglied nicht/);
+    assert.match(dms[2].reason, /DM-Benachrichtigungen/);
+}));
+
+test('channel posts emit sent, and dropped with the refusal reason', withStudio(async (events) => {
+    const discord = api({ settings: { notifyChannel: CHANNEL } });
+    await discord.sendChannelMessage('notifyChannel', { text: 'Neu' });
+    await discord.sendChannelMessage('nope', { text: 'Neu' });
+    const [sent, dropped] = forEvent(events, 'channel');
+    assert.equal(sent.channel, 'notifyChannel');
+    assert.equal(sent.text, 'Neu');
+    assert.equal(sent.result, 'sent');
+    assert.equal(dropped.result, 'dropped');
+    assert.match(dropped.reason, /keine Kanal-Einstellung/);
+}));
+
+test('role changes emit ok and refused', withStudio(async (events) => {
+    const refusing = roleApi({ setRole: async () => ({ ok: false, code: 'unknown-role' }) });
+    await roleApi().addRole(USER, ROLE);
+    await roleApi().removeRole(USER, ROLE);
+    await refusing.addRole(USER, ROLE);
+    const [given, taken, refused] = forEvent(events, 'role');
+    assert.deepEqual([given.userId, given.roleId, given.give, given.result], [USER, ROLE, true, 'ok']);
+    assert.equal(taken.give, false);
+    assert.equal(refused.result, 'refused');
+    assert.equal(typeof refused.reason, 'string');
+}));
+
+test('nothing is emitted without the studio', async () => {
+    const events = [];
+    studioEvents.setSender(message => events.push(message));
+    try {
+        await api().sendDM(USER, { text: 'Hallo' });
+    } finally {
+        studioEvents.setSender(null);
+    }
+    assert.equal(events.length, 0);
+});

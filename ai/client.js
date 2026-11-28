@@ -94,12 +94,14 @@ function getAiClient({ admin = false, overrides = null, env = process.env } = {}
  * Try one tiny request with the given (possibly unsaved) settings.
  *
  * @param {Object|null} [overrides] -> See getAiClient.
+ * @param {Object} [options]
+ * @param {Object} [options.env] -> Environment to read (default process.env).
  * @returns {Promise<{ ok: true, ms: number }|{ ok: false, code: string, error: string }>}
  */
-async function testConnection(overrides = null) {
+async function testConnection(overrides = null, { env = process.env } = {}) {
     const started = Date.now();
     try {
-        const client = getAiClient({ overrides });
+        const client = getAiClient({ overrides, env });
         await client.chat({ system: 'Antworte mit einem Wort.', messages: [{ role: 'user', text: 'Hallo' }], maxTokens: 5, timeoutMs: TEST_TIMEOUT_MS });
         return { ok: true, ms: Date.now() - started };
     } catch (err) {

@@ -21,6 +21,8 @@ data/
 .claude/
 docs/
 scripts/
+# The plugin CLI stays: operators install .dems packages inside the container
+!scripts/plugin.js
 test/
 landing/
 ci/

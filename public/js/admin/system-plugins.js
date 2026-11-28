@@ -8,7 +8,8 @@
 import { registerActions } from '../core/actions.js';
 import { emptyState } from '../core/components.js';
 import { state } from '../core/state.js';
-import { escapeHtml, showConfirmDialog, showToast } from '../core/ui.js';
+import { escapeHtml, showConfirmDialog, showToast, toggleElement } from '../core/ui.js';
+import { permissionCheckLines } from './plugin-upload.js';
 import { textChannelOptions } from './bot-control.js';
 import { addSystemCategory } from './system-nav.js';
 
@@ -16,12 +17,12 @@ addSystemCategory({ id: 'plugins', label: 'Plugins', subtitle: 'Erweiterungen ei
 
 const LOAD_ERROR = 'Plugins konnten nicht geladen werden.';
 const NO_CHOICE = 'Keine Auswahl';
-const STATUS_TONES = { on: 'success', error: 'danger', invalid: 'danger', incompatible: 'danger', confirm: 'warning' };
-// Statuses whose switch cannot act (the server would refuse or nothing could load)
-const LOCKED_STATUSES = ['invalid', 'incompatible', 'safe'];
+const STATUS_TONES = { on: 'success', error: 'danger', invalid: 'danger', incompatible: 'danger', confirm: 'warning', restart: 'warning' };
+// Statuses whose switch cannot act (the server would refuse, nothing could load or DEMS must restart first)
+const LOCKED_STATUSES = ['invalid', 'incompatible', 'safe', 'restart'];
 
 // views: answer of GET /api/admin/plugins in its order; trustId: plugin of the open trust dialog
-const panel = { safeMode: false, views: [], channels: [], roles: [], trustId: null };
+const panel = { safeMode: false, uploadEnabled: false, views: [], channels: [], roles: [], trustId: null };
 
 const settingFieldId = (pluginId, key) => `plugin-${pluginId}-setting-${key}`;
 const passwordFieldId = (pluginId) => `plugin-${pluginId}-password`;
@@ -65,6 +66,7 @@ function warningLines(view) {
         lines.push(warningLine(`Letzter Fehler${at}: ${view.lastError}`));
     }
     if (view.limitWarning) lines.push(warningLine(view.limitWarning));
+    for (const text of permissionCheckLines(view.permissionCheck)) lines.push(warningLine(text));
     return lines.join('');
 }
 
@@ -165,19 +167,26 @@ function settingsHtml(view, lists) {
  * @param {boolean} [context.safeMode] -> Safe mode: only the switch of a plugin stored on is enabled (to switch it off).
  * @param {Array<Object>} [context.channels] -> `GET /api/admin/channels` for `channel` settings.
  * @param {Array<Object>} [context.roles] -> `GET /api/admin/roles` for `role` settings.
+ * @param {boolean} [context.uploadEnabled] -> Uploads allowed (PLUGINS_UPLOAD): a custom plugin that is off gets „Entfernen“.
  * @param {boolean} [context.readOnly] -> A custom folder that reuses an official id: facts only, no actions.
  * @returns {string} -> HTML.
  */
-export function renderPluginCard(view, { safeMode = false, channels = [], roles = [], readOnly = false } = {}) {
+export function renderPluginCard(view, { safeMode = false, channels = [], roles = [], uploadEnabled = false, readOnly = false } = {}) {
     const id = escapeHtml(view.id);
     const orphaned = view.status === 'orphaned';
     const meta = [view.version ? `Version ${view.version}` : '', view.author].filter(Boolean).join(' · ');
     const canDelete = !readOnly && view.status !== 'on' && view.status !== 'safe';
-    const deleteButton = canDelete
+    const canRemove = !readOnly && uploadEnabled && !view.official && !view.enabled && view.status !== 'on' && view.status !== 'orphaned';
+    const removeButton = canRemove
+        ? `<button type="button" class="btn btn-outline-danger btn-sm" data-click="openPluginRemove" data-plugin-id="${id}" data-plugin-name="${escapeHtml(view.name)}">
+                <i class="bi bi-x-circle me-1" aria-hidden="true"></i>Entfernen
+            </button>`
+        : '';
+    const deleteButton = canDelete || canRemove
         ? `<div class="setup-actions">
-            <button type="button" class="btn btn-outline-danger btn-sm" data-click="deletePluginData" data-plugin-id="${id}">
+            ${canDelete ? `<button type="button" class="btn btn-outline-danger btn-sm" data-click="deletePluginData" data-plugin-id="${id}">
                 <i class="bi bi-trash me-1" aria-hidden="true"></i>Daten löschen
-            </button>
+            </button>` : ''}${removeButton}
         </div>`
         : '';
     return `<article class="glass-card system-card plugin-card">
@@ -219,6 +228,7 @@ function cardOf(index) {
         safeMode: panel.safeMode,
         channels: panel.channels,
         roles: panel.roles,
+        uploadEnabled: panel.uploadEnabled,
         readOnly: viewIndex(view.id) !== index
     });
 }
@@ -268,6 +278,8 @@ export async function loadPluginsPanel() {
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || LOAD_ERROR);
         panel.safeMode = data.safeMode === true;
+        panel.uploadEnabled = data.uploadEnabled === true;
+        toggleElement(document.getElementById('plugin-upload-open'), panel.uploadEnabled && !panel.safeMode);
         panel.views = Array.isArray(data.plugins) ? data.plugins : [];
         const types = new Set(panel.views.flatMap(view => (view.settings || []).map(setting => setting.type)));
         [panel.channels, panel.roles] = await Promise.all([
@@ -336,6 +348,7 @@ function openTrustDialog(view) {
     panel.trustId = view.id;
     document.getElementById('plugin-trust-name').textContent = quoted(view.name);
     document.getElementById('plugin-trust-permissions').innerHTML = permissionItems(view.permissions);
+    document.getElementById('plugin-trust-check-result').innerHTML = permissionCheckLines(view.permissionCheck).map(warningLine).join('');
     resetTrustInput();
     const modal = document.getElementById('pluginTrustModal');
     modal.addEventListener('hidden.bs.modal', () => {
@@ -350,6 +363,10 @@ async function togglePlugin(element) {
     const view = viewOf(id);
     if (!view) return;
     const enabled = element.checked === true;
+    if (enabled && LOCKED_STATUSES.includes(view.status)) {
+        element.checked = false;
+        return;
+    }
     if (enabled && !view.official) {
         // The switch moves only once the server took the confirmed request
         element.checked = false;

@@ -12,8 +12,23 @@ const STATUS_TEXT = {
     on: 'An',
     confirm: 'Bestätigung nötig',
     orphaned: 'Verwaist',
-    safe: 'Abgesicherter Modus aktiv'
+    safe: 'Abgesicherter Modus aktiv',
+    restart: 'Neustart nötig'
 };
+
+const labelled = keys => keys.map(key => ({ key, label: PERMISSIONS[key] }));
+
+/** The entry's permission check with labels; null when the entry has none. */
+function permissionCheckView(entry) {
+    const check = entry && entry.permissionCheck;
+    if (!check) return null;
+    return {
+        missing: labelled(check.missing),
+        unused: labelled(check.unused),
+        warnings: [...check.warnings],
+        tooBig: check.tooBig
+    };
+}
 
 /**
  * @typedef {object} PluginView
@@ -24,7 +39,7 @@ const STATUS_TEXT = {
  * @property {string} description
  * @property {boolean} official
  * @property {{ key: string, label: string }[]} permissions
- * @property {'off'|'on'|'error'|'confirm'|'invalid'|'incompatible'|'orphaned'|'safe'} status
+ * @property {'off'|'on'|'error'|'confirm'|'restart'|'invalid'|'incompatible'|'orphaned'|'safe'} status
  * @property {string} statusText -> German.
  * @property {boolean} enabled -> Stored switch (`pluginState.enabled`); in safe mode the only sign which plugins are on.
  * @property {string} lastError
@@ -33,6 +48,8 @@ const STATUS_TEXT = {
  * @property {import('./manifest').Setting[]} settings
  * @property {boolean} hasClient
  * @property {string[]} collections
+ * @property {null|{ missing: { key: string, label: string }[], unused: { key: string, label: string }[], warnings: string[], tooBig: boolean }} permissionCheck
+ *   -> Server-side code check of a valid custom plugin (discovery); null for official and broken ones.
  */
 
 /**
@@ -40,7 +57,7 @@ const STATUS_TEXT = {
  *
  * Status order: no folder → `orphaned`; safe mode → `safe`; a broken
  * manifest → its status and reason; else the record's runtime status
- * (`off`, `on`, `confirm`, `error` with the load error).
+ * (`off`, `on`, `confirm`, `restart`, `error` with the load error).
  *
  * @param {object} options
  * @param {import('./discovery').PluginEntry|null} options.entry -> Null for an orphaned state entry.
@@ -69,7 +86,7 @@ function buildView({ entry, record, safeMode, limitWarning }) {
         author: manifest ? manifest.author : '',
         description: manifest ? manifest.description : '',
         official: entry ? entry.official : false,
-        permissions: (manifest ? manifest.permissions : []).map(key => ({ key, label: PERMISSIONS[key] })),
+        permissions: labelled(manifest ? manifest.permissions : []),
         status,
         statusText: statusText || STATUS_TEXT[status],
         enabled: stored.enabled,
@@ -78,7 +95,8 @@ function buildView({ entry, record, safeMode, limitWarning }) {
         limitWarning,
         settings: structuredClone(manifest ? manifest.settings : []),
         hasClient: Boolean(manifest && manifest.client),
-        collections: [...stored.collections]
+        collections: [...stored.collections],
+        permissionCheck: permissionCheckView(entry)
     };
 }
 

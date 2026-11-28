@@ -7,19 +7,25 @@
  * stops the others or the start of DEMS. At runtime it switches plugins on
  * and off (Node cannot unload a module, so switching on again reuses the
  * first registration), builds the admin views, validates settings and
- * deletes plugin data. All state writes of one plugin go through one promise
- * chain, because `writeState` is a read-merge-write without a transaction.
+ * deletes plugin data. After an upload it re-reads one custom folder
+ * (`reloadPlugin`): a plugin whose code was already required gets runtime
+ * `restart` („Neustart nötig“) and cannot be switched on before DEMS
+ * restarts; `forgetPlugin` drops a removed folder. All state writes of one
+ * plugin go through one promise chain, because `writeState` is a
+ * read-merge-write without a transaction.
  */
+const fs = require('fs');
 const path = require('path');
-const { discoverPlugins } = require('./discovery');
+const { discoverPlugins, readCustomPlugin } = require('./discovery');
 const state = require('./state');
 const { purgeUserData, wipePluginData } = require('./data');
 const { deleteTheme } = require('./theme');
 const { createMessageLimiter } = require('./discord');
-const { setHookGate, setHookErrorReporter, clearHooks } = require('./hooks');
+const { setHookGate, setHookErrorReporter, setHookDirResolver, clearHooks } = require('./hooks');
 const { createContext } = require('./context');
 const { buildView } = require('./views');
 const { PluginHostError } = require('./errors');
+const { studioEmit, studioFrame } = require('./studio');
 
 const DEFAULT_REGISTER_TIMEOUT_MS = 5000;
 const DEFAULT_DISABLE_TIMEOUT_MS = 2000;
@@ -32,7 +38,11 @@ const MESSAGES = {
     cannotEnable: 'Dieses Plugin kann nicht eingeschaltet werden.',
     safeMode: 'Abgesicherter Modus aktiv – Plugins lassen sich nicht einschalten.',
     noSettings: 'Für dieses Plugin lassen sich keine Einstellungen speichern.',
-    badValues: 'Die Einstellungen müssen ein Objekt sein.'
+    badValues: 'Die Einstellungen müssen ein Objekt sein.',
+    restartFirst: 'Starte DEMS neu, bevor du das Plugin wieder einschaltest.',
+    switchOffFirst: 'Schalte das Plugin zuerst aus.',
+    officialRemove: 'Offizielle Plugins können nicht entfernt werden.',
+    replaced: 'Das Plugin wurde inzwischen ersetzt. Prüfe es und schalte es erneut ein.'
 };
 
 /** @typedef {import('./views').PluginView} PluginView */
@@ -85,14 +95,41 @@ function checkSetting(setting, raw) {
     return raw;
 }
 
+/** Real path of `dir`, or its resolved path while it does not exist. */
+function realOrResolved(dir) {
+    try {
+        return fs.realpathSync(dir);
+    } catch {
+        return path.resolve(dir);
+    }
+}
+
+/**
+ * `customDir`, or undefined when it is the official folder or lies inside it: a plugin
+ * found there would count as official, so no custom plugin is read from it.
+ *
+ * @param {string} officialDir -> Folder of the official plugins.
+ * @param {string} [customDir] -> Configured folder of the custom plugins.
+ * @returns {string|undefined}
+ */
+function usableCustomDir(officialDir, customDir) {
+    if (!customDir || !officialDir) return customDir;
+    const relative = path.relative(realOrResolved(officialDir), realOrResolved(customDir));
+    const outside = relative === '..' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative);
+    if (outside) return customDir;
+    console.error(`PLUGINS_DIR ${customDir} is the official plugin folder or lies inside it; custom plugins are not loaded and uploads are refused.`);
+    return undefined;
+}
+
 /**
  * Create the plugin host.
  *
  * @param {object} options
  * @param {string} options.officialDir -> Folder of the official plugins (`<app>/plugins`).
- * @param {string} [options.customDir] -> Folder of the custom plugins (`PLUGINS_DIR`).
+ * @param {string} [options.customDir] -> Folder of the custom plugins (`PLUGINS_DIR`); ignored when it is or lies inside `officialDir`.
  * @param {boolean} [options.safeMode=false] -> Load no plugin code at all.
  * @param {boolean} [options.mockMode=false] -> Dev mock mode: official plugins without state start on.
+ * @param {string} [options.devPluginId=''] -> Mock mode only: this custom plugin (`plugin dev`) starts on and confirmed.
  * @param {number} [options.registerTimeoutMs=5000]
  * @param {number} [options.disableTimeoutMs=2000] -> Per `onDisable` callback.
  * @param {(file: string) => object} [options.requireModule=require] -> Loads a plugin's `server.js`.
@@ -102,10 +139,11 @@ function checkSetting(setting, raw) {
  * host.list(); // [{ id: 'event-submissions', status: 'off', statusText: 'Aus', ... }]
  */
 function createPluginHost({
-    officialDir, customDir, safeMode = false, mockMode = false,
+    officialDir, customDir: configuredCustomDir, safeMode = false, mockMode = false, devPluginId = '',
     registerTimeoutMs = DEFAULT_REGISTER_TIMEOUT_MS, disableTimeoutMs = DEFAULT_DISABLE_TIMEOUT_MS,
     requireModule = require
 }) {
+    const customDir = usableCustomDir(officialDir, configuredCustomDir);
     const limiter = createMessageLimiter();
     /** @type {import('./discovery').PluginEntry[]} every discovered folder, in discovery order */
     let entries = [];
@@ -115,6 +153,13 @@ function createPluginHost({
     const writeChains = new Map();
     /** @type {Map<string, Promise<unknown>>} plugin id -> tail of its switch chain */
     const switchChains = new Map();
+    /** @type {Map<string, number>} plugin id -> switches queued or running in its switch chain */
+    const pendingSwitches = new Map();
+    /**
+     * Ids whose code was required since start. Outlives the record (`deleteData`
+     * of an orphan deletes it), because Node's require cache keeps the module.
+     */
+    const loadedIds = new Set();
     let started = null;
 
     function chain(chains, id, task) {
@@ -125,10 +170,27 @@ function createPluginHost({
 
     const serializeWrite = (id, task) => chain(writeChains, id, task);
 
+    /** Run `task` on the plugin's switch chain and count it as pending until it settles. */
+    function onSwitchChain(id, task) {
+        pendingSwitches.set(id, (pendingSwitches.get(id) || 0) + 1);
+        return chain(switchChains, id, task).finally(() => {
+            const left = pendingSwitches.get(id) - 1;
+            if (left > 0) pendingSwitches.set(id, left);
+            else pendingSwitches.delete(id);
+        });
+    }
+
     /** Apply `patch` to the in-memory state now and store it in order with the plugin's other writes. */
     function persist(record, patch) {
         record.state = { ...state.normalizeState(record.state || {}), ...patch };
         return serializeWrite(record.id, () => state.writeState(record.id, patch));
+    }
+
+    /** Set `record.runtime`; a changed value is reported to the studio. */
+    function setRuntime(record, value) {
+        if (record.runtime === value) return;
+        record.runtime = value;
+        studioEmit('lifecycle', record.id, { status: value });
     }
 
     function newRecord(id, entry, storedState) {
@@ -214,6 +276,7 @@ function createPluginHost({
             record.profileProvider = null;
         }
         if (!entry.manifest.server) {
+            loadedIds.add(record.id);
             record.registered = true;
             return;
         }
@@ -221,6 +284,7 @@ function createPluginHost({
         const attempt = { open: true };
         record.ctx = createContext({ entry, host: contextHost(record, attempt) });
         try {
+            loadedIds.add(record.id);
             const mod = requireModule(path.join(entry.dir, entry.manifest.server));
             if (!mod || typeof mod.register !== 'function') throw new Error('server.js exportiert keine Funktion register(ctx).');
             await withTimeout(Promise.resolve().then(() => mod.register(record.ctx)), registerTimeoutMs,
@@ -229,6 +293,7 @@ function createPluginHost({
         } catch (err) {
             record.loadError = errorMessage(err);
             console.error(`[plugin:${record.id}] register failed: ${record.loadError}`);
+            studioEmit('error', record.id, { message: record.loadError, where: 'register', ...studioFrame(err, entry.dir) });
         } finally {
             attempt.open = false;
         }
@@ -255,16 +320,28 @@ function createPluginHost({
             if (!record.loading) record.loading = register(record).finally(() => { record.loading = null; });
             await record.loading;
         }
-        record.runtime = record.registered ? 'on' : 'error';
+        // A re-read (`restart`) or a forgotten folder while register ran keeps its state
+        if (record.runtime === 'restart' || !record.entry) return;
+        setRuntime(record, record.registered ? 'on' : 'error');
     }
+
+    /** The plugin under development (`plugin dev`) is trusted by its author: on and confirmed in mock mode. */
+    const isDevPlugin = record => mockMode && devPluginId !== '' && record.id === devPluginId && !record.entry.official;
 
     async function startPlugin(record) {
         if (!record.state && record.entry.official && mockMode) {
             await persist(record, { enabled: true, enabledAt: nowIso(), enabledBy: '' });
         }
+        if (isDevPlugin(record) && (!record.state || needsConfirmation(record))) {
+            const { manifest } = record.entry;
+            await persist(record, {
+                enabled: true, enabledAt: nowIso(), enabledBy: '',
+                confirmedVersion: manifest.version, confirmedPermissions: [...manifest.permissions]
+            });
+        }
         if (!record.state || !record.state.enabled) return;
         if (needsConfirmation(record)) {
-            record.runtime = 'confirm';
+            setRuntime(record, 'confirm');
             return;
         }
         await load(record);
@@ -273,6 +350,10 @@ function createPluginHost({
     async function run() {
         setHookGate(id => isEnabled(id));
         setHookErrorReporter((id, message) => reportError(id, message));
+        setHookDirResolver((id) => {
+            const record = records.get(id);
+            return record && record.entry ? record.entry.dir : '';
+        });
         try {
             entries = discoverPlugins({ officialDir, customDir });
         } catch (err) {
@@ -348,7 +429,15 @@ function createPluginHost({
         const record = recordOf(id);
         if (safeMode && enabled) throw new PluginHostError(MESSAGES.safeMode);
         if (!isLoadable(record)) throw new PluginHostError(MESSAGES.cannotEnable);
-        return chain(switchChains, id, async () => {
+        if (enabled && record.runtime === 'restart') throw new PluginHostError(MESSAGES.restartFirst);
+        // Switching on confirms what the admin saw: not a folder that was replaced meanwhile
+        const entryAtCall = record.entry;
+        return onSwitchChain(id, async () => {
+            // Checked again: the folder may have been removed, re-read or forgotten while this switch waited
+            if (records.get(id) !== record) throw new PluginHostError(MESSAGES.notFound);
+            if (!isLoadable(record)) throw new PluginHostError(MESSAGES.cannotEnable);
+            if (enabled && record.entry !== entryAtCall) throw new PluginHostError(MESSAGES.replaced);
+            if (enabled && record.runtime === 'restart') throw new PluginHostError(MESSAGES.restartFirst);
             const { manifest, official } = record.entry;
             if (enabled) {
                 const patch = { enabled: true, enabledAt: nowIso(), enabledBy: String(adminId || '') };
@@ -361,10 +450,169 @@ function createPluginHost({
             } else {
                 await persist(record, { enabled: false });
                 const wasOn = record.runtime === 'on';
-                record.runtime = 'off';
+                // New code on disk next to the old required module stays „Neustart nötig“
+                if (record.runtime !== 'restart') setRuntime(record, 'off');
                 if (wasOn) await runDisableCallbacks(record);
             }
             return viewOf(record.entry, record);
+        });
+    }
+
+    /** @returns {Set<string>} -> Ids of the discovered official plugins. */
+    const officialIds = () => new Set(entries.filter(entry => entry.official).map(entry => entry.id));
+
+    /**
+     * The plugin's code was required since start (also when its record was
+     * deleted since), or a plugin without `server.js` was switched on. A
+     * failed register counts too: a module that throws at top level is evicted
+     * from Node's require cache, but one whose `register` failed stays there,
+     * and `restart` is the conservative answer for both.
+     */
+    function wasLoaded(id) {
+        const record = records.get(id);
+        return loadedIds.has(id) || Boolean(record && (record.registered || record.ctx !== null));
+    }
+
+    /** Re-reading or forgetting a folder must wait until the plugin is off and no switch runs. */
+    function refuseWhileBusy(id) {
+        const record = records.get(id);
+        if (pendingSwitches.has(id) || (record && (isEnabled(id) || record.loading))) {
+            throw new PluginHostError(MESSAGES.switchOffFirst);
+        }
+    }
+
+    /** Official entries in discovery order, then the custom ones sorted by id (like `discoverPlugins`). */
+    function withCustomEntry(id, entry) {
+        const custom = entries.filter(item => !item.official && item.id !== id);
+        if (entry) custom.push(entry);
+        custom.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+        return [...entries.filter(item => item.official), ...custom];
+    }
+
+    /** `<customDir>/<id>/plugin.json`, or `''` for an official id or one that is no plain folder name. */
+    function customManifestFile(id) {
+        const plainName = typeof id === 'string' && id !== '' && !id.startsWith('.') && path.basename(id) === id;
+        if (!customDir || !plainName || officialIds().has(id)) return '';
+        return path.join(customDir, id, 'plugin.json');
+    }
+
+    function assertCustomFolder(id) {
+        const manifestFile = customManifestFile(id);
+        if (!manifestFile || !fs.existsSync(manifestFile)) throw new PluginHostError(MESSAGES.notFound);
+    }
+
+    /** Refusal inside the switch chain: earlier switches are done, so only on/registering counts. */
+    function refuseWhileRunning(record) {
+        if (record && (isEnabled(record.id) || record.loading)) throw new PluginHostError(MESSAGES.switchOffFirst);
+    }
+
+    /** Take the re-read folder into `entries` and the record (checks done by the caller). */
+    function applyReload(id) {
+        const entry = readCustomPlugin(customDir, id, officialIds());
+        entries = withCustomEntry(id, entry);
+        const record = records.get(id);
+        if (!record) {
+            const created = newRecord(id, entry, null);
+            records.set(id, created);
+            if (wasLoaded(id)) setRuntime(created, 'restart');
+        } else {
+            setRuntime(record, wasLoaded(id) ? 'restart' : 'off');
+            record.entry = entry;
+        }
+        return viewOf(entry, records.get(id));
+    }
+
+    /**
+     * Re-read one custom plugin folder (sync building block of `replacePlugin`).
+     * A plugin whose code was loaded gets runtime `restart`; any other one is
+     * (again) `off` with the usual state rules. Official ids are never re-read.
+     *
+     * @returns {PluginView}
+     * @throws {PluginHostError} -> `notFound` for an official id, no plain folder name or a folder without
+     *   `plugin.json`; `switchOffFirst` while the plugin is on or a switch is queued or running.
+     */
+    function reloadPlugin(id) {
+        assertCustomFolder(id);
+        refuseWhileBusy(id);
+        return applyReload(id);
+    }
+
+    /**
+     * Write a plugin folder (install or replace, e.g. `installPackage`) and
+     * re-read it, on the plugin's switch chain: no switch-on can run between
+     * the check and the write, and a switch-on queued behind it is refused.
+     * A plugin stored on (but failed or waiting for confirmation) is stored
+     * off, so the new code needs a new switch-on.
+     *
+     * @param {string} id
+     * @param {() => Promise<unknown>} writeFn -> Writes `<customDir>/<id>`; when it throws, the host stays unchanged.
+     * @returns {Promise<PluginView>}
+     * @throws {PluginHostError} -> `notFound` (official id, bad name, no `plugin.json` after the write);
+     *   `switchOffFirst` while the plugin is on or registering, then `writeFn` is not called.
+     * @example
+     * await host.replacePlugin('feedback-plus', () => installPackage(buffer, { customDir: host.customDir, replace: true }));
+     */
+    async function replacePlugin(id, writeFn) {
+        if (!customManifestFile(id)) throw new PluginHostError(MESSAGES.notFound);
+        return onSwitchChain(id, async () => {
+            refuseWhileRunning(records.get(id));
+            await writeFn();
+            assertCustomFolder(id);
+            applyReload(id);
+            const record = records.get(id);
+            // A plugin stored on (failed, waiting for confirmation) must not start the new code at the next boot
+            if (record.state && record.state.enabled) await persist(record, { enabled: false });
+            return viewOf(record.entry, record);
+        });
+    }
+
+    /** Drop a custom entry; a record with state stays as orphan (checks done by the caller). */
+    function applyForget(id) {
+        const record = records.get(id);
+        entries = withCustomEntry(id, null);
+        if (!record || !record.entry || record.entry.official) return;
+        if (record.state) {
+            record.entry = null;
+            setRuntime(record, 'off');
+        } else {
+            // A switch still holding this record sees it as gone
+            record.entry = null;
+            records.delete(id);
+        }
+    }
+
+    /**
+     * Forget a removed custom folder (sync building block of `removePlugin`).
+     * With a stored state the plugin stays as orphan (its collections are
+     * needed by „Daten löschen“ and `purgeUser`).
+     *
+     * @throws {PluginHostError} -> `switchOffFirst` while the plugin is on or a switch is queued or running.
+     */
+    function forgetPlugin(id) {
+        const record = records.get(id);
+        if (!record || (record.entry && !record.entry.official)) refuseWhileBusy(id);
+        applyForget(id);
+    }
+
+    /**
+     * Remove a custom plugin folder and forget it, on the plugin's switch chain.
+     *
+     * @param {string} id
+     * @param {() => Promise<unknown>} removeFn -> Deletes `<customDir>/<id>`; when it throws, the host stays unchanged.
+     * @returns {Promise<PluginView|null>} -> The orphan view (state kept), or null when the plugin is gone.
+     * @throws {PluginHostError} -> `officialRemove`, `notFound` (unknown or already orphaned),
+     *   `switchOffFirst` while on or registering; `removeFn` is then not called.
+     */
+    async function removePlugin(id, removeFn) {
+        return onSwitchChain(id, async () => {
+            if (officialIds().has(id)) throw new PluginHostError(MESSAGES.officialRemove);
+            const record = records.get(id);
+            if (!record || !record.entry) throw new PluginHostError(MESSAGES.notFound);
+            refuseWhileRunning(record);
+            await removeFn();
+            applyForget(id);
+            const left = records.get(id);
+            return left ? viewOf(null, left) : null;
         });
     }
 
@@ -474,6 +722,16 @@ function createPluginHost({
         get safeMode() {
             return safeMode;
         },
+        /** @returns {string|undefined} -> `PLUGINS_DIR`, the folder uploads install into; undefined when it is unusable. */
+        get customDir() {
+            return customDir;
+        },
+        officialIds,
+        wasLoaded,
+        reloadPlugin,
+        forgetPlugin,
+        replacePlugin,
+        removePlugin,
         list,
         isEnabled,
         entryOf: id => {
@@ -486,17 +744,17 @@ function createPluginHost({
             return record ? record.routes.map(route => ({ ...route })) : [];
         },
         clients: () => [...records.values()]
-            .filter(record => isEnabled(record.id) && record.entry.manifest.client)
+            .filter(record => record.entry && isEnabled(record.id) && record.entry.manifest.client)
             .map(({ entry: { id, official, manifest } }) => ({
                 id, name: manifest.name, version: manifest.version, official,
                 permissions: [...manifest.permissions], hasCss: Boolean(manifest.css)
             })),
         /** @returns {Array<{ id: string, provider: Function }>} -> Profile badge providers of switched-on plugins (none in safe mode). */
         profileProviders: () => [...records.values()]
-            .filter(record => record.profileProvider && isEnabled(record.id))
+            .filter(record => record.entry && record.profileProvider && isEnabled(record.id))
             .map(record => ({ id: record.id, provider: record.profileProvider })),
         themeSources: () => [...records.values()]
-            .filter(record => isEnabled(record.id) && record.entry.manifest.permissions.includes('theme'))
+            .filter(record => record.entry && isEnabled(record.id) && record.entry.manifest.permissions.includes('theme'))
             .map(record => record.id)
             .sort(),
         setEnabled,

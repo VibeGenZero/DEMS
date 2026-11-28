@@ -14,8 +14,51 @@
 const express = require('express');
 const { requireAuth, requireAdmin, safeEqual } = require('../middleware/auth');
 const { PluginHttpError } = require('../plugin-sdk/errors');
+const { studio: studioEvents, pluginFrame } = require('../plugin-sdk/studio');
 
 const DEFAULT_HANDLER_TIMEOUT_MS = 30000;
+
+/** Plain-text JSON of a body for the studio; '' when there is none. */
+function bodyText(value) {
+    if (value === undefined || value === null || (typeof value === 'object' && Object.keys(value).length === 0)) return '';
+    return typeof value === 'string' ? value : JSON.stringify(value);
+}
+
+/** Report this request to the studio when it finishes; only wraps `res.send` while the studio listens. */
+function watchRequest(studio, req, res, pluginId) {
+    const started = process.hrtime.bigint();
+    const requestPath = req.path;
+    let responseBody = '';
+    const send = res.send;
+    res.send = function (body) {
+        if (!responseBody) responseBody = bodyText(Buffer.isBuffer(body) ? '' : body);
+        return send.call(this, body);
+    };
+    res.once('finish', () => {
+        studio.emit('request', pluginId, {
+            method: req.method,
+            path: requestPath,
+            status: res.statusCode,
+            ms: Math.round(Number(process.hrtime.bigint() - started) / 1e4) / 100,
+            requestBody: bodyText(req.body),
+            responseBody
+        });
+    });
+}
+
+/** Report a failed route to the studio. */
+function studioRouteError(host, pluginId, err, message) {
+    const studio = studioEvents();
+    if (!studio) return;
+    let dir = '';
+    try {
+        const entry = typeof host.entryOf === 'function' ? host.entryOf(pluginId) : null;
+        dir = entry && entry.dir ? entry.dir : '';
+    } catch {
+        // no folder known
+    }
+    studio.emit('error', pluginId, { message, where: 'route', ...pluginFrame(err, dir) });
+}
 
 const MESSAGES = {
     pluginNotFound: 'Plugin nicht gefunden.',
@@ -92,11 +135,13 @@ function wrapHandler(host, pluginId, route, timeoutMs) {
             if (isHttpAnswer(err)) return res.status(err.status).json({ error: String(err.message) });
             if (err instanceof HandlerTimeout) {
                 console.error(`[plugin:${pluginId}] ${err.message}`);
+                studioRouteError(host, pluginId, err, err.message);
                 host.reportError(pluginId, err.message);
                 return res.status(504).json({ error: MESSAGES.pluginTimeout });
             }
             const message = err && err.message ? err.message : String(err);
             console.error(`[plugin:${pluginId}] Route ${req.method} ${req.path} failed: ${message}`);
+            studioRouteError(host, pluginId, err, message);
             host.reportError(pluginId, message);
             res.status(500).json({ error: MESSAGES.pluginFailed });
         }
@@ -136,6 +181,7 @@ function buildPluginRouter(host, pluginId, routes, handlerTimeoutMs) {
             router[method](route.path, ...chain, wrapHandler(host, pluginId, route, handlerTimeoutMs));
         } catch (err) {
             console.error(`[plugin:${pluginId}] Route ${route.method} ${route.path} skipped: ${err.message}`);
+            studioRouteError(host, pluginId, null, `Route ${route.method} ${route.path} ist ungültig.`);
             host.reportError(pluginId, `Route ${route.method} ${route.path} ist ungültig.`);
         }
     }
@@ -193,6 +239,8 @@ function createPluginRouter(getHost, { handlerTimeoutMs = DEFAULT_HANDLER_TIMEOU
             const { pluginId } = req.params;
             const host = readyHost(getHost);
             if (!host || !host.isEnabled(pluginId)) return res.status(404).json({ error: MESSAGES.pluginNotFound });
+            const studio = studioEvents();
+            if (studio) watchRequest(studio, req, res, pluginId);
             routerOf(host, pluginId)(req, res, (err) => {
                 if (err) {
                     console.error(`[plugin:${pluginId}] Dispatch error:`, err);

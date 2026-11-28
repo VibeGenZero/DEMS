@@ -55,7 +55,7 @@ CI builds both targets, starts `compose.yaml` + `compose.build.yaml` (so it test
 
 ## Custom plugins (plugin SDK)
 
-Official plugins ship in the image (`/app/plugins`, part of `COPY . .`, owned by root and read-only for DEMS). Custom plugins live on the data volume in `/app/data/plugins/<id>/` (default of `PLUGINS_DIR`; set it in `.env` to use another folder inside the container). There is no upload in the browser: copy the folder in, make it readable for the user `node`, restart, then switch the plugin on in System › Plugins (trust dialog + reset password).
+Official plugins ship in the image (`/app/plugins`, part of `COPY . .`, owned by root and read-only for DEMS). Custom plugins live on the data volume in `/app/data/plugins/<id>/` (default of `PLUGINS_DIR`; set it in `.env` to use another folder inside the container). Unless `PLUGINS_UPLOAD=true` allows a `.dems` upload in System › Plugins, there is no upload in the browser: copy the folder in, make it readable for the user `node`, restart, then switch the plugin on in System › Plugins (trust dialog + reset password).
 
 ```bash
 docker compose exec dems mkdir -p /app/data/plugins
@@ -64,11 +64,20 @@ docker compose exec -u root dems chown -R node:node /app/data/plugins/my-plugin
 docker compose restart dems
 ```
 
+A `.dems` package from the host goes through the plugin CLI, which the image keeps (`!scripts/plugin.js` in `.dockerignore`): copy the file onto the data volume, install it as the user `node` (the default user of `exec`, so the new folder belongs to `node`), then restart and switch it on in System › Plugins. `--force` replaces an installed plugin; `plugin dev` stays refused because the container runs with `NODE_ENV=production`.
+
+```bash
+docker compose cp ./my-plugin-1.0.0.dems dems:/app/data/my-plugin-1.0.0.dems
+docker compose exec dems npm run plugin -- install /app/data/my-plugin-1.0.0.dems
+docker compose exec dems rm /app/data/my-plugin-1.0.0.dems
+docker compose restart dems
+```
+
 A plugin that breaks the start: add `PLUGINS_SAFE_MODE=true` to `.env` and `docker compose up -d` (no plugin code runs), switch the broken plugin off in System › Plugins (in safe mode only switching off works), remove the line and `docker compose up -d` again. Read [write-plugin](../howto/write-plugin.md#7-install-operators) before installing one — custom plugins run with full access.
 
 ## .dockerignore
 
-Excludes `node_modules/`, `.env*` (except `.env.example`), `data/`, `*.sqlite*`, `.git/`, IDE folders, `docs/`, `scripts/`, `test/`, `landing/`, `ci/`, `.github/`, `.gitlab-ci.yml`, `*.md`, Docker files. The image therefore contains no secrets, docs, tests or CI files.
+Excludes `node_modules/`, `.env*` (except `.env.example`), `data/`, `*.sqlite*`, `.git/`, IDE folders, `docs/`, `scripts/` (except `scripts/plugin.js`, the plugin CLI), `test/`, `landing/`, `ci/`, `.github/`, `.gitlab-ci.yml`, `*.md`, Docker files. The image therefore contains no secrets, docs, tests or CI files.
 
 ## Gotchas
 

@@ -12,22 +12,10 @@
  */
 const fs = require('fs');
 const path = require('path');
+const { ASSET_NAME, CONTENT_TYPES } = require('../plugin-sdk/files');
 
 const PLUGIN_ID = /^[a-z][a-z0-9-]{2,31}$/;
-const ASSET_NAME = /^[A-Za-z0-9_-]+\.(js|css|png|jpg|jpeg|webp|gif|json|woff2)$/;
 const ENCODED_SEPARATOR = /%(2f|5c)/i;
-
-const CONTENT_TYPES = {
-    '.js': 'text/javascript; charset=utf-8',
-    '.css': 'text/css; charset=utf-8',
-    '.json': 'application/json; charset=utf-8',
-    '.png': 'image/png',
-    '.jpg': 'image/jpeg',
-    '.jpeg': 'image/jpeg',
-    '.webp': 'image/webp',
-    '.gif': 'image/gif',
-    '.woff2': 'font/woff2'
-};
 
 /** @returns {string|null} -> The decoded path below `/plugins`, null when it is malformed or tricky. */
 function safeDecodedPath(rawPath) {

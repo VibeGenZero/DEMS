@@ -52,6 +52,16 @@ test('forces the mock environment and ignores real credentials', () => {
     assert.equal(env.ADMIN_RESET_PASSWORD, 'dev');
 });
 
+test('keeps the preview BASE_URL in studio mode, overwrites it otherwise', () => {
+    const studio = runNode(PRINT_ENV, { DEV_MOCK: 'true', PORT: '4321', PLUGIN_STUDIO: '1', BASE_URL: 'http://127.0.0.1:4101' });
+    assert.equal(studio.status, 0, studio.stderr);
+    assert.equal(parseLastLine(studio.stdout).env.BASE_URL, 'http://127.0.0.1:4101');
+
+    const plain = runNode(PRINT_ENV, { DEV_MOCK: 'true', PORT: '4321', BASE_URL: 'http://127.0.0.1:4101' });
+    assert.equal(plain.status, 0, plain.stderr);
+    assert.equal(parseLastLine(plain.stdout).env.BASE_URL, 'http://localhost:4321');
+});
+
 test('keeps an own session secret, reset password, dev database path and upload folder', () => {
     const customDb = path.join(os.tmpdir(), 'dems-custom-dev.sqlite');
     const customUploads = path.join(os.tmpdir(), 'dems-custom-uploads');

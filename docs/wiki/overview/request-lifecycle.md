@@ -3,7 +3,7 @@ id: request-lifecycle
 title: Request lifecycle (middleware order)
 type: overview
 tags: [express, middleware, csrf, session, rate-limit, routing]
-sources: [server.js, routes/pluginStatic.js, routes/plugins.js]
+sources: [server.js, routes/pluginStatic.js, routes/plugins.js, dev/studioHost.js]
 depends_on: [server]
 see_also: [auth-session, security]
 ---
@@ -15,6 +15,7 @@ see_also: [auth-session, security]
 
 | # | Middleware / route | Applies to | Notes |
 |---|---|---|---|
+| 0 | studio Host guard (`dev/studioHost.js`) | all, only as the plugin studio's DEMS child (`PLUGIN_STUDIO=1` in mock mode) | `Host` must be the preview origin (`BASE_URL`) or `127.0.0.1:<PORT>` / `localhost:<PORT>`, else 403 „Ungültiger Host.“; not mounted in any other mode |
 | 1 | `GET /healthz` | all | before session on purpose: probes must not create sessions |
 | 2 | `helmet({ contentSecurityPolicy })` | all | custom directives merged with helmet defaults (incl. `upgrade-insecure-requests`, see [known-issues](../reference/known-issues.md)) |
 | 3 | `cors({ origin: BASE_URL, credentials: true })` | all | only sets headers, does not block same-origin calls |

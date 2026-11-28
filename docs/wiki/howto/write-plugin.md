@@ -3,7 +3,7 @@ id: write-plugin
 title: How to write a plugin
 type: howto
 tags: [howto, plugins, plugin-sdk, manifest, ctx, ui, hooks, settings, discord, privacy]
-sources: [plugins/event-submissions, plugins/custom-design, plugin-sdk/manifest.js, plugin-sdk/context.js, plugin-sdk/data.js, plugin-sdk/discord.js, plugin-sdk/theme.js, plugin-sdk/themeCss.js, public/js/core/plugins.js, public/js/core/pluginTheme.js, public/js/core/passwordDialog.js, test/pluginClientGuards.test.js]
+sources: [scripts/plugin.js, plugins/event-submissions, plugins/custom-design, plugin-sdk/manifest.js, plugin-sdk/context.js, plugin-sdk/data.js, plugin-sdk/discord.js, plugin-sdk/theme.js, plugin-sdk/themeCss.js, public/js/core/plugins.js, public/js/core/pluginTheme.js, public/js/core/passwordDialog.js, test/pluginClientGuards.test.js]
 depends_on: [plugin-sdk]
 see_also: [security, frontend-app, bot, data-model, api-index, docker]
 ---
@@ -14,6 +14,10 @@ see_also: [security, frontend-app, bot, data-model, api-index, docker]
 Background (lifecycle, hooks, security model): [plugin-sdk](../concepts/plugin-sdk.md).
 
 ## 1. Folder
+
+Start with the scaffold: `npm run plugin -- new <id> [--dir <parent>]` (id `^[a-z][a-z0-9-]{2,31}$`, refuses an existing folder) writes `plugin.json` (version `0.1.0`, `sdk: 1.1`), a `server.js` with one `access: 'member'` route, a `client.js` with a tab page and `client.css`. It uses no permission, so `check` finds nothing to change.
+
+Prefer a browser tool? `npm run plugin -- studio` starts the local plugin studio (editor with `ctx`/`ui` autocompletion, live DEMS preview, debug panel, hook buttons, build download): see [plugin-studio](plugin-studio.md).
 
 ```
 my-plugin/              # folder name = manifest id
@@ -53,7 +57,7 @@ The browser can load only `client.js`, `client.css` and `assets/<name>` (one lev
 | `version` | `x.y.z`. Changing it on a custom plugin makes the admin confirm again |
 | `name` / `description` / `author` | required ≤ 40 / optional ≤ 200 / optional ≤ 60 characters, German |
 | `server` / `client` | optional relative file names inside the folder (no `..`, `\`, `:`, leading `/`); must exist |
-| `permissions` | list of known names: `events:read`, `events:draft`, `members:read`, `discord:dm`, `discord:channel`, `theme`, `network`. Ask only for what you use; a new one on a custom plugin makes the admin confirm again |
+| `permissions` | list of known names: `events:read`, `events:draft`, `members:read`, `discord:dm`, `discord:channel`, `theme`, `network`, plus the SDK 1.1 ones `registrations:read` and `discord:roles`. Ask only for what you use; a new one on a custom plugin makes the admin confirm again |
 | `settings` | list of `{ key, type, label, help?, required?, options? }`; `key` `^[a-zA-Z][a-zA-Z0-9]{0,31}$`, unique; `type` one of `text`, `textarea`, `number`, `boolean`, `select` (needs `options`: strings or `{ value, label }`), `channel`, `role`, `secret` |
 
 DEMS draws the settings form in System › Plugins and validates it: numbers finite, `select` only its options, `channel`/`role` Discord ids picked from the bot's lists, text ≤ 4000, `required` must be filled; `null`/`''` clears. A `secret` shows only „gesetzt“/„nicht gesetzt“ and needs the reset password to change.
@@ -190,14 +194,21 @@ Checked by `test/pluginClientGuards.test.js` for official plugins; for custom pl
 
 ## 6. Try it
 
+0. `npm run plugin -- check <folder>` compares `plugin.json` with the code and writes nothing: `+ <perm>` is used in the code but not declared, `? <perm> (nicht mehr gefunden)` is declared but no longer found, an `sdk` line shows a needed SDK raise, and warnings (`file:line: message`) mark code the scanner cannot judge (exit 1 only on errors). The scanner follows only the parameter names `ctx` (server) and `ui` (client): a `register` whose first parameter is named otherwise or destructured gets the warning „register() benennt den Parameter nicht ctx – Berechtigungen nicht erkennbar.“ (client: „… nicht ui – …“). `npm run plugin -- build <folder> [--yes] [--out <file>]` prints the same, asks „plugin.json aktualisieren? (j/n)“ when the manifest would change (`--yes` skips the question; without a terminal `--yes` is required), then writes `<id>-<version>.dems` next to the plugin folder (its parent directory). The build skips dot entries at any depth (`.git/`, `.gitignore`, `.vscode/`), `node_modules` and files without an extension (`LICENSE`) and prints „übersprungen: <name>“ for each (`check` lists them too); any other file outside the allow-list (`.html`, `.svg`, …) still stops it, and install and upload refuse all of them. Answering `n` still builds with the old manifest and warns. The detection is a help for authors, not a security check: permissions stay a guard rail, not a wall, because the scanner only reads the code and can miss dynamic access.
+
+`npm run plugin -- dev <folder>` is the quick way: it runs DEMS in mock mode with exactly this one plugin mounted (a link `data/dev-plugins/<id>` to your folder, `PLUGINS_DIR` and `PLUGINS_DEV_ID` set for the child process) and restarts on every change of a `.js`, `.json` or `.css` file in the folder. The folder name must equal the id; official ids and `NODE_ENV=production` are refused. Sign in as `admin` and open System › Plugins to switch it on. The manual way:
+
 1. Put the folder into `data/plugins/<id>/` of a checkout (or point `PLUGINS_DIR` elsewhere) and run `npm run dev:mock`.
 2. Log in as `admin`, open System › Plugins: the card shows „Nicht offiziell“, your permissions and the status. Switch it on: tick „Ich vertraue dem Code dieses Plugins“ and enter the reset password (mock mode: `dev`).
 3. Your tab appears after a reload; errors show on the card („Letzter Fehler …“) and in the log with `[plugin:<id>]`. DMs and channel posts show as `dev/mockBot.js` log lines.
-4. After changing `server.js` or `plugin.json`, restart the server (nodemon ignores `data/**`: type `rs` or stop and start); a changed `version` asks for confirmation again. If your plugin breaks the start: restart with `PLUGINS_SAFE_MODE=true`, switch the broken plugin off in System › Plugins, remove the line, restart (in safe mode plugins can only be switched off).
+4. After changing `server.js` or `plugin.json`, restart the server (with `plugin dev` this happens by itself; with plain `dev:mock` nodemon ignores `data/**`: type `rs` or stop and start); a changed `version` asks for confirmation again. If your plugin breaks the start: restart with `PLUGINS_SAFE_MODE=true`, switch the broken plugin off in System › Plugins, remove the line, restart (in safe mode plugins can only be switched off).
 
 ## 7. Install (operators)
 
-- Copy the folder onto the server into the custom plugin folder: in Docker `/app/data/plugins/<id>/` on the `dems-data` volume (see [docker](../ops/docker.md)), readable by the user `node`; then restart DEMS and switch it on in System › Plugins. There is no upload in the browser on purpose.
+- From a package: `npm run plugin -- install <file>.dems [--force] [--plugins-dir <dir>]` (dir default `PLUGINS_DIR` or `data/plugins`) checks the package, refuses ids of official plugins and asks before it replaces an installed plugin (a terminal asks „<id> <alt> ersetzen durch <neu>? (j/n)“; without one `--force` is required). Restart DEMS afterwards, then switch the plugin on in System › Plugins. In Docker run it inside the container on a file copied onto the data volume (`docker compose exec dems npm run plugin -- install /app/data/<file>.dems`, see [docker](../ops/docker.md)).
+
+- Copy the folder onto the server into the custom plugin folder: in Docker `/app/data/plugins/<id>/` on the `dems-data` volume (see [docker](../ops/docker.md)), readable by the user `node`; then restart DEMS and switch it on in System › Plugins. The browser upload below is the alternative.
+- **Upload in the browser** (off by default): set `PLUGINS_UPLOAD=true` and restart. System › Plugins then shows „Plugin hochladen“ (hidden in safe mode). Two steps: pick the `.dems` file, DEMS checks it and shows the report (name, version, files, permission mismatch, warnings; nothing is written); then type the reset password and press „Installieren“. A plugin id that is already installed is replaced only while it is switched off („Schalte das Plugin zuerst aus.“); if it was loaded since the last start the report says „Neustart nötig“ and the card shows that status until you restart. The new plugin is stored off: switch it on yourself (trust dialog). „Entfernen“ on the card of a custom, switched-off plugin (reset password) deletes its folder; its data stays as „Verwaist“ until „Daten löschen“. Remove also works in safe mode. Upload, replace and remove are audit-logged.
 - **Warning: a custom plugin is not sandboxed.** It runs inside the DEMS process with full access to DEMS, the database, the Discord bot and its token, the files and the network. The listed permissions show what it wants to use; they prevent nothing. Install only code you have read or whose author you trust. Updating the code means trusting it again (DEMS asks when the version or the permissions change).
 - **Dependencies:** a custom plugin may bring its own `node_modules`; their code runs with the same full access, so they are part of what you trust. Official plugins have none.
 - **Privacy:** plugins can store data of members. Mention every switched-on plugin and what it stores in your privacy policy (System › Datenschutz); DEMS writes no text for it. Account deletion removes the documents a plugin marks with `userId`.

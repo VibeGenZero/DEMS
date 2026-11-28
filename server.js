@@ -4,6 +4,7 @@ require('dotenv').config({ quiet: true });
 // Dev mock mode (DEV_MOCK=true) -> has to adjust the environment before
 // firebaseAdmin.js and bot.js read it (see dev/mockMode.js)
 const { IS_MOCK_MODE } = require('./dev/mockMode');
+const { listenHost, createHostGuard } = require('./dev/studioHost');
 const { debugLog, IS_DEBUG } = require('./utils/debugLog');
 
 const express = require('express');
@@ -52,6 +53,10 @@ app.set('case sensitive routing', true);
 // Client address behind the TLS proxy (rate limits, X-Forwarded-Proto). Default: one hop,
 // only from a proxy on a loopback or private address; TRUST_PROXY overrides (utils/trustProxy.js)
 app.set('trust proxy', trustProxySetting(process.env.TRUST_PROXY));
+
+// Plugin studio child (PLUGIN_STUDIO=1, mock mode): only the preview origin and its own loopback port
+const studioHostGuard = createHostGuard();
+if (studioHostGuard) app.use(studioHostGuard);
 
 // ── Validate required env vars ──────────────────────────────────────────
 // A missing SESSION_SECRET is generated and stored at start (utils/systemConfig.js, #138);
@@ -359,7 +364,8 @@ async function start() {
             officialDir: path.join(__dirname, 'plugins'),
             customDir: path.resolve(process.env.PLUGINS_DIR || path.join(__dirname, 'data', 'plugins')),
             safeMode: process.env.PLUGINS_SAFE_MODE === 'true',
-            mockMode: IS_MOCK_MODE
+            mockMode: IS_MOCK_MODE,
+            devPluginId: IS_MOCK_MODE ? (process.env.PLUGINS_DEV_ID || '') : ''
         });
     } catch (err) {
         console.error('❌ Plugins konnten nicht gestartet werden, DEMS läuft ohne Plugins:', err.message);
@@ -368,7 +374,7 @@ async function start() {
     // Setup mode: no Discord values yet -> the wizard runs, the PIN goes to the log
     await initSetupState({ mockMode: IS_MOCK_MODE });
 
-    server = app.listen(PORT, (err) => {
+    const onListen = (err) => {
         // Express 5 hands listen errors (e.g. EADDRINUSE) to this callback instead
         // of crashing -> exit so a supervisor like Docker can restart the process.
         if (err) {
@@ -376,7 +382,10 @@ async function start() {
             process.exit(1);
         }
         console.log(`\n🌐 DEMS Server running at http://localhost:${PORT}\n`);
-    });
+    };
+    // The plugin studio's child listens on 127.0.0.1 only; every other mode keeps the default address
+    const listenAddress = listenHost();
+    server = listenAddress ? app.listen(PORT, listenAddress, onListen) : app.listen(PORT, onListen);
 
     // Start Discord bot
     startBot(process.env.DISCORD_BOT_TOKEN);

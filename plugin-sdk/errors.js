@@ -44,4 +44,12 @@ class PluginHostError extends Error {
     }
 }
 
-module.exports = { PluginDataError, PluginPermissionError, PluginHttpError, PluginHostError };
+/** A `.dems` package is unreadable or breaks a limit; the message is German. */
+class PackageError extends Error {
+    constructor(message) {
+        super(message);
+        this.name = 'PackageError';
+    }
+}
+
+module.exports = { PackageError, PluginDataError, PluginPermissionError, PluginHttpError, PluginHostError };

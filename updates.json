@@ -1,6 +1,25 @@
 {
-    "version": "3.5.0",
+    "version": "3.6.0",
     "releases": [
+        {
+            "version": "3.6.0",
+            "date": "2026-11-28",
+            "news": [
+                {
+                    "title": "🧩 Plugins von anderen installieren",
+                    "content": "Admins können jetzt unter System › Plugins ein Plugin-Paket (.dems) hochladen, das jemand anderes gebaut hat. DEMS prüft das Paket vorher: Dateien und Größe, ob die angegebenen Berechtigungen zum Code passen, und warnt deutlich, dass fremder Code mit vollem Zugriff auf DEMS läuft. Installiert wird erst nach deiner Bestätigung mit dem Admin-Reset-Passwort, eingeschaltet wird das Plugin danach von dir. Der Upload ist aus Sicherheitsgründen erst aktiv, wenn in der .env PLUGINS_UPLOAD=true steht.",
+                    "highlight": true
+                },
+                {
+                    "title": "🛠️ Für Plugin-Entwickler: Plugin-Builder",
+                    "content": "Mit „npm run plugin“ legst du ein neues Plugin an, prüfst es und baust daraus ein .dems-Paket zum Weitergeben. Die nötigen Berechtigungen erkennt der Builder aus dem Code und trägt sie in die plugin.json ein. „plugin dev“ startet DEMS im Testmodus mit deinem Plugin und startet bei jeder Änderung neu, „plugin install“ installiert ein Paket direkt auf dem Server."
+                },
+                {
+                    "title": "💻 Plugin-Studio mit KI-Assistent",
+                    "content": "Auf dem eigenen Rechner öffnet „npm run plugin -- studio“ eine Entwicklungsumgebung im Browser: Editor mit Autovervollständigung für das SDK, Live-Vorschau von DEMS als Admin, Mitglied oder Neuling, Debug-Ansicht für Anfragen, Hooks und Discord-Nachrichten und ein Knopf zum Bauen. Ein KI-Assistent schlägt Änderungen am Plugin vor, die du erst ansiehst, dann übernimmst oder verwirfst und auch wieder rückgängig machen kannst. Das Studio läuft nur lokal und ist nicht Teil des Server-Images."
+                }
+            ]
+        },
         {
             "version": "3.5.0",
             "date": "2026-11-22",

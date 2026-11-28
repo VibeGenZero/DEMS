@@ -65,3 +65,33 @@ test('the deployment example follows DEMS_TAG like compose.yaml', () => {
     assert.match(deployment, /image: moritakahashi\/dems:\$\{DEMS_TAG:-latest\}/);
     assert.doesNotMatch(deployment, /image: moritakahashi\/dems:latest/);
 });
+
+test('the image keeps the plugin CLI, so operators can install a .dems on the server', () => {
+    // howto/write-plugin.md and ops/docker.md document `npm run plugin -- install` in the container
+    const lines = read('.dockerignore').split(/\r?\n/).map((l) => l.trim());
+    assert.ok(lines.includes('scripts/'), 'the other scripts stay out of the image');
+    assert.ok(lines.indexOf('!scripts/plugin.js') > lines.indexOf('scripts/'), 're-included after scripts/');
+    assert.match(read('package.json'), /"plugin": "node scripts\/plugin\.js"/);
+    // the CLI may only need the SDK and Node built-ins at top level
+    const requires = [...read('scripts/plugin.js').matchAll(/^const .*require\('([^']+)'\)/gm)].map((m) => m[1]);
+    for (const spec of requires) assert.ok(!spec.startsWith('.') || spec.startsWith('../plugin-sdk/'), spec);
+    assert.match(read('docs/wiki/ops/docker.md'), /docker compose exec dems npm run plugin -- install \/app\/data\/[^ ]+\.dems/);
+});
+
+test('the plugin studio stays out of the image: scripts/ is excluded and only plugin.js is re-included', () => {
+    const lines = read('.dockerignore').split(/\r?\n/).map((l) => l.trim());
+    assert.ok(lines.includes('scripts/'));
+    assert.deepEqual(lines.filter((l) => l.startsWith('!scripts')), ['!scripts/plugin.js']);
+    // no negation pattern may bring scripts/studio back (small glob: * = no slash, ** = anything)
+    const escape = (x) => x.replace(/[^\w/-]/g, (c) => `\\${c}`);
+    const globToRegExp = (g) => new RegExp(`^${g.split('**').map((part) => part.split('*').map(escape).join('[^/]*')).join('.*')}$`);
+    for (const line of lines.filter((l) => l.startsWith('!') && l !== '!scripts/plugin.js')) {
+        const re = globToRegExp(line.slice(1).replace(/\/$/, ''));
+        for (const sample of ['scripts', 'scripts/studio', 'scripts/studio/index.js', 'scripts/studio/vendor/monaco/x.js']) {
+            assert.ok(!re.test(sample), `${line} would re-include ${sample}`);
+        }
+    }
+    // the CLI loads the studio lazily, so the image never needs it
+    assert.match(read('scripts/plugin.js'), /require\('\.\/studio'\)/);
+    assert.doesNotMatch(read('scripts/plugin.js'), /^const .*require\('\.\/studio/m);
+});

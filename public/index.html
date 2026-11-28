@@ -1244,6 +1244,11 @@
             <section class="settings-panel is-hidden" id="system-panel-plugins" aria-labelledby="system-panel-plugins-title">
               <h3 class="settings-panel-title" id="system-panel-plugins-title" tabindex="-1">Plugins</h3>
               <p class="text-secondary" id="plugins-privacy-hint">Plugins können Daten von Mitgliedern speichern. Erwähne eingeschaltete Plugins in deiner Datenschutzerklärung.</p>
+              <div class="setup-actions">
+                <button type="button" class="btn btn-primary is-hidden" data-click="openPluginUpload" id="plugin-upload-open">
+                  <i class="bi bi-upload me-1" aria-hidden="true"></i>Plugin hochladen
+                </button>
+              </div>
               <div class="plugin-list" id="plugins-list"></div>
             </section>
             <section class="settings-panel is-hidden" id="system-panel-privacy" aria-labelledby="system-panel-privacy-title">
@@ -2706,6 +2711,7 @@
             den Discord-Bot und die Datenbank, und im Browser jedes angemeldeten Mitglieds mit dessen
             Rechten — bei Admins also mit Admin-Rechten. Die Berechtigungen unten zeigen, was es nutzen
             möchte, verhindern aber nichts. Schalte es nur ein, wenn du dem Code vertraust.</p>
+          <div class="mb-3" id="plugin-trust-check-result"></div>
           <p class="form-label">Berechtigungen</p>
           <ul class="plugin-permissions" id="plugin-trust-permissions"></ul>
           <div class="form-check mb-3">
@@ -2718,6 +2724,53 @@
         <div class="modal-footer border-0">
           <button type="button" class="btn btn-outline-light" data-bs-dismiss="modal">Abbrechen</button>
           <button type="button" class="btn btn-warning" id="plugin-trust-confirm" data-click="confirmPluginTrust" disabled>Einschalten</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- System › Plugins (admin/plugin-upload.js): upload of a .dems package -->
+  <div class="modal fade" id="pluginUploadModal" tabindex="-1" aria-labelledby="plugin-upload-title">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header border-0">
+          <h5 class="modal-title" id="plugin-upload-title"><i class="bi bi-upload me-2" aria-hidden="true"></i>Plugin hochladen</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Schließen"></button>
+        </div>
+        <div class="modal-body">
+          <p class="text-secondary">Wähle ein Paket (.dems). Es wird erst geprüft und erst nach deiner Bestätigung installiert. Danach schaltest du es selbst ein.</p>
+          <p>Ein hochgeladenes Plugin läuft nach dem Einschalten mit vollem Zugriff auf DEMS,
+            den Discord-Bot und die Datenbank. Lade nur Pakete hoch, deren Code du vertraust.</p>
+          <label class="form-label" for="plugin-upload-file">Plugin-Paket</label>
+          <input type="file" class="form-control mb-3" accept=".dems" data-change="pluginUploadFile" id="plugin-upload-file">
+          <div class="mb-3" id="plugin-upload-report" aria-live="polite"></div>
+          <label class="form-label" for="plugin-upload-password">Admin-Reset-Passwort</label>
+          <input type="password" class="form-control" autocomplete="current-password" data-input="pluginUploadInput" id="plugin-upload-password">
+        </div>
+        <div class="modal-footer border-0">
+          <button type="button" class="btn btn-outline-light" data-bs-dismiss="modal">Abbrechen</button>
+          <button type="button" class="btn btn-primary" data-click="installPluginUpload" id="plugin-upload-confirm" disabled>Installieren</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- System › Plugins (admin/plugin-upload.js): remove a custom plugin -->
+  <div class="modal fade" id="pluginRemoveModal" tabindex="-1" aria-labelledby="plugin-remove-title">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header border-0">
+          <h5 class="modal-title" id="plugin-remove-title"><i class="bi bi-x-circle me-2" aria-hidden="true"></i>Plugin entfernen?</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Schließen"></button>
+        </div>
+        <div class="modal-body">
+          <p>Der Ordner von <span id="plugin-remove-name"></span> wird gelöscht. Gespeicherte Daten und Einstellungen bleiben erhalten; „Daten löschen“ entfernt sie vorher.</p>
+          <label class="form-label" for="plugin-remove-password">Admin-Reset-Passwort</label>
+          <input type="password" class="form-control" autocomplete="current-password" data-input="pluginRemoveInput" id="plugin-remove-password">
+        </div>
+        <div class="modal-footer border-0">
+          <button type="button" class="btn btn-outline-light" data-bs-dismiss="modal">Abbrechen</button>
+          <button type="button" class="btn btn-danger" data-click="confirmPluginRemove" id="plugin-remove-confirm" disabled>Entfernen</button>
         </div>
       </div>
     </div>

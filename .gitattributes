@@ -1,2 +1,5 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+
+# Vendored Monaco Editor (minified; git must not rewrite it)
+scripts/studio/vendor/monaco/** -text

@@ -18,6 +18,7 @@ const { createMembersApi } = require('./members');
 const { HOOK_NAMES, EVENT_HOOKS, REGISTRATION_HOOKS, onHook, toPluginEvent } = require('./hooks');
 const { PluginPermissionError, PluginHttpError } = require('./errors');
 const state = require('./state');
+const { studio } = require('./studio');
 
 const ACCESS = ['member', 'admin'];
 const METHODS = ['get', 'post', 'put', 'delete'];
@@ -53,10 +54,28 @@ const isDocId = id => typeof id === 'string' && id.length >= 1 && id.length <= M
 function createLog(pluginId) {
     const prefix = `[plugin:${pluginId}]`;
     return Object.freeze({
-        info: (...args) => console.log(prefix, ...args),
-        warn: (...args) => console.warn(prefix, ...args),
-        error: (...args) => console.error(prefix, ...args)
+        info: (...args) => { console.log(prefix, ...args); studioLog(pluginId, 'info', args); },
+        warn: (...args) => { console.warn(prefix, ...args); studioLog(pluginId, 'warn', args); },
+        error: (...args) => { console.error(prefix, ...args); studioLog(pluginId, 'error', args); }
     });
+}
+
+/** Forward a log line to the local plugin studio (no-op without it). */
+function studioLog(pluginId, level, args) {
+    const events = studio();
+    if (!events) return;
+    const text = args.map(arg => (typeof arg === 'string' ? arg : stringify(arg))).join(' ');
+    events.emit('log', pluginId, { level, text });
+}
+
+function stringify(value) {
+    if (value instanceof Error) return value.stack || value.message;
+    try {
+        const json = JSON.stringify(value);
+        return json === undefined ? String(value) : json;
+    } catch {
+        return String(value);
+    }
 }
 
 /** Start time of a stored event as milliseconds, Infinity without a valid date (sorts last). */

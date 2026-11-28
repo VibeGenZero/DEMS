@@ -196,4 +196,4 @@ function validateManifest(raw, folderName, { fileExists }) {
     };
 }
 
-module.exports = { SDK_VERSION, SDK_MINOR, SDK_VERSIONS, SDK_1_1_PERMISSIONS, PERMISSIONS, SETTING_TYPES, validateManifest };
+module.exports = { ID_PATTERN, isPlainObject, SDK_VERSION, SDK_MINOR, SDK_VERSIONS, SDK_1_1_PERMISSIONS, PERMISSIONS, SETTING_TYPES, validateManifest };

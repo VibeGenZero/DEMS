@@ -13,6 +13,8 @@
  * emission makes.
  */
 
+const { studioEmit, studioFrame } = require('./studio');
+
 const HOOK_NAMES = [
     'event.created', 'event.published', 'event.updated', 'event.ended',
     'event.cancelled', 'event.deleted', 'member.deleted', 'registration.checkedIn'
@@ -37,6 +39,7 @@ const generations = new Map();
 
 let gate = null;
 let errorReporter = null;
+let dirResolver = null;
 let slowHookMs = DEFAULT_SLOW_HOOK_MS;
 let hookTimeoutMs = DEFAULT_HOOK_TIMEOUT_MS;
 let pending = 0;
@@ -90,6 +93,11 @@ function setHookErrorReporter(fn) {
     errorReporter = typeof fn === 'function' ? fn : null;
 }
 
+/** @param {((pluginId: string) => string)|null} fn -> Plugin folder of an id (studio: file and line of hook errors). */
+function setHookDirResolver(fn) {
+    dirResolver = typeof fn === 'function' ? fn : null;
+}
+
 /** Tests only: threshold for the slow-hook warning in milliseconds. */
 function setSlowHookMs(ms) {
     slowHookMs = ms;
@@ -106,6 +114,21 @@ function isAllowed(pluginId) {
         return gate(pluginId) === true;
     } catch {
         return false;
+    }
+}
+
+/** Short label of a hook payload for the studio: event title or id, else the registration id. */
+function summaryOf(payload) {
+    const source = (payload && (payload.event || payload.registration)) || {};
+    return String(source.title || source.id || '');
+}
+
+/** Studio only: `file`/`line` of the error inside the plugin's folder, or `{}`. */
+function frameOf(pluginId, err) {
+    try {
+        return dirResolver ? studioFrame(err, dirResolver(pluginId)) : {};
+    } catch {
+        return {};
     }
 }
 
@@ -134,7 +157,12 @@ async function runHandler(pluginId, name, handler, payload, generation) {
     try {
         // A late settle of the handler is ignored: race already listens to it, so nothing goes unhandled
         await Promise.race([Promise.resolve().then(() => handler(payload)), timedOut]);
+        studioEmit('hook', pluginId, { name, summary: summaryOf(payload), ok: true, error: '' });
     } catch (err) {
+        const message = err && err.message ? err.message : String(err);
+        const frame = frameOf(pluginId, err);
+        studioEmit('hook', pluginId, { name, summary: summaryOf(payload), ok: false, error: message, ...frame });
+        studioEmit('error', pluginId, { message, where: `hook:${name}`, ...frame });
         reportError(pluginId, name, err);
     } finally {
         clearTimeout(slowTimer);
@@ -220,6 +248,7 @@ module.exports = {
     clearHooks,
     setHookGate,
     setHookErrorReporter,
+    setHookDirResolver,
     setSlowHookMs,
     setHookTimeoutMs,
     emitHook,

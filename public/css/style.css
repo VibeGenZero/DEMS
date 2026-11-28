@@ -5127,6 +5127,10 @@ a.info-version-badge:focus-visible {
   color: var(--warning);
 }
 
+.plugin-error {
+  color: var(--danger);
+}
+
 .plugin-switch {
   margin: 0;
 }

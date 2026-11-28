@@ -304,3 +304,23 @@ test('a failed connection test names a certificate problem and logs it', async (
     assert.equal(lines.length, 1);
     assert.ok(lines[0].startsWith('KI-Anfrage fehlgeschlagen (Verbindungstest): certificate SELF_SIGNED_CERT_IN_CHAIN'), lines[0]);
 });
+
+test('testConnection uses the given env', async () => {
+    const http = require('http');
+    const fake = http.createServer((req, res) => {
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({ choices: [{ message: { content: 'Hallo' } }], usage: { prompt_tokens: 1, completion_tokens: 1 } }));
+    });
+    await new Promise(resolve => fake.listen(0, '127.0.0.1', resolve));
+    const before = process.env.AI_PROVIDER;
+    delete process.env.AI_PROVIDER;
+    try {
+        const env = { AI_PROVIDER: 'ollama', AI_BASE_URL: `http://127.0.0.1:${fake.address().port}/v1`, AI_MODEL: 'm' };
+        const result = await testConnection(null, { env });
+        assert.equal(result.ok, true, JSON.stringify(result));
+        assert.equal(process.env.AI_PROVIDER, undefined);
+    } finally {
+        if (before !== undefined) process.env.AI_PROVIDER = before;
+        await new Promise(resolve => fake.close(resolve));
+    }
+});
