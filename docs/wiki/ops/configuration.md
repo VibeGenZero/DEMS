@@ -40,7 +40,7 @@ see_also: [docker, deployment, dev-mock-mode]
 | `PORT` | no | `3000` | HTTP port (fixed to 3000 inside containers) |
 | `TIMEZONE` | no | `Europe/Berlin` | date formatting in bot messages |
 | `DEBUG_MODE` | no | `false` | verbose request/database/bot logging + `#debug` UI section; never in production |
-| `ADMIN_RESET_PASSWORD` | no | — | system reset and panic-mode deactivation; empty → both impossible |
+| `ADMIN_RESET_PASSWORD` | no | — | confirms system reset, panic-mode deactivation, switching on a custom plugin (trust dialog), plugin upload install and remove, and changing a secret plugin setting; empty → all of these are impossible |
 | `NODE_ENV` | no | `production` in the Docker image | blocks `DEV_MOCK`; makes session and `XSRF-TOKEN` cookies `Secure` → DEMS must be reached via HTTPS (TLS proxy sending `X-Forwarded-Proto: https`), otherwise the login does not stick |
 | `DEMS_PORT` | no | `3000` | host port in `compose.yaml` |
 | `DEMS_BIND` | no | `127.0.0.1` | host address `compose.yaml` publishes the port on; the default keeps the port off the network, so clients cannot skip the TLS proxy. A proxy on another machine needs `0.0.0.0` |
