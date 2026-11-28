@@ -58,11 +58,11 @@ Allowed: `plugin.json`; `*.js|*.json|*.css|*.md|*.txt` at any depth outside `ass
 | a segment is `node_modules` | „node_modules wird nicht unterstützt: <name>“ |
 | any other extension / asset name | „Nicht erlaubte Datei: <name>“ |
 
-- [ ] **Step 1: Write the failing tests** — `packageEntryError` table above row by row (`'../x.js'`, `'/x.js'`, `'C:/x.js'`, `'a\\b.js'`, `'a//b.js'`, `'.env'`, `'lib/.hidden.js'`, `'node_modules/x/index.js'`, `'index.html'`, `'assets/logo.svg'`, `'assets/sub/x.js'`) and allowed ones (`'plugin.json'`, `'server.js'`, `'lib/engine.js'`, `'README.md'`, `'assets/view.js'`, `'assets/font.woff2'`); `readPluginSourcesSync` on a temp folder returns `server.js`, `lib/a.js`, `assets/view.js`, not `node_modules/x.js`, strips a BOM, and sets `tooBig` for a 21 MB file.
-- [ ] **Step 2: Run** `node --test test/pluginFiles.test.js` → FAIL (module missing).
-- [ ] **Step 3: Implement `plugin-sdk/files.js`**, move the two constants out of `routes/pluginStatic.js` and import them there.
-- [ ] **Step 4: Run** `npm test` → PASS.
-- [ ] **Step 5: Commit** „Share the plugin file allow-list between serving and packaging“.
+- [x] **Step 1: Write the failing tests** — `packageEntryError` table above row by row (`'../x.js'`, `'/x.js'`, `'C:/x.js'`, `'a\\b.js'`, `'a//b.js'`, `'.env'`, `'lib/.hidden.js'`, `'node_modules/x/index.js'`, `'index.html'`, `'assets/logo.svg'`, `'assets/sub/x.js'`) and allowed ones (`'plugin.json'`, `'server.js'`, `'lib/engine.js'`, `'README.md'`, `'assets/view.js'`, `'assets/font.woff2'`); `readPluginSourcesSync` on a temp folder returns `server.js`, `lib/a.js`, `assets/view.js`, not `node_modules/x.js`, strips a BOM, and sets `tooBig` for a 21 MB file.
+- [x] **Step 2: Run** `node --test test/pluginFiles.test.js` → FAIL (module missing).
+- [x] **Step 3: Implement `plugin-sdk/files.js`**, move the two constants out of `routes/pluginStatic.js` and import them there.
+- [x] **Step 4: Run** `npm test` → PASS.
+- [x] **Step 5: Commit** „Share the plugin file allow-list between serving and packaging“.
 
 ---
 
@@ -77,7 +77,7 @@ Allowed: `plugin.json`; `*.js|*.json|*.css|*.md|*.txt` at any depth outside `ass
 
 Regex vs. division: a `/` starts a regex when the previous significant token is absent, a `punct` other than `)` `]` `}`, or one of the names `return typeof instanceof in of new delete void throw case do else yield await`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
   - `tokenize('ctx.events.list()')` values `['ctx','.','events','.','list','(',')']`
   - `// ctx.discord.sendDM` and `/* ctx.x */` → `[]`
   - `'ctx.discord.sendDM'` → one `string` token
@@ -85,10 +85,10 @@ Regex vs. division: a `/` starts a regex when the previous significant token is 
   - `` `${`${ctx.theme.x}`}` `` contains `theme`
   - `x = /ctx\.discord/g; y = a / b / c` → no name `discord`, names `a b c` present
   - `"a\nb"` line counting: `'a\r\nb\nc'` lines `1,2,3`
-- [ ] **Step 2: Run** `node --test test/pluginTokenize.test.js` → FAIL.
-- [ ] **Step 3: Implement `tokenize`** as a single pass state machine over the string.
-- [ ] **Step 4: Run** → PASS.
-- [ ] **Step 5: Commit** „Add a small JavaScript tokenizer for the permission scan“.
+- [x] **Step 2: Run** `node --test test/pluginTokenize.test.js` → FAIL.
+- [x] **Step 3: Implement `tokenize`** as a single pass state machine over the string.
+- [x] **Step 4: Run** → PASS.
+- [x] **Step 5: Commit** „Add a small JavaScript tokenizer for the permission scan“.
 
 ---
 
@@ -140,7 +140,7 @@ Passing `ctx`/`ui` as an argument (`createEngine(ctx)`) yields nothing.
 
 `scanPlugin` file kinds: client = `manifest.client`, every `isClientAsset` file, and every file reached from them through `imports` (resolved relative, `.js` appended when missing, transitively); every other `.js` = server.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
   - one test per rule row and per warning row (each asserting permissions and the exact message + line)
   - `'fetch(url)'` kind `client` → no `network`; kind `server` → `network`; `'this.fetch(x)'` → none; `"require('node:https')"` server → `network`
   - `'createEngine(ctx)'` → no permission, no warning; `'this.ctx.discord.sendDM()'` → none
@@ -148,10 +148,10 @@ Passing `ctx`/`ui` as an argument (`createEngine(ctx)`) yields nothing.
   - `requiredSdk(['discord:roles'], 1) === 1.1`, `requiredSdk(['events:read'], 1.1) === 1.1`, `requiredSdk([], 1) === 1`
   - `comparePermissions(['a','b'], ['b','c'])` → `{ missing: ['c'], unused: ['a'] }`
   - **guard:** for each folder in `plugins/` (`badges`, `custom-design`, `event-feedback`, `event-submissions`): `scanPlugin(readPluginSourcesSync(dir).sources, manifest).permissions` deep-equals the manifest `permissions` sorted in `PERMISSIONS` order, `warnings` is `[]`, and `requiredSdk(found, 1)` equals the manifest `sdk`
-- [ ] **Step 2: Run** `node --test test/pluginPermissionScan.test.js` → FAIL.
-- [ ] **Step 3: Implement** the module (token-window matching over the `tokenize` output).
-- [ ] **Step 4: Run** → PASS (fix rules, never the official plugins, if the guard fails).
-- [ ] **Step 5: Commit** „Detect plugin permissions from the code“.
+- [x] **Step 2: Run** `node --test test/pluginPermissionScan.test.js` → FAIL.
+- [x] **Step 3: Implement** the module (token-window matching over the `tokenize` output).
+- [x] **Step 4: Run** → PASS (fix rules, never the official plugins, if the guard fails).
+- [x] **Step 5: Commit** „Detect plugin permissions from the code“.
 
 ---
 
@@ -170,11 +170,11 @@ Passing `ctx`/`ui` as an argument (`createEngine(ctx)`) yields nothing.
 
 `readZip` errors (exact): „Die Datei ist keine gültige ZIP-Datei.“ (no EOCD, bad offsets, CRC mismatch), „Verschlüsselte oder geteilte ZIP-Dateien werden nicht unterstützt.“, „Nicht unterstütztes Packverfahren: <name>“ (method ≠ 0/8), „Zu viele Dateien (höchstens 300).“, „Die Datei ist größer als 5 MB.“, „Entpackt zu groß (höchstens 20 MB).“, „Datei zu groß: <name>“ (entry > 2 MB), „Doppelte Datei: <name>“ (also case-insensitive). Inflate with `maxOutputLength: min(entryBytes, declared size) + 1` so an actual size beyond the declared one is caught.
 
-- [ ] **Step 1: Write the failing tests** — round trip of 3 entries (text, binary, empty); a stored entry; a ZIP with data-descriptor flag (build it with a test helper that writes local sizes 0 + descriptor) reads correctly; `__MACOSX/._x` and `.DS_Store` are skipped; symlink attribute → `symlink: true`; 301 entries, 6 MB buffer, an entry whose actual inflated size exceeds its declared size (bomb), a duplicate `A.js`/`a.js`, a method-12 entry, a flipped CRC byte, an encrypted flag → each the exact error above.
-- [ ] **Step 2: Run** `node --test test/pluginZip.test.js` → FAIL.
-- [ ] **Step 3: Implement** `writeZip`/`readZip`.
-- [ ] **Step 4: Run** → PASS.
-- [ ] **Step 5: Commit** „Read and write .dems packages without a ZIP dependency“.
+- [x] **Step 1: Write the failing tests** — round trip of 3 entries (text, binary, empty); a stored entry; a ZIP with data-descriptor flag (build it with a test helper that writes local sizes 0 + descriptor) reads correctly; `__MACOSX/._x` and `.DS_Store` are skipped; symlink attribute → `symlink: true`; 301 entries, 6 MB buffer, an entry whose actual inflated size exceeds its declared size (bomb), a duplicate `A.js`/`a.js`, a method-12 entry, a flipped CRC byte, an encrypted flag → each the exact error above.
+- [x] **Step 2: Run** `node --test test/pluginZip.test.js` → FAIL.
+- [x] **Step 3: Implement** `writeZip`/`readZip`.
+- [x] **Step 4: Run** → PASS.
+- [x] **Step 5: Commit** „Read and write .dems packages without a ZIP dependency“.
 
 ---
 
@@ -199,16 +199,16 @@ Passing `ctx`/`ui` as an argument (`createEngine(ctx)`) yields nothing.
 
 `installPackage` writes into `<customDir>/.incoming-<8 random hex>/<id>/`, then: if `<customDir>/<id>` exists rename it to `<customDir>/.old-<random>`, rename incoming into place, delete `.old-*` and the incoming parent; on any failure before the swap delete incoming and leave the old folder untouched.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
   - `analyzePlugin` on a fixture using `ctx.discord.addRole` with `sdk: 1`, `permissions: ['theme']` → `missing ['discord:roles']`, `unused ['theme']`, `nextRaw.sdk 1.1`, `nextRaw.permissions ['theme','discord:roles']`, unknown key `homepage` kept in place
   - second `analyzePlugin` after `writeManifest` → `changed: false`; CRLF `plugin.json` stays CRLF; BOM `plugin.json` parses
   - `packPlugin` → `fileName 'demo-1.0.0.dems'`; `readZip` of it has `plugin.json` at root; a folder with `index.html` / a symlink / `node_modules` → `PackageError` naming the file
   - `checkPackage`: wrapped folder → the „Hauptverzeichnis“ error; official id → error; `missing` reported but `ok: true`; existing install → `exists: true, installedVersion '1.0.0'`
   - `installPackage` new → folder exists with all files; second call without `replace` → „Das Plugin ist schon installiert.“; with `replace` → `replaced: true`, new content, no `.incoming-*`/`.old-*` left; a stubbed `fs.promises.rename` failing on the swap leaves the old folder intact
-- [ ] **Step 2: Run** `node --test test/pluginPackage.test.js` → FAIL.
-- [ ] **Step 3: Implement** `plugin-sdk/package.js`.
-- [ ] **Step 4: Run** → PASS.
-- [ ] **Step 5: Commit** „Build, check and install .dems plugin packages“.
+- [x] **Step 2: Run** `node --test test/pluginPackage.test.js` → FAIL.
+- [x] **Step 3: Implement** `plugin-sdk/package.js`.
+- [x] **Step 4: Run** → PASS.
+- [x] **Step 5: Commit** „Build, check and install .dems plugin packages“.
 
 ---
 
@@ -233,14 +233,14 @@ Passing `ctx`/`ui` as an argument (`createEngine(ctx)`) yields nothing.
 
 A large plugin gets `permissionCheck.tooBig: true` and the view warning „Code zu groß für die Prüfung“.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
   - discovery: `.incoming-x/demo/plugin.json` not listed; a symlinked folder (`fs.symlinkSync(target, link, 'junction')`) is listed; custom plugin calling `ctx.discord.sendDM` without the permission → `permissionCheck.missing ['discord:dm']`; official entry → `permissionCheck null`
   - host: `reloadPlugin` of a never-loaded id → status `off`, new version visible; after `setEnabled(true)` + `setEnabled(false)` + `reloadPlugin` → status `restart`, `statusText 'Neustart nötig'`, and `setEnabled(id, true)` rejects with `restartFirst`; `forgetPlugin` of a plugin with stored state → status `orphaned`, without state → gone from `list()`
   - host mock: `devPluginId: 'demo'`, `mockMode: true` → `demo` is `on` after `start()`; same with `mockMode: false` → `off`
-- [ ] **Step 2: Run** `node --test test/pluginDiscovery.test.js test/pluginHost.test.js` → FAIL.
-- [ ] **Step 3: Implement** the changes listed above.
-- [ ] **Step 4: Run** `npm test` → PASS.
-- [ ] **Step 5: Commit** „Check custom plugin permissions at discovery and re-read single plugins“.
+- [x] **Step 2: Run** `node --test test/pluginDiscovery.test.js test/pluginHost.test.js` → FAIL.
+- [x] **Step 3: Implement** the changes listed above.
+- [x] **Step 4: Run** `npm test` → PASS.
+- [x] **Step 5: Commit** „Check custom plugin permissions at discovery and re-read single plugins“.
 
 ---
 
@@ -263,11 +263,11 @@ Commands and exact behaviour:
 - `install <file.dems> [--force] [--plugins-dir <dir>]` — dir default `env.PLUGINS_DIR || <repo>/data/plugins`; official ids from `<repo>/plugins`; existing plugin without `--force`: TTY asks „<id> <alt> ersetzen durch <neu>? (j/n) “, non-TTY exits 1; on success prints „Installiert: <id> <version>. DEMS neu starten, damit das Plugin erscheint.“
 - `help` / no command — German usage text, exit 0.
 
-- [ ] **Step 1: Write the failing tests** (call `main` with fake streams and a temp `cwd`): `new demo-plugin` then `build demo-plugin --yes` → exit 0 and `demo-plugin-0.1.0.dems` exists; `new Bad` → exit 1 with the ID message; `build` with a missing permission, non-TTY, no `--yes` → exit 1 and `plugin.json` unchanged; with `--yes` → `plugin.json` contains the permission; `check` writes nothing; `install` into a temp plugins dir → exit 0 and folder present, second `install` non-TTY without `--force` → exit 1, with `--force` → 0.
-- [ ] **Step 2: Run** `node --test test/pluginCli.test.js` → FAIL.
-- [ ] **Step 3: Implement** `scripts/plugin.js` (argument parsing by hand, `readline/promises` for questions) and the wiki section.
-- [ ] **Step 4: Run** `npm run wiki && npm test` → PASS.
-- [ ] **Step 5: Commit** „Add the plugin CLI to scaffold, check, build and install plugins“.
+- [x] **Step 1: Write the failing tests** (call `main` with fake streams and a temp `cwd`): `new demo-plugin` then `build demo-plugin --yes` → exit 0 and `demo-plugin-0.1.0.dems` exists; `new Bad` → exit 1 with the ID message; `build` with a missing permission, non-TTY, no `--yes` → exit 1 and `plugin.json` unchanged; with `--yes` → `plugin.json` contains the permission; `check` writes nothing; `install` into a temp plugins dir → exit 0 and folder present, second `install` non-TTY without `--force` → exit 1, with `--force` → 0.
+- [x] **Step 2: Run** `node --test test/pluginCli.test.js` → FAIL.
+- [x] **Step 3: Implement** `scripts/plugin.js` (argument parsing by hand, `readline/promises` for questions) and the wiki section.
+- [x] **Step 4: Run** `npm run wiki && npm test` → PASS.
+- [x] **Step 5: Commit** „Add the plugin CLI to scaffold, check, build and install plugins“.
 
 ---
 
@@ -284,11 +284,11 @@ Commands and exact behaviour:
 
 `prepareDev`: exits with German errors when `env.NODE_ENV === 'production'` („plugin dev läuft nicht mit NODE_ENV=production.“), the folder has no valid `plugin.json`, the folder name ≠ id („Der Ordnername muss der Plugin-ID entsprechen.“), or the id is official („Offizielle Plugins entwickelst du direkt mit npm run dev:mock.“). It recreates `<repo>/data/dev-plugins/` containing only the link `<id>` → absolute folder (`fs.symlinkSync(abs, link, 'junction')`), writes `<repo>/data/dev-plugins/nodemon.json` = `{ "watch": [<abs folder>], "ext": "js,json,css", "ignore": [] }`, and returns env `{ …env, PLUGINS_DIR: <repo>/data/dev-plugins, PLUGINS_DEV_ID: <id> }`.
 
-- [ ] **Step 1: Write the failing tests** for `prepareDev`: each refusal message; on success `data/dev-plugins/<id>` resolves (`fs.realpathSync`) to the folder, nothing else is in `data/dev-plugins` besides the link and `nodemon.json`, returned env has both variables. (Use a temp `repoRoot` with an empty `plugins/` folder.)
-- [ ] **Step 2: Run** → FAIL.
-- [ ] **Step 3: Implement** `prepareDev` and the spawn; docs.
-- [ ] **Step 4: Run** `npm run wiki && npm test` → PASS. Manual check: `npm run plugin -- new demo-plugin --dir ../tmp && npm run plugin -- dev ../tmp/demo-plugin`, open `http://localhost:3000`, System › Plugins shows `demo-plugin` „An“; editing `server.js` restarts.
-- [ ] **Step 5: Commit** „Run a plugin under development in mock mode with plugin dev“.
+- [x] **Step 1: Write the failing tests** for `prepareDev`: each refusal message; on success `data/dev-plugins/<id>` resolves (`fs.realpathSync`) to the folder, nothing else is in `data/dev-plugins` besides the link and `nodemon.json`, returned env has both variables. (Use a temp `repoRoot` with an empty `plugins/` folder.)
+- [x] **Step 2: Run** → FAIL.
+- [x] **Step 3: Implement** `prepareDev` and the spawn; docs.
+- [x] **Step 4: Run** `npm run wiki && npm test` → PASS. Manual check: `npm run plugin -- new demo-plugin --dir ../tmp && npm run plugin -- dev ../tmp/demo-plugin`, open `http://localhost:3000`, System › Plugins shows `demo-plugin` „An“; editing `server.js` restarts.
+- [x] **Step 5: Commit** „Run a plugin under development in mock mode with plugin dev“.
 
 ---
 
@@ -317,14 +317,14 @@ Routes (all below the existing `/api/admin` guard; order: the two `upload/*` rou
 
 The password check happens before `store.take`, so a wrong password does not burn the upload.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
   - store: `take` twice → second `null`; other session → `null`; after `ttlMs` (fake `now`) → `null`; 4th `put` evicts the first
   - router: upload off → check/install/remove 403 and `GET` `uploadEnabled: false`; safe-mode host → 409; check of a valid package → 200 with `uploadId`, `report.missing` labels; check of a `../` / symlink / `.html` package → `ok: false`, `uploadId: null`, error names the file; 6 MB body → 413; install wrong password → 401 and a later correct install with the same `uploadId` works; install twice with the same `uploadId` → 410; install replacing an enabled plugin → 409; after replacing a loaded-then-switched-off plugin `plugin.status === 'restart'`; install writes one `PLUGIN_UPLOAD` audit entry; remove official → 409, remove custom off → folder gone, view `orphaned` (state existed), audit `PLUGIN_REMOVE`
   - dev server (`test/devServer.test.js`, persona `admin`, `PLUGINS_UPLOAD=true`, temp `PLUGINS_DIR`): upload + install of a packed fixture → `GET /api/admin/plugins` lists it with `official: false`, `status 'off'`
-- [ ] **Step 2: Run** `node --test test/pluginUploadStore.test.js test/adminPluginsRouter.test.js` → FAIL.
-- [ ] **Step 3: Implement** store, routes, docs.
-- [ ] **Step 4: Run** `npm run wiki && npm test` → PASS.
-- [ ] **Step 5: Commit** „Let admins upload .dems plugins when PLUGINS_UPLOAD is on“.
+- [x] **Step 2: Run** `node --test test/pluginUploadStore.test.js test/adminPluginsRouter.test.js` → FAIL.
+- [x] **Step 3: Implement** store, routes, docs.
+- [x] **Step 4: Run** `npm run wiki && npm test` → PASS.
+- [x] **Step 5: Commit** „Let admins upload .dems plugins when PLUGINS_UPLOAD is on“.
 
 ---
 
@@ -347,11 +347,11 @@ The password check happens before `store.take`, so a wrong password does not bur
 
 The „Installieren“ button is disabled until a report with `ok` arrived, no `replaces.enabled`, and a password is typed. `replace` is sent as `Boolean(replaces)`. After install/remove the list reloads (`loadPluginsPanel`) and a success toast names the plugin.
 
-- [ ] **Step 1: Write the failing tests** — `renderUploadReport` escapes a `<script>` plugin name, shows both mismatch lists with labels, the restart hint, the switch-off hint; `permissionCheckLines(null)` → `[]`, truncation after 5 warnings; `renderPluginCard` of a custom, off plugin with `uploadEnabled` contains `data-click="openPluginRemove"`, an official or enabled one does not; a card with `permissionCheck.missing` contains „Berechtigungen passen nicht zum Code“.
-- [ ] **Step 2: Run** `node --test test/systemPluginsView.test.js test/pluginUploadView.test.js` → FAIL.
-- [ ] **Step 3: Implement** module, markup, wiring, docs.
-- [ ] **Step 4: Run** `npm run wiki && npm test` → PASS (CSP/style/icon guards included). Manual check in `npm run dev:mock` with `PLUGINS_UPLOAD=true`: upload a built `.dems`, see the report, install, switch on via trust dialog, upload the same id again → „Schalte das Plugin zuerst aus.“; switch off, replace → „Neustart nötig“; remove.
-- [ ] **Step 5: Commit** „Add plugin upload and removal to System › Plugins“.
+- [x] **Step 1: Write the failing tests** — `renderUploadReport` escapes a `<script>` plugin name, shows both mismatch lists with labels, the restart hint, the switch-off hint; `permissionCheckLines(null)` → `[]`, truncation after 5 warnings; `renderPluginCard` of a custom, off plugin with `uploadEnabled` contains `data-click="openPluginRemove"`, an official or enabled one does not; a card with `permissionCheck.missing` contains „Berechtigungen passen nicht zum Code“.
+- [x] **Step 2: Run** `node --test test/systemPluginsView.test.js test/pluginUploadView.test.js` → FAIL.
+- [x] **Step 3: Implement** module, markup, wiring, docs.
+- [x] **Step 4: Run** `npm run wiki && npm test` → PASS (CSP/style/icon guards included). Manual check in `npm run dev:mock` with `PLUGINS_UPLOAD=true`: upload a built `.dems`, see the report, install, switch on via trust dialog, upload the same id again → „Schalte das Plugin zuerst aus.“; switch off, replace → „Neustart nötig“; remove.
+- [x] **Step 5: Commit** „Add plugin upload and removal to System › Plugins“.
 
 ---
 
@@ -361,6 +361,6 @@ The „Installieren“ button is disabled until a report with `ok` arrived, no `
 - Modify: `docs/wiki/reference/known-issues.md` only if a limit surfaced (e.g. scanner blind spots stay documented in `concepts/plugin-sdk.md` instead)
 - Modify: `openspec/specs/` if a spec there describes plugin security rule 2 (grep `Code only via` / `No upload`), else nothing
 
-- [ ] **Step 1:** `grep -rn "No upload\|kein Upload" docs/wiki openspec/specs` and align every remaining statement with the new rule 2 (older specs and archived changes stay as history).
-- [ ] **Step 2: Run** `npm run wiki && npm test && npm run test:e2e` → all PASS.
-- [ ] **Step 3: Commit** „Align the docs with plugin upload“ (skip when nothing changed).
+- [x] **Step 1:** `grep -rn "No upload\|kein Upload" docs/wiki openspec/specs` and align every remaining statement with the new rule 2 (older specs and archived changes stay as history).
+- [x] **Step 2: Run** `npm run wiki && npm test && npm run test:e2e` → all PASS.
+- [x] **Step 3: Commit** „Align the docs with plugin upload“ (skip when nothing changed). Skipped: nothing left to change.
